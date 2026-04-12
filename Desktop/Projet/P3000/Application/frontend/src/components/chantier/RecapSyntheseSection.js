@@ -324,8 +324,13 @@ const RecapSyntheseSection = ({
   tauxFacturation,
   syntheseMensuelle,
   syntheseMensuelleLoading,
+  syntheseUiResetKey = 0,
 }) => {
   const [selectedMonth, setSelectedMonth] = React.useState(null);
+
+  React.useEffect(() => {
+    if (syntheseUiResetKey > 0) setSelectedMonth(null);
+  }, [syntheseUiResetKey]);
 
   if (!data) return null;
   const paye = depensesPaye || data.sorties?.paye || {};
@@ -374,11 +379,6 @@ const RecapSyntheseSection = ({
       amount: Number(selectedMonth.cout_chantier),
       color: COL_COUT_LINE,
       isNegative: true,
-      costBreakdown: {
-        main_oeuvre: selectedMonth.main_oeuvre,
-        materiel: selectedMonth.materiel,
-        sous_traitant: selectedMonth.sous_traitant,
-      },
     },
     { title: `Coût cumulé (fin ${selectedMonth.label})`, amount: Number(selectedMonth.cout_chantier_cumule), color: COL_COUT_LINE, isNegative: true },
     { title: `Bénéfice (fin ${selectedMonth.label})`, amount: Number(selectedMonth.benefice), color: Number(selectedMonth.benefice) >= 0 ? COL_BENEF : "#d32f2f" }

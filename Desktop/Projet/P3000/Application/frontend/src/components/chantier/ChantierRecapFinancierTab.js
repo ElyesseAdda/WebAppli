@@ -35,6 +35,8 @@ const ChantierRecapFinancierTab = ({ chantierId, isActive = true }) => {
   const [tauxFacturationData, setTauxFacturationData] = useState(null);
   const [syntheseMensuelle, setSyntheseMensuelle] = useState(null);
   const [syntheseMensuelleLoading, setSyntheseMensuelleLoading] = useState(false);
+  /** Incrémenté après un « Actualiser » pour réinitialiser la vue mois dans la synthèse */
+  const [syntheseUiResetKey, setSyntheseUiResetKey] = useState(0);
   /** Premier chargement ou changement de chantier : masque le corps du récap */
   const [loading, setLoading] = useState(false);
   /** Changement mois / année / global : mise à jour sans démonter la page */
@@ -117,6 +119,24 @@ const ChantierRecapFinancierTab = ({ chantierId, isActive = true }) => {
     [chantierId, global, periode.mois, periode.annee]
   );
 
+  const fetchSyntheseMensuelle = useCallback(async () => {
+    if (!chantierId) return;
+    setSyntheseMensuelleLoading(true);
+    try {
+      const res = await axios.get(`/api/chantier/${chantierId}/recap-synthese-mensuelle/`);
+      setSyntheseMensuelle(res.data);
+    } catch {
+      setSyntheseMensuelle(null);
+    } finally {
+      setSyntheseMensuelleLoading(false);
+    }
+  }, [chantierId]);
+
+  const handleActualiserTout = useCallback(async () => {
+    await Promise.all([fetchData({ background: true }), fetchSyntheseMensuelle()]);
+    setSyntheseUiResetKey((k) => k + 1);
+  }, [fetchData, fetchSyntheseMensuelle]);
+
   /** Changement de chantier → rechargement complet ; mois/année/global → mise à jour en tâche de fond */
   useEffect(() => {
     if (!chantierId) return;
@@ -136,23 +156,8 @@ const ChantierRecapFinancierTab = ({ chantierId, isActive = true }) => {
   /** Séries mensuelles pour le graphique de synthèse (indépendant du mois / global du récap) */
   useEffect(() => {
     if (!chantierId) return;
-    let cancelled = false;
-    setSyntheseMensuelleLoading(true);
-    axios
-      .get(`/api/chantier/${chantierId}/recap-synthese-mensuelle/`)
-      .then((res) => {
-        if (!cancelled) setSyntheseMensuelle(res.data);
-      })
-      .catch(() => {
-        if (!cancelled) setSyntheseMensuelle(null);
-      })
-      .finally(() => {
-        if (!cancelled) setSyntheseMensuelleLoading(false);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [chantierId]);
+    void fetchSyntheseMensuelle();
+  }, [chantierId, fetchSyntheseMensuelle]);
 
   /** Retour sur l’onglet récap : rafraîchir sans masquer l’UI (évite doublon au 1er montage si isActive déjà true) */
   const prevIsActiveRef = useRef(isActive);
@@ -253,7 +258,7 @@ const ChantierRecapFinancierTab = ({ chantierId, isActive = true }) => {
             {global ? "Désactiver" : "Global"}
           </Button>
           <Button
-            onClick={() => fetchData({ background: true })}
+            onClick={() => void handleActualiserTout()}
             color="primary"
             sx={{ ml: 1 }}
             startIcon={<FaSync />}
@@ -285,6 +290,7 @@ const ChantierRecapFinancierTab = ({ chantierId, isActive = true }) => {
             tauxFacturation={tauxFacturationData}
             syntheseMensuelle={syntheseMensuelle}
             syntheseMensuelleLoading={syntheseMensuelleLoading}
+            syntheseUiResetKey={syntheseUiResetKey}
           />
           <Grid container spacing={3}>
           {/* Sorties */}
