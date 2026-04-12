@@ -22,7 +22,7 @@ import RecapSyntheseSection from "./RecapSyntheseSection";
 const CATEGORY_COLORS = {
   materiel: "#0088FE",
   main_oeuvre: "#00C49F",
-  sous_traitant: "#FFBB28",
+  sous_traitant: "#0D9488",
   situation: "#8884d8",
   facture: "#FF8042",
 };

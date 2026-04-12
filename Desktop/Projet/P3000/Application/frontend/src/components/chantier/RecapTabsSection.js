@@ -158,7 +158,7 @@ const RecapTabsSection = ({
   const fixedColors = {
     materiel: "#FF9800", // orange
     main_oeuvre: "#2196F3", // bleu
-    sous_traitant: "#4CAF50", // vert
+    sous_traitant: "#0D9488", // teal (distinct du bénéfice / succès vert)
   };
 
   // Fonction pour masquer/afficher une catégorie

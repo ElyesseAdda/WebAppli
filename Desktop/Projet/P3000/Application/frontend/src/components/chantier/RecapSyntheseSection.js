@@ -31,7 +31,8 @@ import {
 
 const COL_MAT = "#FF9800"; // Orange (pour correspondre au reste de la page)
 const COL_MO = "#2196F3"; // Bleu
-const COL_ST = "#4CAF50"; // Vert
+/** Sous-traitant : teal (évite la confusion avec le bénéfice en vert) */
+const COL_ST = "#0D9488";
 const COL_COUT_CUM = "rgba(211, 47, 47, 0.1)"; // Rouge très léger
 const COL_COUT_LINE = "#d32f2f"; // Rouge (comme dans les cartes)
 const COL_BENEF = "#43A047"; // Vert
@@ -656,8 +657,32 @@ const RecapSyntheseSection = ({
             "& .recharts-bar-rectangle path:active": {
               transform: "scale(0.98)",
               filter: "brightness(0.9)",
-            }
-          }}>
+            },
+            "& .recharts-legend-wrapper": {
+              fontSize: "0.65rem",
+              lineHeight: 1.25,
+            },
+            "& .recharts-default-legend": {
+              display: "flex",
+              flexWrap: "wrap",
+              justifyContent: "center",
+              alignItems: "center",
+              columnGap: "1.35rem",
+              rowGap: "0.35rem",
+              padding: "6px 8px 0",
+            },
+            "& .recharts-legend-item": {
+              display: "inline-flex",
+              alignItems: "center",
+              marginRight: "0 !important",
+            },
+            "& .recharts-legend-item-text": {
+              fontSize: "0.65rem !important",
+              fontWeight: 500,
+              marginLeft: "0.25rem",
+            },
+          }}
+          >
             {syntheseMensuelleLoading ? (
               <Box
                 sx={{
@@ -738,10 +763,14 @@ const RecapSyntheseSection = ({
                     cursor={{ fill: 'rgba(0, 0, 0, 0.04)' }} // Survol plus doux sur la colonne
                     content={() => null} // On désactive l'affichage du tooltip flottant
                   />
-                  <Legend 
-                    wrapperStyle={{ paddingTop: 20 }} 
-                    iconType="circle" // Légende avec des petits ronds au lieu de carrés
-                    iconSize={10}
+                  <Legend
+                    wrapperStyle={{
+                      paddingTop: 10,
+                      fontSize: "0.65rem",
+                      lineHeight: 1.25,
+                    }}
+                    iconType="circle"
+                    iconSize={7}
                   />
                   {/* Les Barres sont rendues en PREMIER pour être en arrière-plan */}
                   <Bar
