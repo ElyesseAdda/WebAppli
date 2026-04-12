@@ -15,6 +15,7 @@ import {
   TableBody,
   TableCell,
   TableContainer,
+  TableFooter,
   TableHead,
   TableRow,
   TextField,
@@ -29,6 +30,74 @@ import axios from "axios";
 import React from "react";
 import { FaFilter, FaTimes } from "react-icons/fa";
 import { useRecapFinancier } from "./RecapFinancierContext";
+
+/** Affichage heures / jours pour une ligne MO (API : type_paiement journalier | horaire) */
+const formatHeuresMainOeuvre = (doc) => {
+  const heures = Number(doc.heures);
+  if (Number.isNaN(heures)) return "-";
+  if (doc.type_paiement === "journalier") {
+    const jours = heures / 8;
+    if (jours === 0.5) return "0,5 j";
+    if (Math.abs(jours - Math.round(jours)) < 1e-6) return `${Math.round(jours)} j`;
+    return `${jours.toLocaleString("fr-FR", { minimumFractionDigits: 1, maximumFractionDigits: 1 })} j`;
+  }
+  if (heures >= 8 && heures % 8 === 0) {
+    const jours = heures / 8;
+    return jours === 1 ? "1 j" : `${jours} j`;
+  }
+  if (heures === 4) return "0,5 j";
+  return heures.toLocaleString("fr-FR", {
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 2,
+  });
+};
+
+/** Totaux heures MO : horaires (h) et journaliers (j) séparément */
+const formatTotauxHeuresMainOeuvre = (docs) => {
+  let hHoraire = 0;
+  let hJournalier = 0;
+  for (const doc of docs || []) {
+    const h = Number(doc.heures || 0);
+    if (Number.isNaN(h)) continue;
+    if (doc.type_paiement === "journalier") hJournalier += h;
+    else hHoraire += h;
+  }
+  const parts = [];
+  if (hHoraire > 0) {
+    parts.push(
+      `${hHoraire.toLocaleString("fr-FR", { minimumFractionDigits: 0, maximumFractionDigits: 2 })} h`
+    );
+  }
+  if (hJournalier > 0) {
+    const j = hJournalier / 8;
+    const jStr =
+      Math.abs(j - Math.round(j)) < 1e-6
+        ? `${Math.round(j)} j`
+        : `${j.toLocaleString("fr-FR", { minimumFractionDigits: 1, maximumFractionDigits: 1 })} j`;
+    parts.push(jStr);
+  }
+  return parts.length ? parts.join(" · ") : "—";
+};
+
+/** Style proposé pour les lignes « Total » des tableaux récap : bandeau teinté, bordure primaire, montants lisibles */
+const recapTableFooterRowSx = (theme) => ({
+  "& .MuiTableCell-root": {
+    fontWeight: 700,
+    fontSize: "0.8125rem",
+    borderTop: `2px solid ${theme.palette.primary.main}`,
+    bgcolor:
+      theme.palette.mode === "dark"
+        ? "rgba(33, 150, 243, 0.14)"
+        : "rgba(33, 150, 243, 0.07)",
+    color: theme.palette.text.primary,
+    py: 1.125,
+  },
+  "& .MuiTableCell-root:first-of-type": {
+    color: theme.palette.primary.dark,
+    fontWeight: 800,
+    letterSpacing: "0.02em",
+  },
+});
 
 const RecapCategoryDetails = ({
   open,
@@ -178,7 +247,11 @@ const RecapCategoryDetails = ({
             montant: 0,
             primes: [],
             totalPrimes: 0,
+            type_paiement: doc.type_paiement || null,
           };
+        }
+        if (!grouped[key].type_paiement && doc.type_paiement) {
+          grouped[key].type_paiement = doc.type_paiement;
         }
         grouped[key].heures += doc.heures || 0;
         grouped[key].montant += doc.montant || 0;
@@ -210,6 +283,7 @@ const RecapCategoryDetails = ({
           montant: 0,
           primes: [],
           totalPrimes: 0,
+          type_paiement: null,
         };
       }
       
@@ -328,6 +402,38 @@ const RecapCategoryDetails = ({
     visibleFournisseurs === null
       ? fournisseurs
       : fournisseurs.filter((f) => visibleFournisseurs.has(f));
+
+  /** Somme des montants affichés (fournisseurs visibles) — tableau matériel */
+  const totalMontantsFournisseurs = displayedFournisseurs.reduce((acc, f) => {
+    const v = paiements[f];
+    if (v === undefined || v === null || v === "") return acc;
+    const n = Number(String(v).replace(",", "."));
+    return acc + (Number.isNaN(n) ? 0 : n);
+  }, 0);
+
+  /** Totaux pied de tableau (hors matériel fournisseur) */
+  const rowsForFooter = displayDocuments || [];
+  const classicFooterMontantTotal =
+    category !== "materiel"
+      ? rowsForFooter.reduce((acc, doc) => {
+          if (category === "main_oeuvre") {
+            return (
+              acc +
+              Number(doc.montant || 0) +
+              Number(doc.totalPrimes || 0)
+            );
+          }
+          return acc + Number(doc.montant || 0);
+        }, 0)
+      : null;
+  const classicFooterPrimesTotal =
+    category === "main_oeuvre"
+      ? rowsForFooter.reduce((acc, doc) => acc + Number(doc.totalPrimes || 0), 0)
+      : null;
+  const classicFooterHeuresTotaux =
+    category === "main_oeuvre"
+      ? formatTotauxHeuresMainOeuvre(rowsForFooter)
+      : null;
 
   // Fournisseurs ayant au moins un document matériel (BC) dans le récap courant
   const fournisseursAvecBcNormalized = React.useMemo(() => {
@@ -748,6 +854,25 @@ const RecapCategoryDetails = ({
                     ))
                   )}
                 </TableBody>
+                <TableFooter>
+                  <TableRow sx={recapTableFooterRowSx}>
+                    <TableCell>Total</TableCell>
+                    <TableCell
+                      align="right"
+                      sx={{
+                        fontVariantNumeric: "tabular-nums",
+                        color: "primary.main",
+                        fontWeight: 800,
+                      }}
+                    >
+                      {totalMontantsFournisseurs.toLocaleString("fr-FR", {
+                        minimumFractionDigits: 2,
+                        maximumFractionDigits: 2,
+                      })}{" "}
+                      €
+                    </TableCell>
+                  </TableRow>
+                </TableFooter>
               </Table>
             </TableContainer>
             <Box mt={2} display="flex" alignItems="center" flexWrap="wrap" gap={2}>
@@ -1079,23 +1204,7 @@ const RecapCategoryDetails = ({
                                 );
                               })()
                             : col.key === "heures" && doc.heures !== undefined
-                            ? (() => {
-                                // Pour les agents journaliers, convertir les heures en jours
-                                // On détecte un agent journalier si les heures sont un multiple de 8 et >= 8
-                                const heures = Number(doc.heures);
-                                if (heures >= 8 && heures % 8 === 0) {
-                                  const jours = heures / 8;
-                                  return jours === 1 ? "1j" : `${jours}j`;
-                                }
-                                // Demi-journées (4h) pour agents journaliers
-                                if (heures === 4) {
-                                  return "0.5j";
-                                }
-                                // Pour les autres cas (agents horaires)
-                                return heures.toLocaleString("fr-FR", {
-                                  minimumFractionDigits: 2,
-                                });
-                              })()
+                            ? formatHeuresMainOeuvre(doc)
                             : col.key === "date" && doc.date
                             ? (() => {
                                 const d = new Date(doc.date);
@@ -1126,6 +1235,59 @@ const RecapCategoryDetails = ({
                   </TableRow>
                 )}
               </TableBody>
+              <TableFooter>
+                <TableRow sx={recapTableFooterRowSx}>
+                  {columns.map((col, colIdx) => (
+                    <TableCell
+                      key={col.key}
+                      align={
+                        col.key === "montant" || col.key === "prime"
+                          ? "right"
+                          : "left"
+                      }
+                      sx={{
+                        fontVariantNumeric:
+                          col.key === "montant" || col.key === "prime"
+                            ? "tabular-nums"
+                            : undefined,
+                        ...(col.key === "heures" && category === "main_oeuvre"
+                          ? {
+                              borderLeft: "3px solid #0D9488",
+                              pl: 1.25,
+                            }
+                          : {}),
+                        ...(col.key === "montant" || col.key === "prime"
+                          ? { color: "primary.main", fontWeight: 800 }
+                          : {}),
+                      }}
+                    >
+                      {colIdx === 0 ? (
+                        "Total"
+                      ) : col.key === "heures" && category === "main_oeuvre" ? (
+                        <Typography variant="body2" fontWeight={700} component="span">
+                          {classicFooterHeuresTotaux}
+                        </Typography>
+                      ) : col.key === "prime" && category === "main_oeuvre" ? (
+                        classicFooterPrimesTotal > 0 ? (
+                          `${classicFooterPrimesTotal.toLocaleString("fr-FR", {
+                            minimumFractionDigits: 2,
+                            maximumFractionDigits: 2,
+                          })} €`
+                        ) : (
+                          "—"
+                        )
+                      ) : col.key === "montant" ? (
+                        `${Number(classicFooterMontantTotal).toLocaleString("fr-FR", {
+                          minimumFractionDigits: 2,
+                          maximumFractionDigits: 2,
+                        })} €`
+                      ) : (
+                        ""
+                      )}
+                    </TableCell>
+                  ))}
+                </TableRow>
+              </TableFooter>
             </Table>
           </TableContainer>
         )}
