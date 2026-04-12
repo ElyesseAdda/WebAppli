@@ -9,6 +9,8 @@ import {
   MenuItem,
   Paper,
   Select,
+  Tab,
+  Tabs,
   Typography,
 } from "@mui/material";
 import axios from "axios";
@@ -37,6 +39,8 @@ const ChantierRecapFinancierTab = ({ chantierId, isActive = true }) => {
   const [syntheseMensuelleLoading, setSyntheseMensuelleLoading] = useState(false);
   /** Incrémenté après un « Actualiser » pour réinitialiser la vue mois dans la synthèse */
   const [syntheseUiResetKey, setSyntheseUiResetKey] = useState(0);
+  /** Onglet principal Dépenses (0) / Paiements (1) dans le bloc commun */
+  const [depensesPaiementsTab, setDepensesPaiementsTab] = useState(0);
   /** Premier chargement ou changement de chantier : masque le corps du récap */
   const [loading, setLoading] = useState(false);
   /** Changement mois / année / global : mise à jour sans démonter la page */
@@ -293,36 +297,74 @@ const ChantierRecapFinancierTab = ({ chantierId, isActive = true }) => {
             syntheseUiResetKey={syntheseUiResetKey}
           />
           <Grid container spacing={3}>
-          {/* Sorties */}
-          <Grid item xs={12}>
-            <RecapTabsSection
-              title="Dépenses"
-              tabs={[
-                { label: "Payées", data: getDepensesData() },
-                { label: "Restantes", data: data.sorties.reste_a_payer }
-              ]}
-              colors={CATEGORY_COLORS}
-              chantierId={chantierId}
-              periode={periode}
-              refreshRecap={refreshRecapSilently}
-              showDocumentsPane
-            />
+            <Grid item xs={12}>
+              <Paper
+                elevation={0}
+                sx={{
+                  p: 3,
+                  mb: 3,
+                  borderRadius: 4,
+                  boxShadow: "0 4px 24px 0 rgba(0,0,0,0.06)",
+                }}
+              >
+                <Tabs
+                  value={depensesPaiementsTab}
+                  onChange={(_, v) => setDepensesPaiementsTab(v)}
+                  sx={{
+                    mb: 2,
+                    borderBottom: 1,
+                    borderColor: "divider",
+                    minHeight: 42,
+                    "& .MuiTab-root": { fontWeight: 700, textTransform: "none" },
+                  }}
+                >
+                  <Tab label="Dépenses" />
+                  <Tab label="Paiements" />
+                </Tabs>
+                <Box
+                  sx={{
+                    display: depensesPaiementsTab === 0 ? "block" : "none",
+                  }}
+                  aria-hidden={depensesPaiementsTab !== 0}
+                >
+                  <RecapTabsSection
+                    title="Dépenses"
+                    hideOuterChrome
+                    tabs={[
+                      { label: "Payées", data: getDepensesData() },
+                      { label: "Restantes", data: data.sorties.reste_a_payer },
+                    ]}
+                    colors={CATEGORY_COLORS}
+                    chantierId={chantierId}
+                    periode={periode}
+                    refreshRecap={refreshRecapSilently}
+                    showDocumentsPane
+                  />
+                </Box>
+                <Box
+                  sx={{
+                    display: depensesPaiementsTab === 1 ? "block" : "none",
+                  }}
+                  aria-hidden={depensesPaiementsTab !== 1}
+                >
+                  <RecapTabsSection
+                    title="Paiements"
+                    hideOuterChrome
+                    tabs={[
+                      { label: "Reçus", data: data.entrees.paye },
+                      { label: "En attente", data: data.entrees.reste_a_encaisser },
+                    ]}
+                    colors={CATEGORY_COLORS}
+                    chantierId={chantierId}
+                    periode={periode}
+                    refreshRecap={refreshRecapSilently}
+                    showDocumentsPane
+                    documentsPaneVariant="paiements"
+                  />
+                </Box>
+              </Paper>
+            </Grid>
           </Grid>
-          {/* Entrées */}
-          <Grid item xs={12}>
-            <RecapTabsSection
-              title="Paiements"
-              tabs={[
-                { label: "Reçus", data: data.entrees.paye },
-                { label: "En attente", data: data.entrees.reste_a_encaisser }
-              ]}
-              colors={CATEGORY_COLORS}
-              chantierId={chantierId}
-              periode={periode}
-              refreshRecap={refreshRecapSilently}
-            />
-          </Grid>
-        </Grid>
         </>
       ) : error ? (
         <Alert severity="error">{error}</Alert>

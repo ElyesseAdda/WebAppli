@@ -119,6 +119,10 @@ const RecapTabsSection = ({
   periode,
   refreshRecap,
   showDocumentsPane = false,
+  /** Sans Paper ni titre : à placer dans un conteneur parent (ex. onglets Dépenses / Paiements) */
+  hideOuterChrome = false,
+  /** Panneau latéral : BC / contrats (dépenses) ou PDF situations & factures (paiements) */
+  documentsPaneVariant = "depenses",
 }) => {
   const [currentTab, setCurrentTab] = useState(0);
   const [openDetails, setOpenDetails] = useState({});
@@ -207,21 +211,29 @@ const RecapTabsSection = ({
     });
   };
 
+  const rootSx = hideOuterChrome
+    ? { p: 0, mb: 0, borderRadius: 0, boxShadow: "none" }
+    : {
+        p: 3,
+        mb: 3,
+        borderRadius: 4,
+        boxShadow: "0 4px 24px 0 rgba(0,0,0,0.06)",
+      };
+
+  const Root = hideOuterChrome ? Box : Paper;
+  const rootProps = hideOuterChrome
+    ? { sx: rootSx }
+    : { elevation: 0, sx: rootSx };
+
   return (
-    <Paper 
-      elevation={0} 
-      sx={{ 
-        p: 3, 
-        mb: 3, 
-        borderRadius: 4, 
-        boxShadow: '0 4px 24px 0 rgba(0,0,0,0.06)' 
-      }}
-    >
-      <Box display="flex" justifyContent="space-between" alignItems="center" mb={2}>
-        <Typography variant="h6" sx={{ fontWeight: 700, color: 'text.primary' }}>
-          {title}
-        </Typography>
-      </Box>
+    <Root {...rootProps}>
+      {!hideOuterChrome ? (
+        <Box display="flex" justifyContent="space-between" alignItems="center" mb={2}>
+          <Typography variant="h6" sx={{ fontWeight: 700, color: "text.primary" }}>
+            {title}
+          </Typography>
+        </Box>
+      ) : null}
 
       <Tabs 
         value={currentTab} 
@@ -341,6 +353,7 @@ const RecapTabsSection = ({
               refreshRecap={refreshRecap}
               paneMode={depensePaneMode}
               onPaneModeChange={setDepensePaneMode}
+              variant={documentsPaneVariant}
             />
           </Grid>
         ) : null}
@@ -455,7 +468,7 @@ const RecapTabsSection = ({
           </AccordionDetails>
         </Accordion>
       )}
-    </Paper>
+    </Root>
   );
 };
 

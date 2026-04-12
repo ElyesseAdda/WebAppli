@@ -76,6 +76,20 @@ const RecapCategoryDetails = ({
           { label: "Date", key: "date" },
           { label: "Montant", key: "montant" },
         ];
+      case "situation":
+        return [
+          { label: "N° situation", key: "numero" },
+          { label: "Date", key: "date" },
+          { label: "Montant", key: "montant" },
+          { label: "Statut", key: "statut" },
+        ];
+      case "facture":
+        return [
+          { label: "N° facture", key: "numero" },
+          { label: "Date", key: "date" },
+          { label: "Montant HT", key: "montant" },
+          { label: "Statut", key: "statut" },
+        ];
       default:
         return [
           { label: "N°", key: "numero" },

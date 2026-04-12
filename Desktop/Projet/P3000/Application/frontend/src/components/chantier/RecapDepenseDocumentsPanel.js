@@ -25,8 +25,9 @@ const openPreview = (url) => {
 };
 
 /**
- * Panneau latéral du récap « Dépenses » : onglet Tableau (même contenu que l’accordéon détail)
- * ou Documents (BC / contrats & avenants).
+ * Panneau latéral du récap : onglet Tableau (détail) ou Documents.
+ * - variant "depenses" : BC (matériel), contrats / avenants (sous-traitant).
+ * - variant "paiements" : PDF situations / factures client (lignes du récap).
  */
 const RecapDepenseDocumentsPanel = ({
   chantierId,
@@ -36,8 +37,10 @@ const RecapDepenseDocumentsPanel = ({
   refreshRecap,
   paneMode = "tableau",
   onPaneModeChange,
+  variant = "depenses",
 }) => {
-  const [loading, setLoading] = useState(true);
+  const isPaiements = variant === "paiements";
+  const [loading, setLoading] = useState(!isPaiements);
   const [bonsCommande, setBonsCommande] = useState([]);
   const [contrats, setContrats] = useState([]);
   /** Onglet sous-traitant (un onglet = une entreprise ST, comme les onglets fournisseur pour les BC) */
@@ -46,7 +49,7 @@ const RecapDepenseDocumentsPanel = ({
   const [bcFournisseurTab, setBcFournisseurTab] = useState(0);
 
   const load = useCallback(async () => {
-    if (!chantierId) return;
+    if (!chantierId || isPaiements) return;
     setLoading(true);
     try {
       const [bcRes, ctRes] = await Promise.all([
@@ -64,11 +67,17 @@ const RecapDepenseDocumentsPanel = ({
     } finally {
       setLoading(false);
     }
-  }, [chantierId]);
+  }, [chantierId, isPaiements]);
 
   useEffect(() => {
+    if (isPaiements) {
+      setLoading(false);
+      setBonsCommande([]);
+      setContrats([]);
+      return;
+    }
     load();
-  }, [load]);
+  }, [isPaiements, load]);
 
   /** Contrats du chantier regroupés par sous-traitant (id stable) */
   const contratsParSousTraitant = useMemo(() => {
@@ -97,6 +106,8 @@ const RecapDepenseDocumentsPanel = ({
       materiel: "Matériel",
       main_oeuvre: "Main d'œuvre",
       sous_traitant: "Sous-traitant",
+      situation: "Situation",
+      facture: "Facture client",
     };
     return m[category] || category;
   }, [category]);
@@ -342,8 +353,67 @@ const RecapDepenseDocumentsPanel = ({
     );
   };
 
+  /** PDF situations / factures client (même période que le tableau) */
+  const renderPaiementPdfList = () => {
+    if (!documents?.length) {
+      return (
+        <Typography variant="body2" color="text.secondary" sx={{ py: 2 }}>
+          {category === "situation"
+            ? "Aucune situation dans cette vue."
+            : "Aucune facture client dans cette vue."}
+        </Typography>
+      );
+    }
+    const previewUrl =
+      category === "situation"
+        ? (id) => `/api/preview-situation-v2/${id}/`
+        : (id) => `/api/preview-facture-v2/${id}/`;
+    return (
+      <Box sx={{ display: "flex", flexDirection: "column", gap: 1, maxHeight: 360, overflowY: "auto", pr: 0.5 }}>
+        {documents.map((doc) => (
+          <Card key={doc.id} variant="outlined" sx={{ borderRadius: 2 }}>
+            <CardActionArea onClick={() => openPreview(previewUrl(doc.id))}>
+              <CardContent sx={{ py: 1.25, "&:last-child": { pb: 1.25 } }}>
+                <Box display="flex" alignItems="center" gap={1}>
+                  <DescriptionOutlinedIcon color="action" fontSize="small" />
+                  <Typography
+                    variant="subtitle2"
+                    fontWeight={700}
+                    sx={{ flex: 1, minWidth: 0, wordBreak: "break-word" }}
+                  >
+                    {doc.numero != null && String(doc.numero).trim() !== ""
+                      ? String(doc.numero).trim()
+                      : category === "situation"
+                      ? `Situation #${doc.id}`
+                      : `Facture #${doc.id}`}
+                  </Typography>
+                  <Typography
+                    variant="subtitle2"
+                    fontWeight={800}
+                    color="primary.main"
+                    sx={{ whiteSpace: "nowrap", flexShrink: 0 }}
+                  >
+                    {formatMontant(doc.montant)} €
+                  </Typography>
+                </Box>
+                {doc.date ? (
+                  <Typography variant="caption" color="text.secondary" sx={{ display: "block", mt: 0.5, pl: 3.5 }}>
+                    {String(doc.date)}
+                  </Typography>
+                ) : null}
+              </CardContent>
+            </CardActionArea>
+          </Card>
+        ))}
+      </Box>
+    );
+  };
+
   const renderDocumentsTabContent = () => {
     if (!category) return null;
+    if (isPaiements && (category === "situation" || category === "facture")) {
+      return renderPaiementPdfList();
+    }
     if (loading) {
       return (
         <Box display="flex" justifyContent="center" py={4}>
@@ -458,11 +528,13 @@ const RecapDepenseDocumentsPanel = ({
       }}
     >
       <Typography variant="subtitle2" fontWeight={800} color="text.primary" sx={{ mb: 0.5 }}>
-        Détails dépenses
+        {isPaiements ? "Détails paiements" : "Détails dépenses"}
       </Typography>
       {!category ? (
         <Typography variant="body2" color="text.secondary" sx={{ py: 2 }}>
-          Aucune catégorie de dépense à afficher.
+          {isPaiements
+            ? "Aucune catégorie de paiement à afficher."
+            : "Aucune catégorie de dépense à afficher."}
         </Typography>
       ) : (
         <>
@@ -507,7 +579,17 @@ const RecapDepenseDocumentsPanel = ({
           ) : (
             <>
               <Typography variant="caption" color="text.secondary" sx={{ display: "block", mb: 1 }}>
-                Liés à : <strong>{titreCategorie}</strong> — clic pour ouvrir l&apos;aperçu PDF dans un nouvel onglet.
+                {isPaiements ? (
+                  <>
+                    <strong>{titreCategorie}</strong> — chaque ligne ouvre l&apos;aperçu PDF (situation ou facture
+                    client) dans un nouvel onglet.
+                  </>
+                ) : (
+                  <>
+                    Liés à : <strong>{titreCategorie}</strong> — clic pour ouvrir l&apos;aperçu PDF dans un nouvel
+                    onglet.
+                  </>
+                )}
               </Typography>
               <Box sx={{ flex: 1, minHeight: 0, overflow: "auto" }}>{renderDocumentsTabContent()}</Box>
             </>
