@@ -480,6 +480,7 @@ const RecapCategoryDetails = ({
 
   /** Saisie montant : espaces retirés, virgule → point, états intermédiaires autorisés (ex. « 12, ») */
   const handleChangeMontant = (fournisseur, raw) => {
+    if (global) return;
     if (raw === "" || raw === null) {
       setPaiements((prev) => ({ ...prev, [fournisseur]: "" }));
       return;
@@ -501,6 +502,7 @@ const RecapCategoryDetails = ({
   };
 
   const handleSave = async () => {
+    if (global) return;
     setSaving(true);
     setSaveError(null);
     setSaveSuccess(false);
@@ -638,6 +640,23 @@ const RecapCategoryDetails = ({
                 ) : null}
               </Box>
             </Box>
+            {global ? (
+              <Box
+                sx={{
+                  mb: 1,
+                  py: 0.65,
+                  px: 1,
+                  borderRadius: 1,
+                  borderLeft: (theme) => `3px solid ${theme.palette.primary.main}`,
+                  bgcolor: (theme) =>
+                    theme.palette.mode === "dark" ? "rgba(144, 202, 249, 0.08)" : "rgba(25, 118, 210, 0.06)",
+                }}
+              >
+                <Typography variant="caption" color="text.primary" sx={{ display: "block", lineHeight: 1.4 }}>
+                  Vue globale : montants affichés en lecture seule. Désactivez « Global » pour modifier par mois.
+                </Typography>
+              </Box>
+            ) : null}
             <TableContainer
               sx={
                 embedded
@@ -697,9 +716,14 @@ const RecapCategoryDetails = ({
                               "& .MuiInputBase-input": {
                                 textAlign: "right",
                                 fontVariantNumeric: "tabular-nums",
+                                ...(global && {
+                                  cursor: "default",
+                                  color: "text.primary",
+                                }),
                               },
                             }}
                             InputProps={{
+                              readOnly: global,
                               endAdornment: (
                                 <InputAdornment position="end">€</InputAdornment>
                               ),
@@ -713,14 +737,25 @@ const RecapCategoryDetails = ({
               </Table>
             </TableContainer>
             <Box mt={2} display="flex" alignItems="center" flexWrap="wrap" gap={2}>
-              <Button
-                variant="contained"
-                color="primary"
-                onClick={handleSave}
-                disabled={saving}
+              <Tooltip
+                title={
+                  global
+                    ? "Passez en vue par mois (désactiver Global) pour enregistrer des montants."
+                    : ""
+                }
+                disableHoverListener={!global}
               >
-                Sauvegarder
-              </Button>
+                <span>
+                  <Button
+                    variant="contained"
+                    color="primary"
+                    onClick={handleSave}
+                    disabled={saving || global}
+                  >
+                    Sauvegarder
+                  </Button>
+                </span>
+              </Tooltip>
               {saveSuccess && (
                 <Typography color="success.main" fontWeight={600}>
                   Sauvegardé !
