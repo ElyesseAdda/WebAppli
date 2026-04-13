@@ -13488,6 +13488,7 @@ def schedule_monthly_summary(request):
 
         agent_id = s.agent.id
         chantier_id = s.chantier.id
+        comment_norm = (s.comment or '').strip()
         
         # Gestion des agents journaliers vs horaires
         is_journalier = s.agent.type_paiement == 'journalier'
@@ -13500,13 +13501,15 @@ def schedule_monthly_summary(request):
             heures_increment = 1
             taux_horaire = s.agent.taux_Horaire or 0
 
-        key = (agent_id, chantier_id)
+        # Regroupement par commentaire : une ligne par (agent, chantier, commentaire)
+        key = (agent_id, chantier_id, comment_norm)
         if key not in result:
             result[key] = {
                 'agent_id': agent_id,
                 'agent_nom': f"{s.agent.name} {s.agent.surname}",
                 'chantier_id': chantier_id,
                 'chantier_nom': s.chantier.chantier_name,
+                'comment': comment_norm,
                 'type_paiement': s.agent.type_paiement,  # Ajout du type d'agent
                 'heures_normal': 0,
                 'heures_samedi': 0,
@@ -13584,7 +13587,7 @@ def schedule_monthly_summary(request):
 
     # Regrouper par chantier pour l'affichage
     chantier_map = {}
-    for (agent_id, chantier_id), data in result.items():
+    for (agent_id, chantier_id, _comment_key), data in result.items():
         if chantier_id not in chantier_map:
             chantier_map[chantier_id] = {
                 'chantier_id': chantier_id,
@@ -13618,15 +13621,21 @@ def schedule_monthly_summary(request):
     if agence_only:
         from .ecole_utils import get_agence_chantier_ids
         agence_ids = get_agence_chantier_ids()
-        merged_by_agent = {}
-        for (_agent_id, _chantier_id), data in result.items():
+        # Une ligne par (agent, commentaire) pour le tableau agence
+        # Clé (agent, commentaire, chantier) : en multi-agence, le même commentaire sur deux
+        # chantiers « agence » distincts ne doit pas être fusionné.
+        merged_by_agent_comment = {}
+        for (_agent_id, chantier_id_row, _comment), data in result.items():
             aid = data['agent_id']
-            if aid not in merged_by_agent:
-                merged_by_agent[aid] = {
+            cmt = data.get('comment') or ''
+            mkey = (aid, cmt, chantier_id_row)
+            if mkey not in merged_by_agent_comment:
+                merged_by_agent_comment[mkey] = {
                     'agent_id': data['agent_id'],
                     'agent_nom': data['agent_nom'],
-                    'chantier_id': agence_ids[0] if agence_ids else None,
+                    'chantier_id': data['chantier_id'],
                     'chantier_nom': data['chantier_nom'],
+                    'comment': cmt,
                     'type_paiement': data['type_paiement'],
                     'heures_normal': 0,
                     'heures_samedi': 0,
@@ -13640,7 +13649,7 @@ def schedule_monthly_summary(request):
                     'montant_overtime': 0,
                     'jours_majoration': [],
                 }
-            m = merged_by_agent[aid]
+            m = merged_by_agent_comment[mkey]
             for k in (
                 'heures_normal', 'heures_samedi', 'heures_dimanche', 'heures_ferie', 'heures_overtime',
                 'montant_normal', 'montant_samedi', 'montant_dimanche', 'montant_ferie', 'montant_overtime',
@@ -13648,15 +13657,27 @@ def schedule_monthly_summary(request):
                 m[k] += data[k]
             m['jours_majoration'].extend(data['jours_majoration'])
 
-        details = sorted(merged_by_agent.values(), key=lambda x: (x['agent_nom'] or '').lower())
+        details = sorted(
+            merged_by_agent_comment.values(),
+            key=lambda x: (
+                (x['agent_nom'] or '').lower(),
+                (x.get('chantier_nom') or '').lower(),
+                x.get('comment') or '',
+            ),
+        )
         tot_h = (
             sum(d['heures_normal'] + d['heures_samedi'] + d['heures_dimanche'] + d['heures_ferie'] + d['heures_overtime'] for d in details)
         )
         tot_m = (
             sum(d['montant_normal'] + d['montant_samedi'] + d['montant_dimanche'] + d['montant_ferie'] + d['montant_overtime'] for d in details)
         )
+        try:
+            cf = int(chantier_id_filter) if chantier_id_filter not in (None, '') else None
+        except (TypeError, ValueError):
+            cf = None
+        resolved_top_chantier_id = cf if cf is not None else (agence_ids[0] if agence_ids else None)
         return Response({
-            'chantier_id': agence_ids[0] if agence_ids else None,
+            'chantier_id': resolved_top_chantier_id,
             'chantier_nom': 'Agence (planning)',
             'details': details,
             'total_heures_normal': sum(d['heures_normal'] for d in details),
@@ -13726,7 +13747,8 @@ def schedule_yearly_summary(request):
     elif chantier_id_filter:
         schedules = schedules.filter(chantier_id=chantier_id_filter)
 
-    monthly_agents = {}  # {month: {agent_id: {...}}}
+    # {month: {agent_id: {...}}} ou, si agence_only, {month: {(agent_id, comment, chantier_id): {...}}}
+    monthly_agents = {}
     for s in schedules:
         if not s.chantier:
             continue
@@ -13738,6 +13760,12 @@ def schedule_yearly_summary(request):
             continue
         m = date_creneau.month
         agent_id = s.agent.id
+        comment_norm = (s.comment or '').strip()
+        chantier_id_row = s.chantier_id
+        if agence_only:
+            agent_subkey = (agent_id, comment_norm, chantier_id_row)
+        else:
+            agent_subkey = agent_id
 
         is_journalier = s.agent.type_paiement == 'journalier'
         if is_journalier:
@@ -13749,8 +13777,8 @@ def schedule_yearly_summary(request):
 
         if m not in monthly_agents:
             monthly_agents[m] = {}
-        if agent_id not in monthly_agents[m]:
-            monthly_agents[m][agent_id] = {
+        if agent_subkey not in monthly_agents[m]:
+            row = {
                 'agent_id': agent_id,
                 'agent_nom': f"{s.agent.name} {s.agent.surname}",
                 'type_paiement': s.agent.type_paiement,
@@ -13759,7 +13787,12 @@ def schedule_yearly_summary(request):
                 'montant_normal': 0, 'montant_samedi': 0, 'montant_dimanche': 0,
                 'montant_ferie': 0, 'montant_overtime': 0,
             }
-        data = monthly_agents[m][agent_id]
+            if agence_only:
+                row['comment'] = comment_norm
+                row['chantier_id'] = chantier_id_row
+                row['chantier_nom'] = s.chantier.chantier_name
+            monthly_agents[m][agent_subkey] = row
+        data = monthly_agents[m][agent_subkey]
         has_overtime = s.overtime_hours and s.overtime_hours > 0
 
         if is_journalier:
@@ -13789,7 +13822,17 @@ def schedule_yearly_summary(request):
     result_months = []
     for m in range(1, 13):
         agents = monthly_agents.get(m, {})
-        details = sorted(agents.values(), key=lambda x: (x['agent_nom'] or '').lower())
+        if agence_only:
+            details = sorted(
+                agents.values(),
+                key=lambda x: (
+                    (x['agent_nom'] or '').lower(),
+                    (x.get('chantier_nom') or '').lower(),
+                    x.get('comment') or '',
+                ),
+            )
+        else:
+            details = sorted(agents.values(), key=lambda x: (x['agent_nom'] or '').lower())
         keys = ('heures_normal', 'heures_samedi', 'heures_dimanche', 'heures_ferie', 'heures_overtime',
                 'montant_normal', 'montant_samedi', 'montant_dimanche', 'montant_ferie', 'montant_overtime')
         tot_h = sum(d['heures_normal'] + d['heures_samedi'] + d['heures_dimanche'] + d['heures_ferie'] + d['heures_overtime'] for d in details)

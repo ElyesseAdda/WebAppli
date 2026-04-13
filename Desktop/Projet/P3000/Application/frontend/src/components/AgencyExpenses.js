@@ -389,27 +389,46 @@ const AgencyExpenses = () => {
     return `${h.toFixed(2)} h`;
   };
 
+  const planningCommentKey = (comment) => {
+    const s = comment || "";
+    let h = 0;
+    for (let i = 0; i < s.length; i++) {
+      h = (Math.imul(31, h) + s.charCodeAt(i)) | 0;
+    }
+    return String(Math.abs(h));
+  };
+
   const planningRowsVirtual = useMemo(() => {
     if (!planningAgence?.details?.length) return [];
-    return planningAgence.details.map((row) => ({
-      id: `planning-agence-${row.agent_id}`,
-      description: `${row.agent_nom} — planning agence (${formatHeuresCommeResume(
+    return planningAgence.details.map((row, idx) => {
+      const cmt = (row.comment || "").trim();
+      const suffix = planningCommentKey(cmt);
+      const chantierLabel = row.chantier_nom ? `${row.chantier_nom} — ` : "";
+      const heuresLabel = formatHeuresCommeResume(
         sumHeuresPlanningAgent(row),
         row.type_paiement
-      )})`,
-      category: "Planning agence",
-      amount: sumMontantPlanningAgent(row),
-      isPlanningRow: true,
-    }));
+      );
+      return {
+        id: `planning-agence-${row.agent_id}-${suffix}-${idx}`,
+        // Description : agent + chantier (si multi-agence) + heures — le texte planning reste en colonne Commentaire
+        description: `${row.agent_nom} — ${chantierLabel}${heuresLabel}`,
+        planningComment: cmt,
+        category: "Planning agence",
+        amount: sumMontantPlanningAgent(row),
+        isPlanningRow: true,
+      };
+    });
   }, [planningAgence]);
 
   const planningRowsFiltered = useMemo(() => {
     return planningRowsVirtual.filter((row) => {
-      if (
-        filters.description &&
-        !row.description.toLowerCase().includes(filters.description.toLowerCase())
-      ) {
-        return false;
+      if (filters.description) {
+        const q = filters.description.toLowerCase();
+        const inDesc = row.description.toLowerCase().includes(q);
+        const inPlanningComment =
+          row.isPlanningRow &&
+          (row.planningComment || "").toLowerCase().includes(q);
+        if (!inDesc && !inPlanningComment) return false;
       }
       if (
         filters.category &&
@@ -827,7 +846,21 @@ const AgencyExpenses = () => {
                       {parseFloat(row.amount).toFixed(2)} €
                     </TableCell>
                     <TableCell sx={{ minWidth: 160, maxWidth: 280, verticalAlign: "top" }}>
-                      {(row.isPlanningRow || row.category === "Prime") ? null : (
+                      {row.isPlanningRow ? (
+                        <Typography
+                          variant="body2"
+                          sx={{
+                            fontSize: "0.82rem",
+                            color: "#555",
+                            lineHeight: 1.4,
+                            whiteSpace: "pre-wrap",
+                            wordBreak: "break-word",
+                            py: 0.5,
+                          }}
+                        >
+                          {row.planningComment ? row.planningComment : "—"}
+                        </Typography>
+                      ) : row.category === "Prime" ? null : (
                         <TextField
                           size="small"
                           variant="standard"
