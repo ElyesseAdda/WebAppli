@@ -334,6 +334,10 @@ const RecapCategoryDetails = ({
   const [saveError, setSaveError] = React.useState(null);
   const [saveSuccess, setSaveSuccess] = React.useState(false);
 
+  // Compteur anti-race-condition : seul le dernier appel loadPaiements applique ses résultats
+  const loadPaiementsGenRef = React.useRef(0);
+  const [loadingPaiements, setLoadingPaiements] = React.useState(false);
+
   // Filtre fournisseurs affichés (null = tous, sinon Set des noms à afficher) — chargé depuis la DB
   const [visibleFournisseurs, setVisibleFournisseurs] = React.useState(null);
   const [modalFournisseursOpen, setModalFournisseursOpen] = React.useState(false);
@@ -492,17 +496,21 @@ const RecapCategoryDetails = ({
   // Fonction pour charger les paiements depuis l'API
   const loadPaiements = React.useCallback(async () => {
     if (category === "materiel" && detailsActive && chantierId) {
+      const gen = ++loadPaiementsGenRef.current;
+      const isStale = () => gen !== loadPaiementsGenRef.current;
+      setLoadingPaiements(true);
+
       try {
-        // Récupérer tous les fournisseurs depuis le modèle Fournisseur
         const fournisseursRes = await axios.get("/api/fournisseurs/");
+        if (isStale()) return;
         const fournisseursList = fournisseursRes.data.map((f) => f.name);
         setFournisseurs(fournisseursList);
 
-        // Charger la préférence "fournisseurs à afficher" pour ce chantier (sauvegardée en DB)
         try {
           const prefRes = await axios.get(
             `/api/chantier/${chantierId}/recap-fournisseurs-affichage/`
           );
+          if (isStale()) return;
           const list = prefRes.data?.fournisseurs_visibles;
           if (list && Array.isArray(list) && list.length > 0) {
             const validNames = list.filter((name) =>
@@ -517,42 +525,35 @@ const RecapCategoryDetails = ({
             setVisibleFournisseurs(null);
           }
         } catch (_) {
+          if (isStale()) return;
           setVisibleFournisseurs(null);
         }
 
-        // Initialiser tous les fournisseurs à 0 pour éviter les champs vides
         const paiementsInit = {};
         fournisseursList.forEach((f) => {
           paiementsInit[f] = 0;
         });
 
-        // Récupérer les paiements sauvegardés depuis l'API pour la période courante
         let paiementsUrl = `/api/chantier/${chantierId}/paiements-materiel/`;
         if (!global && periode?.mois && periode?.annee) {
           paiementsUrl += `?mois=${periode.mois}&annee=${periode.annee}`;
         }
         
         const paiementsRes = await axios.get(paiementsUrl);
+        if (isStale()) return;
         const paiementsSauvegardes = paiementsRes.data || [];
 
-        // Mettre à jour avec les montants À PAYER existants depuis l'API
         paiementsSauvegardes.forEach((paiement) => {
           if (paiement.fournisseur) {
-            // Utiliser montant_a_payer s'il est renseigné (y compris 0 et négatif), sinon utiliser montant
             const montantAPayer = parseFloat(paiement.montant_a_payer);
             const montant = parseFloat(paiement.montant) || 0;
             const montantFinal = (paiement.montant_a_payer != null && paiement.montant_a_payer !== '' && !isNaN(montantAPayer)) ? montantAPayer : montant;
-            // En mode global, additionner tous les montants pour chaque fournisseur
-            // En mode période, remplacer (car un seul paiement par fournisseur/mois)
             if (global) {
-              // Initialiser si pas encore présent dans paiementsInit
               if (!paiementsInit.hasOwnProperty(paiement.fournisseur)) {
                 paiementsInit[paiement.fournisseur] = 0;
               }
-              // Convertir en nombre avant l'addition pour éviter la concaténation de chaînes
               paiementsInit[paiement.fournisseur] = Number(paiementsInit[paiement.fournisseur]) + Number(montantFinal);
             } else {
-              // En mode période, s'assurer que le fournisseur existe dans paiementsInit
               if (paiementsInit.hasOwnProperty(paiement.fournisseur)) {
                 paiementsInit[paiement.fournisseur] = Number(montantFinal);
               }
@@ -561,10 +562,10 @@ const RecapCategoryDetails = ({
         });
 
         setPaiements(paiementsInit);
+        setLoadingPaiements(false);
       } catch (error) {
-        // En cas d'erreur, initialiser tous les fournisseurs à 0
+        if (isStale()) return;
         const paiementsInit = {};
-        // Utiliser l'état fournisseurs si disponible, sinon utiliser les documents pour extraire les fournisseurs
         const fournisseursToUse = fournisseurs.length > 0 ? fournisseurs : 
           (documents ? [...new Set(documents.map(d => d.fournisseur).filter(Boolean))] : []);
         
@@ -572,11 +573,9 @@ const RecapCategoryDetails = ({
           paiementsInit[f] = 0;
         });
         
-        // Utiliser les documents passés en props si disponibles
         if (documents) {
           documents.forEach((doc) => {
             if (doc.fournisseur) {
-              // Utiliser montant_a_payer s'il est renseigné (y compris 0 et négatif), sinon utiliser montant
               const montantAPayer = parseFloat(doc.montant_a_payer);
               const montant = parseFloat(doc.montant) || 0;
               const montantFinal = (doc.montant_a_payer != null && doc.montant_a_payer !== '' && !isNaN(montantAPayer)) ? montantAPayer : montant;
@@ -589,9 +588,22 @@ const RecapCategoryDetails = ({
           });
         }
         setPaiements(paiementsInit);
+        setLoadingPaiements(false);
       }
     }
   }, [category, detailsActive, embedded, open, chantierId, periode, global, documents]);
+
+  // Réinitialiser les paiements immédiatement lors du changement de mode/période
+  // pour éviter d'afficher des montants cumulés (global) dans une vue mensuelle
+  React.useEffect(() => {
+    if (category === "materiel") {
+      setPaiements((prev) => {
+        const reset = {};
+        Object.keys(prev).forEach((k) => { reset[k] = 0; });
+        return reset;
+      });
+    }
+  }, [category, global, periode?.mois, periode?.annee]);
 
   React.useEffect(() => {
     loadPaiements();
@@ -622,7 +634,7 @@ const RecapCategoryDetails = ({
   };
 
   const handleSave = async () => {
-    if (global) return;
+    if (global || loadingPaiements) return;
     setSaving(true);
     setSaveError(null);
     setSaveSuccess(false);
@@ -889,7 +901,7 @@ const RecapCategoryDetails = ({
                     variant="contained"
                     color="primary"
                     onClick={handleSave}
-                    disabled={saving || global}
+                    disabled={saving || global || loadingPaiements}
                   >
                     Sauvegarder
                   </Button>
