@@ -585,6 +585,22 @@ const PlanningHebdoAgent = ({
     return [{ hour, day }];
   };
 
+  /** Étend chaque cellule à tout le bloc visuellement fusionné (rowspan/colspan), sans doublons. */
+  const expandCellsToMergeGroups = (cells) => {
+    const seen = new Set();
+    const out = [];
+    for (const cell of cells) {
+      for (const c of getSpanCells(cell.hour, cell.day)) {
+        const k = `${c.hour}-${c.day}`;
+        if (!seen.has(k)) {
+          seen.add(k);
+          out.push(c);
+        }
+      }
+    }
+    return out;
+  };
+
   // Double-clic pour ouvrir directement le modal
   const handleCellDoubleClick = (hour, day, event) => {
     event.preventDefault();
@@ -651,22 +667,23 @@ const PlanningHebdoAgent = ({
 
     if (cellInfo.ctrlKey || cellInfo.metaKey) {
       setSelectedCells((prev) => {
-        const exists = prev.some(
-          (cell) => cell.hour === hour && cell.day === day
+        const groupSet = new Set(groupCells.map((c) => `${c.hour}-${c.day}`));
+        const existingSet = new Set(prev.map((c) => `${c.hour}-${c.day}`));
+        // Tout le bloc fusionné doit être pris en compte (pas seulement l’ancrage) : sinon Ctrl+Maj
+        // laisse une sélection partielle et la suppression n’efface qu’une partie du groupe.
+        const allGroupSelected = groupCells.every((c) =>
+          existingSet.has(`${c.hour}-${c.day}`)
         );
-        if (exists) {
-          const groupSet = new Set(groupCells.map((c) => `${c.hour}-${c.day}`));
+        if (allGroupSelected) {
           return prev.filter((cell) => !groupSet.has(`${cell.hour}-${cell.day}`));
-        } else {
-          setLastSelectedCell({ hour, day });
-          const existingSet = new Set(prev.map((c) => `${c.hour}-${c.day}`));
-          const toAdd = groupCells.filter((c) => !existingSet.has(`${c.hour}-${c.day}`));
-          return [...prev, ...toAdd];
         }
+        setLastSelectedCell({ hour, day });
+        const toAdd = groupCells.filter((c) => !existingSet.has(`${c.hour}-${c.day}`));
+        return [...prev, ...toAdd];
       });
     } else if (cellInfo.shiftKey && lastSelectedCell) {
       const range = getCellRange(lastSelectedCell, { hour, day });
-      setSelectedCells(range);
+      setSelectedCells(expandCellsToMergeGroups(range));
     } else if (cellInfo.shiftKey && !lastSelectedCell) {
       setSelectedCells(groupCells);
       setLastSelectedCell({ hour, day });
@@ -796,9 +813,10 @@ const PlanningHebdoAgent = ({
     }
 
     try {
+      const expandedSelection = expandCellsToMergeGroups(selectedCells);
       // Filtrer les cellules pour exclure les heures de pause
-      const validCells = selectedCells.filter(cell => !isPauseHour(cell.hour));
-      const excludedPauseCells = selectedCells.filter(cell => isPauseHour(cell.hour));
+      const validCells = expandedSelection.filter(cell => !isPauseHour(cell.hour));
+      const excludedPauseCells = expandedSelection.filter(cell => isPauseHour(cell.hour));
       
       if (validCells.length === 0) {
         alert("Aucune cellule valide sélectionnée (les heures de pause sont automatiquement exclues).");
@@ -843,7 +861,7 @@ const PlanningHebdoAgent = ({
           newSchedule[selectedAgentId] = {};
         }
 
-        selectedCells.forEach((cell) => {
+        expandedSelection.forEach((cell) => {
           if (!newSchedule[selectedAgentId][cell.hour]) {
             newSchedule[selectedAgentId][cell.hour] = {};
           }
@@ -884,13 +902,15 @@ const PlanningHebdoAgent = ({
       return;
     }
 
+    const cellsToDelete = expandCellsToMergeGroups(selectedCells);
+
     const confirmation = window.confirm(
-      `Êtes-vous sûr de vouloir supprimer les assignations de ${selectedCells.length} cellule(s) sélectionnée(s) ?`
+      `Êtes-vous sûr de vouloir supprimer les assignations de ${cellsToDelete.length} créneau(x) (groupes fusionnés inclus) ?`
     );
     if (!confirmation) return;
 
     // Préparer les données à envoyer
-    const deletions = selectedCells.map((cell) => {
+    const deletions = cellsToDelete.map((cell) => {
       // Calculer la date réelle du créneau
       // Utiliser la fonction utilitaire pour gérer correctement les semaines qui chevauchent les années
       const startOfWeek = getWeekStartDate(selectedWeek, selectedYear).startOf("isoWeek");
@@ -930,7 +950,7 @@ const PlanningHebdoAgent = ({
           newSchedule[selectedAgentId] = {};
         }
 
-        selectedCells.forEach((cell) => {
+        cellsToDelete.forEach((cell) => {
           if (!newSchedule[selectedAgentId][cell.hour]) {
             newSchedule[selectedAgentId][cell.hour] = {};
           }
@@ -946,7 +966,7 @@ const PlanningHebdoAgent = ({
       closeChantierModal();
 
       alert(
-        `${selectedCells.length} assignation(s) supprimée(s) avec succès !`
+        `${cellsToDelete.length} assignation(s) supprimée(s) avec succès !`
       );
     } catch (error) {
       console.error("Erreur lors de la suppression des assignations :", error);
