@@ -27,6 +27,18 @@ import { useParams } from "react-router-dom";
 import { FaEdit, FaTrash, FaChevronRight, FaChevronDown } from "react-icons/fa";
 import { FilterCell, StyledTextField } from "../styles/tableStyles";
 
+/** Euros formatés localement (espaces milliers, virgule décimale), ex. 12 270,30 € */
+function formatMontantEuroFR(value) {
+  const n = Number(value);
+  if (!Number.isFinite(n)) return "0,00 €";
+  return new Intl.NumberFormat("fr-FR", {
+    style: "currency",
+    currency: "EUR",
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  }).format(n);
+}
+
 const AgencyExpenses = () => {
   const { agenceId } = useParams();
   const [expenses, setExpenses] = useState([]);
@@ -779,7 +791,7 @@ const AgencyExpenses = () => {
                       align="center"
                       sx={{ fontWeight: 700, color: "rgba(27, 120, 188, 1)", fontSize: "0.9rem" }}
                     >
-                      {parseFloat(row.amount).toFixed(2)} €
+                      {formatMontantEuroFR(row.amount)}
                     </TableCell>
                     <TableCell />
                     <TableCell />
@@ -843,7 +855,7 @@ const AgencyExpenses = () => {
                       {row.category}
                     </TableCell>
                     <TableCell align="center" sx={{ color: sourceColor }}>
-                      {parseFloat(row.amount).toFixed(2)} €
+                      {formatMontantEuroFR(row.amount)}
                     </TableCell>
                     <TableCell sx={{ minWidth: 160, maxWidth: 280, verticalAlign: "top" }}>
                       {row.isPlanningRow ? (
@@ -936,7 +948,7 @@ const AgencyExpenses = () => {
                   </TableCell>
                   <TableCell align="center">{row.category}</TableCell>
                   <TableCell align="center">
-                    {parseFloat(row.amount).toFixed(2)} €
+                    {formatMontantEuroFR(row.amount)}
                   </TableCell>
                   <TableCell sx={{ minWidth: 160, maxWidth: 280, verticalAlign: "top" }}>
                     <TextField
@@ -988,7 +1000,7 @@ const AgencyExpenses = () => {
                 align="center"
                 sx={{ fontWeight: "bold", color: "rgba(27, 120, 188, 1)" }}
               >
-                {calculateMonthlyTotal().toFixed(2)} €
+                {formatMontantEuroFR(calculateMonthlyTotal())}
               </TableCell>
               <TableCell />
               <TableCell />
@@ -1055,7 +1067,7 @@ const AgencyExpenses = () => {
                   lineHeight: 1.15,
                 }}
               >
-                {yearlyTotal.toFixed(2)} €
+                {formatMontantEuroFR(yearlyTotal)}
               </Typography>
               <Box
                 sx={{
@@ -1192,7 +1204,7 @@ const AgencyExpenses = () => {
                       bgcolor: "rgba(27, 120, 188, 0.08)",
                     }}
                   >
-                    {total.toFixed(2)} €
+                    {formatMontantEuroFR(total)}
                   </Typography>
                 </Box>
               ))}
