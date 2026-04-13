@@ -505,7 +505,12 @@ const PlanningHebdoAgent = ({
       let spanStart = null;
       let spanCount = 0;
       hours.forEach((hour) => {
-        const cellKey = getCellKey(agentSchedule, hour, day);
+        let cellKey = getCellKey(agentSchedule, hour, day);
+        // Coupure obligatoire sur la pause déjeuner : sinon un rowspan « plein » recouvre 12h-13h
+        // (et la ligne suivante via skipped), alors que ces créneaux ne doivent pas être colorés chantier.
+        if (!isAgentJournalier && isPauseHour(hour)) {
+          cellKey = null;
+        }
         if (cellKey && cellKey === prevKey) {
           spanCount++;
         } else {
@@ -562,7 +567,7 @@ const PlanningHebdoAgent = ({
     });
 
     return { cells, skipped };
-  }, [schedule, selectedAgentId, hours, daysOfWeek]);
+  }, [schedule, selectedAgentId, hours, daysOfWeek, isAgentJournalier]);
 
   const getSpanCells = (hour, day) => {
     const info = mergedBlocks.cells[`${hour}-${day}`];
