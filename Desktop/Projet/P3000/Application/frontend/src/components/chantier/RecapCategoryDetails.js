@@ -79,6 +79,45 @@ const formatTotauxHeuresMainOeuvre = (docs) => {
   return parts.length ? parts.join(" · ") : "—";
 };
 
+const MONTANT_INPUT_MAX_DECIMALS = 2;
+
+const roundMontant2 = (n) => {
+  const x = Number(n);
+  if (Number.isNaN(x)) return 0;
+  return Math.round(x * 100) / 100;
+};
+
+/** Chaîne avec point décimal : au plus MONTANT_INPUT_MAX_DECIMALS chiffres après le point (conserve « 12. » en saisie). */
+const truncateDecimalStringDot = (dotStr) => {
+  const i = dotStr.indexOf(".");
+  if (i === -1) return dotStr;
+  const intp = dotStr.slice(0, i);
+  const frac = dotStr.slice(i + 1);
+  if (frac === "") return `${intp}.`;
+  return `${intp}.${frac.slice(0, MONTANT_INPUT_MAX_DECIMALS)}`;
+};
+
+/** Affichage des champs montant (fr-FR, max 2 décimales). */
+const formatMontantPaiementFieldValue = (raw) => {
+  if (raw === undefined || raw === null || raw === "") return "";
+  const normalized = String(raw).replace(/\s/g, "").replace(",", ".");
+  if (normalized === "-" || normalized === "-." || normalized === ".")
+    return normalized.replace(".", ",");
+  if (/^-?\d+\.$/.test(normalized))
+    return `${normalized.slice(0, -1).replace(".", ",")},`;
+  const n = Number(normalized);
+  if (Number.isNaN(n)) return String(raw).replace(/\s/g, "");
+  return roundMontant2(n).toLocaleString("fr-FR", {
+    minimumFractionDigits: 0,
+    maximumFractionDigits: MONTANT_INPUT_MAX_DECIMALS,
+  });
+};
+
+const sortFournisseursAlpha = (names) =>
+  [...(names || [])].sort((a, b) =>
+    String(a || "").localeCompare(String(b || ""), "fr", { sensitivity: "base" })
+  );
+
 /** Style proposé pour les lignes « Total » des tableaux récap : bandeau teinté, bordure primaire, montants lisibles */
 const recapTableFooterRowSx = (theme) => ({
   "& .MuiTableCell-root": {
@@ -401,19 +440,22 @@ const RecapCategoryDetails = ({
     setModalSelected(checked ? new Set(fournisseurs) : new Set());
   };
 
-  // Liste des fournisseurs à afficher dans le tableau (filtrée par sélection + recherche dans le modal)
-  const displayedFournisseurs =
+  // Liste des fournisseurs à afficher dans le tableau (filtrée + ordre alphabétique)
+  const displayedFournisseurs = sortFournisseursAlpha(
     visibleFournisseurs === null
       ? fournisseurs
-      : fournisseurs.filter((f) => visibleFournisseurs.has(f));
+      : fournisseurs.filter((f) => visibleFournisseurs.has(f))
+  );
 
   /** Somme des montants affichés (fournisseurs visibles) — tableau matériel */
-  const totalMontantsFournisseurs = displayedFournisseurs.reduce((acc, f) => {
-    const v = paiements[f];
-    if (v === undefined || v === null || v === "") return acc;
-    const n = Number(String(v).replace(",", "."));
-    return acc + (Number.isNaN(n) ? 0 : n);
-  }, 0);
+  const totalMontantsFournisseurs = roundMontant2(
+    displayedFournisseurs.reduce((acc, f) => {
+      const v = paiements[f];
+      if (v === undefined || v === null || v === "") return acc;
+      const n = Number(String(v).replace(/\s/g, "").replace(",", "."));
+      return acc + (Number.isNaN(n) ? 0 : n);
+    }, 0)
+  );
 
   /** Totaux pied de tableau (hors matériel fournisseur) */
   const rowsForFooter = displayDocuments || [];
@@ -471,7 +513,9 @@ const RecapCategoryDetails = ({
 
   const fournisseursMatchModalSearch = React.useMemo(() => {
     const q = (modalSearch || "").toLowerCase().trim();
-    return fournisseurs.filter((f) => f.toLowerCase().includes(q));
+    return sortFournisseursAlpha(
+      fournisseurs.filter((f) => f.toLowerCase().includes(q))
+    );
   }, [fournisseurs, modalSearch]);
 
   // Pour le modal : recherche + filtre attributs (BC / montant)
@@ -503,7 +547,9 @@ const RecapCategoryDetails = ({
       try {
         const fournisseursRes = await axios.get("/api/fournisseurs/");
         if (isStale()) return;
-        const fournisseursList = fournisseursRes.data.map((f) => f.name);
+        const fournisseursList = sortFournisseursAlpha(
+          fournisseursRes.data.map((f) => f.name)
+        );
         setFournisseurs(fournisseursList);
 
         try {
@@ -548,14 +594,17 @@ const RecapCategoryDetails = ({
             const montantAPayer = parseFloat(paiement.montant_a_payer);
             const montant = parseFloat(paiement.montant) || 0;
             const montantFinal = (paiement.montant_a_payer != null && paiement.montant_a_payer !== '' && !isNaN(montantAPayer)) ? montantAPayer : montant;
+            const montantArrondi = roundMontant2(montantFinal);
             if (global) {
               if (!paiementsInit.hasOwnProperty(paiement.fournisseur)) {
                 paiementsInit[paiement.fournisseur] = 0;
               }
-              paiementsInit[paiement.fournisseur] = Number(paiementsInit[paiement.fournisseur]) + Number(montantFinal);
+              paiementsInit[paiement.fournisseur] = roundMontant2(
+                Number(paiementsInit[paiement.fournisseur]) + Number(montantArrondi)
+              );
             } else {
               if (paiementsInit.hasOwnProperty(paiement.fournisseur)) {
-                paiementsInit[paiement.fournisseur] = Number(montantFinal);
+                paiementsInit[paiement.fournisseur] = montantArrondi;
               }
             }
           }
@@ -566,9 +615,14 @@ const RecapCategoryDetails = ({
       } catch (error) {
         if (isStale()) return;
         const paiementsInit = {};
-        const fournisseursToUse = fournisseurs.length > 0 ? fournisseurs : 
-          (documents ? [...new Set(documents.map(d => d.fournisseur).filter(Boolean))] : []);
-        
+        const fournisseursToUse = sortFournisseursAlpha(
+          fournisseurs.length > 0
+            ? fournisseurs
+            : documents
+              ? [...new Set(documents.map((d) => d.fournisseur).filter(Boolean))]
+              : []
+        );
+
         fournisseursToUse.forEach((f) => {
           paiementsInit[f] = 0;
         });
@@ -579,10 +633,13 @@ const RecapCategoryDetails = ({
               const montantAPayer = parseFloat(doc.montant_a_payer);
               const montant = parseFloat(doc.montant) || 0;
               const montantFinal = (doc.montant_a_payer != null && doc.montant_a_payer !== '' && !isNaN(montantAPayer)) ? montantAPayer : montant;
+              const montantArrondi = roundMontant2(montantFinal);
               if (global) {
-                paiementsInit[doc.fournisseur] = Number(paiementsInit[doc.fournisseur] || 0) + Number(montantFinal);
+                paiementsInit[doc.fournisseur] = roundMontant2(
+                  Number(paiementsInit[doc.fournisseur] || 0) + Number(montantArrondi)
+                );
               } else {
-                paiementsInit[doc.fournisseur] = Number(montantFinal);
+                paiementsInit[doc.fournisseur] = montantArrondi;
               }
             }
           });
@@ -623,15 +680,13 @@ const RecapCategoryDetails = ({
       return;
     }
     if (/^-?\d*\.?\d*$/.test(cleaned)) {
-      setPaiements((prev) => ({ ...prev, [fournisseur]: cleaned }));
+      const limited = truncateDecimalStringDot(cleaned);
+      setPaiements((prev) => ({ ...prev, [fournisseur]: limited }));
     }
   };
 
-  const montantFieldValue = (fournisseur) => {
-    const v = paiements[fournisseur];
-    if (v === undefined || v === null || v === "") return "";
-    return String(v);
-  };
+  const montantFieldValue = (fournisseur) =>
+    formatMontantPaiementFieldValue(paiements[fournisseur]);
 
   const handleSave = async () => {
     if (global || loadingPaiements) return;
@@ -645,13 +700,15 @@ const RecapCategoryDetails = ({
         .filter((f) => {
           const v = paiements[f];
           if (v === undefined || v === null || v === "") return false;
-          const n = Number(String(v).replace(",", "."));
+          const n = Number(String(v).replace(/\s/g, "").replace(",", "."));
           return !Number.isNaN(n);
         })
         .map((f) => ({
           fournisseur: f,
           montant: 0, // Montant payé reste à 0 (non modifiable par l'utilisateur ici)
-          montant_a_payer: Number(String(paiements[f]).replace(",", ".")), // Les montants saisis sont les montants à payer
+          montant_a_payer: roundMontant2(
+            Number(String(paiements[f]).replace(/\s/g, "").replace(",", "."))
+          ),
           mois: periode.mois,
           annee: periode.annee,
         }));
