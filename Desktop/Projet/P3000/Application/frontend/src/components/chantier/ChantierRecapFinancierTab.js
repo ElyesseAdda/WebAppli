@@ -207,47 +207,58 @@ const ChantierRecapFinancierTab = ({ chantierId, isActive = true }) => {
     <Box sx={{ p: 2 }}>
       <Paper
         sx={{
-          p: 2,
-          mb: 3,
+          px: 1.5,
+          pt: 1.35,
+          pb: 1,
+          mb: 2,
           position: "sticky",
-          top: 0,
+          top: 8,
           zIndex: (theme) => theme.zIndex.appBar - 1,
           bgcolor: "background.paper",
-          boxShadow: (theme) => theme.shadows[2],
+          border: "1px solid",
+          borderColor: "divider",
+          borderRadius: 2.5,
+          boxShadow: "0 2px 12px 0 rgba(0,0,0,0.05)",
+          backdropFilter: "blur(4px)",
         }}
       >
-        <Box display="flex" alignItems="center" gap={2} flexWrap="wrap">
-          <Typography variant="h5" sx={{ flex: 1, minWidth: 200 }}>
+        <Box display="flex" alignItems="center" gap={1} flexWrap="wrap">
+          <Typography
+            variant="h6"
+            sx={{ flex: 1, minWidth: 200, fontWeight: 700, fontSize: { xs: "1rem", md: "1.08rem" } }}
+          >
             Récapitulatif Financier du Chantier
           </Typography>
           {refreshing ? (
-            <CircularProgress size={22} thickness={5} aria-label="Mise à jour des données" />
+            <CircularProgress size={18} thickness={5} aria-label="Mise à jour des données" />
           ) : null}
-          <FormControl sx={{ minWidth: 120 }} size="small">
+          <FormControl sx={{ minWidth: 108 }} size="small">
             <InputLabel>Mois</InputLabel>
             <Select
               value={periode.mois}
               label="Mois"
               onChange={handleMoisChange}
               disabled={global}
+              sx={{ fontSize: "0.83rem" }}
             >
               {moisOptions.map((mois, idx) => (
-                <MenuItem key={mois} value={idx + 1}>
+                <MenuItem key={mois} value={idx + 1} sx={{ fontSize: "0.83rem" }}>
                   {mois}
                 </MenuItem>
               ))}
             </Select>
           </FormControl>
-          <FormControl sx={{ minWidth: 100 }} size="small">
+          <FormControl sx={{ minWidth: 92 }} size="small">
             <InputLabel>Année</InputLabel>
             <Select
               value={periode.annee}
               label="Année"
               onChange={handleAnneeChange}
               disabled={global}
+              sx={{ fontSize: "0.83rem" }}
             >
               {anneeOptions.map((annee) => (
-                <MenuItem key={annee} value={annee}>
+                <MenuItem key={annee} value={annee} sx={{ fontSize: "0.83rem" }}>
                   {annee}
                 </MenuItem>
               ))}
@@ -257,14 +268,16 @@ const ChantierRecapFinancierTab = ({ chantierId, isActive = true }) => {
             variant={global ? "contained" : "outlined"}
             color="primary"
             onClick={handleGlobal}
-            sx={{ ml: 2 }}
+            size="small"
+            sx={{ ml: 0.5, minHeight: 34, px: 1.2, fontSize: "0.73rem", fontWeight: 700 }}
           >
             {global ? "Désactiver" : "Global"}
           </Button>
           <Button
             onClick={() => void handleActualiserTout()}
             color="primary"
-            sx={{ ml: 1 }}
+            size="small"
+            sx={{ ml: 0.25, minHeight: 34, px: 1.2, fontSize: "0.73rem", fontWeight: 700 }}
             startIcon={<FaSync />}
             disabled={refreshing}
           >
