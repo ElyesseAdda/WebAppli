@@ -15,6 +15,7 @@ import EventOutlinedIcon from "@mui/icons-material/EventOutlined";
 import ReceiptLongOutlinedIcon from "@mui/icons-material/ReceiptLongOutlined";
 import ErrorOutlineIcon from "@mui/icons-material/ErrorOutline";
 import PaymentsOutlinedIcon from "@mui/icons-material/PaymentsOutlined";
+import PercentOutlinedIcon from "@mui/icons-material/PercentOutlined";
 import React from "react";
 import {
   Area,
@@ -37,6 +38,7 @@ const COL_ST = "#0D9488";
 const COL_COUT_CUM = "rgba(211, 47, 47, 0.1)"; // Rouge très léger
 const COL_COUT_LINE = "#d32f2f"; // Rouge (comme dans les cartes)
 const COL_BENEF = "#43A047"; // Vert
+const COL_TAUX_FIXE = "#9C27B0"; // Violet (aligné sur les graphiques devis)
 const COL_ENC_SITUATION = "#0277bd";
 const COL_ENC_FACTURE = "#1565c0";
 const COL_ENC_RETARD = "#c62828";
@@ -90,6 +92,16 @@ const StatCard = ({
           value: Number(costBreakdown.sous_traitant),
           lineColor: COL_ST,
           Icon: HandshakeOutlinedIcon,
+        },
+        montantCoutVisible(costBreakdown.taux_fixe) && {
+          label: "Taux fixe",
+          tip:
+            costBreakdown.taux_fixe_tip ||
+            "Part du marché HT au titre du taux fixe (déduite du bénéfice).",
+          value: Number(costBreakdown.taux_fixe),
+          lineColor: COL_TAUX_FIXE,
+          Icon: PercentOutlinedIcon,
+          valueNegative: true,
         },
       ].filter(Boolean)
     : [];
@@ -342,7 +354,7 @@ const StatCard = ({
                         letterSpacing: "0.01em",
                       }}
                     >
-                      {isNegative ? "- " : ""}
+                      {row.valueNegative || isNegative ? "- " : ""}
                       {formatEuro(row.value)}
                       <Box
                         component="span"
@@ -524,7 +536,11 @@ const ChartTooltip = ({ active, payload, label }) => {
   if (!active || !payload?.length) return null;
   const row = payload[0]?.payload;
   if (!row) return null;
-  const beneficeCalcule = Number(row.montant_facture_line || 0) - Number(row.cout_chantier_cumule || 0);
+  const beneficeCalcule = Number(
+    row.benefice != null
+      ? row.benefice
+      : Number(row.montant_facture_line || 0) - Number(row.cout_chantier_cumule || 0)
+  );
   return (
     <Box
       sx={{
@@ -581,6 +597,8 @@ const RecapSyntheseSection = ({
   if (!data) return null;
   const paye = depensesPaye || data.sorties?.paye || {};
   const montant_ht = Number(data.montant_ht || 0);
+  const taux_fixe_pct = Number(data.taux_fixe || 0);
+  const montant_taux_fixe = Number(data.montant_taux_fixe || 0);
   const montant_factures = Number(tauxFacturation?.montant_factures ?? 0);
   const montant_avenants = Number(tauxFacturation?.montant_avenants ?? 0);
   const montant_avenants_et_factures = montant_factures + montant_avenants;
@@ -611,7 +629,8 @@ const RecapSyntheseSection = ({
   const montant_facture_reel = total_paiements_recus + total_en_attente_encaissement;
 
   const total_marche_avenants_factures = montant_ht + montant_avenants_et_factures;
-  const benefice = total_marche_avenants_factures - cout_chantier_pour_benefice;
+  const benefice =
+    total_marche_avenants_factures - cout_chantier_pour_benefice - montant_taux_fixe;
   const prev = data.previsionnel_couts_chantier || {};
   const prevMo = Number(prev.main_oeuvre || 0);
   const prevMat = Number(prev.materiel || 0);
@@ -630,12 +649,12 @@ const RecapSyntheseSection = ({
       const factureCumule = Number(row.facture_cumule || 0);
       return {
         ...row,
-        benefice: factureCumule - Number(row.cout_chantier_cumule || 0),
+        benefice: factureCumule - Number(row.cout_chantier_cumule || 0) - montant_taux_fixe,
         cout_cumul_line: Number(row.cout_chantier_cumule || 0),
         montant_facture_line: factureCumule,
       };
     });
-  }, [syntheseMensuelle]);
+  }, [syntheseMensuelle, montant_taux_fixe]);
 
   const displayCards = selectedMonth ? [
     {
@@ -692,6 +711,14 @@ const RecapSyntheseSection = ({
       amount: montant_ht,
       color: "#1976d2",
       percentOfTotal: total_marche_avenants_factures > 0 ? (montant_ht / total_marche_avenants_factures) * 100 : null,
+      ...(montant_taux_fixe > 0
+        ? {
+            costBreakdown: {
+              taux_fixe: montant_taux_fixe,
+              taux_fixe_tip: `Montant à ${formatPercent(taux_fixe_pct)} % du marché HT (déduit du bénéfice).`,
+            },
+          }
+        : {}),
     },
     {
       title: "Avenants + Factures",
