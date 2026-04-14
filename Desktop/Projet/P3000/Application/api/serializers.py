@@ -1953,6 +1953,8 @@ class RecapFinancierSerializer(serializers.Serializer):
     )
     # Encaissements clients encore dus (toutes périodes), ventilés par échéance vs aujourd'hui
     encours_paiements_clients = serializers.DictField(required=False, allow_null=True)
+    # Prévisionnel coûts chantier (source: décomposition devis + factures + avenants)
+    previsionnel_couts_chantier = serializers.DictField(required=False, allow_null=True)
 
 class FactureFournisseurMaterielSerializer(serializers.ModelSerializer):
     class Meta:

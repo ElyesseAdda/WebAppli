@@ -11823,6 +11823,40 @@ class RecapFinancierChantierAPIView(APIView):
             "en_retard_ht": round(enc_en_retard_ht, 2),
         }
 
+        # Prévisionnel coûts chantier (découpage métier) :
+        # devis principal + factures classiques + avenants (FactureTS via leur devis)
+        # + sous-traitance (contrats ST + avenants ST enregistrés sur le chantier)
+        previsionnel_cout_mo = 0.0
+        previsionnel_cout_materiel = 0.0
+
+        devis_principal = Devis.objects.filter(
+            chantier=chantier, devis_chantier=True
+        ).first()
+        if devis_principal is not None:
+            previsionnel_cout_mo += float(devis_principal.cout_estime_main_oeuvre or 0)
+            previsionnel_cout_materiel += float(devis_principal.cout_estime_materiel or 0)
+
+        for fac in Facture.objects.filter(chantier=chantier):
+            previsionnel_cout_mo += float(fac.cout_estime_main_oeuvre or 0)
+            previsionnel_cout_materiel += float(fac.cout_estime_materiel or 0)
+
+        for fac_ts in FactureTS.objects.filter(chantier=chantier).select_related("devis"):
+            d = getattr(fac_ts, "devis", None)
+            if d is None:
+                continue
+            previsionnel_cout_mo += float(d.cout_estime_main_oeuvre or 0)
+            previsionnel_cout_materiel += float(d.cout_estime_materiel or 0)
+
+        previsionnel_cout_st = float(chantier.cout_sous_traitance or 0)
+        previsionnel_total = previsionnel_cout_mo + previsionnel_cout_materiel + previsionnel_cout_st
+
+        previsionnel_couts_chantier = {
+            "main_oeuvre": round(previsionnel_cout_mo, 2),
+            "materiel": round(previsionnel_cout_materiel, 2),
+            "sous_traitant": round(previsionnel_cout_st, 2),
+            "total": round(previsionnel_total, 2),
+        }
+
         # Montant marché : même règle que get_chantier_details — source de vérité = devis de chantier si présent
         montant_ht = float(chantier.montant_ht or 0)
         devis_marche = Devis.objects.filter(
@@ -11923,6 +11957,7 @@ class RecapFinancierChantierAPIView(APIView):
             "montant_taux_fixe": montant_taux_fixe,
             "cout_chantier_cumul_jusqua_fin_mois": cout_chantier_cumul_jusqua_fin_mois,
             "encours_paiements_clients": encours_paiements_clients,
+            "previsionnel_couts_chantier": previsionnel_couts_chantier,
         }
 
         serializer = RecapFinancierSerializer(data)

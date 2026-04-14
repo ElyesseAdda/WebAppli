@@ -46,6 +46,12 @@ const formatEuro = (v) =>
     maximumFractionDigits: 2,
   });
 
+const formatPercent = (v) =>
+  Number(v || 0).toLocaleString("fr-FR", {
+    minimumFractionDigits: 1,
+    maximumFractionDigits: 1,
+  });
+
 const montantCoutVisible = (v) => {
   if (v == null) return false;
   const n = Number(v);
@@ -59,6 +65,7 @@ const StatCard = ({
   isNegative = false,
   costBreakdown,
   paymentEncours,
+  percentOfTotal,
 }) => {
   const breakdownRows = costBreakdown
     ? [
@@ -172,23 +179,41 @@ const StatCard = ({
       >
         {title}
       </Typography>
-      <Typography
-        variant="h6"
-        style={{ color: color }}
-        sx={{
-          fontWeight: 700,
-          display: "flex",
-          alignItems: "baseline",
-          gap: 0.5,
-          ...(hasCompact && { mb: 0, lineHeight: 1.1 }),
-        }}
-      >
-        {isNegative ? "- " : ""}
-        {amount.toLocaleString("fr-FR", { minimumFractionDigits: 2 })}
-        <Typography component="span" variant="body2" fontWeight={600} style={{ color: color }}>
-          €
+      <Box sx={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 1.5 }}>
+        <Typography
+          variant="h6"
+          style={{ color: color }}
+          sx={{
+            fontWeight: 700,
+            display: "flex",
+            alignItems: "baseline",
+            gap: 0.5,
+            ...(hasCompact && { mb: 0, lineHeight: 1.1 }),
+          }}
+        >
+          {isNegative ? "- " : ""}
+          {amount.toLocaleString("fr-FR", { minimumFractionDigits: 2 })}
+          <Typography component="span" variant="body2" fontWeight={600} style={{ color: color }}>
+            €
+          </Typography>
         </Typography>
-      </Typography>
+        {percentOfTotal != null && (
+          <Typography
+            variant="caption"
+            sx={{
+              color: color,
+              opacity: 0.72,
+              fontWeight: 600,
+              whiteSpace: "nowrap",
+              textAlign: "right",
+              lineHeight: 1.1,
+              fontSize: "0.78rem",
+            }}
+          >
+            {formatPercent(percentOfTotal)} %
+          </Typography>
+        )}
+      </Box>
       {hasCostBreakdown && (
         <Box
           sx={{
@@ -321,6 +346,19 @@ const StatCard = ({
                         {" "}
                         €
                       </Box>
+                      {amount > 0 && (
+                        <Box
+                          component="span"
+                          sx={{
+                            ml: 0.35,
+                            fontSize: "0.5rem",
+                            opacity: 0.8,
+                            fontWeight: 600,
+                          }}
+                        >
+                          ({formatPercent((Number(row.value || 0) / Number(amount)) * 100)} %)
+                        </Box>
+                      )}
                     </Box>
                   </Box>
                 </MuiTooltip>
@@ -557,6 +595,16 @@ const RecapSyntheseSection = ({
 
   const total_marche_avenants_factures = montant_ht + montant_avenants_et_factures;
   const benefice = total_marche_avenants_factures - cout_chantier_pour_benefice;
+  const prev = data.previsionnel_couts_chantier || {};
+  const prevMo = Number(prev.main_oeuvre || 0);
+  const prevMat = Number(prev.materiel || 0);
+  const prevSt = Number(prev.sous_traitant || 0);
+  const prevTotal = Number(prev.total || 0);
+  const previsionnelTotalChantier = prevTotal;
+  const basePercentMensuel =
+    previsionnelTotalChantier > 0
+      ? previsionnelTotalChantier
+      : total_marche_avenants_factures;
 
   const chartData = React.useMemo(() => {
     const rows = syntheseMensuelle?.par_mois;
@@ -571,25 +619,78 @@ const RecapSyntheseSection = ({
   }, [syntheseMensuelle, total_marche_avenants_factures, total_paiements_recus]);
 
   const displayCards = selectedMonth ? [
-    { title: `Matériel (${selectedMonth.label})`, amount: Number(selectedMonth.materiel), color: COL_MAT },
-    { title: `Main d'œuvre (${selectedMonth.label})`, amount: Number(selectedMonth.main_oeuvre), color: COL_MO },
-    { title: `Sous-traitant (${selectedMonth.label})`, amount: Number(selectedMonth.sous_traitant), color: COL_ST },
+    {
+      title: `Matériel (${selectedMonth.label})`,
+      amount: Number(selectedMonth.materiel),
+      color: COL_MAT,
+      percentOfTotal:
+        prevMat > 0
+          ? (Number(selectedMonth.materiel || 0) / prevMat) * 100
+          : null,
+    },
+    {
+      title: `Main d'œuvre (${selectedMonth.label})`,
+      amount: Number(selectedMonth.main_oeuvre),
+      color: COL_MO,
+      percentOfTotal:
+        prevMo > 0
+          ? (Number(selectedMonth.main_oeuvre || 0) / prevMo) * 100
+          : null,
+    },
+    {
+      title: `Sous-traitant (${selectedMonth.label})`,
+      amount: Number(selectedMonth.sous_traitant),
+      color: COL_ST,
+      percentOfTotal:
+        prevSt > 0
+          ? (Number(selectedMonth.sous_traitant || 0) / prevSt) * 100
+          : null,
+    },
     {
       title: `Coût du mois (${selectedMonth.label})`,
       amount: Number(selectedMonth.cout_chantier),
       color: COL_COUT_LINE,
       isNegative: true,
+      percentOfTotal:
+        basePercentMensuel > 0
+          ? (Number(selectedMonth.cout_chantier || 0) / basePercentMensuel) * 100
+          : null,
     },
-    { title: `Coût cumulé (fin ${selectedMonth.label})`, amount: Number(selectedMonth.cout_chantier_cumule), color: COL_COUT_LINE, isNegative: true },
+    {
+      title: `Coût cumulé (fin ${selectedMonth.label})`,
+      amount: Number(selectedMonth.cout_chantier_cumule),
+      color: COL_COUT_LINE,
+      isNegative: true,
+      percentOfTotal:
+        basePercentMensuel > 0
+          ? (Number(selectedMonth.cout_chantier_cumule || 0) / basePercentMensuel) * 100
+          : null,
+    },
     { title: `Bénéfice (fin ${selectedMonth.label})`, amount: Number(selectedMonth.benefice), color: Number(selectedMonth.benefice) >= 0 ? COL_BENEF : "#d32f2f" }
   ] : [
-    { title: "Marché", amount: montant_ht, color: "#1976d2" },
-    { title: "Avenants + Factures", amount: montant_avenants_et_factures, color: "#1976d2" },
-    { title: "Total", amount: total_marche_avenants_factures, color: "#1565c0" },
+    {
+      title: "Marché",
+      amount: montant_ht,
+      color: "#1976d2",
+      percentOfTotal: total_marche_avenants_factures > 0 ? (montant_ht / total_marche_avenants_factures) * 100 : null,
+    },
+    {
+      title: "Avenants + Factures",
+      amount: montant_avenants_et_factures,
+      color: "#1976d2",
+      percentOfTotal: total_marche_avenants_factures > 0 ? (montant_avenants_et_factures / total_marche_avenants_factures) * 100 : null,
+    },
+    {
+      title: "Total",
+      amount: total_marche_avenants_factures,
+      color: "#1565c0",
+      percentOfTotal: null,
+    },
     {
       title: "Paiements reçus",
       amount: total_paiements_recus,
       color: COL_BENEF,
+      percentOfTotal: total_marche_avenants_factures > 0 ? (total_paiements_recus / total_marche_avenants_factures) * 100 : null,
       ...(data.encours_paiements_clients && {
         paymentEncours: {
           situationsHt: Number(data.encours_paiements_clients.situations_a_encaisser_ht ?? 0),
@@ -603,13 +704,19 @@ const RecapSyntheseSection = ({
       amount: cout_chantier,
       color: "#d32f2f",
       isNegative: true,
+      percentOfTotal: total_marche_avenants_factures > 0 ? (cout_chantier / total_marche_avenants_factures) * 100 : null,
       costBreakdown: {
         main_oeuvre: paye.main_oeuvre?.total,
         materiel: paye.materiel?.total,
         sous_traitant: paye.sous_traitant?.total,
       },
     },
-    { title: "Bénéfice", amount: benefice, color: benefice >= 0 ? COL_BENEF : "#d32f2f" }
+    {
+      title: "Bénéfice",
+      amount: benefice,
+      color: benefice >= 0 ? COL_BENEF : "#d32f2f",
+      percentOfTotal: total_marche_avenants_factures > 0 ? (benefice / total_marche_avenants_factures) * 100 : null,
+    }
   ];
 
   return (
@@ -638,6 +745,7 @@ const RecapSyntheseSection = ({
                   isNegative={card.isNegative}
                   costBreakdown={card.costBreakdown}
                   paymentEncours={card.paymentEncours}
+                  percentOfTotal={card.percentOfTotal}
                 />
               </Grid>
             ))}
