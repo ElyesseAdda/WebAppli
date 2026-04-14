@@ -477,6 +477,7 @@ const ChartTooltip = ({ active, payload, label }) => {
   if (!active || !payload?.length) return null;
   const row = payload[0]?.payload;
   if (!row) return null;
+  const beneficeCalcule = Number(row.paiements_recus_line || 0) - Number(row.cout_chantier_cumule || 0);
   return (
     <Box
       sx={{
@@ -502,9 +503,14 @@ const ChartTooltip = ({ active, payload, label }) => {
         Coût du mois : {formatEuro(row.cout_chantier)} €
       </Typography>
       <Typography variant="body2">Coût cumulé : {formatEuro(row.cout_chantier_cumule)} €</Typography>
-      {row.benefice != null && (
+      {row.paiements_recus_line != null && (
         <Typography variant="body2" sx={{ mt: 0.5 }} fontWeight={600}>
-          Bénéfice (fin de mois) : {formatEuro(row.benefice)} €
+          Paiements reçus : {formatEuro(row.paiements_recus_line)} €
+        </Typography>
+      )}
+      {row.paiements_recus_line != null && (
+        <Typography variant="body2" sx={{ mt: 0.5 }} fontWeight={600}>
+          Bénéfice (écart) : {formatEuro(beneficeCalcule)} €
         </Typography>
       )}
     </Box>
@@ -560,8 +566,9 @@ const RecapSyntheseSection = ({
       ...row,
       benefice: base - Number(row.cout_chantier_cumule || 0),
       cout_cumul_line: Number(row.cout_chantier_cumule || 0),
+      paiements_recus_line: Number(total_paiements_recus || 0),
     }));
-  }, [syntheseMensuelle, total_marche_avenants_factures]);
+  }, [syntheseMensuelle, total_marche_avenants_factures, total_paiements_recus]);
 
   const displayCards = selectedMonth ? [
     { title: `Matériel (${selectedMonth.label})`, amount: Number(selectedMonth.materiel), color: COL_MAT },
@@ -823,8 +830,8 @@ const RecapSyntheseSection = ({
                   <Line
                     yAxisId="cumul"
                     type="monotone"
-                    dataKey="benefice"
-                    name="Bénéfice"
+                    dataKey="paiements_recus_line"
+                    name="Paiements reçus"
                     stroke={COL_BENEF}
                     strokeWidth={3} // Ligne plus épaisse
                     dot={{ r: 4, strokeWidth: 2, fill: '#fff' }} // Points plus jolis
