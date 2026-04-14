@@ -578,6 +578,7 @@
         <p>{{ societe.codepostal_societe }}, {{ societe.ville }}</p>
       </div>
 
+      {% if situation.contact_societe or client.nom or client.prenom %}
       <div class="contact-info">
         <h3>Contact:</h3>
         {% if situation.contact_societe %}
@@ -590,7 +591,9 @@
           {% endif %}
         {% else %}
           {# Fallback sur le client par défaut #}
+          {% if client.nom or client.prenom %}
           <p>{% if client.civilite %}{{ client.civilite }} {% endif %}{{ client.prenom }} {{ client.nom }}</p>
+          {% endif %}
           {% if client.poste %}<p>{{ client.poste }}</p>{% endif %}
           {% if client.client_mail %}<p class="client-mail">Mail: {{ client.client_mail }}</p>{% endif %}
           {% if client.phone_Number %}
@@ -600,6 +603,7 @@
           {% endif %}
         {% endif %}
       </div>
+      {% endif %}
     </div>
 
     <div class="date">

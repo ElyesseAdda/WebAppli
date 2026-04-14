@@ -780,10 +780,6 @@ const DevisAvance = () => {
   // Handlers pour le flux de création de nouveau chantier
 
   const handleClientInfoSubmit = async (clientData) => {
-    if (!clientData.name || !clientData.surname) {
-      alert("Le nom et le prénom sont obligatoires");
-      return;
-    }
     if (!clientData) {
       return;
     }
@@ -3003,9 +2999,11 @@ const DevisAvance = () => {
         } else {
           // Créer le client avec tous les champs (incluant civilite et poste)
           const clientResponse = await axios.post("/api/client/", {
-            name: pendingChantierData.client.name,
-            surname: pendingChantierData.client.surname,
-            phone_Number: pendingChantierData.client.phone_Number.toString(),
+            name: pendingChantierData.client.name || "",
+            surname: pendingChantierData.client.surname || "",
+            phone_Number: pendingChantierData.client.phone_Number
+              ? pendingChantierData.client.phone_Number.toString()
+              : null,
             client_mail: pendingChantierData.client.client_mail || "",
             civilite: pendingChantierData.client.civilite || "",
             poste: pendingChantierData.client.poste || "",

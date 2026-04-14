@@ -53,9 +53,12 @@ const SelectClientModal = ({ open, onClose, onSelectClient, onCreateNew }) => {
     try {
       const response = await axios.get('/api/client/');
       
+      // Exclure les clients sans nom ET sans prénom (créés sans renseigner le contact)
+      const clientsAvecNom = response.data.filter(client => client.name?.trim() || client.surname?.trim());
+
       // Dédupliquer les clients en utilisant une Map avec une clé unique
       const clientsMap = new Map();
-      response.data.forEach(client => {
+      clientsAvecNom.forEach(client => {
         // Créer une clé unique basée sur nom, prénom et email (normalisés)
         const key = `${client.name?.toLowerCase().trim()}-${client.surname?.toLowerCase().trim()}-${client.client_mail?.toLowerCase().trim()}`;
         
@@ -98,7 +101,7 @@ const SelectClientModal = ({ open, onClose, onSelectClient, onCreateNew }) => {
       try {
         // Récupérer TOUS les clients pour trouver les doublons
         const allClientsResponse = await axios.get('/api/client/');
-        const allClients = allClientsResponse.data;
+        const allClients = allClientsResponse.data.filter(c => c.name?.trim() || c.surname?.trim());
         
         // Trouver tous les IDs de clients qui correspondent au même client (même nom, prénom, email)
         const clientIds = allClients

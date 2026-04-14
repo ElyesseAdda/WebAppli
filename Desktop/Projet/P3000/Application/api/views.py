@@ -1863,6 +1863,13 @@ class ClientViewSet(viewsets.ModelViewSet):
     serializer_class = ClientSerializer
     permission_classes = [AllowAny]
 
+    def get_queryset(self):
+        queryset = super().get_queryset()
+        # Pour les listes (action list), exclure les clients sans nom ET sans prénom
+        if self.action == 'list':
+            queryset = queryset.exclude(name='', surname='')
+        return queryset
+
 class AgentViewSet(viewsets.ModelViewSet):
     queryset = Agent.objects.all()
     serializer_class = AgentSerializer

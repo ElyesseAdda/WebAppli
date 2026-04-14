@@ -681,6 +681,8 @@ class ClientSerializer(serializers.ModelSerializer):
         model = Client
         fields = '__all__'
         extra_kwargs = {
+            'name': {'required': False, 'allow_blank': True},
+            'surname': {'required': False, 'allow_blank': True},
             'client_mail': {'required': False, 'allow_blank': True, 'allow_null': True},
             'phone_Number': {'required': False, 'allow_null': True},
         }

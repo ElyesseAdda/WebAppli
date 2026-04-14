@@ -33,8 +33,8 @@ class Client(models.Model):
     ]
     
     civilite = models.CharField(max_length=10, choices=CIVILITE_CHOICES, blank=True, default='', verbose_name="Civilité")
-    name = models.CharField(max_length=100)
-    surname = models.CharField(max_length=25)
+    name = models.CharField(max_length=100, blank=True, default='')
+    surname = models.CharField(max_length=25, blank=True, default='')
     client_mail = models.EmailField(blank=True, null=True)
     phone_Number = models.IntegerField(blank=True, null=True)
     poste = models.CharField(max_length=100, blank=True, default='', verbose_name="Poste")

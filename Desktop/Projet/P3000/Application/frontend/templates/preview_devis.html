@@ -554,6 +554,7 @@
         <p>{{ societe.codepostal_societe }}, {{ societe.ville_societe }}</p>
       </div>
 
+      {% if client.name or client.surname %}
       <div class="contact-info">
         <h3>Contact:</h3>
         <p>{% if client.civilite %}{{ client.civilite }} {% endif %}{{ client.name }} {{ client.surname }}</p>
@@ -565,6 +566,7 @@
         </p>
         {% endif %}
       </div>
+      {% endif %}
     </div>
 
     <div class="date">

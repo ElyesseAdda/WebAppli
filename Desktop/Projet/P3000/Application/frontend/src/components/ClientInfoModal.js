@@ -112,7 +112,6 @@ const ClientInfoModal = ({ open, onClose, onSubmit, onSelectExisting, initialDat
           label="Nom"
           value={formData.name}
           onChange={handleChange}
-          required
         />
         <TextField
           fullWidth
@@ -121,7 +120,6 @@ const ClientInfoModal = ({ open, onClose, onSubmit, onSelectExisting, initialDat
           label="Prénom"
           value={formData.surname}
           onChange={handleChange}
-          required
         />
         <TextField
           fullWidth
@@ -179,6 +177,12 @@ const ClientInfoModal = ({ open, onClose, onSubmit, onSelectExisting, initialDat
       </DialogContent>
       <DialogActions>
         <Button onClick={onClose}>Annuler</Button>
+        <Button
+          onClick={() => onSubmit({})}
+          color="secondary"
+        >
+          Passer cette étape
+        </Button>
         <Button onClick={handleSubmit} variant="contained" color="primary">
           Suivant
         </Button>
