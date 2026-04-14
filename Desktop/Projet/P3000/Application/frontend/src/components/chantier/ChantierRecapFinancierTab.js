@@ -308,6 +308,8 @@ const ChantierRecapFinancierTab = ({ chantierId, isActive = true }) => {
             syntheseMensuelle={syntheseMensuelle}
             syntheseMensuelleLoading={syntheseMensuelleLoading}
             syntheseUiResetKey={syntheseUiResetKey}
+            chantierId={chantierId}
+            onRecapRefresh={refreshRecapSilently}
           />
           <Grid container spacing={3}>
             <Grid item xs={12}>

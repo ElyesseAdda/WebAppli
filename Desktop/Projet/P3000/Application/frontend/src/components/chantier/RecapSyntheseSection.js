@@ -1,13 +1,22 @@
 import {
+  Alert,
   Box,
-  Grid,
-  Paper,
-  Typography,
+  Button,
   Card,
   CardContent,
   CircularProgress,
+  Dialog,
+  DialogActions,
+  DialogContent,
+  DialogTitle,
+  Grid,
+  InputAdornment,
+  Paper,
+  TextField,
+  Typography,
   Tooltip as MuiTooltip,
 } from "@mui/material";
+import axios from "axios";
 import GroupsOutlinedIcon from "@mui/icons-material/GroupsOutlined";
 import Inventory2OutlinedIcon from "@mui/icons-material/Inventory2Outlined";
 import HandshakeOutlinedIcon from "@mui/icons-material/HandshakeOutlined";
@@ -69,6 +78,7 @@ const StatCard = ({
   costBreakdown,
   paymentEncours,
   percentOfTotal,
+  onTauxFixeRowClick,
 }) => {
   const breakdownRows = costBreakdown
     ? [
@@ -93,7 +103,9 @@ const StatCard = ({
           lineColor: COL_ST,
           Icon: HandshakeOutlinedIcon,
         },
-        montantCoutVisible(costBreakdown.taux_fixe) && {
+        "taux_fixe" in costBreakdown &&
+          (montantCoutVisible(costBreakdown.taux_fixe) ||
+            costBreakdown.taux_fixe_always_show) && {
           label: "Taux fixe",
           tip:
             costBreakdown.taux_fixe_tip ||
@@ -102,6 +114,7 @@ const StatCard = ({
           lineColor: COL_TAUX_FIXE,
           Icon: PercentOutlinedIcon,
           valueNegative: true,
+          breakdownKey: "taux_fixe",
         },
       ].filter(Boolean)
     : [];
@@ -254,6 +267,8 @@ const StatCard = ({
         >
           {breakdownRows.map((row, i) => {
             const Ico = row.Icon;
+            const isTauxClickable =
+              row.breakdownKey === "taux_fixe" && typeof onTauxFixeRowClick === "function";
             return (
               <React.Fragment key={row.label}>
                 {i > 0 && (
@@ -305,6 +320,20 @@ const StatCard = ({
                 >
                   <Box
                     className="cout-chantier-bd-seg"
+                    role={isTauxClickable ? "button" : undefined}
+                    tabIndex={isTauxClickable ? 0 : undefined}
+                    onClick={(e) => {
+                      if (isTauxClickable) {
+                        e.preventDefault();
+                        onTauxFixeRowClick();
+                      }
+                    }}
+                    onKeyDown={(e) => {
+                      if (isTauxClickable && (e.key === "Enter" || e.key === " ")) {
+                        e.preventDefault();
+                        onTauxFixeRowClick();
+                      }
+                    }}
                     sx={{
                       display: "inline-flex",
                       alignItems: "center",
@@ -313,7 +342,7 @@ const StatCard = ({
                       px: 0.35,
                       mx: -0.1,
                       borderRadius: 1,
-                      cursor: "default",
+                      cursor: isTauxClickable ? "pointer" : "default",
                       position: "relative",
                       zIndex: 0,
                       transformOrigin: "center center",
@@ -322,7 +351,7 @@ const StatCard = ({
                         "transform 0.2s cubic-bezier(0.4, 0, 0.2, 1), background-color 0.2s ease, box-shadow 0.2s ease",
                       "&:hover": {
                         zIndex: 3,
-                        transform: "scale(1.14)",
+                        transform: isTauxClickable ? "scale(1.08)" : "scale(1.14)",
                         bgcolor: "action.hover",
                         boxShadow: (theme) =>
                           theme.palette.mode === "dark"
@@ -587,12 +616,33 @@ const RecapSyntheseSection = ({
   syntheseMensuelle,
   syntheseMensuelleLoading,
   syntheseUiResetKey = 0,
+  chantierId,
+  onRecapRefresh,
 }) => {
   const [selectedMonth, setSelectedMonth] = React.useState(null);
+  const [tauxFixeModalOpen, setTauxFixeModalOpen] = React.useState(false);
+  const [tauxFixeDraft, setTauxFixeDraft] = React.useState("");
+  const [tauxFixeSaving, setTauxFixeSaving] = React.useState(false);
+  const [tauxFixeError, setTauxFixeError] = React.useState(null);
 
   React.useEffect(() => {
     if (syntheseUiResetKey > 0) setSelectedMonth(null);
   }, [syntheseUiResetKey]);
+
+  const montantTauxFixeChart = Number(data?.montant_taux_fixe || 0);
+  const chartData = React.useMemo(() => {
+    const rows = syntheseMensuelle?.par_mois;
+    if (!Array.isArray(rows) || rows.length === 0) return [];
+    return rows.map((row) => {
+      const factureCumule = Number(row.facture_cumule || 0);
+      return {
+        ...row,
+        benefice: factureCumule - Number(row.cout_chantier_cumule || 0) - montantTauxFixeChart,
+        cout_cumul_line: Number(row.cout_chantier_cumule || 0),
+        montant_facture_line: factureCumule,
+      };
+    });
+  }, [syntheseMensuelle, montantTauxFixeChart]);
 
   if (!data) return null;
   const paye = depensesPaye || data.sorties?.paye || {};
@@ -642,19 +692,36 @@ const RecapSyntheseSection = ({
       ? previsionnelTotalChantier
       : total_marche_avenants_factures;
 
-  const chartData = React.useMemo(() => {
-    const rows = syntheseMensuelle?.par_mois;
-    if (!Array.isArray(rows) || rows.length === 0) return [];
-    return rows.map((row) => {
-      const factureCumule = Number(row.facture_cumule || 0);
-      return {
-        ...row,
-        benefice: factureCumule - Number(row.cout_chantier_cumule || 0) - montant_taux_fixe,
-        cout_cumul_line: Number(row.cout_chantier_cumule || 0),
-        montant_facture_line: factureCumule,
-      };
-    });
-  }, [syntheseMensuelle, montant_taux_fixe]);
+  const openTauxFixeModal = () => {
+    const tf = data.taux_fixe;
+    const n = tf != null && tf !== "" && !Number.isNaN(Number(tf)) ? Number(tf) : 0;
+    setTauxFixeDraft(String(n).replace(".", ","));
+    setTauxFixeError(null);
+    setTauxFixeModalOpen(true);
+  };
+
+  const handleSaveTauxFixe = async () => {
+    if (!chantierId) return;
+    const raw = String(tauxFixeDraft).replace(/\s/g, "").replace(",", ".");
+    const n = parseFloat(raw);
+    if (Number.isNaN(n) || n < 0 || n > 100) {
+      setTauxFixeError("Indiquez un pourcentage entre 0 et 100.");
+      return;
+    }
+    setTauxFixeSaving(true);
+    setTauxFixeError(null);
+    try {
+      await axios.patch(`/api/chantier/${chantierId}/`, { taux_fixe: n });
+      setTauxFixeModalOpen(false);
+      if (typeof onRecapRefresh === "function") {
+        await onRecapRefresh();
+      }
+    } catch {
+      setTauxFixeError("Enregistrement impossible. Réessayez.");
+    } finally {
+      setTauxFixeSaving(false);
+    }
+  };
 
   const displayCards = selectedMonth ? [
     {
@@ -711,12 +778,16 @@ const RecapSyntheseSection = ({
       amount: montant_ht,
       color: "#1976d2",
       percentOfTotal: total_marche_avenants_factures > 0 ? (montant_ht / total_marche_avenants_factures) * 100 : null,
-      ...(montant_taux_fixe > 0
+      ...(montant_ht > 0 && (chantierId || montant_taux_fixe > 0)
         ? {
             costBreakdown: {
               taux_fixe: montant_taux_fixe,
-              taux_fixe_tip: `Montant à ${formatPercent(taux_fixe_pct)} % du marché HT (déduit du bénéfice).`,
+              taux_fixe_always_show: Boolean(chantierId),
+              taux_fixe_tip: `Montant à ${formatPercent(taux_fixe_pct)} % du marché HT (déduit du bénéfice).${
+                chantierId ? " Cliquer pour modifier le taux chantier." : ""
+              }`,
             },
+            onTauxFixeRowClick: chantierId ? openTauxFixeModal : undefined,
           }
         : {}),
     },
@@ -776,6 +847,48 @@ const RecapSyntheseSection = ({
       }}
       elevation={0}
     >
+      <Dialog
+        open={tauxFixeModalOpen}
+        onClose={() => !tauxFixeSaving && setTauxFixeModalOpen(false)}
+        fullWidth
+        maxWidth="sm"
+        PaperProps={{ sx: { borderRadius: 2 } }}
+      >
+        <DialogTitle sx={{ fontWeight: 700 }}>Taux fixe du chantier</DialogTitle>
+        <DialogContent dividers>
+          <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+            Pourcentage appliqué sur le montant HT du marché pour estimer la part « taux fixe » (déduite du
+            bénéfice dans cette synthèse).
+          </Typography>
+          {tauxFixeError ? (
+            <Alert severity="error" sx={{ mb: 2 }} onClose={() => setTauxFixeError(null)}>
+              {tauxFixeError}
+            </Alert>
+          ) : null}
+          <TextField
+            fullWidth
+            autoFocus
+            label="Taux fixe"
+            value={tauxFixeDraft}
+            onChange={(e) => setTauxFixeDraft(e.target.value)}
+            disabled={tauxFixeSaving}
+            placeholder="20"
+            inputProps={{ inputMode: "decimal", "aria-label": "Taux fixe en pourcentage" }}
+            InputProps={{
+              endAdornment: <InputAdornment position="end">%</InputAdornment>,
+            }}
+          />
+        </DialogContent>
+        <DialogActions sx={{ px: 2, py: 1.5 }}>
+          <Button onClick={() => setTauxFixeModalOpen(false)} disabled={tauxFixeSaving}>
+            Annuler
+          </Button>
+          <Button variant="contained" onClick={handleSaveTauxFixe} disabled={tauxFixeSaving}>
+            {tauxFixeSaving ? "Enregistrement…" : "Enregistrer"}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
       <Typography variant="h6" sx={{ mb: 3, fontWeight: 700, color: "text.primary" }}>
         Synthèse Financière du Chantier
       </Typography>
@@ -793,6 +906,7 @@ const RecapSyntheseSection = ({
                   costBreakdown={card.costBreakdown}
                   paymentEncours={card.paymentEncours}
                   percentOfTotal={card.percentOfTotal}
+                  onTauxFixeRowClick={card.onTauxFixeRowClick}
                 />
               </Grid>
             ))}
