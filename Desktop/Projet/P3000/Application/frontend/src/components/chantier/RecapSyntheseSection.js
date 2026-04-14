@@ -14,6 +14,7 @@ import HandshakeOutlinedIcon from "@mui/icons-material/HandshakeOutlined";
 import EventOutlinedIcon from "@mui/icons-material/EventOutlined";
 import ReceiptLongOutlinedIcon from "@mui/icons-material/ReceiptLongOutlined";
 import ErrorOutlineIcon from "@mui/icons-material/ErrorOutline";
+import PaymentsOutlinedIcon from "@mui/icons-material/PaymentsOutlined";
 import React from "react";
 import {
   Area,
@@ -95,6 +96,14 @@ const StatCard = ({
 
   const paymentRows = paymentEncours
     ? [
+        montantCoutVisible(paymentEncours.paiementsRecus) && {
+          key: "recus",
+          label: "Paiements reçus",
+          tip: "Total des paiements effectivement reçus.",
+          value: Number(paymentEncours.paiementsRecus),
+          lineColor: COL_BENEF,
+          Icon: PaymentsOutlinedIcon,
+        },
         montantCoutVisible(paymentEncours.situationsHt) && {
           key: "sit",
           label: "Situations (HT)",
@@ -515,7 +524,7 @@ const ChartTooltip = ({ active, payload, label }) => {
   if (!active || !payload?.length) return null;
   const row = payload[0]?.payload;
   if (!row) return null;
-  const beneficeCalcule = Number(row.paiements_recus_line || 0) - Number(row.cout_chantier_cumule || 0);
+  const beneficeCalcule = Number(row.montant_facture_line || 0) - Number(row.cout_chantier_cumule || 0);
   return (
     <Box
       sx={{
@@ -541,12 +550,12 @@ const ChartTooltip = ({ active, payload, label }) => {
         Coût du mois : {formatEuro(row.cout_chantier)} €
       </Typography>
       <Typography variant="body2">Coût cumulé : {formatEuro(row.cout_chantier_cumule)} €</Typography>
-      {row.paiements_recus_line != null && (
+      {row.montant_facture_line != null && (
         <Typography variant="body2" sx={{ mt: 0.5 }} fontWeight={600}>
-          Paiements reçus : {formatEuro(row.paiements_recus_line)} €
+          Montant facturé : {formatEuro(row.montant_facture_line)} €
         </Typography>
       )}
-      {row.paiements_recus_line != null && (
+      {row.montant_facture_line != null && (
         <Typography variant="body2" sx={{ mt: 0.5 }} fontWeight={600}>
           Bénéfice (écart) : {formatEuro(beneficeCalcule)} €
         </Typography>
@@ -575,6 +584,7 @@ const RecapSyntheseSection = ({
   const montant_factures = Number(tauxFacturation?.montant_factures ?? 0);
   const montant_avenants = Number(tauxFacturation?.montant_avenants ?? 0);
   const montant_avenants_et_factures = montant_factures + montant_avenants;
+
   const total_materiel = Number(paye.materiel?.total || 0);
   const total_main_oeuvre = Number(paye.main_oeuvre?.total || 0);
   const total_sous_traitant = Number(paye.sous_traitant?.total || 0);
@@ -593,6 +603,13 @@ const RecapSyntheseSection = ({
       ? Object.values(data.entrees.paye).reduce((acc, cat) => acc + (cat.total || 0), 0)
       : 0;
 
+  const total_en_attente_encaissement =
+    data.entrees && data.entrees.reste_a_encaisser
+      ? Object.values(data.entrees.reste_a_encaisser).reduce((acc, cat) => acc + (cat.total || 0), 0)
+      : 0;
+
+  const montant_facture_reel = total_paiements_recus + total_en_attente_encaissement;
+
   const total_marche_avenants_factures = montant_ht + montant_avenants_et_factures;
   const benefice = total_marche_avenants_factures - cout_chantier_pour_benefice;
   const prev = data.previsionnel_couts_chantier || {};
@@ -609,14 +626,16 @@ const RecapSyntheseSection = ({
   const chartData = React.useMemo(() => {
     const rows = syntheseMensuelle?.par_mois;
     if (!Array.isArray(rows) || rows.length === 0) return [];
-    const base = total_marche_avenants_factures;
-    return rows.map((row) => ({
-      ...row,
-      benefice: base - Number(row.cout_chantier_cumule || 0),
-      cout_cumul_line: Number(row.cout_chantier_cumule || 0),
-      paiements_recus_line: Number(total_paiements_recus || 0),
-    }));
-  }, [syntheseMensuelle, total_marche_avenants_factures, total_paiements_recus]);
+    return rows.map((row) => {
+      const factureCumule = Number(row.facture_cumule || 0);
+      return {
+        ...row,
+        benefice: factureCumule - Number(row.cout_chantier_cumule || 0),
+        cout_cumul_line: Number(row.cout_chantier_cumule || 0),
+        montant_facture_line: factureCumule,
+      };
+    });
+  }, [syntheseMensuelle]);
 
   const displayCards = selectedMonth ? [
     {
@@ -687,12 +706,13 @@ const RecapSyntheseSection = ({
       percentOfTotal: null,
     },
     {
-      title: "Paiements reçus",
-      amount: total_paiements_recus,
+      title: "Montant facturé",
+      amount: montant_facture_reel,
       color: COL_BENEF,
-      percentOfTotal: total_marche_avenants_factures > 0 ? (total_paiements_recus / total_marche_avenants_factures) * 100 : null,
+      percentOfTotal: total_marche_avenants_factures > 0 ? (montant_facture_reel / total_marche_avenants_factures) * 100 : null,
       ...(data.encours_paiements_clients && {
         paymentEncours: {
+          paiementsRecus: total_paiements_recus,
           situationsHt: Number(data.encours_paiements_clients.situations_a_encaisser_ht ?? 0),
           facturesHt: Number(data.encours_paiements_clients.factures_a_encaisser_ht ?? 0),
           enRetardHt: Number(data.encours_paiements_clients.en_retard_ht ?? 0),
@@ -938,8 +958,8 @@ const RecapSyntheseSection = ({
                   <Line
                     yAxisId="cumul"
                     type="monotone"
-                    dataKey="paiements_recus_line"
-                    name="Paiements reçus"
+                    dataKey="montant_facture_line"
+                    name="Montant facturé"
                     stroke={COL_BENEF}
                     strokeWidth={3} // Ligne plus épaisse
                     dot={{ r: 4, strokeWidth: 2, fill: '#fff' }} // Points plus jolis

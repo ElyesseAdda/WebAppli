@@ -12051,6 +12051,27 @@ class RecapSyntheseMensuelleAPIView(APIView):
                     cost = taux_horaire * heures_increment
             buckets[(yb, mb)]["main_oeuvre"] += cost
 
+        # --- Facturation cumulative (situations + factures classiques) ---
+        factu_buckets = defaultdict(float)
+
+        for sit in Situation.objects.filter(chantier=chantier):
+            d = sit.date_envoi
+            if not d:
+                continue
+            montant = float(sit.montant_reel_ht) if sit.date_paiement_reel and sit.montant_reel_ht else float(sit.montant_apres_retenues or 0)
+            factu_buckets[(d.year, d.month)] += montant
+
+        for fac in Facture.objects.filter(chantier=chantier, type_facture='classique'):
+            d = fac.date_envoi or (fac.date_creation.date() if fac.date_creation else None)
+            if not d:
+                continue
+            factu_buckets[(d.year, d.month)] += float(fac.price_ht or 0)
+
+        # Inclure les mois de facturation dans la plage du graphique
+        for key in factu_buckets:
+            if key not in buckets:
+                buckets[key]  # crée l'entrée avec les valeurs par défaut
+
         if not buckets:
             return Response({"par_mois": []})
 
@@ -12075,6 +12096,7 @@ class RecapSyntheseMensuelleAPIView(APIView):
 
         par_mois = []
         cumul = 0.0
+        cumul_facture = 0.0
         y, m = y1, m1
         while True:
             b = buckets[(y, m)]
@@ -12083,6 +12105,8 @@ class RecapSyntheseMensuelleAPIView(APIView):
             st = b["sous_traitant"]
             cout = mat + mo + st
             cumul += cout
+            factu_mois = factu_buckets.get((y, m), 0.0)
+            cumul_facture += factu_mois
             par_mois.append(
                 {
                     "annee": y,
@@ -12093,6 +12117,8 @@ class RecapSyntheseMensuelleAPIView(APIView):
                     "sous_traitant": round(st, 2),
                     "cout_chantier": round(cout, 2),
                     "cout_chantier_cumule": round(cumul, 2),
+                    "facture_mois": round(factu_mois, 2),
+                    "facture_cumule": round(cumul_facture, 2),
                 }
             )
             if (y, m) == (y2, m2):
