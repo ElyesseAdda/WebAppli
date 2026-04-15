@@ -98,6 +98,9 @@ const ChantierListeFactures = ({
   const [showDateEnvoiModal, setShowDateEnvoiModal] = useState(false);
   const [factureForDateEnvoi, setFactureForDateEnvoi] = useState(null);
   const [snackbar, setSnackbar] = useState({ open: false, message: "", severity: "info" });
+  const [editNumeroDialogOpen, setEditNumeroDialogOpen] = useState(false);
+  const [factureToEditNumero, setFactureToEditNumero] = useState(null);
+  const [newNumeroValue, setNewNumeroValue] = useState("");
 
   // Fonction pour obtenir les styles de statut (mêmes que le dashboard)
   const getStatusStyles = (stateFacture) => {
@@ -264,6 +267,52 @@ const ChantierListeFactures = ({
     setFactureToUpdate(selectedFacture);
     setShowStatusModal(true);
     handleClose();
+  };
+
+  const handleEditNumeroClick = () => {
+    if (selectedFacture) {
+      setFactureToEditNumero(selectedFacture);
+      setNewNumeroValue(String(selectedFacture.numero ?? ""));
+      setEditNumeroDialogOpen(true);
+    }
+    setAnchorEl(null);
+  };
+
+  const handleEditNumeroClose = () => {
+    setEditNumeroDialogOpen(false);
+    setFactureToEditNumero(null);
+    setNewNumeroValue("");
+  };
+
+  const handleEditNumeroSave = async () => {
+    if (!factureToEditNumero) return;
+    const value = String(newNumeroValue ?? "").trim();
+    if (!value) {
+      setSnackbar({
+        open: true,
+        message: "Veuillez entrer un numéro valide.",
+        severity: "error",
+      });
+      return;
+    }
+    try {
+      await axios.patch(`/api/facture/${factureToEditNumero.id}/`, {
+        numero: value,
+      });
+      await fetchFactures();
+      handleEditNumeroClose();
+      setSnackbar({
+        open: true,
+        message: `Numéro de facture mis à jour : ${value}`,
+        severity: "success",
+      });
+    } catch (error) {
+      const msg =
+        error.response?.data?.numero?.[0] ||
+        error.response?.data?.detail ||
+        "Erreur lors de la mise à jour du numéro de facture.";
+      setSnackbar({ open: true, message: msg, severity: "error" });
+    }
   };
 
   const handleStatusUpdate = async (newStatus, datePaiement = null) => {
@@ -624,6 +673,7 @@ const ChantierListeFactures = ({
         >
           Télécharger le PDF
         </MenuItem>
+        <MenuItem onClick={handleEditNumeroClick}>Modifier le numéro</MenuItem>
         <MenuItem onClick={handleChangeStatus}>Modifier le statut</MenuItem>
         <MenuItem
           onClick={handleDeleteClick}
@@ -675,6 +725,44 @@ const ChantierListeFactures = ({
             sx={{ borderRadius: 2 }}
           >
             Supprimer
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      <Dialog
+        open={editNumeroDialogOpen}
+        onClose={handleEditNumeroClose}
+        PaperProps={{
+          sx: { borderRadius: 2, padding: 1 },
+        }}
+      >
+        <DialogTitle>Modifier le numéro de facture</DialogTitle>
+        <DialogContent>
+          <StyledTextField
+            autoFocus
+            label="Numéro"
+            type="text"
+            value={newNumeroValue}
+            onChange={(e) => setNewNumeroValue(e.target.value)}
+            variant="outlined"
+            fullWidth
+            inputProps={{ maxLength: 100 }}
+            sx={{
+              mt: 1,
+              "& .MuiInputBase-input": { color: "black" },
+              "& .MuiInputLabel-root": { color: "rgba(0,0,0,0.6)" },
+              "& .MuiOutlinedInput-notchedOutline": {
+                borderColor: "rgba(0,0,0,0.23)",
+              },
+            }}
+          />
+        </DialogContent>
+        <DialogActions sx={{ padding: 2 }}>
+          <Button onClick={handleEditNumeroClose} variant="outlined">
+            Annuler
+          </Button>
+          <Button onClick={handleEditNumeroSave} variant="contained">
+            Enregistrer
           </Button>
         </DialogActions>
       </Dialog>

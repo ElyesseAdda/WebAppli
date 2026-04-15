@@ -1,5 +1,10 @@
 import {
   Alert,
+  Button,
+  Dialog,
+  DialogActions,
+  DialogContent,
+  DialogTitle,
   IconButton,
   Menu,
   MenuItem,
@@ -101,6 +106,9 @@ const ChantierListeDevis = ({
   const statusOptions = ["En attente", "Validé", "Refusé"];
   const [pendingSave, setPendingSave] = useState(false);
   const [snackbar, setSnackbar] = useState({ open: false, message: "", severity: "info" });
+  const [editNumeroDialogOpen, setEditNumeroDialogOpen] = useState(false);
+  const [devisToEditNumero, setDevisToEditNumero] = useState(null);
+  const [newNumeroValue, setNewNumeroValue] = useState("");
 
   // Fonction pour obtenir les styles de statut (mêmes que le dashboard)
   const getStatusStyles = (status) => {
@@ -425,6 +433,52 @@ const ChantierListeDevis = ({
     handleClose();
   };
 
+  const handleEditNumeroClick = () => {
+    if (selectedDevis) {
+      setDevisToEditNumero(selectedDevis);
+      setNewNumeroValue(String(selectedDevis.numero ?? ""));
+      setEditNumeroDialogOpen(true);
+    }
+    setAnchorEl(null);
+  };
+
+  const handleEditNumeroClose = () => {
+    setEditNumeroDialogOpen(false);
+    setDevisToEditNumero(null);
+    setNewNumeroValue("");
+  };
+
+  const handleEditNumeroSave = async () => {
+    if (!devisToEditNumero) return;
+    const value = String(newNumeroValue ?? "").trim();
+    if (!value) {
+      setSnackbar({
+        open: true,
+        message: "Veuillez entrer un numéro valide.",
+        severity: "error",
+      });
+      return;
+    }
+    try {
+      await axios.patch(`/api/devisa/${devisToEditNumero.id}/`, {
+        numero: value,
+      });
+      await fetchDevis();
+      handleEditNumeroClose();
+      setSnackbar({
+        open: true,
+        message: `Numéro de devis mis à jour : ${value}`,
+        severity: "success",
+      });
+    } catch (error) {
+      const msg =
+        error.response?.data?.numero?.[0] ||
+        error.response?.data?.detail ||
+        "Erreur lors de la mise à jour du numéro de devis.";
+      setSnackbar({ open: true, message: msg, severity: "error" });
+    }
+  };
+
   const handleCreateSituation = async () => {
     try {
       const devisResponse = await axios.get(`/api/devisa/${selectedDevis.id}/`);
@@ -745,8 +799,47 @@ const ChantierListeDevis = ({
         )}
         <MenuItem onClick={handleEditCIE}>Éditer en CIE</MenuItem>
         <MenuItem onClick={handleConvertToBonCommande}>Convertir en bon de commande</MenuItem>
+        <MenuItem onClick={handleEditNumeroClick}>Modifier le numéro</MenuItem>
         <MenuItem onClick={handleChangeStatus}>Modifier le statut</MenuItem>
       </Menu>
+
+      <Dialog
+        open={editNumeroDialogOpen}
+        onClose={handleEditNumeroClose}
+        PaperProps={{
+          sx: { borderRadius: 2, padding: 1 },
+        }}
+      >
+        <DialogTitle>Modifier le numéro de devis</DialogTitle>
+        <DialogContent>
+          <StyledTextField
+            autoFocus
+            label="Numéro"
+            type="text"
+            value={newNumeroValue}
+            onChange={(e) => setNewNumeroValue(e.target.value)}
+            variant="outlined"
+            fullWidth
+            inputProps={{ maxLength: 100 }}
+            sx={{
+              mt: 1,
+              "& .MuiInputBase-input": { color: "black" },
+              "& .MuiInputLabel-root": { color: "rgba(0,0,0,0.6)" },
+              "& .MuiOutlinedInput-notchedOutline": {
+                borderColor: "rgba(0,0,0,0.23)",
+              },
+            }}
+          />
+        </DialogContent>
+        <DialogActions sx={{ padding: 2 }}>
+          <Button onClick={handleEditNumeroClose} variant="outlined">
+            Annuler
+          </Button>
+          <Button onClick={handleEditNumeroSave} variant="contained">
+            Enregistrer
+          </Button>
+        </DialogActions>
+      </Dialog>
 
       <StatusChangeModal
         open={showStatusModal}
