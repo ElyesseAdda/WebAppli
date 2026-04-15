@@ -11994,14 +11994,15 @@ class RecapSyntheseMensuelleAPIView(APIView):
             amt = float(pm.montant_a_payer) if pm.montant_a_payer is not None else float(pm.montant or 0)
             buckets[(y, m)]["materiel"] += amt
 
-        # Sous-traitant : même règle que le récap (attribution au mois de date_reception de la facture)
-        for p in PaiementFactureSousTraitant.objects.filter(facture__chantier=chantier).select_related(
-            "facture"
-        ):
-            dr = p.facture.date_reception
+        # Sous-traitant : comptabiliser dès la création de facture
+        # (mois de date_reception), sans attendre le paiement.
+        for facture in FactureSousTraitant.objects.filter(chantier=chantier):
+            dr = facture.date_reception
             if not dr:
                 continue
-            buckets[(dr.year, dr.month)]["sous_traitant"] += float(p.montant_paye)
+            buckets[(dr.year, dr.month)]["sous_traitant"] += float(
+                facture.montant_facture_ht or 0
+            )
 
         # Primes chantier
         for pr in AgentPrime.objects.filter(chantier=chantier, type_affectation="chantier"):
