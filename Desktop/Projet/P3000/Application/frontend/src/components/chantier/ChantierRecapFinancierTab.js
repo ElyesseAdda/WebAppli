@@ -213,7 +213,8 @@ const ChantierRecapFinancierTab = ({ chantierId, isActive = true }) => {
           mb: 2,
           position: "sticky",
           top: 8,
-          zIndex: (theme) => theme.zIndex.appBar - 1,
+          // Doit rester sous les overlays/listes de recherche chantier
+          zIndex: (theme) => theme.zIndex.appBar - 200,
           bgcolor: "background.paper",
           border: "1px solid",
           borderColor: "divider",
