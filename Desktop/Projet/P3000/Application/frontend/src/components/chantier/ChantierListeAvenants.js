@@ -44,6 +44,34 @@ const formatNumber = (number) => {
   return formatted.replace(/\B(?=(\d{3})+(?!\d))/g, " ");
 };
 
+const toInputDate = (value) => {
+  if (!value) return "";
+  if (/^\d{4}-\d{2}-\d{2}$/.test(value)) return value;
+
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "";
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+};
+
+const formatDateFr = (value) => {
+  if (!value) return "-";
+  if (/^\d{4}-\d{2}-\d{2}$/.test(value)) {
+    const [year, month, day] = value.split("-");
+    return `${day}/${month}/${year}`;
+  }
+
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "-";
+  return date.toLocaleDateString("fr-FR", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+  });
+};
+
 const ChantierListeAvenants = ({
   chantierData,
   avenants,
@@ -148,9 +176,7 @@ const ChantierListeAvenants = ({
               .includes(filters[key].toLowerCase());
           case "date_creation":
             if (!filters[key]) return true;
-            const itemDate = new Date(item.date_creation)
-              .toISOString()
-              .split("T")[0];
+            const itemDate = toInputDate(item.date_creation);
             return itemDate === filters[key];
           case "montant":
             const itemMontant = item.montant_ht?.toString() || "";
@@ -481,7 +507,7 @@ const ChantierListeAvenants = ({
                       {item.devis_numero}
                     </DevisNumber>
                     <CenteredTableCell>
-                      {new Date(item.date_creation).toLocaleDateString()}
+                      {formatDateFr(item.date_creation)}
                     </CenteredTableCell>
                     <CenteredTableCell
                       sx={{ fontWeight: 600, color: green[500] }}

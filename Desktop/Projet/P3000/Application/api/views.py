@@ -5421,6 +5421,7 @@ def preview_facture(request, facture_id):
                 self.id = facture_obj.id
                 self.numero = facture_obj.numero
                 self.date_creation = facture_obj.date_creation
+                self.date_envoi = facture_obj.date_envoi
                 self.date_echeance = facture_obj.date_echeance
                 self.date_paiement = facture_obj.date_paiement
                 self.state_facture = facture_obj.state_facture
@@ -5787,6 +5788,7 @@ def preview_facture_v2(request, facture_id):
                 self.id = facture_obj.id
                 self.numero = facture_obj.numero
                 self.date_creation = facture_obj.date_creation
+                self.date_envoi = facture_obj.date_envoi
                 self.date_echeance = facture_obj.date_echeance
                 self.date_paiement = facture_obj.date_paiement
                 self.state_facture = facture_obj.state_facture

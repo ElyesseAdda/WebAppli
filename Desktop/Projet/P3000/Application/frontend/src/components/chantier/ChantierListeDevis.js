@@ -44,6 +44,34 @@ const formatNumber = (number) => {
   return formatted.replace(/\B(?=(\d{3})+(?!\d))/g, " ");
 };
 
+const toInputDate = (value) => {
+  if (!value) return "";
+  if (/^\d{4}-\d{2}-\d{2}$/.test(value)) return value;
+
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "";
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+};
+
+const formatDateFr = (value) => {
+  if (!value) return "-";
+  if (/^\d{4}-\d{2}-\d{2}$/.test(value)) {
+    const [year, month, day] = value.split("-");
+    return `${day}/${month}/${year}`;
+  }
+
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "-";
+  return date.toLocaleDateString("fr-FR", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+  });
+};
+
 const ChantierListeDevis = ({
   chantierData,
   devis,
@@ -152,9 +180,7 @@ const ChantierListeDevis = ({
               .includes(filters[key].toLowerCase());
           case "date_creation":
             if (!filters[key]) return true;
-            const devisDate = new Date(devis.date_creation)
-              .toISOString()
-              .split("T")[0];
+            const devisDate = toInputDate(devis.date_creation);
             return devisDate === filters[key];
           case "price_ht":
             const devisPrice = devis.price_ht?.toString() || "";
@@ -190,9 +216,7 @@ const ChantierListeDevis = ({
               .includes(newFilters[key].toLowerCase());
           case "date_creation":
             if (!newFilters[key]) return true;
-            const devisDate = new Date(devis.date_creation)
-              .toISOString()
-              .split("T")[0];
+            const devisDate = toInputDate(devis.date_creation);
             return devisDate === newFilters[key];
           case "price_ht":
             const devisPrice = devis.price_ht?.toString() || "";
@@ -647,7 +671,7 @@ const ChantierListeDevis = ({
                     {devis.numero}
                   </DevisNumber>
                   <CenteredTableCell>
-                    {new Date(devis.date_creation).toLocaleDateString()}
+                    {formatDateFr(devis.date_creation)}
                   </CenteredTableCell>
                   <CenteredTableCell
                     style={{ fontWeight: 600, color: green[500] }}

@@ -46,6 +46,35 @@ const formatNumber = (number) => {
   return formatted.replace(/\B(?=(\d{3})+(?!\d))/g, " ");
 };
 
+const pad2 = (value) => String(value).padStart(2, "0");
+
+const toInputDate = (value) => {
+  if (!value) return "";
+  if (/^\d{4}-\d{2}-\d{2}$/.test(value)) return value;
+
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "";
+  return `${date.getFullYear()}-${pad2(date.getMonth() + 1)}-${pad2(
+    date.getDate()
+  )}`;
+};
+
+const formatDateFr = (value) => {
+  if (!value) return "-";
+  if (/^\d{4}-\d{2}-\d{2}$/.test(value)) {
+    const [year, month, day] = value.split("-");
+    return `${day}/${month}/${year}`;
+  }
+
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "-";
+  return date.toLocaleDateString("fr-FR", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+  });
+};
+
 const ChantierListeFactures = ({
   chantierData,
   factures,
@@ -490,13 +519,15 @@ const ChantierListeFactures = ({
                       },
                     }}
                   >
-                    {facture.date_envoi
-                      ? new Date(facture.date_envoi).toLocaleDateString()
-                      : "-"}
+                    {formatDateFr(facture.date_envoi)}
                   </CenteredTableCell>
                   <CenteredTableCell>
                     {(facture.date_paiement || facture.date_echeance || facture.date_creation)
-                      ? new Date(facture.date_paiement || facture.date_echeance || facture.date_creation).toLocaleDateString()
+                      ? formatDateFr(
+                          facture.date_paiement ||
+                            facture.date_echeance ||
+                            facture.date_creation
+                        )
                       : "-"}
                   </CenteredTableCell>
                   <CenteredTableCell
@@ -660,7 +691,7 @@ const ChantierListeFactures = ({
         title="Modifier l'état de la facture"
         currentDatePaiement={
           factureToUpdate?.date_paiement
-            ? new Date(factureToUpdate.date_paiement).toISOString().split("T")[0]
+            ? toInputDate(factureToUpdate.date_paiement)
             : ""
         }
       />
@@ -722,10 +753,10 @@ const DateEnvoiFactureModalContent = ({ facture, onSave, onCancel }) => {
     if (facture) {
       // Précharger la date d'envoi si elle existe, sinon la date du jour
       if (facture.date_envoi) {
-        setDateEnvoi(new Date(facture.date_envoi).toISOString().split("T")[0]);
+        setDateEnvoi(toInputDate(facture.date_envoi));
       } else {
         // Date du jour par défaut
-        setDateEnvoi(new Date().toISOString().split("T")[0]);
+        setDateEnvoi(toInputDate(new Date()));
       }
     }
   }, [facture]);

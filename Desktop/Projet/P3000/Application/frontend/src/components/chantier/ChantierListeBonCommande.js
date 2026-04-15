@@ -38,6 +38,34 @@ import BonCommandeForm from "../BonCommandeForm";
 import { RegeneratePDFIconButton } from "../shared/RegeneratePDFButton";
 import { DOCUMENT_TYPES } from "../../config/documentTypeConfig";
 
+const toInputDate = (value) => {
+  if (!value) return "";
+  if (/^\d{4}-\d{2}-\d{2}$/.test(value)) return value;
+
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "";
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+};
+
+const formatDateFr = (value) => {
+  if (!value) return "-";
+  if (/^\d{4}-\d{2}-\d{2}$/.test(value)) {
+    const [year, month, day] = value.split("-");
+    return `${day}/${month}/${year}`;
+  }
+
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "-";
+  return date.toLocaleDateString("fr-FR", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+  });
+};
+
 const ChantierListeBonCommande = ({
   chantierId,
   chantierData = null,
@@ -218,7 +246,7 @@ const ChantierListeBonCommande = ({
             .includes(filters[key].toLowerCase());
         case "date_creation":
           if (!filters[key]) return true;
-          const bcDate = new Date(bc.date_creation).toISOString().split("T")[0];
+          const bcDate = toInputDate(bc.date_creation);
           return bcDate === filters[key];
         case "montant_total":
           if (!filters[key]) return true;
@@ -560,7 +588,7 @@ const ChantierListeBonCommande = ({
                     : fournisseurMap[bc.fournisseur] || bc.fournisseur}
                 </CenteredTableCell>
                 <CenteredTableCell>
-                  {new Date(bc.date_creation).toLocaleDateString()}
+                  {formatDateFr(bc.date_creation)}
                 </CenteredTableCell>
                 <CenteredTableCell sx={{ textAlign: "center" }}>
                   {parseFloat(bc.montant_total).toFixed(2)} €
