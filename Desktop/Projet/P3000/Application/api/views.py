@@ -8831,9 +8831,10 @@ def preview_situation(request, situation_id):
                 montant_avancement_avenant = Decimal('0')
                 nb_lignes_avenant = 0
 
-            # Utiliser numero_complet (numéro devis - désignation) pour éviter la duplication dans le template
+            # Utiliser uniquement le numéro du devis.
+            # Le numéro d'avenant est déjà affiché séparément dans le template.
             current_avenant_lines.append({
-                'devis_numero': facture_ts.numero_complet,
+                'devis_numero': facture_ts.devis.numero,
                 'designation': facture_ts.designation,
                 'montant_ht': ligne_avenant.montant_ht,
                 'pourcentage_actuel': ligne_avenant.pourcentage_actuel,

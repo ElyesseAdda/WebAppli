@@ -1306,7 +1306,7 @@ class BonCommandeSerializer(serializers.ModelSerializer):
         return None
 
 class FactureTSSerializer(serializers.ModelSerializer):
-    devis_numero = serializers.CharField(source='numero_complet', read_only=True)
+    devis_numero = serializers.CharField(source='devis.numero', read_only=True)
     devis_date_creation = serializers.DateTimeField(source='devis.date_creation', read_only=True)
     devis_nature_travaux = serializers.CharField(source='devis.nature_travaux', read_only=True)
     devis_status = serializers.CharField(source='devis.status', read_only=True)
@@ -1628,7 +1628,7 @@ class SituationLigneUpdateSerializer(serializers.ModelSerializer):
         return instance
 
 class FactureTSListSerializer(serializers.ModelSerializer):
-    devis_numero = serializers.CharField(source='numero_complet', read_only=True)
+    devis_numero = serializers.CharField(source='devis.numero', read_only=True)
     avenant_numero = serializers.CharField(source='avenant.numero', read_only=True)
     
     class Meta:
