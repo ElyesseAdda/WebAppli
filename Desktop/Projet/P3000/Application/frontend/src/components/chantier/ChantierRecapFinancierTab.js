@@ -9,8 +9,6 @@ import {
   MenuItem,
   Paper,
   Select,
-  Tab,
-  Tabs,
   Typography,
 } from "@mui/material";
 import axios from "axios";
@@ -39,8 +37,6 @@ const ChantierRecapFinancierTab = ({ chantierId, isActive = true }) => {
   const [syntheseMensuelleLoading, setSyntheseMensuelleLoading] = useState(false);
   /** Incrémenté après un « Actualiser » pour réinitialiser la vue mois dans la synthèse */
   const [syntheseUiResetKey, setSyntheseUiResetKey] = useState(0);
-  /** Onglet principal Dépenses (0) / Paiements (1) dans le bloc commun */
-  const [depensesPaiementsTab, setDepensesPaiementsTab] = useState(0);
   /** Premier chargement ou changement de chantier : masque le corps du récap */
   const [loading, setLoading] = useState(false);
   /** Changement mois / année / global : mise à jour sans démonter la page */
@@ -323,61 +319,63 @@ const ChantierRecapFinancierTab = ({ chantierId, isActive = true }) => {
                   boxShadow: "0 4px 24px 0 rgba(0,0,0,0.06)",
                 }}
               >
-                <Tabs
-                  value={depensesPaiementsTab}
-                  onChange={(_, v) => setDepensesPaiementsTab(v)}
-                  sx={{
-                    mb: 2,
-                    borderBottom: 1,
-                    borderColor: "divider",
-                    minHeight: 42,
-                    "& .MuiTab-root": { fontWeight: 700, textTransform: "none" },
-                  }}
-                >
-                  <Tab label="Dépenses" />
-                  <Tab label="Paiements" />
-                </Tabs>
-                <Box
-                  sx={{
-                    display: depensesPaiementsTab === 0 ? "block" : "none",
-                  }}
-                  aria-hidden={depensesPaiementsTab !== 0}
-                >
-                  <RecapTabsSection
-                    title="Dépenses"
-                    hideOuterChrome
-                    tabs={[
-                      { label: "Payées", data: getDepensesData() },
-                      { label: "Restantes", data: data.sorties.reste_a_payer },
-                    ]}
-                    colors={CATEGORY_COLORS}
-                    chantierId={chantierId}
-                    periode={periode}
-                    refreshRecap={refreshRecapSilently}
-                    showDocumentsPane
-                  />
-                </Box>
-                <Box
-                  sx={{
-                    display: depensesPaiementsTab === 1 ? "block" : "none",
-                  }}
-                  aria-hidden={depensesPaiementsTab !== 1}
-                >
-                  <RecapTabsSection
-                    title="Paiements"
-                    hideOuterChrome
-                    tabs={[
-                      { label: "Reçus", data: data.entrees.paye },
-                      { label: "En attente", data: data.entrees.reste_a_encaisser },
-                    ]}
-                    colors={CATEGORY_COLORS}
-                    chantierId={chantierId}
-                    periode={periode}
-                    refreshRecap={refreshRecapSilently}
-                    showDocumentsPane
-                    documentsPaneVariant="paiements"
-                  />
-                </Box>
+                <Grid container spacing={3} alignItems="stretch">
+                  <Grid item xs={12} xl={6}>
+                    <Paper
+                      elevation={0}
+                      sx={{
+                        height: "100%",
+                        p: 2,
+                        borderRadius: 3,
+                        border: "1px solid",
+                        borderColor: "divider",
+                        bgcolor: "background.default",
+                      }}
+                    >
+                      <RecapTabsSection
+                        title="Dépenses"
+                        hideOuterChrome
+                        tabs={[
+                          { label: "Payées", data: getDepensesData() },
+                          { label: "Restantes", data: data.sorties.reste_a_payer },
+                        ]}
+                        colors={CATEGORY_COLORS}
+                        chantierId={chantierId}
+                        periode={periode}
+                        refreshRecap={refreshRecapSilently}
+                        showDocumentsPane
+                      />
+                    </Paper>
+                  </Grid>
+                  <Grid item xs={12} xl={6}>
+                    <Paper
+                      elevation={0}
+                      sx={{
+                        height: "100%",
+                        p: 2,
+                        borderRadius: 3,
+                        border: "1px solid",
+                        borderColor: "divider",
+                        bgcolor: "background.paper",
+                      }}
+                    >
+                      <RecapTabsSection
+                        title="Paiements"
+                        hideOuterChrome
+                        tabs={[
+                          { label: "Reçus", data: data.entrees.paye },
+                          { label: "En attente", data: data.entrees.reste_a_encaisser },
+                        ]}
+                        colors={CATEGORY_COLORS}
+                        chantierId={chantierId}
+                        periode={periode}
+                        refreshRecap={refreshRecapSilently}
+                        showDocumentsPane
+                        documentsPaneVariant="paiements"
+                      />
+                    </Paper>
+                  </Grid>
+                </Grid>
               </Paper>
             </Grid>
           </Grid>

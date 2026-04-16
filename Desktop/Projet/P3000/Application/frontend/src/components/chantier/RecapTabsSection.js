@@ -224,6 +224,8 @@ const RecapTabsSection = ({
   const rootProps = hideOuterChrome
     ? { sx: rootSx }
     : { elevation: 0, sx: rootSx };
+  const compactDocumentsLayout = showDocumentsPane;
+  const summaryBlockMinHeight = compactDocumentsLayout ? 250 : "auto";
 
   return (
     <Root {...rootProps}>
@@ -246,10 +248,10 @@ const RecapTabsSection = ({
       </Tabs>
 
       <Grid container spacing={3} alignItems="stretch">
-        <Grid item xs={12} md={showDocumentsPane ? 5 : 12}>
-          <Grid container spacing={3} alignItems="center">
+        <Grid item xs={12} sx={{ minHeight: summaryBlockMinHeight }}>
+          <Grid container spacing={3} alignItems="flex-start">
         {/* Section Gauche : Textes dans des cartes */}
-        <Grid item xs={12} md={showDocumentsPane ? 12 : 7}>
+        <Grid item xs={12} md={compactDocumentsLayout ? 8 : 7}>
           <Grid container spacing={2}>
             {Object.keys(data).map((cat) => (
               <Grid item xs={12} sm={6} key={cat}>
@@ -272,8 +274,8 @@ const RecapTabsSection = ({
         </Grid>
 
         {/* Section Droite : PieChart (Style Jauge / Demi-cercle) */}
-        <Grid item xs={12} md={showDocumentsPane ? 12 : 5}>
-          <Box sx={{ width: '100%', maxWidth: 300, height: 200, position: "relative", mx: "auto", mt: 2 }}>
+        <Grid item xs={12} sm={6} md={compactDocumentsLayout ? 4 : 5}>
+          <Box sx={{ width: '100%', maxWidth: compactDocumentsLayout ? 220 : 300, height: compactDocumentsLayout ? 150 : 200, position: "relative", mx: "auto", mt: compactDocumentsLayout ? 0 : 2 }}>
             <ResponsivePie
               data={pieData}
               margin={{ top: 10, right: 10, bottom: 10, left: 10 }}
@@ -323,7 +325,7 @@ const RecapTabsSection = ({
                 <Typography
                   variant="h4"
                   fontWeight={800}
-                  sx={{ fontSize: getFontSize(totalSum), color: 'text.primary', lineHeight: 1 }}
+                  sx={{ fontSize: compactDocumentsLayout ? Math.max(getFontSize(totalSum) - 6, 14) : getFontSize(totalSum), color: 'text.primary', lineHeight: 1 }}
                 >
                   {Number(totalSum).toLocaleString("fr-FR", {
                     minimumFractionDigits: 0,
@@ -340,7 +342,7 @@ const RecapTabsSection = ({
         </Grid>
 
         {showDocumentsPane && chantierId ? (
-          <Grid item xs={12} md={7} sx={{ minWidth: 0, maxWidth: "100%" }}>
+          <Grid item xs={12} md={12} sx={{ minWidth: 0, maxWidth: "100%" }}>
             <RecapDepenseDocumentsPanel
               chantierId={chantierId}
               category={effectiveExpenseCategory}
