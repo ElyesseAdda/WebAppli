@@ -11476,21 +11476,44 @@ class RecapFinancierChantierAPIView(APIView):
         factures_qs = FactureSousTraitant.objects.filter(chantier=chantier).prefetch_related('paiements', 'sous_traitant')
         
         # Collecter les paiements effectués dans la période
+        # IMPORTANT : ventilation ST par mois/année de facture (champ métier),
+        # et non par date_reception.
         paiements_periode = []
         factures_reste_periode = []
         
         for facture in factures_qs:
+            try:
+                facture_mois = int(facture.mois) if facture.mois is not None else None
+                facture_annee = int(facture.annee) if facture.annee is not None else None
+            except (TypeError, ValueError):
+                facture_mois, facture_annee = None, None
+
+            in_selected_period = True
+            if mois and annee:
+                try:
+                    mois_int = int(mois)
+                    annee_int = int(annee)
+                    if facture_mois is not None and facture_annee is not None:
+                        in_selected_period = (facture_mois == mois_int and facture_annee == annee_int)
+                    elif facture.date_reception:
+                        in_selected_period = (
+                            facture.date_reception.month == mois_int
+                            and facture.date_reception.year == annee_int
+                        )
+                    else:
+                        in_selected_period = False
+                except (TypeError, ValueError):
+                    in_selected_period = True
+
             # Paiements effectués dans la période
-            # Filtrer par date de réception de la facture (pas la date de paiement réelle)
+            # Filtrer par mois/année de facture (pas la date de paiement réelle).
             for paiement in facture.paiements.all():
-                # Filtrer par date de réception de la facture
-                if not date_debut or not date_fin or (date_debut <= facture.date_reception <= date_fin):
+                if in_selected_period:
                     paiements_periode.append(paiement)
             
-            # Factures avec échéance dans la période et pas entièrement payées
-            if not facture.est_soldee and facture.date_paiement_prevue:
-                if not date_debut or not date_fin or (date_debut <= facture.date_paiement_prevue <= date_fin):
-                    factures_reste_periode.append(facture)
+            # Factures non soldées du mois/année sélectionné
+            if not facture.est_soldee and in_selected_period:
+                factures_reste_periode.append(facture)
 
         # 5. Main d'œuvre (Sorties) - NOUVELLE LOGIQUE AVEC SCHEDULE
         # Gestion des jours fériés pour toutes les années concernées
@@ -11977,7 +12000,7 @@ class RecapFinancierChantierAPIView(APIView):
 class RecapSyntheseMensuelleAPIView(APIView):
     """
     Séries mensuelles pour le graphique de synthèse (indépendant du filtre mois/année du récap).
-    Même logique de ventilation que le récap : matériel (paiements mensuels), ST (mois de date_reception),
+    Même logique de ventilation que le récap : matériel (paiements mensuels), ST (mois/année de facture),
     main d'œuvre (créneaux + primes du mois).
     """
     permission_classes = []
@@ -11997,15 +12020,17 @@ class RecapSyntheseMensuelleAPIView(APIView):
             amt = float(pm.montant_a_payer) if pm.montant_a_payer is not None else float(pm.montant or 0)
             buckets[(y, m)]["materiel"] += amt
 
-        # Sous-traitant : comptabiliser dès la création de facture
-        # (mois de date_reception), sans attendre le paiement.
+        # Sous-traitant : comptabiliser sur le mois/année métier de la facture,
+        # sans attendre le paiement.
         for facture in FactureSousTraitant.objects.filter(chantier=chantier):
-            dr = facture.date_reception
-            if not dr:
-                continue
-            buckets[(dr.year, dr.month)]["sous_traitant"] += float(
-                facture.montant_facture_ht or 0
-            )
+            try:
+                y, m = int(facture.annee), int(facture.mois)
+            except (TypeError, ValueError):
+                dr = facture.date_reception
+                if not dr:
+                    continue
+                y, m = int(dr.year), int(dr.month)
+            buckets[(y, m)]["sous_traitant"] += float(facture.montant_facture_ht or 0)
 
         # Primes chantier
         for pr in AgentPrime.objects.filter(chantier=chantier, type_affectation="chantier"):
