@@ -905,12 +905,6 @@ const RapportForm = ({
       }
       return next;
     });
-    if (value === false) {
-      (pendingPhotosPlatinePortail || []).forEach((p) => {
-        if (p?.previewUrl && String(p.previewUrl).startsWith("blob:")) URL.revokeObjectURL(p.previewUrl);
-      });
-      setPendingPhotosPlatinePortail([]);
-    }
     scheduleDraftPersistence();
   };
 
@@ -1201,8 +1195,9 @@ const RapportForm = ({
   };
 
   const isVigikPlus = formData.type_rapport === "vigik_plus";
-  const vigikShowPortailPhoto =
-    formData.presence_portail === true && formData.presence_platine_portail === true;
+  const vigikPortailPhotosEnabled =
+    formData.presence_portail === false ||
+    (formData.presence_portail === true && formData.presence_platine_portail === true);
   const vigikPhotos = useMemo(() => {
     const out = [];
     const datePlat =
@@ -1218,7 +1213,7 @@ const RapportForm = ({
         pending: !!p.file,
       });
     });
-    if (vigikShowPortailPhoto) {
+    if (vigikPortailPhotosEnabled) {
       (pendingPhotosPlatinePortail || []).forEach((p, i) => {
         if (!p?.previewUrl) return;
         out.push({
@@ -1234,7 +1229,7 @@ const RapportForm = ({
     pendingPhotosPlatine,
     pendingPhotosPlatinePortail,
     formData.dates_intervention,
-    vigikShowPortailPhoto,
+    vigikPortailPhotosEnabled,
     rapportData?.date,
   ]);
 
@@ -1428,8 +1423,9 @@ const RapportForm = ({
         if (p.previewUrl && String(p.previewUrl).startsWith("blob:")) URL.revokeObjectURL(p.previewUrl);
       }
       if (
-        formDataRef.current?.presence_portail === true &&
-        formDataRef.current?.presence_platine_portail === true
+        formDataRef.current?.presence_portail === false ||
+        (formDataRef.current?.presence_portail === true &&
+          formDataRef.current?.presence_platine_portail === true)
       ) {
         for (const p of pendingPhotosPlatinePortailRef.current || []) {
           if (!p?.file) continue;
@@ -1538,7 +1534,8 @@ const RapportForm = ({
 
       const fdVigik = formDataRef.current;
       const allowPortailPhoto =
-        fdVigik?.presence_portail === true && fdVigik?.presence_platine_portail === true;
+        fdVigik?.presence_portail === false ||
+        (fdVigik?.presence_portail === true && fdVigik?.presence_platine_portail === true);
       const nextPortState = [];
       if (allowPortailPhoto) {
         for (const p of portItems) {
@@ -1565,7 +1562,7 @@ const RapportForm = ({
           });
         }
         setPendingPhotosPlatinePortail(nextPortState);
-      } else if (!allowPortailPhoto) {
+      } else if (fdVigik?.presence_portail === true && fdVigik?.presence_platine_portail === false) {
         setPendingPhotosPlatinePortail([]);
       }
     }
@@ -2630,11 +2627,13 @@ const RapportForm = ({
                   </Box>
                 </>
               )}
-              {/* Photo portail : uniquement si portail + platine oui (facultatif) */}
-              {formData.presence_portail === true && formData.presence_platine_portail === true && (
+              {/* Photos « portail » : sans portail (facultatif) ou portail + platine oui (facultatif) */}
+              {vigikPortailPhotosEnabled && (
               <Box sx={{ gridColumn: { md: "1 / -1" } }}>
                 <Typography variant="subtitle2" color="text.secondary" sx={{ mb: 1 }}>
-                  Joindre des photos (facultatif). Vous pouvez en ajouter plusieurs.
+                  {formData.presence_portail === false
+                    ? "Joindre des photos (facultatif), par exemple pour illustrer l'accès ou le contexte sur site. Vous pouvez en ajouter plusieurs."
+                    : "Joindre des photos (facultatif). Vous pouvez en ajouter plusieurs."}
                 </Typography>
                 <input
                   ref={photoPlatinePortailInputRef}

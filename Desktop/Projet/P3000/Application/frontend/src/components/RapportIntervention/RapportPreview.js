@@ -151,6 +151,16 @@ const RapportPreview = ({ rapport }) => {
                 variant="outlined"
                 sx={{ mr: 1, mb: 1 }}
               />
+              {rapport.presence_portail === false &&
+                (rapport.vigik_platine_portail_photos || []).filter((x) => x?.url).map((row, idx) => (
+                  <Box key={row.s3_key || idx} sx={{ mt: 1 }}>
+                    <img
+                      src={row.url}
+                      alt={`Photo contexte site ${idx + 1}`}
+                      style={{ maxWidth: "100%", width: 280, height: 210, objectFit: "cover", borderRadius: 4, border: "1px solid #ddd" }}
+                    />
+                  </Box>
+                ))}
             </Box>
             {(rapport.presence_portail === true || (rapport.presence_portail == null && rapport.presence_platine_portail != null)) && (
               <Box sx={{ mt: 2 }}>

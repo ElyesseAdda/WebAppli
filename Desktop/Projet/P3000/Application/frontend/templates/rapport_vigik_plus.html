@@ -267,6 +267,18 @@
                     {% endif %}
                 </span>
             </div>
+            {% if rapport.presence_portail is False and photo_platine_portail_urls %}
+            <div class="photos-section">
+                <h4>Photos (facultatif)</h4>
+                <div class="photos-grid">
+                    {% for u in photo_platine_portail_urls %}
+                    <div class="photo-item">
+                        <img src="{{ u }}" alt="Photo site" />
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+            {% endif %}
         </div>
         {% if rapport.presence_portail %}
         <div class="info-block info-block-full">

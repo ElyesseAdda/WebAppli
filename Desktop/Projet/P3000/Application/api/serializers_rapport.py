@@ -30,7 +30,8 @@ def _safe_delete_s3_key(key):
 
 def _normalize_vigik_portail_answers(validated_data, instance=None):
     """
-    Vigik+ : pas de portail ou pas de platine Vigik+ au portail -> pas de photo portail.
+    Vigik+ : sans portail, pas de réponse « platine au portail », mais des photos
+    facultatives peuvent rester associées au rapport. Portail oui sans platine -> pas de photos portail.
     """
     type_r = validated_data.get('type_rapport')
     if type_r is None and instance is not None:
@@ -49,7 +50,6 @@ def _normalize_vigik_portail_answers(validated_data, instance=None):
 
     if pp is False:
         validated_data['presence_platine_portail'] = None
-        validated_data['photos_platine_portail_s3_keys'] = []
     elif pp is True and ppp is False:
         validated_data['photos_platine_portail_s3_keys'] = []
     return validated_data

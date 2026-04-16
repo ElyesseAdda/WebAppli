@@ -75,7 +75,7 @@ import {
 import { styled } from '@mui/material/styles';
 import { usePreload } from './hooks/usePreload';
 import MoveDialog from './MoveDialog';
-import { checkFileExists, findAvailableFileName } from './hooks/useUpload';
+import { useUpload } from './hooks/useUpload';
 import { normalizeFilename } from './services/pathNormalizationService';
 
 const ExplorerContainer = styled(Box)(({ theme, isDragOver }) => ({
@@ -210,6 +210,7 @@ const DriveExplorer = ({
   const [downloadingFolder, setDownloadingFolder] = useState(null);
   const containerRef = useRef(null);
   const { preloadOfficeFiles, isOfficeFile } = usePreload();
+  const { findAvailableFileName } = useUpload();
 
   // Précharger les fichiers Office dès l'affichage
   useEffect(() => {
