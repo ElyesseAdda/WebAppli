@@ -29,6 +29,7 @@ import {
   photoSnapshotIsEmpty,
   deserializePhotoSnapshotFromPayload,
 } from "../../utils/rapportDraftIDB";
+import { compressImage, VIGIK_REPORT_PHOTO_OPTIONS } from "../../utils/compressImage";
 
 const EMPTY_PRESTATION = {
   localisation: "",
@@ -524,6 +525,7 @@ const RapportForm = ({
   const [vigikGalleryOpen, setVigikGalleryOpen] = useState(false);
   const [vigikGalleryIndex, setVigikGalleryIndex] = useState(0);
   const [vigikZoom, setVigikZoom] = useState(1);
+  const [vigikPhotoCompressing, setVigikPhotoCompressing] = useState(false);
   const vigikTouchStartXRef = useRef(null);
   const draftPromptForIdRef = useRef(null);
   const suppressDraftAutosaveRef = useRef(false);
@@ -1823,17 +1825,26 @@ const RapportForm = ({
     }
   };
 
-  const appendVigikPlatineFiles = (fileList) => {
+  const appendVigikPlatineFiles = async (fileList) => {
     const arr = Array.from(fileList || []).filter(Boolean);
     if (!arr.length) return;
-    setPendingPhotosPlatine((prev) => {
-      const next = [...prev];
-      for (const file of arr) {
-        next.push({ file, name: file.name, previewUrl: URL.createObjectURL(file) });
-      }
-      return next;
-    });
-    scheduleDraftPersistence();
+    setVigikPhotoCompressing(true);
+    try {
+      const processed = await Promise.all(arr.map((f) => compressImage(f, VIGIK_REPORT_PHOTO_OPTIONS)));
+      setPendingPhotosPlatine((prev) => {
+        const next = [...prev];
+        for (const file of processed) {
+          next.push({ file, name: file.name, previewUrl: URL.createObjectURL(file) });
+        }
+        return next;
+      });
+      scheduleDraftPersistence();
+    } catch (err) {
+      console.warn("Compression photo Vigik+ platine:", err);
+      showSnackbar("Impossible de traiter une ou plusieurs images.", "error");
+    } finally {
+      setVigikPhotoCompressing(false);
+    }
   };
 
   const removeVigikPlatineAt = async (index) => {
@@ -1863,17 +1874,26 @@ const RapportForm = ({
     scheduleDraftPersistence();
   };
 
-  const appendVigikPortailFiles = (fileList) => {
+  const appendVigikPortailFiles = async (fileList) => {
     const arr = Array.from(fileList || []).filter(Boolean);
     if (!arr.length) return;
-    setPendingPhotosPlatinePortail((prev) => {
-      const next = [...prev];
-      for (const file of arr) {
-        next.push({ file, name: file.name, previewUrl: URL.createObjectURL(file) });
-      }
-      return next;
-    });
-    scheduleDraftPersistence();
+    setVigikPhotoCompressing(true);
+    try {
+      const processed = await Promise.all(arr.map((f) => compressImage(f, VIGIK_REPORT_PHOTO_OPTIONS)));
+      setPendingPhotosPlatinePortail((prev) => {
+        const next = [...prev];
+        for (const file of processed) {
+          next.push({ file, name: file.name, previewUrl: URL.createObjectURL(file) });
+        }
+        return next;
+      });
+      scheduleDraftPersistence();
+    } catch (err) {
+      console.warn("Compression photo Vigik+ portail:", err);
+      showSnackbar("Impossible de traiter une ou plusieurs images.", "error");
+    } finally {
+      setVigikPhotoCompressing(false);
+    }
   };
 
   const removeVigikPortailAt = async (index) => {
@@ -2488,7 +2508,8 @@ const RapportForm = ({
               </Box>
               <Box sx={{ gridColumn: { md: "1 / -1" } }}>
                 <Typography variant="subtitle2" color="text.secondary" sx={{ mb: 1 }}>
-                  Joindre au moins une photo (obligatoire). Vous pouvez en ajouter plusieurs.
+                  Joindre au moins une photo (obligatoire). Vous pouvez en ajouter plusieurs. Les images sont redimensionnées
+                  (max. 1600 px) et compressées en JPEG pour limiter le poids des envois.
                 </Typography>
                 <input
                   ref={photoPlatineInputRef}
@@ -2497,8 +2518,9 @@ const RapportForm = ({
                   multiple
                   style={{ display: "none" }}
                   onChange={(e) => {
-                    appendVigikPlatineFiles(e.target.files);
+                    const fl = e.target.files;
                     e.target.value = "";
+                    void appendVigikPlatineFiles(fl);
                   }}
                 />
                 <input
@@ -2508,8 +2530,9 @@ const RapportForm = ({
                   capture="environment"
                   style={{ display: "none" }}
                   onChange={(e) => {
-                    appendVigikPlatineFiles(e.target.files);
+                    const fl = e.target.files;
                     e.target.value = "";
+                    void appendVigikPlatineFiles(fl);
                   }}
                 />
                 <Box sx={{ display: "flex", alignItems: "flex-start", gap: 1.5, flexWrap: "wrap" }}>
@@ -2561,18 +2584,34 @@ const RapportForm = ({
                     <Box sx={{ display: "flex", gap: 1, flexWrap: "wrap", alignItems: "center" }}>
                       {isMobile ? (
                         <>
-                          <Button size="small" variant="outlined" onClick={() => photoPlatineCameraInputRef.current?.click()}>
+                          <Button
+                            size="small"
+                            variant="outlined"
+                            disabled={vigikPhotoCompressing}
+                            onClick={() => photoPlatineCameraInputRef.current?.click()}
+                          >
                             Prendre une photo
                           </Button>
-                          <Button size="small" variant="outlined" onClick={() => photoPlatineInputRef.current?.click()}>
+                          <Button
+                            size="small"
+                            variant="outlined"
+                            disabled={vigikPhotoCompressing}
+                            onClick={() => photoPlatineInputRef.current?.click()}
+                          >
                             Galerie
                           </Button>
                         </>
                       ) : (
-                        <Button size="small" variant="outlined" onClick={() => photoPlatineInputRef.current?.click()}>
+                        <Button
+                          size="small"
+                          variant="outlined"
+                          disabled={vigikPhotoCompressing}
+                          onClick={() => photoPlatineInputRef.current?.click()}
+                        >
                           Ajouter des photos
                         </Button>
                       )}
+                      {vigikPhotoCompressing && <CircularProgress size={22} sx={{ ml: 0.5 }} aria-label="Traitement des images" />}
                     </Box>
                   )}
                 </Box>
@@ -2632,8 +2671,8 @@ const RapportForm = ({
               <Box sx={{ gridColumn: { md: "1 / -1" } }}>
                 <Typography variant="subtitle2" color="text.secondary" sx={{ mb: 1 }}>
                   {formData.presence_portail === false
-                    ? "Joindre des photos (facultatif), par exemple pour illustrer l'accès ou le contexte sur site. Vous pouvez en ajouter plusieurs."
-                    : "Joindre des photos (facultatif). Vous pouvez en ajouter plusieurs."}
+                    ? "Joindre des photos (facultatif), par exemple pour illustrer l'accès ou le contexte sur site. Vous pouvez en ajouter plusieurs. Même compression automatique que pour la platine (max. 1600 px, JPEG)."
+                    : "Joindre des photos (facultatif). Vous pouvez en ajouter plusieurs. Même compression automatique que pour la platine (max. 1600 px, JPEG)."}
                 </Typography>
                 <input
                   ref={photoPlatinePortailInputRef}
@@ -2642,8 +2681,9 @@ const RapportForm = ({
                   multiple
                   style={{ display: "none" }}
                   onChange={(e) => {
-                    appendVigikPortailFiles(e.target.files);
+                    const fl = e.target.files;
                     e.target.value = "";
+                    void appendVigikPortailFiles(fl);
                   }}
                 />
                 <input
@@ -2653,8 +2693,9 @@ const RapportForm = ({
                   capture="environment"
                   style={{ display: "none" }}
                   onChange={(e) => {
-                    appendVigikPortailFiles(e.target.files);
+                    const fl = e.target.files;
                     e.target.value = "";
+                    void appendVigikPortailFiles(fl);
                   }}
                 />
                 <Box sx={{ display: "flex", alignItems: "flex-start", gap: 1.5, flexWrap: "wrap" }}>
@@ -2709,18 +2750,34 @@ const RapportForm = ({
                     <Box sx={{ display: "flex", gap: 1, flexWrap: "wrap", alignItems: "center" }}>
                       {isMobile ? (
                         <>
-                          <Button size="small" variant="outlined" onClick={() => photoPlatinePortailCameraInputRef.current?.click()}>
+                          <Button
+                            size="small"
+                            variant="outlined"
+                            disabled={vigikPhotoCompressing}
+                            onClick={() => photoPlatinePortailCameraInputRef.current?.click()}
+                          >
                             Prendre une photo
                           </Button>
-                          <Button size="small" variant="outlined" onClick={() => photoPlatinePortailInputRef.current?.click()}>
+                          <Button
+                            size="small"
+                            variant="outlined"
+                            disabled={vigikPhotoCompressing}
+                            onClick={() => photoPlatinePortailInputRef.current?.click()}
+                          >
                             Galerie
                           </Button>
                         </>
                       ) : (
-                        <Button size="small" variant="outlined" onClick={() => photoPlatinePortailInputRef.current?.click()}>
+                        <Button
+                          size="small"
+                          variant="outlined"
+                          disabled={vigikPhotoCompressing}
+                          onClick={() => photoPlatinePortailInputRef.current?.click()}
+                        >
                           Ajouter des photos
                         </Button>
                       )}
+                      {vigikPhotoCompressing && <CircularProgress size={22} sx={{ ml: 0.5 }} aria-label="Traitement des images" />}
                     </Box>
                   )}
                 </Box>

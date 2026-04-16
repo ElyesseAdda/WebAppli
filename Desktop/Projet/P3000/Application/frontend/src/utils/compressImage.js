@@ -2,8 +2,25 @@ const MAX_WIDTH = 1920;
 const MAX_HEIGHT = 1920;
 const QUALITY = 0.8;
 
-export function compressImage(file, { maxWidth = MAX_WIDTH, maxHeight = MAX_HEIGHT, quality = QUALITY } = {}) {
-  return new Promise((resolve, reject) => {
+/** Photos rapport Vigik+ : dimensions modérées + JPEG pour limiter le poids (upload / nginx). */
+export const VIGIK_REPORT_PHOTO_OPTIONS = {
+  maxWidth: 1600,
+  maxHeight: 1600,
+  quality: 0.78,
+  force: true,
+};
+
+/**
+ * @param {File} file
+ * @param {{ maxWidth?: number, maxHeight?: number, quality?: number, force?: boolean, skipIfBytesUnder?: number }} [opts]
+ *   force : si true, repasse toujours par le canvas JPEG (ignore le court-circuit « déjà léger »).
+ *   skipIfBytesUnder : seuil du court-circuit quand force est false (défaut 500 ko).
+ */
+export function compressImage(
+  file,
+  { maxWidth = MAX_WIDTH, maxHeight = MAX_HEIGHT, quality = QUALITY, force = false, skipIfBytesUnder = 500_000 } = {}
+) {
+  return new Promise((resolve) => {
     if (!file.type.startsWith("image/")) {
       resolve(file);
       return;
@@ -17,7 +34,7 @@ export function compressImage(file, { maxWidth = MAX_WIDTH, maxHeight = MAX_HEIG
 
       let { width, height } = img;
 
-      if (width <= maxWidth && height <= maxHeight && file.size < 500_000) {
+      if (!force && width <= maxWidth && height <= maxHeight && file.size < skipIfBytesUnder) {
         resolve(file);
         return;
       }
@@ -44,7 +61,9 @@ export function compressImage(file, { maxWidth = MAX_WIDTH, maxHeight = MAX_HEIG
             resolve(file);
             return;
           }
-          const compressed = new File([blob], file.name, {
+          const baseName = (file.name || "photo").replace(/\.[^/.]+$/, "") || "photo";
+          const outName = /\.jpe?g$/i.test(file.name || "") ? file.name || "photo.jpg" : `${baseName}.jpg`;
+          const compressed = new File([blob], outName, {
             type: "image/jpeg",
             lastModified: Date.now(),
           });

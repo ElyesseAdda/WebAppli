@@ -279,6 +279,16 @@ nginx -t
 cat /etc/nginx/sites-available/elekable.conf | grep proxy_pass
 ```
 
+### Erreur 413 Request Entity Too Large (uploads)
+
+Nginx refuse le corps de la requête si `client_max_body_size` n’est pas assez élevé (défaut ~1 Mo). Dans le bloc `server { listen 443 … }` du site, ajoutez par exemple :
+
+```nginx
+client_max_body_size 100M;
+```
+
+Puis : `sudo nginx -t && sudo systemctl reload nginx`. Le template `deploy/nginx-template.conf` du dépôt inclut cette directive au niveau `server` pour couvrir tout le trafic vers Gunicorn (`location /`).
+
 ### Problème de fichiers statiques
 
 ```bash
