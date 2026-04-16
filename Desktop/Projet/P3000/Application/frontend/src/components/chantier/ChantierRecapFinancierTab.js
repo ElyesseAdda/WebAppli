@@ -332,6 +332,30 @@ const ChantierRecapFinancierTab = ({ chantierId, isActive = true }) => {
                         bgcolor: "background.default",
                       }}
                     >
+                      <Box
+                        sx={{
+                          mb: 2,
+                          pb: 1,
+                          borderBottom: "1px solid",
+                          borderColor: "divider",
+                          display: "flex",
+                          justifyContent: "center",
+                        }}
+                      >
+                        <Typography
+                          variant="subtitle1"
+                          sx={{
+                            fontWeight: 800,
+                            color: "text.primary",
+                            textTransform: "uppercase",
+                            letterSpacing: 1.4,
+                            fontSize: "0.9rem",
+                            lineHeight: 1.2,
+                          }}
+                        >
+                          Dépenses
+                        </Typography>
+                      </Box>
                       <RecapTabsSection
                         title="Dépenses"
                         hideOuterChrome
@@ -359,6 +383,30 @@ const ChantierRecapFinancierTab = ({ chantierId, isActive = true }) => {
                         bgcolor: "background.paper",
                       }}
                     >
+                      <Box
+                        sx={{
+                          mb: 2,
+                          pb: 1,
+                          borderBottom: "1px solid",
+                          borderColor: "divider",
+                          display: "flex",
+                          justifyContent: "center",
+                        }}
+                      >
+                        <Typography
+                          variant="subtitle1"
+                          sx={{
+                            fontWeight: 800,
+                            color: "text.primary",
+                            textTransform: "uppercase",
+                            letterSpacing: 1.4,
+                            fontSize: "0.9rem",
+                            lineHeight: 1.2,
+                          }}
+                        >
+                          Paiements
+                        </Typography>
+                      </Box>
                       <RecapTabsSection
                         title="Paiements"
                         hideOuterChrome

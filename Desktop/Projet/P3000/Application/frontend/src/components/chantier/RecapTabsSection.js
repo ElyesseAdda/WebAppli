@@ -240,10 +240,20 @@ const RecapTabsSection = ({
       <Tabs 
         value={currentTab} 
         onChange={handleTabChange} 
-        sx={{ mb: 4, borderBottom: 1, borderColor: 'divider' }}
+        variant="fullWidth"
+        sx={{
+          mb: 4,
+          borderBottom: 1,
+          borderColor: "divider",
+          "& .MuiTab-root": {
+            fontWeight: 700,
+            textTransform: "uppercase",
+            minHeight: 46,
+          },
+        }}
       >
         {tabs.map((tab, index) => (
-          <Tab key={index} label={tab.label} sx={{ fontWeight: 600 }} />
+          <Tab key={index} label={tab.label} />
         ))}
       </Tabs>
 
