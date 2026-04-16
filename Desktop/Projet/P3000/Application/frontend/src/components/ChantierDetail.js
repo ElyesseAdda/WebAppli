@@ -356,7 +356,12 @@ const ChantierDetail = () => {
           {/* BARRE DE RECHERCHE CHANTIER */}
           <Box
             ref={searchBarRef}
-            sx={{ mb: 3, position: "relative", maxWidth: 500 }}
+            sx={(theme) => ({
+              mb: 3,
+              position: "relative",
+              maxWidth: 500,
+              zIndex: showDropdown ? theme.zIndex.modal : "auto",
+            })}
           >
             <Box
               sx={{
@@ -402,16 +407,16 @@ const ChantierDetail = () => {
             {/* Dropdown suggestions */}
             {showDropdown && displayList.length > 0 && (
               <Paper
-                sx={{
+                sx={(theme) => ({
                   position: "absolute",
                   top: 44,
                   left: 0,
                   right: 0,
-                  zIndex: 10,
+                  zIndex: theme.zIndex.modal + 1,
                   maxHeight: 300,
                   overflowY: "auto",
                   borderRadius: 2,
-                }}
+                })}
                 elevation={4}
               >
                 {displayList.map((chantier) => (

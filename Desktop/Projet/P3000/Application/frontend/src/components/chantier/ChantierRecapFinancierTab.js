@@ -209,8 +209,8 @@ const ChantierRecapFinancierTab = ({ chantierId, isActive = true }) => {
           mb: 2,
           position: "sticky",
           top: 8,
-          // Doit rester sous les overlays/listes de recherche chantier
-          zIndex: (theme) => theme.zIndex.appBar - 200,
+          // Rester derrière les overlays/listes globales
+          zIndex: 1,
           bgcolor: "background.paper",
           border: "1px solid",
           borderColor: "divider",
@@ -266,7 +266,14 @@ const ChantierRecapFinancierTab = ({ chantierId, isActive = true }) => {
             color="primary"
             onClick={handleGlobal}
             size="small"
-            sx={{ ml: 0.5, minHeight: 34, px: 1.2, fontSize: "0.73rem", fontWeight: 700 }}
+            sx={{
+              ml: 0.5,
+              minHeight: 34,
+              minWidth: 108,
+              px: 1.2,
+              fontSize: "0.73rem",
+              fontWeight: 700,
+            }}
           >
             {global ? "Désactiver" : "Global"}
           </Button>
