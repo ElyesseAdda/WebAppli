@@ -307,6 +307,10 @@ const ChantierRecapFinancierTab = ({ chantierId, isActive = true }) => {
             syntheseUiResetKey={syntheseUiResetKey}
             chantierId={chantierId}
             onRecapRefresh={refreshRecapSilently}
+            global={global}
+            periode={periode}
+            setGlobal={setGlobal}
+            setPeriode={setPeriode}
           />
           <Grid container spacing={3}>
             <Grid item xs={12}>

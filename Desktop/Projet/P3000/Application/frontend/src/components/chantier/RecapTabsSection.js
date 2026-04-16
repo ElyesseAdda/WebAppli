@@ -226,6 +226,8 @@ const RecapTabsSection = ({
     : { elevation: 0, sx: rootSx };
   const compactDocumentsLayout = showDocumentsPane;
   const summaryBlockMinHeight = compactDocumentsLayout ? 250 : "auto";
+  const categoryCount = Object.keys(data || {}).length;
+  const compactCardSm = categoryCount >= 3 ? 4 : categoryCount === 2 ? 6 : 12;
 
   return (
     <Root {...rootProps}>
@@ -259,95 +261,91 @@ const RecapTabsSection = ({
 
       <Grid container spacing={3} alignItems="stretch">
         <Grid item xs={12} sx={{ minHeight: summaryBlockMinHeight }}>
-          <Grid container spacing={3} alignItems="flex-start">
-        {/* Section Gauche : Textes dans des cartes */}
-        <Grid item xs={12} md={compactDocumentsLayout ? 8 : 7}>
-          <Grid container spacing={2}>
-            {Object.keys(data).map((cat) => (
-              <Grid item xs={12} sm={6} key={cat}>
-                <CategoryCard 
-                  title={cat.replace("_", " ")}
-                  amount={data[cat].total || 0}
-                  color={fixedColors[cat] || colors[cat] || "primary.main"}
-                  isHidden={hiddenCategories.includes(cat)}
-                  onToggleVisibility={() => handleToggleCategory(cat)}
-                  categoryKey={cat}
-                  showDocumentsPane={showDocumentsPane}
-                  isSelected={showDocumentsPane && effectiveExpenseCategory === cat}
-                  onSelectCategory={setSelectedExpenseCategory}
-                  onMouseEnter={() => setHoveredCategory(cat.replace("_", " ").toUpperCase())}
-                  onMouseLeave={() => setHoveredCategory(null)}
-                />
+          <Grid container spacing={2} alignItems="flex-start">
+            <Grid item xs={12}>
+              <Grid container spacing={2}>
+                {Object.keys(data).map((cat) => (
+                  <Grid item xs={12} sm={compactDocumentsLayout ? compactCardSm : 6} key={cat}>
+                    <CategoryCard
+                      title={cat.replace("_", " ")}
+                      amount={data[cat].total || 0}
+                      color={fixedColors[cat] || colors[cat] || "primary.main"}
+                      isHidden={hiddenCategories.includes(cat)}
+                      onToggleVisibility={() => handleToggleCategory(cat)}
+                      categoryKey={cat}
+                      showDocumentsPane={showDocumentsPane}
+                      isSelected={showDocumentsPane && effectiveExpenseCategory === cat}
+                      onSelectCategory={setSelectedExpenseCategory}
+                      onMouseEnter={() => setHoveredCategory(cat.replace("_", " ").toUpperCase())}
+                      onMouseLeave={() => setHoveredCategory(null)}
+                    />
+                  </Grid>
+                ))}
               </Grid>
-            ))}
-          </Grid>
-        </Grid>
-
-        {/* Section Droite : PieChart (Style Jauge / Demi-cercle) */}
-        <Grid item xs={12} sm={6} md={compactDocumentsLayout ? 4 : 5}>
-          <Box sx={{ width: '100%', maxWidth: compactDocumentsLayout ? 220 : 300, height: compactDocumentsLayout ? 150 : 200, position: "relative", mx: "auto", mt: compactDocumentsLayout ? 0 : 2 }}>
-            <ResponsivePie
-              data={pieData}
-              margin={{ top: 10, right: 10, bottom: 10, left: 10 }}
-              startAngle={-90}
-              endAngle={90}
-              innerRadius={0.8}
-              padAngle={2}
-              cornerRadius={4}
-              colors={{ datum: "data.color" }}
-              borderWidth={0}
-              enableArcLabels={false}
-              enableArcLinkLabels={false}
-              activeOuterRadiusOffset={8}
-              activeId={hoveredCategory}
-              tooltip={({ datum }) => (
-                <Box sx={{ p: 1.5, bgcolor: 'background.paper', borderRadius: 2, boxShadow: '0 4px 20px rgba(0,0,0,0.1)' }}>
-                  <Typography variant="body2" fontWeight={800} sx={{ textTransform: 'uppercase', mb: 0.5 }}>
-                    {datum.label}
-                  </Typography>
-                  <Typography variant="body1" color="primary.main" fontWeight={700}>
-                    {Number(datum.value).toLocaleString("fr-FR", {
-                      minimumFractionDigits: 2,
-                    })}{" "}
-                    €
-                  </Typography>
-                </Box>
-              )}
-            />
-            {/* Afficher la somme totale au centre-bas de la jauge */}
-            <Box
-              sx={{
-                position: "absolute",
-                bottom: "10%",
-                left: 0,
-                width: "100%",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                pointerEvents: "none",
-                flexDirection: "column",
-              }}
-            >
-              <Typography variant="body2" color="text.secondary" sx={{ mb: 0.5, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '1.5px', fontSize: '0.75rem' }}>
-                Total
-              </Typography>
-              <Box display="flex" alignItems="baseline" gap={0.5}>
-                <Typography
-                  variant="h4"
-                  fontWeight={800}
-                  sx={{ fontSize: compactDocumentsLayout ? Math.max(getFontSize(totalSum) - 6, 14) : getFontSize(totalSum), color: 'text.primary', lineHeight: 1 }}
+            </Grid>
+            <Grid item xs={12}>
+              <Box sx={{ width: "100%", maxWidth: compactDocumentsLayout ? 220 : 300, height: compactDocumentsLayout ? 150 : 200, position: "relative", mx: "auto", mt: 0.5 }}>
+                <ResponsivePie
+                  data={pieData}
+                  margin={{ top: 10, right: 10, bottom: 10, left: 10 }}
+                  startAngle={-90}
+                  endAngle={90}
+                  innerRadius={0.8}
+                  padAngle={2}
+                  cornerRadius={4}
+                  colors={{ datum: "data.color" }}
+                  borderWidth={0}
+                  enableArcLabels={false}
+                  enableArcLinkLabels={false}
+                  activeOuterRadiusOffset={8}
+                  activeId={hoveredCategory}
+                  tooltip={({ datum }) => (
+                    <Box sx={{ p: 1.5, bgcolor: "background.paper", borderRadius: 2, boxShadow: "0 4px 20px rgba(0,0,0,0.1)" }}>
+                      <Typography variant="body2" fontWeight={800} sx={{ textTransform: "uppercase", mb: 0.5 }}>
+                        {datum.label}
+                      </Typography>
+                      <Typography variant="body1" color="primary.main" fontWeight={700}>
+                        {Number(datum.value).toLocaleString("fr-FR", {
+                          minimumFractionDigits: 2,
+                        })}{" "}
+                        €
+                      </Typography>
+                    </Box>
+                  )}
+                />
+                <Box
+                  sx={{
+                    position: "absolute",
+                    bottom: "10%",
+                    left: 0,
+                    width: "100%",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    pointerEvents: "none",
+                    flexDirection: "column",
+                  }}
                 >
-                  {Number(totalSum).toLocaleString("fr-FR", {
-                    minimumFractionDigits: 0,
-                  })}
-                </Typography>
-                <Typography variant="body2" fontWeight={700} color="text.secondary">
-                  €
-                </Typography>
+                  <Typography variant="body2" color="text.secondary" sx={{ mb: 0.5, fontWeight: 700, textTransform: "uppercase", letterSpacing: "1.5px", fontSize: "0.75rem" }}>
+                    Total
+                  </Typography>
+                  <Box display="flex" alignItems="baseline" gap={0.5}>
+                    <Typography
+                      variant="h4"
+                      fontWeight={800}
+                      sx={{ fontSize: compactDocumentsLayout ? Math.max(getFontSize(totalSum) - 6, 14) : getFontSize(totalSum), color: "text.primary", lineHeight: 1 }}
+                    >
+                      {Number(totalSum).toLocaleString("fr-FR", {
+                        minimumFractionDigits: 0,
+                      })}
+                    </Typography>
+                    <Typography variant="body2" fontWeight={700} color="text.secondary">
+                      €
+                    </Typography>
+                  </Box>
+                </Box>
               </Box>
-            </Box>
-          </Box>
-        </Grid>
+            </Grid>
           </Grid>
         </Grid>
 

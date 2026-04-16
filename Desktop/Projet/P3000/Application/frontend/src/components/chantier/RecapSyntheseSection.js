@@ -618,6 +618,10 @@ const RecapSyntheseSection = ({
   syntheseUiResetKey = 0,
   chantierId,
   onRecapRefresh,
+  global = true,
+  periode,
+  setGlobal,
+  setPeriode,
 }) => {
   const [selectedMonth, setSelectedMonth] = React.useState(null);
   const [tauxFixeModalOpen, setTauxFixeModalOpen] = React.useState(false);
@@ -643,6 +647,36 @@ const RecapSyntheseSection = ({
       };
     });
   }, [syntheseMensuelle, montantTauxFixeChart]);
+
+  const filteredChartData = React.useMemo(() => {
+    if (!Array.isArray(chartData) || chartData.length === 0) return [];
+    const targetYear = Number(periode?.annee);
+    if (Number.isNaN(targetYear)) return chartData;
+    const rows = chartData.filter((row) => Number(row?.annee) === targetYear);
+    return rows.length > 0 ? rows : [];
+  }, [chartData, periode?.annee]);
+
+  const getRowMonthInfo = React.useCallback((row) => {
+    const m = Number(row?.mois);
+    const y = Number(row?.annee);
+    if (!Number.isNaN(m) && m >= 1 && m <= 12 && !Number.isNaN(y)) {
+      return { mois: m, annee: y };
+    }
+    return null;
+  }, []);
+
+  const findChartRowForPeriode = React.useCallback(
+    (targetPeriode) => {
+      if (!targetPeriode || !Array.isArray(filteredChartData)) return null;
+      return (
+        filteredChartData.find((row) => {
+          const info = getRowMonthInfo(row);
+          return info && info.mois === Number(targetPeriode.mois) && info.annee === Number(targetPeriode.annee);
+        }) || null
+      );
+    },
+    [filteredChartData, getRowMonthInfo]
+  );
 
   if (!data) return null;
   const paye = depensesPaye || data.sorties?.paye || {};
@@ -722,6 +756,19 @@ const RecapSyntheseSection = ({
       setTauxFixeSaving(false);
     }
   };
+
+  React.useEffect(() => {
+    if (!Array.isArray(filteredChartData) || filteredChartData.length === 0) {
+      setSelectedMonth(null);
+      return;
+    }
+    if (global) {
+      setSelectedMonth(null);
+      return;
+    }
+    const row = findChartRowForPeriode(periode);
+    setSelectedMonth(row || null);
+  }, [global, periode, filteredChartData, findChartRowForPeriode]);
 
   const displayCards = selectedMonth ? [
     {
@@ -970,7 +1017,7 @@ const RecapSyntheseSection = ({
               >
                 <CircularProgress />
               </Box>
-            ) : chartData.length === 0 ? (
+            ) : filteredChartData.length === 0 ? (
               <Box
                 sx={{
                   display: "flex",
@@ -983,26 +1030,40 @@ const RecapSyntheseSection = ({
                 }}
               >
                 <Typography color="text.secondary">
-                  Pas encore de coûts ventilés par mois pour ce chantier.
+                  Pas encore de coûts ventilés pour l&apos;année sélectionnée.
                 </Typography>
               </Box>
             ) : (
               <ResponsiveContainer width="100%" height="100%">
                 <ComposedChart
-                  data={chartData}
+                  data={filteredChartData}
                   margin={{ top: 20, right: 20, left: 10, bottom: 20 }}
                   barCategoryGap="25%"
                   barSize={40} // Barres plus épaisses et uniformes
                   onClick={(state) => {
                     if (state && state.activePayload && state.activePayload.length > 0) {
                       const clickedData = state.activePayload[0].payload;
-                      if (selectedMonth && selectedMonth.label === clickedData.label) {
-                        setSelectedMonth(null); // Toggle off
-                      } else {
-                        setSelectedMonth(clickedData);
+                      const isSameMonth = selectedMonth && selectedMonth.label === clickedData.label;
+                      if (isSameMonth) {
+                        setSelectedMonth(null);
+                        if (typeof setGlobal === "function") setGlobal(true);
+                        return;
+                      }
+                      setSelectedMonth(clickedData);
+                      const info = getRowMonthInfo(clickedData);
+                      if (info && typeof setPeriode === "function") {
+                        setPeriode((prev) => ({
+                          ...(prev || {}),
+                          mois: info.mois,
+                          annee: info.annee,
+                        }));
+                      }
+                      if (typeof setGlobal === "function") {
+                        setGlobal(false);
                       }
                     } else {
                       setSelectedMonth(null);
+                      if (typeof setGlobal === "function") setGlobal(true);
                     }
                   }}
                   style={{ cursor: 'pointer' }}
@@ -1057,7 +1118,7 @@ const RecapSyntheseSection = ({
                     fill={COL_MAT}
                     radius={[0, 0, 4, 4]} // Arrondi en bas
                   >
-                    {chartData.map((entry, index) => (
+                    {filteredChartData.map((entry, index) => (
                       <Cell key={`cell-mat-${index}`} fillOpacity={selectedMonth && selectedMonth.label !== entry.label ? 0.3 : 1} />
                     ))}
                   </Bar>
@@ -1068,7 +1129,7 @@ const RecapSyntheseSection = ({
                     stackId="cout"
                     fill={COL_MO}
                   >
-                    {chartData.map((entry, index) => (
+                    {filteredChartData.map((entry, index) => (
                       <Cell key={`cell-mo-${index}`} fillOpacity={selectedMonth && selectedMonth.label !== entry.label ? 0.3 : 1} />
                     ))}
                   </Bar>
@@ -1080,7 +1141,7 @@ const RecapSyntheseSection = ({
                     fill={COL_ST}
                     radius={[4, 4, 0, 0]} // Arrondi en haut
                   >
-                    {chartData.map((entry, index) => (
+                    {filteredChartData.map((entry, index) => (
                       <Cell key={`cell-st-${index}`} fillOpacity={selectedMonth && selectedMonth.label !== entry.label ? 0.3 : 1} />
                     ))}
                   </Bar>
