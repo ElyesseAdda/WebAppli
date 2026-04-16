@@ -12087,21 +12087,28 @@ class RecapSyntheseMensuelleAPIView(APIView):
                     cost = taux_horaire * heures_increment
             buckets[(yb, mb)]["main_oeuvre"] += cost
 
-        # --- Facturation cumulative (situations + factures classiques) ---
-        factu_buckets = defaultdict(float)
+        # --- Facturation mensuelle et cumulative (situations + factures classiques) ---
+        factu_situation_buckets = defaultdict(float)
+        factu_classique_buckets = defaultdict(float)
 
         for sit in Situation.objects.filter(chantier=chantier):
             d = sit.date_envoi
             if not d:
                 continue
             montant = float(sit.montant_reel_ht) if sit.date_paiement_reel and sit.montant_reel_ht else float(sit.montant_apres_retenues or 0)
-            factu_buckets[(d.year, d.month)] += montant
+            factu_situation_buckets[(d.year, d.month)] += montant
 
         for fac in Facture.objects.filter(chantier=chantier, type_facture='classique'):
             d = fac.date_envoi or (fac.date_creation.date() if fac.date_creation else None)
             if not d:
                 continue
-            factu_buckets[(d.year, d.month)] += float(fac.price_ht or 0)
+            factu_classique_buckets[(d.year, d.month)] += float(fac.price_ht or 0)
+
+        factu_buckets = defaultdict(float)
+        for key, value in factu_situation_buckets.items():
+            factu_buckets[key] += value
+        for key, value in factu_classique_buckets.items():
+            factu_buckets[key] += value
 
         # Inclure les mois de facturation dans la plage du graphique
         for key in factu_buckets:
@@ -12133,6 +12140,8 @@ class RecapSyntheseMensuelleAPIView(APIView):
         par_mois = []
         cumul = 0.0
         cumul_facture = 0.0
+        cumul_facture_situation = 0.0
+        cumul_facture_classique = 0.0
         y, m = y1, m1
         while True:
             b = buckets[(y, m)]
@@ -12142,7 +12151,11 @@ class RecapSyntheseMensuelleAPIView(APIView):
             cout = mat + mo + st
             cumul += cout
             factu_mois = factu_buckets.get((y, m), 0.0)
+            factu_situation_mois = factu_situation_buckets.get((y, m), 0.0)
+            factu_classique_mois = factu_classique_buckets.get((y, m), 0.0)
             cumul_facture += factu_mois
+            cumul_facture_situation += factu_situation_mois
+            cumul_facture_classique += factu_classique_mois
             par_mois.append(
                 {
                     "annee": y,
@@ -12154,7 +12167,11 @@ class RecapSyntheseMensuelleAPIView(APIView):
                     "cout_chantier": round(cout, 2),
                     "cout_chantier_cumule": round(cumul, 2),
                     "facture_mois": round(factu_mois, 2),
+                    "situation_mois": round(factu_situation_mois, 2),
+                    "facture_classique_mois": round(factu_classique_mois, 2),
                     "facture_cumule": round(cumul_facture, 2),
+                    "situation_cumule": round(cumul_facture_situation, 2),
+                    "facture_classique_cumule": round(cumul_facture_classique, 2),
                 }
             )
             if (y, m) == (y2, m2):

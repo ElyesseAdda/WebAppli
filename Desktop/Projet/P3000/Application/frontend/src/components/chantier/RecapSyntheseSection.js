@@ -51,6 +51,8 @@ const COL_TAUX_FIXE = "#9C27B0"; // Violet (aligné sur les graphiques devis)
 const COL_ENC_SITUATION = "#0277bd";
 const COL_ENC_FACTURE = "#1565c0";
 const COL_ENC_RETARD = "#c62828";
+const COL_FAC_SITUATION = "#0288d1";
+const COL_FAC_CLASSIQUE = "#3949ab";
 
 const formatEuro = (v) =>
   Number(v || 0).toLocaleString("fr-FR", {
@@ -119,6 +121,38 @@ const StatCard = ({
           Icon: PercentOutlinedIcon,
           valueNegative: true,
           breakdownKey: "taux_fixe",
+        },
+        montantCoutVisible(costBreakdown.entrees_mois) && {
+          label: "Entrées du mois",
+          tip: `Situations + factures du mois (${formatEuro(
+            Number(costBreakdown.situation_mois_detail || 0)
+          )} € + ${formatEuro(Number(costBreakdown.facture_classique_mois_detail || 0))} €).`,
+          value: Number(costBreakdown.entrees_mois),
+          lineColor: COL_FAC_CLASSIQUE,
+          Icon: ReceiptLongOutlinedIcon,
+        },
+        montantCoutVisible(costBreakdown.entrees_cumule) && {
+          label: "Entrées cumulées",
+          tip: `Situations + factures cumulées (${formatEuro(
+            Number(costBreakdown.situation_cumule_detail || 0)
+          )} € + ${formatEuro(Number(costBreakdown.facture_classique_cumule_detail || 0))} €).`,
+          value: Number(costBreakdown.entrees_cumule),
+          lineColor: COL_FAC_CLASSIQUE,
+          Icon: ReceiptLongOutlinedIcon,
+        },
+        (costBreakdown.ecart_mois != null) && {
+          label: "Écart du mois",
+          tip: "Entrées du mois - Coûts du mois (incl. taux fixe).",
+          value: Number(costBreakdown.ecart_mois),
+          lineColor: Number(costBreakdown.ecart_mois) >= 0 ? COL_BENEF : COL_COUT_LINE,
+          Icon: PaymentsOutlinedIcon,
+        },
+        (costBreakdown.ecart_cumule != null) && {
+          label: "Écart cumulé",
+          tip: "Entrées cumulées - Coûts cumulés (incl. taux fixe).",
+          value: Number(costBreakdown.ecart_cumule),
+          lineColor: Number(costBreakdown.ecart_cumule) >= 0 ? COL_BENEF : COL_COUT_LINE,
+          Icon: PaymentsOutlinedIcon,
         },
       ].filter(Boolean)
     : [];
@@ -782,6 +816,20 @@ const RecapSyntheseSection = ({
     ? (Number(selectedMonth.cout_chantier || 0) * Number(taux_fixe_pct || 0)) / 100
     : 0;
 
+  const monthlyCostWithTauxFixe = selectedMonth
+    ? Number(selectedMonth.cout_chantier || 0) + Number(monthlyTauxFixeMontant || 0)
+    : 0;
+  const monthlyEntries = selectedMonth ? Number(selectedMonth.facture_mois || 0) : 0;
+  const monthlyGap = selectedMonth ? monthlyEntries - monthlyCostWithTauxFixe : 0;
+  const cumulTauxFixeMontant = selectedMonth
+    ? (Number(selectedMonth.cout_chantier_cumule || 0) * Number(taux_fixe_pct || 0)) / 100
+    : 0;
+  const cumulCostWithTauxFixe = selectedMonth
+    ? Number(selectedMonth.cout_chantier_cumule || 0) + Number(cumulTauxFixeMontant || 0)
+    : 0;
+  const cumulEntries = selectedMonth ? Number(selectedMonth.facture_cumule || 0) : 0;
+  const cumulGap = selectedMonth ? cumulEntries - cumulCostWithTauxFixe : 0;
+
   const displayCards = selectedMonth ? [
     {
       title: `Matériel (${selectedMonth.label})`,
@@ -812,12 +860,12 @@ const RecapSyntheseSection = ({
     },
     {
       title: `Coût du mois (${selectedMonth.label})`,
-      amount: Number(selectedMonth.cout_chantier) + Number(monthlyTauxFixeMontant || 0),
+      amount: monthlyCostWithTauxFixe,
       color: COL_COUT_LINE,
-      isNegative: true,
+      isNegative: false,
       percentOfTotal:
         basePercentMensuel > 0
-          ? ((Number(selectedMonth.cout_chantier || 0) + Number(monthlyTauxFixeMontant || 0)) / basePercentMensuel) * 100
+          ? (monthlyCostWithTauxFixe / basePercentMensuel) * 100
           : null,
       ...(monthlyTauxFixeMontant > 0
         ? {
@@ -825,20 +873,52 @@ const RecapSyntheseSection = ({
               taux_fixe: monthlyTauxFixeMontant,
               taux_fixe_always_show: true,
               taux_fixe_rate_pct: Number(taux_fixe_pct || 0),
+              entrees_mois: Number(selectedMonth.facture_mois || 0),
+              situation_mois_detail: Number(selectedMonth.situation_mois || 0),
+              facture_classique_mois_detail: Number(selectedMonth.facture_classique_mois || 0),
+              ecart_mois: monthlyGap,
               taux_fixe_tip: `Montant à ${formatPercent(taux_fixe_pct)} % du coût du mois (ajouté au coût du mois affiché).`,
             },
           }
-        : {}),
+        : {
+            costBreakdown: {
+              entrees_mois: Number(selectedMonth.facture_mois || 0),
+              situation_mois_detail: Number(selectedMonth.situation_mois || 0),
+              facture_classique_mois_detail: Number(selectedMonth.facture_classique_mois || 0),
+              ecart_mois: monthlyGap,
+            },
+          }),
     },
     {
       title: `Coût cumulé (fin ${selectedMonth.label})`,
-      amount: Number(selectedMonth.cout_chantier_cumule),
+      amount: cumulCostWithTauxFixe,
       color: COL_COUT_LINE,
-      isNegative: true,
+      isNegative: false,
       percentOfTotal:
         basePercentMensuel > 0
-          ? (Number(selectedMonth.cout_chantier_cumule || 0) / basePercentMensuel) * 100
+          ? (cumulCostWithTauxFixe / basePercentMensuel) * 100
           : null,
+      ...(cumulTauxFixeMontant > 0
+        ? {
+            costBreakdown: {
+              taux_fixe: cumulTauxFixeMontant,
+              taux_fixe_always_show: true,
+              taux_fixe_rate_pct: Number(taux_fixe_pct || 0),
+              entrees_cumule: Number(selectedMonth.facture_cumule || 0),
+              situation_cumule_detail: Number(selectedMonth.situation_cumule || 0),
+              facture_classique_cumule_detail: Number(selectedMonth.facture_classique_cumule || 0),
+              ecart_cumule: cumulGap,
+              taux_fixe_tip: `Montant à ${formatPercent(taux_fixe_pct)} % du coût cumulé (ajouté au coût cumulé affiché).`,
+            },
+          }
+        : {
+            costBreakdown: {
+              entrees_cumule: Number(selectedMonth.facture_cumule || 0),
+              situation_cumule_detail: Number(selectedMonth.situation_cumule || 0),
+              facture_classique_cumule_detail: Number(selectedMonth.facture_classique_cumule || 0),
+              ecart_cumule: cumulGap,
+            },
+          }),
     },
     { title: `Bénéfice (fin ${selectedMonth.label})`, amount: Number(selectedMonth.benefice), color: Number(selectedMonth.benefice) >= 0 ? COL_BENEF : "#d32f2f" }
   ] : [
