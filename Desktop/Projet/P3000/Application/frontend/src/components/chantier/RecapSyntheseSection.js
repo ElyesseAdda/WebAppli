@@ -111,6 +111,10 @@ const StatCard = ({
             costBreakdown.taux_fixe_tip ||
             "Part du marché HT au titre du taux fixe (déduite du bénéfice).",
           value: Number(costBreakdown.taux_fixe),
+          ratePct:
+            costBreakdown.taux_fixe_rate_pct != null
+              ? Number(costBreakdown.taux_fixe_rate_pct)
+              : null,
           lineColor: COL_TAUX_FIXE,
           Icon: PercentOutlinedIcon,
           valueNegative: true,
@@ -396,7 +400,7 @@ const StatCard = ({
                         {" "}
                         €
                       </Box>
-                      {amount > 0 && (
+                      {(row.ratePct != null || amount > 0) && (
                         <Box
                           component="span"
                           sx={{
@@ -406,7 +410,11 @@ const StatCard = ({
                             fontWeight: 600,
                           }}
                         >
-                          ({formatPercent((Number(row.value || 0) / Number(amount)) * 100)} %)
+                          ({formatPercent(
+                            row.ratePct != null
+                              ? Number(row.ratePct)
+                              : (Number(row.value || 0) / Number(amount)) * 100
+                          )} %)
                         </Box>
                       )}
                     </Box>
@@ -770,6 +778,10 @@ const RecapSyntheseSection = ({
     setSelectedMonth(row || null);
   }, [global, periode, filteredChartData, findChartRowForPeriode]);
 
+  const monthlyTauxFixeMontant = selectedMonth
+    ? (Number(selectedMonth.cout_chantier || 0) * Number(taux_fixe_pct || 0)) / 100
+    : 0;
+
   const displayCards = selectedMonth ? [
     {
       title: `Matériel (${selectedMonth.label})`,
@@ -800,13 +812,23 @@ const RecapSyntheseSection = ({
     },
     {
       title: `Coût du mois (${selectedMonth.label})`,
-      amount: Number(selectedMonth.cout_chantier),
+      amount: Number(selectedMonth.cout_chantier) + Number(monthlyTauxFixeMontant || 0),
       color: COL_COUT_LINE,
       isNegative: true,
       percentOfTotal:
         basePercentMensuel > 0
-          ? (Number(selectedMonth.cout_chantier || 0) / basePercentMensuel) * 100
+          ? ((Number(selectedMonth.cout_chantier || 0) + Number(monthlyTauxFixeMontant || 0)) / basePercentMensuel) * 100
           : null,
+      ...(monthlyTauxFixeMontant > 0
+        ? {
+            costBreakdown: {
+              taux_fixe: monthlyTauxFixeMontant,
+              taux_fixe_always_show: true,
+              taux_fixe_rate_pct: Number(taux_fixe_pct || 0),
+              taux_fixe_tip: `Montant à ${formatPercent(taux_fixe_pct)} % du coût du mois (ajouté au coût du mois affiché).`,
+            },
+          }
+        : {}),
     },
     {
       title: `Coût cumulé (fin ${selectedMonth.label})`,
