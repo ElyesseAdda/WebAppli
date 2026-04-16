@@ -862,8 +862,24 @@ const RecapCategoryDetails = ({
               >
                 <TableHead>
                   <TableRow>
-                    <TableCell sx={{ fontWeight: 700, width: "48%" }}>Fournisseur</TableCell>
-                    <TableCell align="right" sx={{ fontWeight: 700, minWidth: 140 }}>
+                    <TableCell
+                      sx={{
+                        fontWeight: 700,
+                        width: "48%",
+                        wordBreak: "break-word",
+                        overflowWrap: "anywhere",
+                      }}
+                    >
+                      Fournisseur
+                    </TableCell>
+                    <TableCell
+                      align="right"
+                      sx={{
+                        fontWeight: 700,
+                        minWidth: 160,
+                        whiteSpace: "nowrap",
+                      }}
+                    >
                       Montant à payer
                     </TableCell>
                   </TableRow>
@@ -884,11 +900,19 @@ const RecapCategoryDetails = ({
                           sx={{
                             wordBreak: "break-word",
                             maxWidth: embedded ? 220 : 360,
+                            overflowWrap: "anywhere",
                           }}
                         >
                           {f}
                         </TableCell>
-                        <TableCell align="right" sx={{ py: 1 }}>
+                        <TableCell
+                          align="right"
+                          sx={{
+                            py: 1,
+                            whiteSpace: "nowrap",
+                            minWidth: 160,
+                          }}
+                        >
                           <TextField
                             size="small"
                             placeholder="0,00"
@@ -901,7 +925,7 @@ const RecapCategoryDetails = ({
                             sx={{
                               width: "100%",
                               minWidth: 120,
-                              maxWidth: 180,
+                              maxWidth: 200,
                               "& .MuiInputBase-input": {
                                 textAlign: "right",
                                 fontVariantNumeric: "tabular-nums",
@@ -932,6 +956,8 @@ const RecapCategoryDetails = ({
                         fontVariantNumeric: "tabular-nums",
                         color: "primary.main",
                         fontWeight: 800,
+                        whiteSpace: "nowrap",
+                        minWidth: 160,
                       }}
                     >
                       {totalMontantsFournisseurs.toLocaleString("fr-FR", {
@@ -1187,7 +1213,26 @@ const RecapCategoryDetails = ({
               <TableHead>
                 <TableRow>
                   {columns.map((col) => (
-                    <TableCell key={col.key}>{col.label}</TableCell>
+                    <TableCell
+                      key={col.key}
+                      sx={{
+                        ...(col.key === "montant"
+                          ? {
+                              whiteSpace: "nowrap",
+                              minWidth: 130,
+                              textAlign: "right",
+                            }
+                          : {}),
+                        ...(col.key === "statut"
+                          ? {
+                              whiteSpace: "nowrap",
+                              minWidth: 90,
+                            }
+                          : {}),
+                      }}
+                    >
+                      {col.label}
+                    </TableCell>
                   ))}
                 </TableRow>
               </TableHead>
@@ -1196,7 +1241,31 @@ const RecapCategoryDetails = ({
                   displayDocuments.map((doc, idx) => (
                     <TableRow key={doc.id || idx}>
                       {columns.map((col) => (
-                        <TableCell key={col.key}>
+                        <TableCell
+                          key={col.key}
+                          sx={{
+                            ...(col.key === "montant"
+                              ? {
+                                  whiteSpace: "nowrap",
+                                  textAlign: "right",
+                                  fontVariantNumeric: "tabular-nums",
+                                  minWidth: 130,
+                                }
+                              : {}),
+                            ...(col.key === "statut"
+                              ? {
+                                  whiteSpace: "nowrap",
+                                  minWidth: 90,
+                                }
+                              : {}),
+                            ...(col.key === "numero" || col.key === "facture_numero"
+                              ? {
+                                  wordBreak: "break-word",
+                                  overflowWrap: "anywhere",
+                                }
+                              : {}),
+                          }}
+                        >
                           {col.key === "montant" && doc.montant !== undefined
                             ? (() => {
                                 // Pour main_oeuvre, ajouter les primes au montant total
@@ -1327,6 +1396,12 @@ const RecapCategoryDetails = ({
                           : {}),
                         ...(col.key === "montant" || col.key === "prime"
                           ? { color: "primary.main", fontWeight: 800 }
+                          : {}),
+                        ...(col.key === "montant"
+                          ? {
+                              whiteSpace: "nowrap",
+                              minWidth: 130,
+                            }
                           : {}),
                       }}
                     >
