@@ -104,6 +104,7 @@ const SlideBar = ({ toggleSidebar, isSidebarVisible, user }) => {
               { label: "Liste Situation", to: "/ListeSituation" },
               { label: "Liste facture", to: "/ListeFactures" },
               { label: "Liste Bon de Commande", to: "/ListeBonCommande" },
+              { label: "Rapports d'intervention", to: "/RapportsIntervention" },
             ],
           },
           {

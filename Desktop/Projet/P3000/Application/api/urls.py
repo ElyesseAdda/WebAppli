@@ -627,3 +627,8 @@ urlpatterns += [
     path('download-file-from-drive/', download_file_from_drive, name='download_file_from_drive'),
     path('list-pdfs-in-drive/', list_pdfs_in_drive, name='list_pdfs_in_drive'),
 ]
+
+# --- URLs POUR LES RAPPORTS D'INTERVENTION / VIGIK+ ---
+urlpatterns += [
+    path('', include('api.urls_rapport')),
+]

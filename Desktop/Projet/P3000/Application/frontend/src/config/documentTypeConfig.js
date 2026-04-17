@@ -15,6 +15,8 @@ export const DOCUMENT_TYPES = {
   FACTURE: 'facture',
   PLANNING_HEBDO: 'planning_hebdo',
   RAPPORT_AGENTS: 'rapport_agents',
+  RAPPORT_INTERVENTION: 'rapport_intervention',
+  RAPPORT_VIGIK_PLUS: 'rapport_vigik_plus',
 };
 
 /**
@@ -169,6 +171,32 @@ export const DOCUMENT_CONFIG = {
     buildParams: (documentData) => ({
       month: documentData.month || documentData.mois,
       year: documentData.year || documentData.annee,
+      force_replace: true,
+    }),
+  },
+
+  [DOCUMENT_TYPES.RAPPORT_INTERVENTION]: {
+    label: "Rapport d'intervention",
+    endpoint: '/api/generate-rapport-intervention-pdf-drive/',
+    icon: '📋',
+    confirmMessage: "Êtes-vous sûr de vouloir régénérer ce rapport d'intervention dans le Drive ?",
+    successMessage: "Rapport d'intervention régénéré avec succès dans le Drive",
+    errorMessage: "Erreur lors de la régénération du rapport d'intervention",
+    buildParams: (documentData) => ({
+      rapport_id: documentData.id,
+      force_replace: true,
+    }),
+  },
+
+  [DOCUMENT_TYPES.RAPPORT_VIGIK_PLUS]: {
+    label: 'Rapport Vigik+',
+    endpoint: '/api/generate-rapport-intervention-pdf-drive/',
+    icon: '📋',
+    confirmMessage: 'Êtes-vous sûr de vouloir régénérer ce rapport Vigik+ dans le Drive ?',
+    successMessage: 'Rapport Vigik+ régénéré avec succès dans le Drive',
+    errorMessage: 'Erreur lors de la régénération du rapport Vigik+',
+    buildParams: (documentData) => ({
+      rapport_id: documentData.id,
       force_replace: true,
     }),
   },

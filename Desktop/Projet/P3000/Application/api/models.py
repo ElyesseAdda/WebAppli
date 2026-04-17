@@ -50,6 +50,7 @@ class Societe(models.Model):
     rue_societe = models.CharField(max_length=100,)
     rue_societe = models.CharField(max_length=100,)
     codepostal_societe = models.CharField(max_length=10,validators=[RegexValidator(regex=r'^\d{5}$',message='Le code postal doit être exactement 5 chiffres.',code='invalid_codepostal')],blank=True,null=True)
+    logo_s3_key = models.CharField(max_length=500, blank=True, null=True, verbose_name="Clé S3 du logo")
    #Change client_name to nom_contact
     client_name = models.ForeignKey(Client, on_delete=models.CASCADE)  # Association avec Client
     
@@ -3606,3 +3607,20 @@ def create_default_emetteurs(sender, **kwargs):
                 print(f"✅ {created_count} émetteur(s) créé(s) automatiquement")
         except Exception as e:
             print(f"❌ Erreur lors de la création des émetteurs : {e}")
+
+
+# --- Rapport d'intervention / Vigik+ -------------------------------------
+# Modèles dédiés à la fonctionnalité « Rapport d'intervention / Vigik+ ».
+# Ils sont définis dans ``api/models_rapport.py`` et réexportés ici afin
+# de rester accessibles via ``from api.models import RapportIntervention``.
+from .models_rapport import (  # noqa: E402  (import après signaux/post_migrate)
+    TitreRapport,
+    Residence,
+    RapportIntervention,
+    RapportInterventionNumeroCompteur,
+    RapportInterventionBrouillon,
+    PrestationRapport,
+    PhotoRapport,
+    assign_numero_rapport_si_absent,
+    default_dates_intervention_list,
+)

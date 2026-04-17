@@ -116,8 +116,8 @@ const LoginMobile = ({ onLoginSuccess }) => {
         if (onLoginSuccess) {
           onLoginSuccess(data.user);
         }
-        // Rediriger vers la page distributeurs sur mobile
-        navigate("/distributeurs");
+        // Rediriger vers l'application Rapport Elekable (home PWA mobile)
+        navigate("/rapports-mobile");
       } else {
         setError(data.error || "Identifiants incorrects");
       }
