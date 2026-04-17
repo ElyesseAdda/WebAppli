@@ -2518,9 +2518,9 @@ const RapportForm = ({
                   multiple
                   style={{ display: "none" }}
                   onChange={(e) => {
-                    const fl = e.target.files;
+                    const files = Array.from(e.target.files || []);
                     e.target.value = "";
-                    void appendVigikPlatineFiles(fl);
+                    void appendVigikPlatineFiles(files);
                   }}
                 />
                 <input
@@ -2530,9 +2530,9 @@ const RapportForm = ({
                   capture="environment"
                   style={{ display: "none" }}
                   onChange={(e) => {
-                    const fl = e.target.files;
+                    const files = Array.from(e.target.files || []);
                     e.target.value = "";
-                    void appendVigikPlatineFiles(fl);
+                    void appendVigikPlatineFiles(files);
                   }}
                 />
                 <Box sx={{ display: "flex", alignItems: "flex-start", gap: 1.5, flexWrap: "wrap" }}>
@@ -2681,9 +2681,9 @@ const RapportForm = ({
                   multiple
                   style={{ display: "none" }}
                   onChange={(e) => {
-                    const fl = e.target.files;
+                    const files = Array.from(e.target.files || []);
                     e.target.value = "";
-                    void appendVigikPortailFiles(fl);
+                    void appendVigikPortailFiles(files);
                   }}
                 />
                 <input
@@ -2693,9 +2693,9 @@ const RapportForm = ({
                   capture="environment"
                   style={{ display: "none" }}
                   onChange={(e) => {
-                    const fl = e.target.files;
+                    const files = Array.from(e.target.files || []);
                     e.target.value = "";
-                    void appendVigikPortailFiles(fl);
+                    void appendVigikPortailFiles(files);
                   }}
                 />
                 <Box sx={{ display: "flex", alignItems: "flex-start", gap: 1.5, flexWrap: "wrap" }}>
