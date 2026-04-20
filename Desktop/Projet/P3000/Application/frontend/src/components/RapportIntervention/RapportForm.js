@@ -1199,7 +1199,8 @@ const RapportForm = ({
   const isVigikPlus = formData.type_rapport === "vigik_plus";
   const vigikPortailPhotosEnabled =
     formData.presence_portail === false ||
-    (formData.presence_portail === true && formData.presence_platine_portail === true);
+    (formData.presence_portail === true &&
+      (formData.presence_platine_portail === true || formData.presence_platine_portail === false));
   const vigikPhotos = useMemo(() => {
     const out = [];
     const datePlat =
@@ -1427,7 +1428,8 @@ const RapportForm = ({
       if (
         formDataRef.current?.presence_portail === false ||
         (formDataRef.current?.presence_portail === true &&
-          formDataRef.current?.presence_platine_portail === true)
+          (formDataRef.current?.presence_platine_portail === true ||
+            formDataRef.current?.presence_platine_portail === false))
       ) {
         for (const p of pendingPhotosPlatinePortailRef.current || []) {
           if (!p?.file) continue;
@@ -1537,7 +1539,8 @@ const RapportForm = ({
       const fdVigik = formDataRef.current;
       const allowPortailPhoto =
         fdVigik?.presence_portail === false ||
-        (fdVigik?.presence_portail === true && fdVigik?.presence_platine_portail === true);
+        (fdVigik?.presence_portail === true &&
+          (fdVigik?.presence_platine_portail === true || fdVigik?.presence_platine_portail === false));
       const nextPortState = [];
       if (allowPortailPhoto) {
         for (const p of portItems) {
@@ -2666,7 +2669,7 @@ const RapportForm = ({
                   </Box>
                 </>
               )}
-              {/* Photos « portail » : sans portail (facultatif) ou portail + platine oui (facultatif) */}
+              {/* Photos « portail » : sans portail (facultatif) ou portail + platine oui/non (facultatif) */}
               {vigikPortailPhotosEnabled && (
               <Box sx={{ gridColumn: { md: "1 / -1" } }}>
                 <Typography variant="subtitle2" color="text.secondary" sx={{ mb: 1 }}>
