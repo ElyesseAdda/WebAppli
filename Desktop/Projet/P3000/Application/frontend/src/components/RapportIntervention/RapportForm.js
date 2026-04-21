@@ -1510,9 +1510,27 @@ const RapportForm = ({
     const photos_platine_s3_keys = [];
     const photos_platine_portail_s3_keys = [];
     if (vigik) {
+      console.log("[VIGIK+][DRAFT] persist:start", {
+        bid,
+        platCount: platItems.length,
+        portCount: portItems.length,
+        platItems: platItems.map((p) => ({
+          name: p?.name,
+          hasFile: !!p?.file,
+          hasDraftKey: !!p?._draftS3Key,
+          previewKind: p?.previewUrl ? (String(p.previewUrl).startsWith("blob:") ? "blob" : "remote") : "none",
+        })),
+        portItems: portItems.map((p) => ({
+          name: p?.name,
+          hasFile: !!p?.file,
+          hasDraftKey: !!p?._draftS3Key,
+          previewKind: p?.previewUrl ? (String(p.previewUrl).startsWith("blob:") ? "blob" : "remote") : "none",
+        })),
+      });
       const nextPlatState = [];
       for (const p of platItems) {
         if (p._draftS3Key) {
+          console.log("[VIGIK+][PLATINE] persist:reuse-existing", { name: p?.name, s3Key: p?._draftS3Key });
           photos_platine_s3_keys.push(p._draftS3Key);
           nextPlatState.push({ ...p, file: null });
           continue;
@@ -1525,6 +1543,11 @@ const RapportForm = ({
           fd,
           { headers: { "Content-Type": "multipart/form-data" } }
         );
+        console.log("[VIGIK+][PLATINE] persist:uploaded", {
+          name: p?.name,
+          returnedS3Key: data?.s3_key,
+          hasPresignedUrl: !!data?.presigned_url,
+        });
         if (data.s3_key) photos_platine_s3_keys.push(data.s3_key);
         const nextPreviewUrl = data.presigned_url || p.previewUrl || null;
         if (
@@ -1542,6 +1565,16 @@ const RapportForm = ({
         });
       }
       setPendingPhotosPlatine(nextPlatState);
+      console.log("[VIGIK+][PLATINE] persist:set-state", {
+        nextCount: nextPlatState.length,
+        keysCount: photos_platine_s3_keys.length,
+        nextItems: nextPlatState.map((p) => ({
+          name: p?.name,
+          hasFile: !!p?.file,
+          hasDraftKey: !!p?._draftS3Key,
+          previewKind: p?.previewUrl ? (String(p.previewUrl).startsWith("blob:") ? "blob" : "remote") : "none",
+        })),
+      });
 
       const fdVigik = formDataRef.current;
       const allowPortailPhoto =
@@ -1552,6 +1585,7 @@ const RapportForm = ({
       if (allowPortailPhoto) {
         for (const p of portItems) {
           if (p._draftS3Key) {
+            console.log("[VIGIK+][PORTAIL] persist:reuse-existing", { name: p?.name, s3Key: p?._draftS3Key });
             photos_platine_portail_s3_keys.push(p._draftS3Key);
             nextPortState.push({ ...p, file: null });
             continue;
@@ -1564,6 +1598,11 @@ const RapportForm = ({
             fd,
             { headers: { "Content-Type": "multipart/form-data" } }
           );
+          console.log("[VIGIK+][PORTAIL] persist:uploaded", {
+            name: p?.name,
+            returnedS3Key: data?.s3_key,
+            hasPresignedUrl: !!data?.presigned_url,
+          });
           if (data.s3_key) photos_platine_portail_s3_keys.push(data.s3_key);
           const nextPreviewUrl = data.presigned_url || p.previewUrl || null;
           if (
@@ -1581,8 +1620,21 @@ const RapportForm = ({
           });
         }
         setPendingPhotosPlatinePortail(nextPortState);
+        console.log("[VIGIK+][PORTAIL] persist:set-state", {
+          nextCount: nextPortState.length,
+          keysCount: photos_platine_portail_s3_keys.length,
+          nextItems: nextPortState.map((p) => ({
+            name: p?.name,
+            hasFile: !!p?.file,
+            hasDraftKey: !!p?._draftS3Key,
+            previewKind: p?.previewUrl ? (String(p.previewUrl).startsWith("blob:") ? "blob" : "remote") : "none",
+          })),
+        });
       } else if (fdVigik?.presence_portail === true && fdVigik?.presence_platine_portail === false) {
         setPendingPhotosPlatinePortail([]);
+        console.log("[VIGIK+][PORTAIL] persist:cleared", {
+          reason: "presence_portail=true && presence_platine_portail=false",
+        });
       }
     }
 
@@ -1845,14 +1897,39 @@ const RapportForm = ({
   const appendVigikPlatineFiles = async (fileList) => {
     const arr = Array.from(fileList || []).filter(Boolean);
     if (!arr.length) return;
+    console.log("[VIGIK+][PLATINE] add:start", {
+      selectedCount: arr.length,
+      selectedNames: arr.map((f) => f?.name),
+      prevCount: (pendingPhotosPlatineRef.current || []).length,
+      prevItems: (pendingPhotosPlatineRef.current || []).map((p) => ({
+        name: p?.name,
+        hasFile: !!p?.file,
+        hasDraftKey: !!p?._draftS3Key,
+        previewKind: p?.previewUrl ? (String(p.previewUrl).startsWith("blob:") ? "blob" : "remote") : "none",
+      })),
+    });
     setVigikPhotoCompressing(true);
     try {
       const processed = await Promise.all(arr.map((f) => compressImage(f, VIGIK_REPORT_PHOTO_OPTIONS)));
+      console.log("[VIGIK+][PLATINE] add:after-compress", {
+        processedCount: processed.length,
+        processedNames: processed.map((f) => f?.name),
+      });
       setPendingPhotosPlatine((prev) => {
         const next = [...prev];
         for (const file of processed) {
           next.push({ file, name: file.name, previewUrl: URL.createObjectURL(file) });
         }
+        console.log("[VIGIK+][PLATINE] add:set-state", {
+          prevCount: prev.length,
+          nextCount: next.length,
+          nextItems: next.map((p) => ({
+            name: p?.name,
+            hasFile: !!p?.file,
+            hasDraftKey: !!p?._draftS3Key,
+            previewKind: p?.previewUrl ? (String(p.previewUrl).startsWith("blob:") ? "blob" : "remote") : "none",
+          })),
+        });
         return next;
       });
       scheduleDraftPersistence();
@@ -1894,14 +1971,39 @@ const RapportForm = ({
   const appendVigikPortailFiles = async (fileList) => {
     const arr = Array.from(fileList || []).filter(Boolean);
     if (!arr.length) return;
+    console.log("[VIGIK+][PORTAIL] add:start", {
+      selectedCount: arr.length,
+      selectedNames: arr.map((f) => f?.name),
+      prevCount: (pendingPhotosPlatinePortailRef.current || []).length,
+      prevItems: (pendingPhotosPlatinePortailRef.current || []).map((p) => ({
+        name: p?.name,
+        hasFile: !!p?.file,
+        hasDraftKey: !!p?._draftS3Key,
+        previewKind: p?.previewUrl ? (String(p.previewUrl).startsWith("blob:") ? "blob" : "remote") : "none",
+      })),
+    });
     setVigikPhotoCompressing(true);
     try {
       const processed = await Promise.all(arr.map((f) => compressImage(f, VIGIK_REPORT_PHOTO_OPTIONS)));
+      console.log("[VIGIK+][PORTAIL] add:after-compress", {
+        processedCount: processed.length,
+        processedNames: processed.map((f) => f?.name),
+      });
       setPendingPhotosPlatinePortail((prev) => {
         const next = [...prev];
         for (const file of processed) {
           next.push({ file, name: file.name, previewUrl: URL.createObjectURL(file) });
         }
+        console.log("[VIGIK+][PORTAIL] add:set-state", {
+          prevCount: prev.length,
+          nextCount: next.length,
+          nextItems: next.map((p) => ({
+            name: p?.name,
+            hasFile: !!p?.file,
+            hasDraftKey: !!p?._draftS3Key,
+            previewKind: p?.previewUrl ? (String(p.previewUrl).startsWith("blob:") ? "blob" : "remote") : "none",
+          })),
+        });
         return next;
       });
       scheduleDraftPersistence();
