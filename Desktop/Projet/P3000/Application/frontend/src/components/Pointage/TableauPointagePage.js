@@ -286,17 +286,14 @@ const TableauPointagePage = () => {
 
   const totals = useMemo(() => {
     const totalNetVerseSalaries = rows.reduce(
-      (acc, row) => acc + row.accompte + row.paiement,
+      (acc, row) => acc + row.paiement,
       0
     );
     const totalNetVerseEmployeur = rows.reduce(
-      (acc, row) => acc + row.salaireInitial + row.prime,
+      (acc, row) => acc + row.montantCharge,
       0
     );
-    const cumulMensuelCharges = rows.reduce(
-      (acc, row) => acc + row.salaireInitial + row.prime,
-      0
-    );
+    const cumulMensuelCharges = totalNetVerseEmployeur - totalNetVerseSalaries;
     const totalVerse = totalNetVerseSalaries + rows.reduce((acc, row) => acc + row.prime, 0);
 
     return {
