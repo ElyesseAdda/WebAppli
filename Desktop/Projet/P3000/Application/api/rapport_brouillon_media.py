@@ -37,6 +37,27 @@ def enrich_draft_media_with_presigned_urls(draft_media):
     elif out.get("photo_platine_portail_s3_key"):
         out["photo_platine_portail_presigned_urls"] = [_safe_presign(out["photo_platine_portail_s3_key"])]
         out["photo_platine_portail_presigned_url"] = out["photo_platine_portail_presigned_urls"][0]
+    # Contrat canonique (nouveau) + compat legacy.
+    vigik_platine = []
+    for k in out.get("photos_platine_s3_keys") or []:
+        if not k:
+            continue
+        vigik_platine.append({"s3_key": k, "url": _safe_presign(k), "question": "platine"})
+    if not vigik_platine and out.get("photo_platine_s3_key"):
+        legacy_key = out.get("photo_platine_s3_key")
+        vigik_platine.append({"s3_key": legacy_key, "url": _safe_presign(legacy_key), "question": "platine"})
+    vigik_portail = []
+    for k in out.get("photos_platine_portail_s3_keys") or []:
+        if not k:
+            continue
+        vigik_portail.append({"s3_key": k, "url": _safe_presign(k), "question": "portail"})
+    if not vigik_portail and out.get("photo_platine_portail_s3_key"):
+        legacy_key = out.get("photo_platine_portail_s3_key")
+        vigik_portail.append({"s3_key": legacy_key, "url": _safe_presign(legacy_key), "question": "portail"})
+    out["vigik"] = {
+        "platine": vigik_platine,
+        "portail": vigik_portail,
+    }
     pp = out.get("prestation_photos")
     if isinstance(pp, dict):
         out_p = {}
