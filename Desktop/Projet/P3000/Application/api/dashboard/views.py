@@ -519,6 +519,7 @@ def get_pending_payments(request):
         
         result = []
         today = date.today()
+        upcoming_limit_date = today + timedelta(days=15)
         
         # 1. Récupérer les situations en attente de paiement (toutes les situations, peu importe le statut)
         situations_query = Situation.objects.filter(
@@ -531,8 +532,12 @@ def get_pending_payments(request):
             if situation.date_envoi and situation.delai_paiement:
                 date_paiement_attendue = situation.date_envoi + timedelta(days=situation.delai_paiement)
             
-            # Filtrer : uniquement les situations avec date de paiement attendue dans le futur
-            if date_paiement_attendue is None or date_paiement_attendue <= today:
+            # Filtrer : uniquement les situations dont l'échéance est dans les 15 prochains jours
+            if (
+                date_paiement_attendue is None
+                or date_paiement_attendue <= today
+                or date_paiement_attendue > upcoming_limit_date
+            ):
                 continue
             
             # Filtrer par année de la date de paiement attendue si spécifié
@@ -571,8 +576,12 @@ def get_pending_payments(request):
                 # Sinon, calculer à partir de date_envoi + delai_paiement
                 date_paiement_attendue = facture.date_envoi + timedelta(days=facture.delai_paiement)
             
-            # Filtrer : uniquement les factures avec date de paiement attendue dans le futur
-            if date_paiement_attendue is None or date_paiement_attendue <= today:
+            # Filtrer : uniquement les factures dont l'échéance est dans les 15 prochains jours
+            if (
+                date_paiement_attendue is None
+                or date_paiement_attendue <= today
+                or date_paiement_attendue > upcoming_limit_date
+            ):
                 continue
             
             # Filtrer par année de la date de paiement attendue si spécifié
