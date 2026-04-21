@@ -930,12 +930,6 @@ const RapportForm = ({
 
   const handleVigikPlatinePortailChange = (value) => {
     setFormData((prev) => ({ ...prev, presence_platine_portail: value }));
-    if (value === false) {
-      (pendingPhotosPlatinePortail || []).forEach((p) => {
-        if (p?.previewUrl && String(p.previewUrl).startsWith("blob:")) URL.revokeObjectURL(p.previewUrl);
-      });
-      setPendingPhotosPlatinePortail([]);
-    }
     scheduleDraftPersistence();
   };
 
@@ -1657,8 +1651,6 @@ const RapportForm = ({
             /* noop */
           }
         });
-      } else if (fdVigik?.presence_portail === true && fdVigik?.presence_platine_portail === false) {
-        setPendingPhotosPlatinePortail([]);
       }
     }
 
