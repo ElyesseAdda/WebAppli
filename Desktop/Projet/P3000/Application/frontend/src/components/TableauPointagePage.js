@@ -271,6 +271,7 @@ const TableauPointagePage = () => {
           id: agent.id,
           prenom: agent.name || "-",
           nom: agent.surname || "-",
+          typePaiement: agent.type_paiement || "horaire",
           email: agent.email || "",
           totalHeures,
           salaireInitial: toNumber(draft.salaireInitial),
@@ -307,6 +308,24 @@ const TableauPointagePage = () => {
       cumulMensuelCharges,
       totalVerse,
     };
+  }, [rows]);
+
+  const groupedRows = useMemo(() => {
+    const sortByPrenom = (a, b) =>
+      String(a.prenom || "").localeCompare(String(b.prenom || ""), "fr", {
+        sensitivity: "base",
+      });
+
+    const journaliers = rows
+      .filter((row) => row.typePaiement === "journalier")
+      .sort(sortByPrenom);
+    const horaires = rows
+      .filter((row) => row.typePaiement !== "journalier")
+      .sort(sortByPrenom);
+    return [
+      { key: "horaire", label: "Agents horaires", items: horaires },
+      { key: "journalier", label: "Agents journaliers", items: journaliers },
+    ];
   }, [rows]);
 
   const handleCellChange = (agentId, field, value) => {
@@ -592,16 +611,31 @@ const TableauPointagePage = () => {
                 </TableRow>
               </TableHead>
               <TableBody>
-                {rows.map((row) => (
-                  <TableRow
-                    key={row.id}
-                    hover
-                    sx={{
-                      "&:nth-of-type(odd)": { backgroundColor: "#f5f5f5" },
-                      "&:nth-of-type(even)": { backgroundColor: "#ffffff" },
-                      "&:hover": { backgroundColor: "#f5f5f5" },
-                    }}
-                  >
+                {groupedRows.map((group) => (
+                  <React.Fragment key={group.key}>
+                    <TableRow>
+                      <TableCell
+                        colSpan={11}
+                        sx={{
+                          backgroundColor: "rgba(27, 120, 188, 0.12)",
+                          color: "rgba(27, 120, 188, 1)",
+                          fontWeight: 700,
+                          textAlign: "left",
+                        }}
+                      >
+                        {group.label} ({group.items.length})
+                      </TableCell>
+                    </TableRow>
+                    {group.items.map((row) => (
+                      <TableRow
+                        key={`${group.key}-${row.id}`}
+                        hover
+                        sx={{
+                          "&:nth-of-type(odd)": { backgroundColor: "#f5f5f5" },
+                          "&:nth-of-type(even)": { backgroundColor: "#ffffff" },
+                          "&:hover": { backgroundColor: "#f5f5f5" },
+                        }}
+                      >
                     <TableCell sx={commonBodyCellStyle}>{row.prenom}</TableCell>
                     <TableCell sx={commonBodyCellStyle}>{row.nom}</TableCell>
                     <TableCell sx={commonBodyCellStyle}>
@@ -659,7 +693,9 @@ const TableauPointagePage = () => {
                     <TableCell align="right" sx={commonBodyCellStyle}>
                       {formatWorkedTime(row.totalHeures, agents.find((a) => a.id === row.id)?.type_paiement)}
                     </TableCell>
-                  </TableRow>
+                      </TableRow>
+                    ))}
+                  </React.Fragment>
                 ))}
               </TableBody>
             </Table>
