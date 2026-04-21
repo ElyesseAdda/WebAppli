@@ -33,6 +33,32 @@ const formatHours = (value) =>
     maximumFractionDigits: 2,
   });
 
+const formatMoneyInput = (value) =>
+  toNumber(value).toLocaleString("fr-FR", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  });
+
+const parseMoneyInput = (rawValue) => {
+  const sanitized = String(rawValue || "")
+    .replace(/\s/g, "")
+    .replace(",", ".");
+  const parsed = Number.parseFloat(sanitized);
+  return Number.isFinite(parsed) ? parsed : 0;
+};
+
+const formatWorkedTime = (hoursValue, agentTypePaiement) => {
+  const hours = toNumber(hoursValue);
+  if (agentTypePaiement === "journalier") {
+    const days = hours / 8;
+    return `${days.toLocaleString("fr-FR", {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    })} j`;
+  }
+  return `${formatHours(hours)} h`;
+};
+
 const headerCellSx = {
   fontWeight: 700,
   backgroundColor: "#1976d2",
@@ -56,7 +82,7 @@ const commonBodyCellStyle = {
 };
 
 const tableInputSx = {
-  width: 120,
+  width: 105,
   px: 0.75,
   py: 0.5,
   border: "1px solid",
@@ -72,6 +98,17 @@ const tableInputSx = {
     borderColor: "#1976d2",
     boxShadow: "inset 0 0 0 1px #1976d2",
   },
+  "& .MuiInputBase-input": {
+    textAlign: "right",
+    paddingRight: "6px",
+  },
+};
+
+const currencyAdornmentSx = {
+  fontSize: "0.82rem",
+  fontWeight: 600,
+  color: "text.secondary",
+  pr: 0.5,
 };
 
 const tableCommentInputSx = {
@@ -130,6 +167,7 @@ const TableauPointagePage = () => {
   const [error, setError] = useState("");
   const [monthKey, setMonthKey] = useState(getMonthKey());
   const [draftByAgent, setDraftByAgent] = useState({});
+  const [hoursByAgent, setHoursByAgent] = useState({});
   const [savingEmailAgentId, setSavingEmailAgentId] = useState(null);
   const [savingPointageKey, setSavingPointageKey] = useState("");
 
@@ -141,13 +179,33 @@ const TableauPointagePage = () => {
       setLoading(true);
       setError("");
       try {
-        const [agentsRes, pointagesRes] = await Promise.all([
+        const [agentsRes, pointagesRes, scheduleSummaryRes] = await Promise.all([
           axios.get("/api/agent/"),
           axios.get(`/api/pointages-mensuels/?month=${monthKey}`),
+          axios.get(`/api/schedule/monthly_summary/?month=${monthKey}`).catch(() => ({ data: [] })),
         ]);
         if (isCancelled) return;
         setAgents(Array.isArray(agentsRes.data) ? agentsRes.data : []);
         const loadedPointages = Array.isArray(pointagesRes.data) ? pointagesRes.data : [];
+        const scheduleSummary = Array.isArray(scheduleSummaryRes.data) ? scheduleSummaryRes.data : [];
+
+        const aggregatedHours = {};
+        scheduleSummary.forEach((chantier) => {
+          const details = Array.isArray(chantier?.details) ? chantier.details : [];
+          details.forEach((detail) => {
+            const agentId = String(detail?.agent_id || "");
+            if (!agentId) return;
+            const totalHoursForDetail =
+              toNumber(detail?.heures_normal) +
+              toNumber(detail?.heures_samedi) +
+              toNumber(detail?.heures_dimanche) +
+              toNumber(detail?.heures_ferie) +
+              toNumber(detail?.heures_overtime);
+            aggregatedHours[agentId] = toNumber(aggregatedHours[agentId]) + totalHoursForDetail;
+          });
+        });
+        setHoursByAgent(aggregatedHours);
+
         const initialDraft = {};
         loadedPointages.forEach((p) => {
           initialDraft[String(p.agent)] = {
@@ -176,6 +234,9 @@ const TableauPointagePage = () => {
   }, [monthKey]);
 
   const getMonthlyHours = (agent) => {
+    const fromScheduleSummary = toNumber(hoursByAgent[String(agent?.id)]);
+    if (fromScheduleSummary > 0) return fromScheduleSummary;
+
     const monthlyHours = Array.isArray(agent?.monthly_hours) ? agent.monthly_hours : [];
     const found = monthlyHours.find((item) =>
       String(item?.month || "").startsWith(monthKey)
@@ -207,7 +268,7 @@ const TableauPointagePage = () => {
           prime,
         };
       });
-  }, [agents, draftByAgent, monthKey]);
+  }, [agents, draftByAgent, hoursByAgent, monthKey]);
 
   const totals = useMemo(() => {
     const totalNetVerseSalaries = rows.reduce(
@@ -425,10 +486,14 @@ const TableauPointagePage = () => {
                   >
                     <TableCell sx={commonBodyCellStyle}>
                       <InputBase
-                        type="number"
-                        value={row.salaireInitial}
+                        type="text"
+                        value={formatMoneyInput(row.salaireInitial)}
                         onChange={(e) =>
-                          handleCellChange(String(row.id), "salaireInitial", e.target.value)
+                          handleCellChange(
+                            String(row.id),
+                            "salaireInitial",
+                            parseMoneyInput(e.target.value)
+                          )
                         }
                         onBlur={(e) => {
                           handleCellChange(String(row.id), "salaireOverridden", true);
@@ -439,39 +504,50 @@ const TableauPointagePage = () => {
                             true
                           );
                         }}
-                        inputProps={{ min: 0, step: "0.01", max: 999999 }}
+                        inputProps={{ inputMode: "decimal" }}
                         sx={tableInputSx}
                         disabled={savingPointageKey === `${row.id}-salaire_net_initial_hors_prime`}
+                        endAdornment={<Typography component="span" sx={currencyAdornmentSx}>€</Typography>}
                       />
                     </TableCell>
                     <TableCell sx={commonBodyCellStyle}>
                       <InputBase
-                        type="number"
-                        value={row.accompte}
+                        type="text"
+                        value={formatMoneyInput(row.accompte)}
                         onChange={(e) =>
-                          handleCellChange(String(row.id), "accompte", e.target.value)
+                          handleCellChange(
+                            String(row.id),
+                            "accompte",
+                            parseMoneyInput(e.target.value)
+                          )
                         }
                         onBlur={(e) =>
                           savePointageField(row.id, "accompte", e.target.value)
                         }
-                        inputProps={{ min: 0, step: "0.01", max: 999999 }}
+                        inputProps={{ inputMode: "decimal" }}
                         sx={tableInputSx}
                         disabled={savingPointageKey === `${row.id}-accompte`}
+                        endAdornment={<Typography component="span" sx={currencyAdornmentSx}>€</Typography>}
                       />
                     </TableCell>
                     <TableCell sx={commonBodyCellStyle}>
                       <InputBase
-                        type="number"
-                        value={row.paiement}
+                        type="text"
+                        value={formatMoneyInput(row.paiement)}
                         onChange={(e) =>
-                          handleCellChange(String(row.id), "paiement", e.target.value)
+                          handleCellChange(
+                            String(row.id),
+                            "paiement",
+                            parseMoneyInput(e.target.value)
+                          )
                         }
                         onBlur={(e) =>
                           savePointageField(row.id, "paiement", e.target.value)
                         }
-                        inputProps={{ min: 0, step: "0.01", max: 999999 }}
+                        inputProps={{ inputMode: "decimal" }}
                         sx={tableInputSx}
                         disabled={savingPointageKey === `${row.id}-paiement`}
+                        endAdornment={<Typography component="span" sx={currencyAdornmentSx}>€</Typography>}
                       />
                     </TableCell>
                     <TableCell sx={commonBodyCellStyle}>{row.prenom}</TableCell>
@@ -505,7 +581,7 @@ const TableauPointagePage = () => {
                       />
                     </TableCell>
                     <TableCell align="right" sx={commonBodyCellStyle}>
-                      {formatHours(row.totalHeures)} h
+                      {formatWorkedTime(row.totalHeures, agents.find((a) => a.id === row.id)?.type_paiement)}
                     </TableCell>
                   </TableRow>
                 ))}
