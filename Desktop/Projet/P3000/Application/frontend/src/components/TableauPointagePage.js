@@ -3,8 +3,12 @@ import axios from "axios";
 import {
   Alert,
   Box,
+  Button,
   CircularProgress,
-  InputBase,
+  Dialog,
+  DialogActions,
+  DialogContent,
+  DialogTitle,
   Paper,
   Table,
   TableBody,
@@ -81,71 +85,15 @@ const commonBodyCellStyle = {
   verticalAlign: "middle",
 };
 
-const tableInputSx = {
-  width: 105,
-  px: 0.75,
-  py: 0.5,
-  border: "1px solid",
-  borderColor: "#cfd8dc",
-  borderRadius: 0,
-  backgroundColor: "#fff",
-  fontSize: "0.82rem",
-  lineHeight: 1.2,
+const clickableValueSx = {
+  cursor: "pointer",
+  px: 1,
+  py: 0.75,
+  borderRadius: 1,
+  border: "1px solid transparent",
   "&:hover": {
-    borderColor: "#b0bec5",
-  },
-  "&.Mui-focused, &:focus-within": {
-    borderColor: "#1976d2",
-    boxShadow: "inset 0 0 0 1px #1976d2",
-  },
-  "& .MuiInputBase-input": {
-    textAlign: "right",
-    paddingRight: "6px",
-  },
-};
-
-const currencyAdornmentSx = {
-  fontSize: "0.82rem",
-  fontWeight: 600,
-  color: "text.secondary",
-  pr: 0.5,
-};
-
-const tableCommentInputSx = {
-  width: 200,
-  px: 0.75,
-  py: 0.5,
-  border: "1px solid",
-  borderColor: "#cfd8dc",
-  borderRadius: 0,
-  backgroundColor: "#fff",
-  fontSize: "0.82rem",
-  lineHeight: 1.2,
-  "&:hover": {
-    borderColor: "#b0bec5",
-  },
-  "&.Mui-focused, &:focus-within": {
-    borderColor: "#1976d2",
-    boxShadow: "inset 0 0 0 1px #1976d2",
-  },
-};
-
-const tableEmailInputSx = {
-  width: 190,
-  px: 0.75,
-  py: 0.5,
-  border: "1px solid",
-  borderColor: "#cfd8dc",
-  borderRadius: 0,
-  backgroundColor: "#fff",
-  fontSize: "0.82rem",
-  lineHeight: 1.2,
-  "&:hover": {
-    borderColor: "#b0bec5",
-  },
-  "&.Mui-focused, &:focus-within": {
-    borderColor: "#1976d2",
-    boxShadow: "inset 0 0 0 1px #1976d2",
+    backgroundColor: "rgba(27, 120, 188, 0.08)",
+    borderColor: "rgba(27, 120, 188, 0.3)",
   },
 };
 
@@ -165,6 +113,15 @@ const TableauPointagePage = () => {
   const [primeByAgent, setPrimeByAgent] = useState({});
   const [savingEmailAgentId, setSavingEmailAgentId] = useState(null);
   const [savingPointageKey, setSavingPointageKey] = useState("");
+  const [editorState, setEditorState] = useState({
+    open: false,
+    agentId: null,
+    field: "",
+    label: "",
+    value: "",
+    inputType: "text",
+    isCurrency: false,
+  });
 
   const monthDate = `${monthKey}-01`;
 
@@ -373,14 +330,6 @@ const TableauPointagePage = () => {
     }
   };
 
-  const handleEmailChange = (agentId, value) => {
-    setAgents((prev) =>
-      prev.map((agent) =>
-        String(agent.id) === String(agentId) ? { ...agent, email: value } : agent
-      )
-    );
-  };
-
   const handleEmailBlur = async (agentId, value) => {
     const trimmedEmail = String(value || "").trim();
     try {
@@ -388,11 +337,94 @@ const TableauPointagePage = () => {
       await axios.patch(`/api/agent/${agentId}/`, {
         email: trimmedEmail || null,
       });
+      setAgents((prev) =>
+        prev.map((agent) =>
+          String(agent.id) === String(agentId)
+            ? { ...agent, email: trimmedEmail }
+            : agent
+        )
+      );
     } catch {
       setError("Erreur lors de la sauvegarde de l'adresse mail de l'agent.");
     } finally {
       setSavingEmailAgentId(null);
     }
+  };
+
+  const openEditor = (row, field) => {
+    const config = {
+      salaireInitial: {
+        field: "salaire_net_initial_hors_prime",
+        label: "Salaire net initiale hors prime",
+        value: row.salaireInitial,
+        inputType: "text",
+        isCurrency: true,
+      },
+      accompte: {
+        field: "accompte",
+        label: "Accompte",
+        value: row.accompte,
+        inputType: "text",
+        isCurrency: true,
+      },
+      paiement: {
+        field: "paiement",
+        label: "Paiement",
+        value: row.paiement,
+        inputType: "text",
+        isCurrency: true,
+      },
+      email: {
+        field: "email",
+        label: "Adresse mail",
+        value: row.email || "",
+        inputType: "email",
+        isCurrency: false,
+      },
+      commentaire: {
+        field: "commentaire",
+        label: "Commentaire",
+        value: row.commentaire || "",
+        inputType: "text",
+        isCurrency: false,
+      },
+    };
+    const next = config[field];
+    if (!next) return;
+    setEditorState({
+      open: true,
+      agentId: row.id,
+      ...next,
+      value: next.isCurrency ? formatMoneyInput(next.value) : next.value,
+    });
+  };
+
+  const closeEditor = () => {
+    setEditorState((prev) => ({ ...prev, open: false }));
+  };
+
+  const saveEditor = async () => {
+    const { agentId, field, value, isCurrency } = editorState;
+    if (!agentId || !field) return;
+    if (field === "email") {
+      await handleEmailBlur(agentId, value);
+      closeEditor();
+      return;
+    }
+    const normalizedValue = isCurrency ? parseMoneyInput(value) : value;
+    if (field === "salaire_net_initial_hors_prime") {
+      handleCellChange(String(agentId), "salaireInitial", normalizedValue);
+      handleCellChange(String(agentId), "salaireOverridden", true);
+      await savePointageField(agentId, field, normalizedValue, true);
+    } else if (field === "accompte" || field === "paiement" || field === "commentaire") {
+      handleCellChange(
+        String(agentId),
+        field === "commentaire" ? "commentaire" : field,
+        normalizedValue
+      );
+      await savePointageField(agentId, field, normalizedValue);
+    }
+    closeEditor();
   };
 
   return (
@@ -494,70 +526,25 @@ const TableauPointagePage = () => {
                     }}
                   >
                     <TableCell sx={commonBodyCellStyle}>
-                      <InputBase
-                        type="text"
-                        value={formatMoneyInput(row.salaireInitial)}
-                        onChange={(e) =>
-                          handleCellChange(
-                            String(row.id),
-                            "salaireInitial",
-                            parseMoneyInput(e.target.value)
-                          )
-                        }
-                        onBlur={(e) => {
-                          handleCellChange(String(row.id), "salaireOverridden", true);
-                          savePointageField(
-                            row.id,
-                            "salaire_net_initial_hors_prime",
-                            e.target.value,
-                            true
-                          );
-                        }}
-                        inputProps={{ inputMode: "decimal" }}
-                        sx={tableInputSx}
-                        disabled={savingPointageKey === `${row.id}-salaire_net_initial_hors_prime`}
-                        endAdornment={<Typography component="span" sx={currencyAdornmentSx}>€</Typography>}
-                      />
+                      <Box sx={clickableValueSx} onClick={() => openEditor(row, "salaireInitial")}>
+                        <Typography sx={{ textAlign: "right", fontWeight: 500 }}>
+                          {formatCurrency(row.salaireInitial)}
+                        </Typography>
+                      </Box>
                     </TableCell>
                     <TableCell sx={commonBodyCellStyle}>
-                      <InputBase
-                        type="text"
-                        value={formatMoneyInput(row.accompte)}
-                        onChange={(e) =>
-                          handleCellChange(
-                            String(row.id),
-                            "accompte",
-                            parseMoneyInput(e.target.value)
-                          )
-                        }
-                        onBlur={(e) =>
-                          savePointageField(row.id, "accompte", e.target.value)
-                        }
-                        inputProps={{ inputMode: "decimal" }}
-                        sx={tableInputSx}
-                        disabled={savingPointageKey === `${row.id}-accompte`}
-                        endAdornment={<Typography component="span" sx={currencyAdornmentSx}>€</Typography>}
-                      />
+                      <Box sx={clickableValueSx} onClick={() => openEditor(row, "accompte")}>
+                        <Typography sx={{ textAlign: "right", fontWeight: 500 }}>
+                          {formatCurrency(row.accompte)}
+                        </Typography>
+                      </Box>
                     </TableCell>
                     <TableCell sx={commonBodyCellStyle}>
-                      <InputBase
-                        type="text"
-                        value={formatMoneyInput(row.paiement)}
-                        onChange={(e) =>
-                          handleCellChange(
-                            String(row.id),
-                            "paiement",
-                            parseMoneyInput(e.target.value)
-                          )
-                        }
-                        onBlur={(e) =>
-                          savePointageField(row.id, "paiement", e.target.value)
-                        }
-                        inputProps={{ inputMode: "decimal" }}
-                        sx={tableInputSx}
-                        disabled={savingPointageKey === `${row.id}-paiement`}
-                        endAdornment={<Typography component="span" sx={currencyAdornmentSx}>€</Typography>}
-                      />
+                      <Box sx={clickableValueSx} onClick={() => openEditor(row, "paiement")}>
+                        <Typography sx={{ textAlign: "right", fontWeight: 500 }}>
+                          {formatCurrency(row.paiement)}
+                        </Typography>
+                      </Box>
                     </TableCell>
                     <TableCell sx={commonBodyCellStyle}>{row.prenom}</TableCell>
                     <TableCell sx={commonBodyCellStyle}>{row.nom}</TableCell>
@@ -565,29 +552,18 @@ const TableauPointagePage = () => {
                       {formatCurrency(row.prime)}
                     </TableCell>
                     <TableCell sx={commonBodyCellStyle}>
-                      <InputBase
-                        type="email"
-                        value={row.email === "-" ? "" : row.email}
-                        onChange={(e) => handleEmailChange(row.id, e.target.value)}
-                        onBlur={(e) => handleEmailBlur(row.id, e.target.value)}
-                        placeholder="Adresse mail"
-                        sx={tableEmailInputSx}
-                        disabled={savingEmailAgentId === row.id}
-                      />
+                      <Box sx={clickableValueSx} onClick={() => openEditor(row, "email")}>
+                        <Typography sx={{ textAlign: "left" }}>
+                          {row.email || "-"}
+                        </Typography>
+                      </Box>
                     </TableCell>
                     <TableCell sx={commonBodyCellStyle}>
-                      <InputBase
-                        value={row.commentaire}
-                        onChange={(e) =>
-                          handleCellChange(String(row.id), "commentaire", e.target.value)
-                        }
-                        onBlur={(e) =>
-                          savePointageField(row.id, "commentaire", e.target.value)
-                        }
-                        placeholder="Commentaire"
-                        sx={tableCommentInputSx}
-                        disabled={savingPointageKey === `${row.id}-commentaire`}
-                      />
+                      <Box sx={clickableValueSx} onClick={() => openEditor(row, "commentaire")}>
+                        <Typography sx={{ textAlign: "left" }}>
+                          {row.commentaire || "-"}
+                        </Typography>
+                      </Box>
                     </TableCell>
                     <TableCell align="right" sx={commonBodyCellStyle}>
                       {formatWorkedTime(row.totalHeures, agents.find((a) => a.id === row.id)?.type_paiement)}
@@ -650,6 +626,37 @@ const TableauPointagePage = () => {
           </Paper>
         </>
       )}
+      <Dialog open={editorState.open} onClose={closeEditor} maxWidth="xs" fullWidth>
+        <DialogTitle>{editorState.label}</DialogTitle>
+        <DialogContent>
+          <TextField
+            autoFocus
+            margin="dense"
+            fullWidth
+            type={editorState.inputType}
+            value={editorState.value}
+            onChange={(e) =>
+              setEditorState((prev) => ({ ...prev, value: e.target.value }))
+            }
+            label={editorState.label}
+            placeholder={editorState.isCurrency ? "0,00" : ""}
+            helperText={editorState.isCurrency ? "Montant en euros" : ""}
+          />
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={closeEditor}>Annuler</Button>
+          <Button
+            variant="contained"
+            onClick={saveEditor}
+            disabled={
+              Boolean(savingPointageKey) ||
+              (savingEmailAgentId !== null && savingEmailAgentId === editorState.agentId)
+            }
+          >
+            Enregistrer
+          </Button>
+        </DialogActions>
+      </Dialog>
     </Box>
   );
 };
