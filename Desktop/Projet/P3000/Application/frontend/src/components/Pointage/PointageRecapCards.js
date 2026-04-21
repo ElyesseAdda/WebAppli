@@ -1,5 +1,5 @@
 import React from "react";
-import { Box, Card, CardContent, Paper, Typography } from "@mui/material";
+import { Box, Button, Card, CardContent, Paper, Typography } from "@mui/material";
 
 const RecapStatCard = ({ label, value, valueColor }) => (
   <Card
@@ -53,7 +53,12 @@ const RecapStatCard = ({ label, value, valueColor }) => (
   </Card>
 );
 
-const PointageRecapCards = ({ totals, formatCurrency }) => (
+const PointageRecapCards = ({
+  totals,
+  formatCurrency,
+  selectedRecapGroup,
+  onToggleGroup,
+}) => (
   <Paper
     sx={{
       mb: 2,
@@ -62,12 +67,61 @@ const PointageRecapCards = ({ totals, formatCurrency }) => (
     }}
     elevation={0}
   >
-    <Typography
-      variant="h6"
-      sx={{ mb: 1.5, fontWeight: 700, color: "#fff", px: 0.5 }}
+    <Box
+      sx={{
+        mb: 1.5,
+        px: 0.5,
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "flex-start",
+        gap: 1,
+        flexWrap: "wrap",
+      }}
     >
-      Récapitulatif pointage
-    </Typography>
+      <Typography variant="h6" sx={{ fontWeight: 700, color: "#fff" }}>
+        Récapitulatif pointage
+      </Typography>
+      <Box sx={{ display: "flex", gap: 1, ml: 1 }}>
+        <Button
+          size="small"
+          variant={selectedRecapGroup === "horaire" ? "contained" : "outlined"}
+          onClick={() => onToggleGroup("horaire")}
+          sx={{
+            minWidth: 100,
+            color: selectedRecapGroup === "horaire" ? "#1976d2" : "#fff",
+            backgroundColor: selectedRecapGroup === "horaire" ? "#fff" : "transparent",
+            borderColor: "rgba(255,255,255,0.7)",
+            "&:hover": {
+              backgroundColor:
+                selectedRecapGroup === "horaire" ? "rgba(255,255,255,0.92)" : "rgba(255,255,255,0.08)",
+              borderColor: "#fff",
+            },
+          }}
+        >
+          Horaire
+        </Button>
+        <Button
+          size="small"
+          variant={selectedRecapGroup === "journalier" ? "contained" : "outlined"}
+          onClick={() => onToggleGroup("journalier")}
+          sx={{
+            minWidth: 100,
+            color: selectedRecapGroup === "journalier" ? "#1976d2" : "#fff",
+            backgroundColor: selectedRecapGroup === "journalier" ? "#fff" : "transparent",
+            borderColor: "rgba(255,255,255,0.7)",
+            "&:hover": {
+              backgroundColor:
+                selectedRecapGroup === "journalier"
+                  ? "rgba(255,255,255,0.92)"
+                  : "rgba(255,255,255,0.08)",
+              borderColor: "#fff",
+            },
+          }}
+        >
+          Journalier
+        </Button>
+      </Box>
+    </Box>
     <Box
       sx={{
         display: "grid",

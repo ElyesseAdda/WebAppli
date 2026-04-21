@@ -169,6 +169,7 @@ const TableauPointagePage = () => {
   const [primeByAgent, setPrimeByAgent] = useState({});
   const [savingEmailAgentId, setSavingEmailAgentId] = useState(null);
   const [savingPointageKey, setSavingPointageKey] = useState("");
+  const [selectedRecapGroup, setSelectedRecapGroup] = useState(null);
   const [editorState, setEditorState] = useState({
     open: false,
     agentId: null,
@@ -311,17 +312,27 @@ const TableauPointagePage = () => {
       });
   }, [agents, brutByAgent, draftByAgent, hoursByAgent, monthKey, primeByAgent]);
 
+  const recapRows = useMemo(() => {
+    if (selectedRecapGroup === "horaire") {
+      return rows.filter((row) => row.typePaiement !== "journalier");
+    }
+    if (selectedRecapGroup === "journalier") {
+      return rows.filter((row) => row.typePaiement === "journalier");
+    }
+    return rows;
+  }, [rows, selectedRecapGroup]);
+
   const totals = useMemo(() => {
-    const totalNetVerseSalaries = rows.reduce(
+    const totalNetVerseSalaries = recapRows.reduce(
       (acc, row) => acc + row.paiement,
       0
     );
-    const totalNetVerseEmployeur = rows.reduce(
+    const totalNetVerseEmployeur = recapRows.reduce(
       (acc, row) => acc + row.montantCharge,
       0
     );
     const cumulMensuelCharges = totalNetVerseEmployeur - totalNetVerseSalaries;
-    const totalVerse = totalNetVerseSalaries + rows.reduce((acc, row) => acc + row.prime, 0);
+    const totalVerse = totalNetVerseSalaries + recapRows.reduce((acc, row) => acc + row.prime, 0);
 
     return {
       totalNetVerseSalaries,
@@ -329,7 +340,7 @@ const TableauPointagePage = () => {
       cumulMensuelCharges,
       totalVerse,
     };
-  }, [rows]);
+  }, [recapRows]);
 
   const groupedRows = useMemo(() => {
     const sortByPrenom = (a, b) =>
@@ -357,6 +368,10 @@ const TableauPointagePage = () => {
         [field]: value,
       },
     }));
+  };
+
+  const handleGroupRecapToggle = (groupKey) => {
+    setSelectedRecapGroup((prev) => (prev === groupKey ? null : groupKey));
   };
 
   const savePointageField = async (agentId, field, value, isSalaryField = false) => {
@@ -591,7 +606,12 @@ const TableauPointagePage = () => {
 
       {!loading && !error && (
         <>
-          <PointageRecapCards totals={totals} formatCurrency={formatCurrency} />
+          <PointageRecapCards
+            totals={totals}
+            formatCurrency={formatCurrency}
+            selectedRecapGroup={selectedRecapGroup}
+            onToggleGroup={handleGroupRecapToggle}
+          />
 
           <TableContainer
             component={Paper}
@@ -650,7 +670,14 @@ const TableauPointagePage = () => {
                           color: "rgba(27, 120, 188, 1)",
                           fontWeight: 700,
                           textAlign: "left",
+                          cursor: "pointer",
+                          userSelect: "none",
+                          borderLeft:
+                            selectedRecapGroup === group.key
+                              ? "4px solid rgba(27, 120, 188, 1)"
+                              : "4px solid transparent",
                         }}
+                        onClick={() => handleGroupRecapToggle(group.key)}
                       >
                         {group.label} ({group.items.length})
                       </TableCell>
