@@ -139,6 +139,19 @@ const getPaiementCellSx = (paiementValue) => {
   };
 };
 
+const getMontantChargeCellSx = (montantChargeValue) => {
+  const hasValue = toNumber(montantChargeValue) > 0;
+  return {
+    ...clickableValueSx,
+    backgroundColor: hasValue ? "rgba(46, 125, 50, 0.12)" : "rgba(211, 47, 47, 0.12)",
+    borderColor: hasValue ? "rgba(46, 125, 50, 0.35)" : "rgba(211, 47, 47, 0.35)",
+    "&:hover": {
+      backgroundColor: hasValue ? "rgba(46, 125, 50, 0.2)" : "rgba(211, 47, 47, 0.2)",
+      borderColor: hasValue ? "rgba(46, 125, 50, 0.5)" : "rgba(211, 47, 47, 0.5)",
+    },
+  };
+};
+
 const getMonthKey = (date = new Date()) => {
   const year = date.getFullYear();
   const month = String(date.getMonth() + 1).padStart(2, "0");
@@ -676,7 +689,7 @@ const TableauPointagePage = () => {
                           </Box>
                         </TableCell>
                         <TableCell sx={commonBodyCellStyle}>
-                          <Box sx={clickableValueSx} onClick={() => openEditor(row, "montantCharge")}>
+                          <Box sx={getMontantChargeCellSx(row.montantCharge)} onClick={() => openEditor(row, "montantCharge")}>
                             <Typography sx={amountTextSx}>
                               {formatCurrencyInTable(row.montantCharge)}
                             </Typography>
