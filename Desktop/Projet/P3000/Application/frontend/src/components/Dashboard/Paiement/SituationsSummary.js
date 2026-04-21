@@ -32,6 +32,7 @@ const SituationsSummary = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [situations, setSituations] = useState([]);
+  const [factures, setFactures] = useState([]);
   const [showStatusModal, setShowStatusModal] = useState(false);
   const [situationToUpdate, setSituationToUpdate] = useState(null);
   
@@ -54,15 +55,23 @@ const SituationsSummary = () => {
     try {
       setLoading(true);
       setError(null);
-      const response = await axios.get("/api/situations/by-year/", {
-        params: {
-          annee: selectedYear,
-        },
-      });
-      setSituations(response.data);
+      const [situationsResponse, facturesResponse] = await Promise.all([
+        axios.get("/api/situations/by-year/", {
+          params: {
+            annee: selectedYear,
+          },
+        }),
+        axios.get("/api/facture/", {
+          params: {
+            date_creation__year: selectedYear,
+          },
+        }),
+      ]);
+      setSituations(situationsResponse.data || []);
+      setFactures(facturesResponse.data || []);
     } catch (err) {
-      console.error("Erreur lors du chargement des situations:", err);
-      setError("Impossible de charger les situations");
+      console.error("Erreur lors du chargement des factures/situations:", err);
+      setError("Impossible de charger les factures/situations");
     } finally {
       setLoading(false);
     }
@@ -70,12 +79,18 @@ const SituationsSummary = () => {
 
   // Calculer les statistiques
   const nombreSituations = situations.length;
-  const nombreDossiers = new Set(situations.map((s) => s.chantier_id)).size;
-  const montantHTCumule = situations.reduce((sum, situation) => {
+  const nombreFactures = factures.length;
+  const nombreEntrees = nombreSituations + nombreFactures;
+  const montantSituations = situations.reduce((sum, situation) => {
     // Utiliser montant_apres_retenues ou montant_total selon ce qui est disponible
     const montant = parseFloat(situation.montant_apres_retenues || situation.montant_total || 0);
     return sum + montant;
   }, 0);
+  const montantFactures = factures.reduce((sum, facture) => {
+    const montant = parseFloat(facture.price_ht || 0);
+    return sum + montant;
+  }, 0);
+  const montantHTCumule = montantSituations + montantFactures;
 
   // Calculer le pourcentage de situations validées/facturées pour la barre de progression
   const situationsValidees = situations.filter(
@@ -92,6 +107,23 @@ const SituationsSummary = () => {
     setSituationToUpdate(situation);
     setShowStatusModal(true);
   };
+
+  const entries = [
+    ...situations.map((situation) => ({
+      ...situation,
+      entryType: "situation",
+      entryKey: `situation-${situation.id}`,
+      entryAmount: parseFloat(
+        situation.montant_apres_retenues || situation.montant_total || 0
+      ),
+    })),
+    ...factures.map((facture) => ({
+      ...facture,
+      entryType: "facture",
+      entryKey: `facture-${facture.id}`,
+      entryAmount: parseFloat(facture.price_ht || 0),
+    })),
+  ];
 
   const handleStatusUpdate = async (newStatus) => {
     try {
@@ -201,7 +233,7 @@ const SituationsSummary = () => {
           letterSpacing: "0.5px",
         }}
       >
-        Situations Entrées
+        Factures Entrées
       </Typography>
 
       {/* Section principale : Statistiques à gauche, Icône rapprochée */}
@@ -233,7 +265,7 @@ const SituationsSummary = () => {
                 lineHeight: 1,
               }}
             >
-              {nombreSituations}
+              {nombreEntrees}
             </Typography>
             <Typography
               variant="body1"
@@ -242,7 +274,7 @@ const SituationsSummary = () => {
                 fontWeight: 500,
               }}
             >
-              SITUATIONS
+              ENTREES
             </Typography>
           </Box>
 
@@ -369,7 +401,7 @@ const SituationsSummary = () => {
               <TableHead>
                 <TableRow sx={{ backgroundColor: "#eef2ff" }}> {/* bg-indigo-50 */}
                   <TableCell sx={{ fontWeight: "bold", color: "#4f46e5" }}>
-                    N° Situation
+                    N°
                   </TableCell>
                   <TableCell sx={{ fontWeight: "bold", color: "#4f46e5" }}>
                     Chantier
@@ -401,18 +433,18 @@ const SituationsSummary = () => {
                 </TableRow>
               </TableHead>
               <TableBody>
-                {situations.length === 0 ? (
+                {entries.length === 0 ? (
                   <TableRow>
                     <TableCell colSpan={6} align="center" sx={{ py: 3 }}>
                       <Typography variant="body2" color="text.secondary">
-                        Aucune situation pour l'année {selectedYear}
+                        Aucune entrée pour l'année {selectedYear}
                       </Typography>
                     </TableCell>
                   </TableRow>
                 ) : (
-                  situations.map((situation, index) => (
+                  entries.map((entry, index) => (
                     <TableRow
-                      key={situation.id}
+                      key={entry.entryKey}
                       hover
                       sx={{
                         backgroundColor: index % 2 === 0 ? "#fafafa" : "#fff",
@@ -423,7 +455,13 @@ const SituationsSummary = () => {
                     >
                       <TableCell>
                         <Typography
-                          onClick={() => handlePreviewSituation(situation.id)}
+                          onClick={() => {
+                            if (entry.entryType === "situation") {
+                              handlePreviewSituation(entry.id);
+                              return;
+                            }
+                            window.open(`/api/preview-facture-v2/${entry.id}/`, "_blank");
+                          }}
                           sx={{
                             cursor: "pointer",
                             color: "#4f46e5", // indigo-600
@@ -434,15 +472,21 @@ const SituationsSummary = () => {
                             },
                           }}
                         >
-                          {situation.numero_situation}
+                          {entry.entryType === "situation"
+                            ? entry.numero_situation
+                            : entry.numero}
                         </Typography>
                       </TableCell>
-                      <TableCell>{situation.chantier_name || "-"}</TableCell>
+                      <TableCell>{entry.chantier_name || "-"}</TableCell>
                       <TableCell align="center">
-                        {`${situation.mois.toString().padStart(2, "0")}/${formatYear(situation.annee)}`}
+                        {entry.entryType === "situation" && entry.mois && entry.annee
+                          ? `${entry.mois.toString().padStart(2, "0")}/${formatYear(entry.annee)}`
+                          : "-"}
                       </TableCell>
                       <TableCell align="center">
-                        {formatNumber(situation.pourcentage_avancement || 0)}%
+                        {entry.entryType === "situation"
+                          ? `${formatNumber(entry.pourcentage_avancement || 0)}%`
+                          : "-"}
                       </TableCell>
                       <TableCell
                         align="right"
@@ -451,50 +495,68 @@ const SituationsSummary = () => {
                           color: "#4f46e5", // indigo-600 - texte montant
                         }}
                       >
-                        {formatNumber(
-                          situation.montant_apres_retenues ||
-                            situation.montant_total ||
-                            0
-                        )}{" "}
-                        €
+                        {formatNumber(entry.entryAmount)} €
                       </TableCell>
                       <TableCell align="center">
-                        <Typography
-                          variant="body2"
-                          onClick={() => handleStatusClick(situation)}
-                          sx={{
-                            display: "inline-block",
-                            px: 1.5,
-                            py: 0.5,
-                            borderRadius: 1,
-                            backgroundColor:
-                              situation.statut === "facturee"
-                                ? "success.light"
-                                : situation.statut === "validee"
-                                ? "info.light"
-                                : "warning.light",
-                            color:
-                              situation.statut === "facturee"
-                                ? "success.dark"
-                                : situation.statut === "validee"
-                                ? "info.dark"
-                                : "warning.dark",
-                            fontWeight: 500,
-                            textTransform: "capitalize",
-                            cursor: "pointer",
-                            "&:hover": {
-                              opacity: 0.8,
-                              transform: "scale(1.05)",
-                            },
-                            transition: "all 0.2s ease",
-                          }}
-                        >
-                          {situation.statut === "facturee"
-                            ? "Facturée"
-                            : situation.statut === "validee"
-                            ? "Validée"
-                            : "Brouillon"}
-                        </Typography>
+                        {entry.entryType === "situation" ? (
+                          <Typography
+                            variant="body2"
+                            onClick={() => handleStatusClick(entry)}
+                            sx={{
+                              display: "inline-block",
+                              px: 1.5,
+                              py: 0.5,
+                              borderRadius: 1,
+                              backgroundColor:
+                                entry.statut === "facturee"
+                                  ? "success.light"
+                                  : entry.statut === "validee"
+                                  ? "info.light"
+                                  : "warning.light",
+                              color:
+                                entry.statut === "facturee"
+                                  ? "success.dark"
+                                  : entry.statut === "validee"
+                                  ? "info.dark"
+                                  : "warning.dark",
+                              fontWeight: 500,
+                              textTransform: "capitalize",
+                              cursor: "pointer",
+                              "&:hover": {
+                                opacity: 0.8,
+                                transform: "scale(1.05)",
+                              },
+                              transition: "all 0.2s ease",
+                            }}
+                          >
+                            {entry.statut === "facturee"
+                              ? "Facturée"
+                              : entry.statut === "validee"
+                              ? "Validée"
+                              : "Brouillon"}
+                          </Typography>
+                        ) : (
+                          <Typography
+                            variant="body2"
+                            sx={{
+                              display: "inline-block",
+                              px: 1.5,
+                              py: 0.5,
+                              borderRadius: 1,
+                              backgroundColor:
+                                entry.state_facture === "Payée"
+                                  ? "success.light"
+                                  : "warning.light",
+                              color:
+                                entry.state_facture === "Payée"
+                                  ? "success.dark"
+                                  : "warning.dark",
+                              fontWeight: 500,
+                            }}
+                          >
+                            {entry.state_facture || "-"}
+                          </Typography>
+                        )}
                       </TableCell>
                     </TableRow>
                   ))
