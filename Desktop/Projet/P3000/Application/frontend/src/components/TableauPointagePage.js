@@ -31,6 +31,11 @@ const formatCurrency = (value) =>
     maximumFractionDigits: 2,
   })} €`;
 
+const formatCurrencyInTable = (value) => {
+  const number = toNumber(value);
+  return number === 0 ? "-" : formatCurrency(number);
+};
+
 const formatHours = (value) =>
   toNumber(value).toLocaleString("fr-FR", {
     minimumFractionDigits: 2,
@@ -95,6 +100,26 @@ const clickableValueSx = {
     backgroundColor: "rgba(27, 120, 188, 0.08)",
     borderColor: "rgba(27, 120, 188, 0.3)",
   },
+};
+
+const amountTextSx = {
+  textAlign: "right",
+  fontWeight: 500,
+  fontSize: "0.8rem",
+  lineHeight: 1.2,
+};
+
+const getPaiementCellSx = (paiementValue) => {
+  const hasValue = toNumber(paiementValue) > 0;
+  return {
+    ...clickableValueSx,
+    backgroundColor: hasValue ? "rgba(46, 125, 50, 0.12)" : "rgba(211, 47, 47, 0.12)",
+    borderColor: hasValue ? "rgba(46, 125, 50, 0.35)" : "rgba(211, 47, 47, 0.35)",
+    "&:hover": {
+      backgroundColor: hasValue ? "rgba(46, 125, 50, 0.2)" : "rgba(211, 47, 47, 0.2)",
+      borderColor: hasValue ? "rgba(46, 125, 50, 0.5)" : "rgba(211, 47, 47, 0.5)",
+    },
+  };
 };
 
 const getMonthKey = (date = new Date()) => {
@@ -540,10 +565,10 @@ const TableauPointagePage = () => {
                   <TableCell sx={compactNumberColumnSx}>
                     Salaire net initiale hors prime
                   </TableCell>
+                  <TableCell sx={compactNumberColumnSx}>Paiement</TableCell>
                   <TableCell sx={compactNumberColumnSx}>Accompte</TableCell>
                   <TableCell sx={compactNumberColumnSx}>Montant charge</TableCell>
                   <TableCell sx={compactNumberColumnSx}>Montant brut</TableCell>
-                  <TableCell sx={compactNumberColumnSx}>Paiement</TableCell>
                   <TableCell sx={compactNumberColumnSx}>Prime</TableCell>
                   <TableCell sx={headerCellSx}>Adresse mail</TableCell>
                   <TableCell sx={headerCellSx}>Commentaire</TableCell>
@@ -567,41 +592,41 @@ const TableauPointagePage = () => {
                     <TableCell sx={commonBodyCellStyle}>{row.nom}</TableCell>
                     <TableCell sx={commonBodyCellStyle}>
                       <Box sx={clickableValueSx} onClick={() => openEditor(row, "salaireInitial")}>
-                        <Typography sx={{ textAlign: "right", fontWeight: 500 }}>
-                          {formatCurrency(row.salaireInitial)}
+                        <Typography sx={amountTextSx}>
+                          {formatCurrencyInTable(row.salaireInitial)}
+                        </Typography>
+                      </Box>
+                    </TableCell>
+                    <TableCell sx={commonBodyCellStyle}>
+                      <Box sx={getPaiementCellSx(row.paiement)} onClick={() => openEditor(row, "paiement")}>
+                        <Typography sx={amountTextSx}>
+                          {formatCurrencyInTable(row.paiement)}
                         </Typography>
                       </Box>
                     </TableCell>
                     <TableCell sx={commonBodyCellStyle}>
                       <Box sx={clickableValueSx} onClick={() => openEditor(row, "accompte")}>
-                        <Typography sx={{ textAlign: "right", fontWeight: 500 }}>
-                          {formatCurrency(row.accompte)}
+                        <Typography sx={amountTextSx}>
+                          {formatCurrencyInTable(row.accompte)}
                         </Typography>
                       </Box>
                     </TableCell>
                     <TableCell sx={commonBodyCellStyle}>
                       <Box sx={clickableValueSx} onClick={() => openEditor(row, "montantCharge")}>
-                        <Typography sx={{ textAlign: "right", fontWeight: 500 }}>
-                          {formatCurrency(row.montantCharge)}
+                        <Typography sx={amountTextSx}>
+                          {formatCurrencyInTable(row.montantCharge)}
                         </Typography>
                       </Box>
                     </TableCell>
                     <TableCell sx={commonBodyCellStyle}>
                       <Box sx={clickableValueSx} onClick={() => openEditor(row, "montantBrut")}>
-                        <Typography sx={{ textAlign: "right", fontWeight: 500 }}>
-                          {formatCurrency(row.montantBrut)}
+                        <Typography sx={amountTextSx}>
+                          {formatCurrencyInTable(row.montantBrut)}
                         </Typography>
                       </Box>
                     </TableCell>
                     <TableCell sx={commonBodyCellStyle}>
-                      <Box sx={clickableValueSx} onClick={() => openEditor(row, "paiement")}>
-                        <Typography sx={{ textAlign: "right", fontWeight: 500 }}>
-                          {formatCurrency(row.paiement)}
-                        </Typography>
-                      </Box>
-                    </TableCell>
-                    <TableCell sx={commonBodyCellStyle}>
-                      {formatCurrency(row.prime)}
+                      {formatCurrencyInTable(row.prime)}
                     </TableCell>
                     <TableCell sx={commonBodyCellStyle}>
                       <Box sx={clickableValueSx} onClick={() => openEditor(row, "email")}>
