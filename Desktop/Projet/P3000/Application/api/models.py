@@ -607,6 +607,8 @@ class PointageMensuel(models.Model):
     agent = models.ForeignKey(Agent, on_delete=models.CASCADE, related_name='pointages_mensuels')
     month = models.DateField(help_text="Premier jour du mois (YYYY-MM-01)")
     salaire_net_initial_hors_prime = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    montant_charge = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    montant_brut = models.DecimalField(max_digits=10, decimal_places=2, default=0)
     accompte = models.DecimalField(max_digits=10, decimal_places=2, default=0)
     paiement = models.DecimalField(max_digits=10, decimal_places=2, default=0)
     commentaire = models.TextField(blank=True, default="")

@@ -177,6 +177,8 @@ const TableauPointagePage = () => {
           initialDraft[String(p.agent)] = {
             id: p.id,
             salaireInitial: p.salaire_net_initial_hors_prime ?? 0,
+            montantCharge: p.montant_charge ?? 0,
+            montantBrut: p.montant_brut ?? 0,
             accompte: p.accompte ?? 0,
             paiement: p.paiement ?? 0,
             commentaire: p.commentaire || "",
@@ -226,6 +228,8 @@ const TableauPointagePage = () => {
           email: agent.email || "",
           totalHeures,
           salaireInitial: toNumber(draft.salaireInitial),
+          montantCharge: toNumber(draft.montantCharge),
+          montantBrut: toNumber(draft.montantBrut),
           accompte: toNumber(draft.accompte),
           paiement: toNumber(draft.paiement),
           commentaire: draft.commentaire || "",
@@ -292,6 +296,8 @@ const TableauPointagePage = () => {
             ...(prev[String(agentId)] || {}),
             id: data.id,
             salaireInitial: data.salaire_net_initial_hors_prime,
+            montantCharge: data.montant_charge,
+            montantBrut: data.montant_brut,
             accompte: data.accompte,
             paiement: data.paiement,
             commentaire: data.commentaire || "",
@@ -303,6 +309,8 @@ const TableauPointagePage = () => {
           agent: agentId,
           month: monthDate,
           salaire_net_initial_hors_prime: toNumber(agentDraft.salaireInitial),
+          montant_charge: toNumber(agentDraft.montantCharge),
+          montant_brut: toNumber(agentDraft.montantBrut),
           accompte: toNumber(agentDraft.accompte),
           paiement: toNumber(agentDraft.paiement),
           commentaire: String(agentDraft.commentaire || ""),
@@ -316,6 +324,8 @@ const TableauPointagePage = () => {
             ...(prev[String(agentId)] || {}),
             id: data.id,
             salaireInitial: data.salaire_net_initial_hors_prime,
+            montantCharge: data.montant_charge,
+            montantBrut: data.montant_brut,
             accompte: data.accompte,
             paiement: data.paiement,
             commentaire: data.commentaire || "",
@@ -364,6 +374,20 @@ const TableauPointagePage = () => {
         field: "accompte",
         label: "Accompte",
         value: row.accompte,
+        inputType: "text",
+        isCurrency: true,
+      },
+      montantCharge: {
+        field: "montant_charge",
+        label: "Montant charge",
+        value: row.montantCharge,
+        inputType: "text",
+        isCurrency: true,
+      },
+      montantBrut: {
+        field: "montant_brut",
+        label: "Montant brut",
+        value: row.montantBrut,
         inputType: "text",
         isCurrency: true,
       },
@@ -416,10 +440,22 @@ const TableauPointagePage = () => {
       handleCellChange(String(agentId), "salaireInitial", normalizedValue);
       handleCellChange(String(agentId), "salaireOverridden", true);
       await savePointageField(agentId, field, normalizedValue, true);
-    } else if (field === "accompte" || field === "paiement" || field === "commentaire") {
+    } else if (
+      field === "accompte" ||
+      field === "paiement" ||
+      field === "commentaire" ||
+      field === "montant_charge" ||
+      field === "montant_brut"
+    ) {
       handleCellChange(
         String(agentId),
-        field === "commentaire" ? "commentaire" : field,
+        field === "commentaire"
+          ? "commentaire"
+          : field === "montant_charge"
+          ? "montantCharge"
+          : field === "montant_brut"
+          ? "montantBrut"
+          : field,
         normalizedValue
       );
       await savePointageField(agentId, field, normalizedValue);
@@ -499,13 +535,15 @@ const TableauPointagePage = () => {
                 }}
               >
                 <TableRow>
+                  <TableCell sx={headerCellSx}>Prenom</TableCell>
+                  <TableCell sx={headerCellSx}>Nom</TableCell>
                   <TableCell sx={compactNumberColumnSx}>
                     Salaire net initiale hors prime
                   </TableCell>
                   <TableCell sx={compactNumberColumnSx}>Accompte</TableCell>
+                  <TableCell sx={compactNumberColumnSx}>Montant charge</TableCell>
+                  <TableCell sx={compactNumberColumnSx}>Montant brut</TableCell>
                   <TableCell sx={compactNumberColumnSx}>Paiement</TableCell>
-                  <TableCell sx={headerCellSx}>Prenom</TableCell>
-                  <TableCell sx={headerCellSx}>Nom</TableCell>
                   <TableCell sx={compactNumberColumnSx}>Prime</TableCell>
                   <TableCell sx={headerCellSx}>Adresse mail</TableCell>
                   <TableCell sx={headerCellSx}>Commentaire</TableCell>
@@ -525,6 +563,8 @@ const TableauPointagePage = () => {
                       "&:hover": { backgroundColor: "#f5f5f5" },
                     }}
                   >
+                    <TableCell sx={commonBodyCellStyle}>{row.prenom}</TableCell>
+                    <TableCell sx={commonBodyCellStyle}>{row.nom}</TableCell>
                     <TableCell sx={commonBodyCellStyle}>
                       <Box sx={clickableValueSx} onClick={() => openEditor(row, "salaireInitial")}>
                         <Typography sx={{ textAlign: "right", fontWeight: 500 }}>
@@ -540,14 +580,26 @@ const TableauPointagePage = () => {
                       </Box>
                     </TableCell>
                     <TableCell sx={commonBodyCellStyle}>
+                      <Box sx={clickableValueSx} onClick={() => openEditor(row, "montantCharge")}>
+                        <Typography sx={{ textAlign: "right", fontWeight: 500 }}>
+                          {formatCurrency(row.montantCharge)}
+                        </Typography>
+                      </Box>
+                    </TableCell>
+                    <TableCell sx={commonBodyCellStyle}>
+                      <Box sx={clickableValueSx} onClick={() => openEditor(row, "montantBrut")}>
+                        <Typography sx={{ textAlign: "right", fontWeight: 500 }}>
+                          {formatCurrency(row.montantBrut)}
+                        </Typography>
+                      </Box>
+                    </TableCell>
+                    <TableCell sx={commonBodyCellStyle}>
                       <Box sx={clickableValueSx} onClick={() => openEditor(row, "paiement")}>
                         <Typography sx={{ textAlign: "right", fontWeight: 500 }}>
                           {formatCurrency(row.paiement)}
                         </Typography>
                       </Box>
                     </TableCell>
-                    <TableCell sx={commonBodyCellStyle}>{row.prenom}</TableCell>
-                    <TableCell sx={commonBodyCellStyle}>{row.nom}</TableCell>
                     <TableCell sx={commonBodyCellStyle}>
                       {formatCurrency(row.prime)}
                     </TableCell>

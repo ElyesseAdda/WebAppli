@@ -714,6 +714,8 @@ class PointageMensuelSerializer(serializers.ModelSerializer):
             'agent',
             'month',
             'salaire_net_initial_hors_prime',
+            'montant_charge',
+            'montant_brut',
             'accompte',
             'paiement',
             'commentaire',
