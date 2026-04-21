@@ -179,6 +179,16 @@ const getMonthKey = (date = new Date()) => {
   return `${year}-${month}`;
 };
 
+/** Mois civil précédent pour une clé `YYYY-MM` (ex. 2024-03 → 2024-02). */
+const getPreviousMonthKey = (monthKey) => {
+  const [ys, ms] = String(monthKey).split("-");
+  const y = Number.parseInt(ys, 10);
+  const m = Number.parseInt(ms, 10);
+  if (!Number.isFinite(y) || !Number.isFinite(m) || m < 1 || m > 12) return monthKey;
+  const d = new Date(y, m - 2, 1);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+};
+
 const TableauPointagePage = () => {
   const [agents, setAgents] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -209,17 +219,24 @@ const TableauPointagePage = () => {
       setLoading(true);
       setError("");
       try {
-        const [agentsRes, pointagesRes, scheduleSummaryRes, agentPrimesRes] = await Promise.all([
-          axios.get("/api/agent/"),
-          axios.get(`/api/pointages-mensuels/?month=${monthKey}`),
-          axios.get(`/api/schedule/monthly_summary/?month=${monthKey}`).catch(() => ({ data: [] })),
-          axios.get("/api/agent-primes/", {
-            params: {
-              mois: Number(monthKey.split("-")[1]),
-              annee: Number(monthKey.split("-")[0]),
-            },
-          }).catch(() => ({ data: [] })),
-        ]);
+        const prevMonthKey = getPreviousMonthKey(monthKey);
+        const [agentsRes, pointagesRes, pointagesPrevRes, scheduleSummaryRes, agentPrimesRes] =
+          await Promise.all([
+            axios.get("/api/agent/"),
+            axios.get(`/api/pointages-mensuels/?month=${monthKey}`),
+            axios
+              .get(`/api/pointages-mensuels/?month=${prevMonthKey}`)
+              .catch(() => ({ data: [] })),
+            axios.get(`/api/schedule/monthly_summary/?month=${monthKey}`).catch(() => ({ data: [] })),
+            axios
+              .get("/api/agent-primes/", {
+                params: {
+                  mois: Number(monthKey.split("-")[1]),
+                  annee: Number(monthKey.split("-")[0]),
+                },
+              })
+              .catch(() => ({ data: [] })),
+          ]);
         if (isCancelled) return;
         setAgents(Array.isArray(agentsRes.data) ? agentsRes.data : []);
         const loadedPointages = Array.isArray(pointagesRes.data) ? pointagesRes.data : [];
@@ -275,6 +292,42 @@ const TableauPointagePage = () => {
             salaireOverridden: Boolean(p.salaire_overridden),
           };
         });
+
+        const prevPointages = Array.isArray(pointagesPrevRes.data) ? pointagesPrevRes.data : [];
+        const prevSalaireByAgent = {};
+        prevPointages.forEach((p) => {
+          prevSalaireByAgent[String(p.agent)] = toNumber(p.salaire_net_initial_hors_prime);
+        });
+
+        const agentsList = Array.isArray(agentsRes.data) ? agentsRes.data : [];
+        agentsList.forEach((agent) => {
+          if (agent?.is_active === false) return;
+          const id = String(agent.id);
+          const prevSal = prevSalaireByAgent[id];
+          if (toNumber(prevSal) <= 0) return;
+
+          const existing = initialDraft[id];
+          if (!existing) {
+            initialDraft[id] = {
+              salaireInitial: prevSal,
+              montantCharge: 0,
+              montantBrut: 0,
+              accompte: 0,
+              paiement: 0,
+              datePaiement: "",
+              commentaire: "",
+              salaireOverridden: false,
+            };
+            return;
+          }
+          if (toNumber(existing.salaireInitial) === 0 && !existing.salaireOverridden) {
+            initialDraft[id] = {
+              ...existing,
+              salaireInitial: prevSal,
+            };
+          }
+        });
+
         setDraftByAgent(initialDraft);
       } catch {
         if (!isCancelled) {
