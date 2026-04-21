@@ -52,6 +52,7 @@ import ModificationDevis from "./ModificationDevis";
 import ModificationDevisV2 from "./ModifDevis/ModificationDevisV2";
 import PaiementsSousTraitantPage from "./PaiementsSousTraitantPage";
 import PlanningContainer from "./PlanningContainer";
+import PresenceForm from "./PresenceForm";
 import StockForm from "./StockForm";
 import TableauSuivi from "./TableauSuivi";
 import Test from "./Test";
@@ -352,6 +353,17 @@ function App() {
               <ProtectedRoute isAuthenticated={isAuthenticated}>
                 <Layout user={user} onLogout={handleLogout}>
                   <PlanningContainer />
+                </Layout>
+              </ProtectedRoute>
+            }
+          />
+
+          <Route
+            path="/TableauPointage"
+            element={
+              <ProtectedRoute isAuthenticated={isAuthenticated}>
+                <Layout user={user} onLogout={handleLogout}>
+                  <PresenceForm />
                 </Layout>
               </ProtectedRoute>
             }

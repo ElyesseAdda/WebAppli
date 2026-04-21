@@ -90,6 +90,7 @@ const SlideBar = ({ toggleSidebar, isSidebarVisible, user }) => {
         children: [
           { label: "Gestion agent", to: "/CalendrierAgentContainer" },
           { label: "Planning hebdo", to: "/PlanningContainer" },
+          { label: "Tableau de pointage", to: "/TableauPointage" },
         ],
       },
       {
