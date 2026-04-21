@@ -102,6 +102,12 @@ const clickableValueSx = {
   },
 };
 
+const readOnlyValueSx = {
+  px: 1,
+  py: 0.75,
+  borderRadius: 1,
+};
+
 const amountTextSx = {
   textAlign: "right",
   fontWeight: 500,
@@ -135,6 +141,7 @@ const TableauPointagePage = () => {
   const [monthKey, setMonthKey] = useState(getMonthKey());
   const [draftByAgent, setDraftByAgent] = useState({});
   const [hoursByAgent, setHoursByAgent] = useState({});
+  const [brutByAgent, setBrutByAgent] = useState({});
   const [primeByAgent, setPrimeByAgent] = useState({});
   const [savingEmailAgentId, setSavingEmailAgentId] = useState(null);
   const [savingPointageKey, setSavingPointageKey] = useState("");
@@ -173,6 +180,7 @@ const TableauPointagePage = () => {
         const scheduleSummary = Array.isArray(scheduleSummaryRes.data) ? scheduleSummaryRes.data : [];
 
         const aggregatedHours = {};
+        const aggregatedBrut = {};
         scheduleSummary.forEach((chantier) => {
           const details = Array.isArray(chantier?.details) ? chantier.details : [];
           details.forEach((detail) => {
@@ -185,9 +193,19 @@ const TableauPointagePage = () => {
               toNumber(detail?.heures_ferie) +
               toNumber(detail?.heures_overtime);
             aggregatedHours[agentId] = toNumber(aggregatedHours[agentId]) + totalHoursForDetail;
+
+            const totalMontantForDetail =
+              toNumber(detail?.montant_normal) +
+              toNumber(detail?.montant_samedi) +
+              toNumber(detail?.montant_dimanche) +
+              toNumber(detail?.montant_ferie) +
+              toNumber(detail?.montant_overtime);
+            aggregatedBrut[agentId] =
+              toNumber(aggregatedBrut[agentId]) + totalMontantForDetail;
           });
         });
         setHoursByAgent(aggregatedHours);
+        setBrutByAgent(aggregatedBrut);
         const primes = Array.isArray(agentPrimesRes.data) ? agentPrimesRes.data : [];
         const aggregatedPrimes = {};
         primes.forEach((prime) => {
@@ -245,6 +263,9 @@ const TableauPointagePage = () => {
         const draft = draftByAgent[agentId] || {};
         const prime = toNumber(primeByAgent[agentId]);
         const totalHeures = getMonthlyHours(agent);
+        const brutCalcule = toNumber(brutByAgent[agentId]);
+        const brutPointage = toNumber(draft.montantBrut);
+        const montantBrutAffiche = brutCalcule > 0 ? brutCalcule : brutPointage;
 
         return {
           id: agent.id,
@@ -254,7 +275,7 @@ const TableauPointagePage = () => {
           totalHeures,
           salaireInitial: toNumber(draft.salaireInitial),
           montantCharge: toNumber(draft.montantCharge),
-          montantBrut: toNumber(draft.montantBrut),
+          montantBrut: montantBrutAffiche,
           accompte: toNumber(draft.accompte),
           paiement: toNumber(draft.paiement),
           commentaire: draft.commentaire || "",
@@ -263,7 +284,7 @@ const TableauPointagePage = () => {
           prime,
         };
       });
-  }, [agents, draftByAgent, hoursByAgent, monthKey, primeByAgent]);
+  }, [agents, brutByAgent, draftByAgent, hoursByAgent, monthKey, primeByAgent]);
 
   const totals = useMemo(() => {
     const totalNetVerseSalaries = rows.reduce(
@@ -406,13 +427,6 @@ const TableauPointagePage = () => {
         field: "montant_charge",
         label: "Montant charge",
         value: row.montantCharge,
-        inputType: "text",
-        isCurrency: true,
-      },
-      montantBrut: {
-        field: "montant_brut",
-        label: "Montant brut",
-        value: row.montantBrut,
         inputType: "text",
         isCurrency: true,
       },
@@ -566,8 +580,8 @@ const TableauPointagePage = () => {
                     Salaire net initiale hors prime
                   </TableCell>
                   <TableCell sx={compactNumberColumnSx}>Paiement</TableCell>
-                  <TableCell sx={compactNumberColumnSx}>Accompte</TableCell>
                   <TableCell sx={compactNumberColumnSx}>Montant charge</TableCell>
+                  <TableCell sx={compactNumberColumnSx}>Accompte</TableCell>
                   <TableCell sx={compactNumberColumnSx}>Montant brut</TableCell>
                   <TableCell sx={compactNumberColumnSx}>Prime</TableCell>
                   <TableCell sx={headerCellSx}>Adresse mail</TableCell>
@@ -605,13 +619,6 @@ const TableauPointagePage = () => {
                       </Box>
                     </TableCell>
                     <TableCell sx={commonBodyCellStyle}>
-                      <Box sx={clickableValueSx} onClick={() => openEditor(row, "accompte")}>
-                        <Typography sx={amountTextSx}>
-                          {formatCurrencyInTable(row.accompte)}
-                        </Typography>
-                      </Box>
-                    </TableCell>
-                    <TableCell sx={commonBodyCellStyle}>
                       <Box sx={clickableValueSx} onClick={() => openEditor(row, "montantCharge")}>
                         <Typography sx={amountTextSx}>
                           {formatCurrencyInTable(row.montantCharge)}
@@ -619,7 +626,14 @@ const TableauPointagePage = () => {
                       </Box>
                     </TableCell>
                     <TableCell sx={commonBodyCellStyle}>
-                      <Box sx={clickableValueSx} onClick={() => openEditor(row, "montantBrut")}>
+                      <Box sx={clickableValueSx} onClick={() => openEditor(row, "accompte")}>
+                        <Typography sx={amountTextSx}>
+                          {formatCurrencyInTable(row.accompte)}
+                        </Typography>
+                      </Box>
+                    </TableCell>
+                    <TableCell sx={commonBodyCellStyle}>
+                      <Box sx={readOnlyValueSx}>
                         <Typography sx={amountTextSx}>
                           {formatCurrencyInTable(row.montantBrut)}
                         </Typography>
