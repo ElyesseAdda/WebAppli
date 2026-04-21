@@ -611,6 +611,7 @@ class PointageMensuel(models.Model):
     montant_brut = models.DecimalField(max_digits=10, decimal_places=2, default=0)
     accompte = models.DecimalField(max_digits=10, decimal_places=2, default=0)
     paiement = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    date_paiement = models.DateField(null=True, blank=True)
     commentaire = models.TextField(blank=True, default="")
     # Permet de distinguer un salaire explicitement saisi d'une valeur héritée automatiquement.
     salaire_overridden = models.BooleanField(default=False)

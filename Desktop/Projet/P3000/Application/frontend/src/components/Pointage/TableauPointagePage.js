@@ -126,15 +126,17 @@ const amountTextSx = {
   lineHeight: 1.2,
 };
 
-const getPaiementCellSx = (paiementValue) => {
-  const hasValue = toNumber(paiementValue) > 0;
+const getPaiementCellSx = (paiementValue, datePaiementValue) => {
+  const paid = toNumber(paiementValue) > 0;
+  const dated = Boolean(String(datePaiementValue || "").trim());
+  const ok = paid && dated;
   return {
     ...clickableValueSx,
-    backgroundColor: hasValue ? "rgba(46, 125, 50, 0.12)" : "rgba(211, 47, 47, 0.12)",
-    borderColor: hasValue ? "rgba(46, 125, 50, 0.35)" : "rgba(211, 47, 47, 0.35)",
+    backgroundColor: ok ? "rgba(46, 125, 50, 0.12)" : "rgba(211, 47, 47, 0.12)",
+    borderColor: ok ? "rgba(46, 125, 50, 0.35)" : "rgba(211, 47, 47, 0.35)",
     "&:hover": {
-      backgroundColor: hasValue ? "rgba(46, 125, 50, 0.2)" : "rgba(211, 47, 47, 0.2)",
-      borderColor: hasValue ? "rgba(46, 125, 50, 0.5)" : "rgba(211, 47, 47, 0.5)",
+      backgroundColor: ok ? "rgba(46, 125, 50, 0.2)" : "rgba(211, 47, 47, 0.2)",
+      borderColor: ok ? "rgba(46, 125, 50, 0.5)" : "rgba(211, 47, 47, 0.5)",
     },
   };
 };
@@ -150,6 +152,25 @@ const getMontantChargeCellSx = (montantChargeValue) => {
       borderColor: hasValue ? "rgba(46, 125, 50, 0.5)" : "rgba(211, 47, 47, 0.5)",
     },
   };
+};
+
+const getTodayYMD = () => {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+};
+
+const normalizeDatePaiement = (v) => {
+  if (v === null || v === undefined || v === "") return "";
+  const s = String(v);
+  return s.length >= 10 ? s.slice(0, 10) : s;
+};
+
+const formatDateDisplay = (v) => {
+  const n = normalizeDatePaiement(v);
+  if (!n) return "-";
+  const [y, m, d] = n.split("-");
+  if (!y || !m || !d) return "-";
+  return `${d}/${m}/${y}`;
 };
 
 const getMonthKey = (date = new Date()) => {
@@ -249,6 +270,7 @@ const TableauPointagePage = () => {
             montantBrut: p.montant_brut ?? 0,
             accompte: p.accompte ?? 0,
             paiement: p.paiement ?? 0,
+            datePaiement: normalizeDatePaiement(p.date_paiement),
             commentaire: p.commentaire || "",
             salaireOverridden: Boolean(p.salaire_overridden),
           };
@@ -304,6 +326,7 @@ const TableauPointagePage = () => {
           montantBrut: montantBrutAffiche,
           accompte: toNumber(draft.accompte),
           paiement: toNumber(draft.paiement),
+          datePaiement: normalizeDatePaiement(draft.datePaiement),
           commentaire: draft.commentaire || "",
           pointageId: draft.id || null,
           salaireOverridden: Boolean(draft.salaireOverridden),
@@ -332,13 +355,19 @@ const TableauPointagePage = () => {
       0
     );
     const cumulMensuelCharges = totalNetVerseEmployeur - totalNetVerseSalaries;
-    const totalVerse = totalNetVerseSalaries + recapRows.reduce((acc, row) => acc + row.prime, 0);
+
+    const paiementValideVert = recapRows.reduce((acc, row) => {
+      const ok =
+        toNumber(row.paiement) > 0 && Boolean(String(row.datePaiement || "").trim());
+      return acc + (ok ? toNumber(row.paiement) : 0);
+    }, 0);
+    const resteAPayer = totalNetVerseSalaries - paiementValideVert;
 
     return {
       totalNetVerseSalaries,
       totalNetVerseEmployeur,
       cumulMensuelCharges,
-      totalVerse,
+      resteAPayer,
     };
   }, [recapRows]);
 
@@ -374,6 +403,18 @@ const TableauPointagePage = () => {
     setSelectedRecapGroup((prev) => (prev === groupKey ? null : groupKey));
   };
 
+  const pointageDraftFromApi = (data) => ({
+    id: data.id,
+    salaireInitial: data.salaire_net_initial_hors_prime,
+    montantCharge: data.montant_charge,
+    montantBrut: data.montant_brut,
+    accompte: data.accompte,
+    paiement: data.paiement,
+    datePaiement: normalizeDatePaiement(data.date_paiement),
+    commentaire: data.commentaire || "",
+    salaireOverridden: Boolean(data.salaire_overridden),
+  });
+
   const savePointageField = async (agentId, field, value, isSalaryField = false) => {
     const key = `${agentId}-${field}`;
     try {
@@ -382,6 +423,12 @@ const TableauPointagePage = () => {
       const payload = {};
       if (field === "commentaire") {
         payload.commentaire = String(value || "");
+      } else if (field === "date_paiement") {
+        if (value === null || value === undefined || String(value).trim() === "") {
+          payload.date_paiement = null;
+        } else {
+          payload.date_paiement = String(value).slice(0, 10);
+        }
       } else {
         payload[field] = toNumber(value);
       }
@@ -395,14 +442,7 @@ const TableauPointagePage = () => {
           ...prev,
           [String(agentId)]: {
             ...(prev[String(agentId)] || {}),
-            id: data.id,
-            salaireInitial: data.salaire_net_initial_hors_prime,
-            montantCharge: data.montant_charge,
-            montantBrut: data.montant_brut,
-            accompte: data.accompte,
-            paiement: data.paiement,
-            commentaire: data.commentaire || "",
-            salaireOverridden: Boolean(data.salaire_overridden),
+            ...pointageDraftFromApi(data),
           },
         }));
       } else {
@@ -414,6 +454,7 @@ const TableauPointagePage = () => {
           montant_brut: toNumber(agentDraft.montantBrut),
           accompte: toNumber(agentDraft.accompte),
           paiement: toNumber(agentDraft.paiement),
+          date_paiement: normalizeDatePaiement(agentDraft.datePaiement) || null,
           commentaire: String(agentDraft.commentaire || ""),
           salaire_overridden: Boolean(agentDraft.salaireOverridden),
           ...payload,
@@ -423,14 +464,7 @@ const TableauPointagePage = () => {
           ...prev,
           [String(agentId)]: {
             ...(prev[String(agentId)] || {}),
-            id: data.id,
-            salaireInitial: data.salaire_net_initial_hors_prime,
-            montantCharge: data.montant_charge,
-            montantBrut: data.montant_brut,
-            accompte: data.accompte,
-            paiement: data.paiement,
-            commentaire: data.commentaire || "",
-            salaireOverridden: Boolean(data.salaire_overridden),
+            ...pointageDraftFromApi(data),
           },
         }));
       }
@@ -492,6 +526,13 @@ const TableauPointagePage = () => {
         inputType: "text",
         isCurrency: true,
       },
+      datePaiement: {
+        field: "date_paiement",
+        label: "Date de paiement",
+        value: row.datePaiement || getTodayYMD(),
+        inputType: "date",
+        isCurrency: false,
+      },
       email: {
         field: "email",
         label: "Adresse mail",
@@ -540,6 +581,11 @@ const TableauPointagePage = () => {
       handleCellChange(String(agentId), "salaireInitial", normalizedValue);
       handleCellChange(String(agentId), "salaireOverridden", true);
       await savePointageField(agentId, field, normalizedValue, true);
+    } else if (field === "date_paiement") {
+      const trimmed = String(value || "").trim();
+      const apiDate = trimmed ? trimmed.slice(0, 10) : null;
+      handleCellChange(String(agentId), "datePaiement", apiDate || "");
+      await savePointageField(agentId, "date_paiement", apiDate);
     } else if (
       field === "accompte" ||
       field === "paiement" ||
@@ -560,6 +606,14 @@ const TableauPointagePage = () => {
       );
       await savePointageField(agentId, field, normalizedValue);
     }
+    closeEditor();
+  };
+
+  const clearPaymentDate = async () => {
+    const agentId = editorState.agentId;
+    if (!agentId || editorState.field !== "date_paiement") return;
+    handleCellChange(String(agentId), "datePaiement", "");
+    await savePointageField(agentId, "date_paiement", null);
     closeEditor();
   };
 
@@ -648,6 +702,7 @@ const TableauPointagePage = () => {
                     Salaire net initiale hors prime
                   </TableCell>
                   <TableCell sx={compactNumberColumnSx}>Paiement</TableCell>
+                  <TableCell sx={compactNumberColumnSx}>Date de paiement</TableCell>
                   <TableCell sx={compactNumberColumnSx}>Montant brut</TableCell>
                   <TableCell sx={compactNumberColumnSx}>Montant charge</TableCell>
                   <TableCell sx={compactNumberColumnSx}>Accompte</TableCell>
@@ -664,7 +719,7 @@ const TableauPointagePage = () => {
                   <React.Fragment key={group.key}>
                     <TableRow>
                       <TableCell
-                        colSpan={11}
+                        colSpan={12}
                         sx={{
                           backgroundColor: "rgba(27, 120, 188, 0.12)",
                           color: "rgba(27, 120, 188, 1)",
@@ -702,9 +757,19 @@ const TableauPointagePage = () => {
                           </Box>
                         </TableCell>
                         <TableCell sx={commonBodyCellStyle}>
-                          <Box sx={getPaiementCellSx(row.paiement)} onClick={() => openEditor(row, "paiement")}>
+                          <Box
+                            sx={getPaiementCellSx(row.paiement, row.datePaiement)}
+                            onClick={() => openEditor(row, "paiement")}
+                          >
                             <Typography sx={amountTextSx}>
                               {formatCurrencyInTable(row.paiement)}
+                            </Typography>
+                          </Box>
+                        </TableCell>
+                        <TableCell sx={commonBodyCellStyle}>
+                          <Box sx={clickableValueSx} onClick={() => openEditor(row, "datePaiement")}>
+                            <Typography sx={{ textAlign: "center", fontSize: "0.8rem" }}>
+                              {formatDateDisplay(row.datePaiement)}
                             </Typography>
                           </Box>
                         </TableCell>
@@ -765,6 +830,7 @@ const TableauPointagePage = () => {
         saveEditor={saveEditor}
         savingPointageKey={savingPointageKey}
         savingEmailAgentId={savingEmailAgentId}
+        onClearPaymentDate={clearPaymentDate}
       />
     </Box>
   );

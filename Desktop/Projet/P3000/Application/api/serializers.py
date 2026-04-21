@@ -719,6 +719,7 @@ class PointageMensuelSerializer(serializers.ModelSerializer):
             'montant_brut',
             'accompte',
             'paiement',
+            'date_paiement',
             'commentaire',
             'salaire_overridden',
         ]

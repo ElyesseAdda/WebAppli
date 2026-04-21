@@ -145,9 +145,13 @@ const PointageRecapCards = ({
         valueColor="rgba(27, 120, 188, 1)"
       />
       <RecapStatCard
-        label="Total verse"
-        value={formatCurrency(totals.totalVerse)}
-        valueColor="rgba(46, 125, 50, 1)"
+        label="Reste à payer"
+        value={formatCurrency(totals.resteAPayer)}
+        valueColor={
+          totals.resteAPayer > 0.005
+            ? "rgba(211, 47, 47, 1)"
+            : "rgba(46, 125, 50, 1)"
+        }
       />
     </Box>
   </Paper>
