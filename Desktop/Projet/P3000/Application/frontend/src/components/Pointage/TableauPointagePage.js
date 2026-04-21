@@ -675,7 +675,7 @@ const TableauPointagePage = () => {
                           borderLeft:
                             selectedRecapGroup === group.key
                               ? "4px solid rgba(27, 120, 188, 1)"
-                              : "4px solid transparent",
+                              : "none",
                         }}
                         onClick={() => handleGroupRecapToggle(group.key)}
                       >
