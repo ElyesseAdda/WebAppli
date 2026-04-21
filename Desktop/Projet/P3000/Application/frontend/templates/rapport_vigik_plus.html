@@ -261,7 +261,7 @@
                     {% endif %}
                 </span>
             </div>
-            {% if rapport.presence_platine_portail and photo_platine_portail_urls %}
+            {% if rapport.presence_platine_portail is not None and photo_platine_portail_urls %}
             <div class="photos-section">
                 <h4>Photos (facultatif)</h4>
                 <div class="photos-grid">

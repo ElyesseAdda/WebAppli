@@ -171,7 +171,7 @@ const RapportPreview = ({ rapport }) => {
                   variant="outlined"
                   sx={{ mr: 1 }}
                 />
-                {rapport.presence_platine_portail === true &&
+                {(rapport.presence_platine_portail === true || rapport.presence_platine_portail === false) &&
                   (rapport.vigik_platine_portail_photos || []).filter((x) => x?.url).map((row, idx) => (
                     <Box key={row.s3_key || idx} sx={{ mt: 1 }}>
                       <img
