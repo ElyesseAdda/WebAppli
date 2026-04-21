@@ -1564,7 +1564,21 @@ const RapportForm = ({
           previewUrl: nextPreviewUrl,
         });
       }
-      setPendingPhotosPlatine(nextPlatState);
+      setPendingPhotosPlatine((prev) => {
+        // Evite d'écraser un ajout plus récent pendant un autosave en cours.
+        const next = [...nextPlatState];
+        const seen = new Set(
+          next.map((p) => p?._draftS3Key || `name:${p?.name || ""}|preview:${p?.previewUrl || ""}`)
+        );
+        for (const p of prev || []) {
+          const key = p?._draftS3Key || `name:${p?.name || ""}|preview:${p?.previewUrl || ""}`;
+          if (!seen.has(key)) {
+            next.push(p);
+            seen.add(key);
+          }
+        }
+        return next;
+      });
       console.log("[VIGIK+][PLATINE] persist:set-state", {
         nextCount: nextPlatState.length,
         keysCount: photos_platine_s3_keys.length,
@@ -1619,7 +1633,21 @@ const RapportForm = ({
             previewUrl: nextPreviewUrl,
           });
         }
-        setPendingPhotosPlatinePortail(nextPortState);
+        setPendingPhotosPlatinePortail((prev) => {
+          // Evite d'écraser un ajout plus récent pendant un autosave en cours.
+          const next = [...nextPortState];
+          const seen = new Set(
+            next.map((p) => p?._draftS3Key || `name:${p?.name || ""}|preview:${p?.previewUrl || ""}`)
+          );
+          for (const p of prev || []) {
+            const key = p?._draftS3Key || `name:${p?.name || ""}|preview:${p?.previewUrl || ""}`;
+            if (!seen.has(key)) {
+              next.push(p);
+              seen.add(key);
+            }
+          }
+          return next;
+        });
         console.log("[VIGIK+][PORTAIL] persist:set-state", {
           nextCount: nextPortState.length,
           keysCount: photos_platine_portail_s3_keys.length,
