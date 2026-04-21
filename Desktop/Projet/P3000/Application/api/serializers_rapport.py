@@ -478,6 +478,16 @@ class RapportInterventionCreateSerializer(serializers.ModelSerializer):
                 if key not in merged:
                     merged[key] = getattr(instance, key)
 
+        # Vigik+ : pas de platine sur site => devis à faire (même suivi que les rapports d'intervention)
+        if _is_vigik_plus(merged):
+            plat = merged.get('presence_platine')
+            if plat is False:
+                attrs['devis_a_faire'] = True
+                merged['devis_a_faire'] = True
+            elif plat is True:
+                attrs['devis_a_faire'] = False
+                merged['devis_a_faire'] = False
+
         devis_a_faire = merged.get('devis_a_faire', False)
         devis_fait = merged.get('devis_fait', False)
         devis_lie = merged.get('devis_lie')

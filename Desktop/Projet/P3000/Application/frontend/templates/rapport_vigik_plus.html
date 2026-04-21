@@ -114,6 +114,7 @@
 
         .badge-oui { background: #e8f5e9; color: #2e7d32; }
         .badge-non { background: #ffebee; color: #c62828; }
+        .badge-devis { background: #fff3e0; color: #e65100; }
 
         .photos-section {
             margin-top: 12px;
@@ -223,6 +224,18 @@
                 <span class="info-value">{{ rapport.type_installation|default:"-" }}</span>
             </div>
         </div>
+
+        {% if rapport.devis_a_faire %}
+        <div class="info-block info-block-full">
+            <h3>Devis à faire</h3>
+            <div class="info-row">
+                <span class="info-label">Suivi :</span>
+                <span class="info-value">
+                    <span class="badge badge-devis">Oui</span>
+                </span>
+            </div>
+        </div>
+        {% endif %}
 
         <div class="info-block info-block-full">
             <h3>Présence de platine Vigik+ :</h3>

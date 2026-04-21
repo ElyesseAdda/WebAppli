@@ -32,6 +32,8 @@ def compute_champs_manquants(payload):
         missing.append("dates_intervention")
 
     devis_a_faire = bool(p.get("devis_a_faire"))
+    if type_rapport == "vigik_plus" and p.get("presence_platine") is False:
+        devis_a_faire = True
     devis_fait = bool(p.get("devis_fait"))
     devis_lie = p.get("devis_lie")
     if devis_a_faire and devis_fait and not devis_lie:

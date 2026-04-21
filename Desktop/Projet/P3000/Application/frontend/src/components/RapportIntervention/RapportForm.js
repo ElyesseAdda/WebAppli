@@ -1209,6 +1209,22 @@ const RapportForm = ({
   };
 
   const isVigikPlus = formData.type_rapport === "vigik_plus";
+
+  useEffect(() => {
+    if (!isVigikPlus) return;
+    if (formData.presence_platine === false) {
+      setFormData((prev) => {
+        if (prev.devis_a_faire) return prev;
+        return { ...prev, devis_a_faire: true };
+      });
+    } else if (formData.presence_platine === true) {
+      setFormData((prev) => {
+        if (!prev.devis_a_faire && !prev.devis_fait && !prev.devis_lie) return prev;
+        return { ...prev, devis_a_faire: false, devis_fait: false, devis_lie: null };
+      });
+    }
+  }, [isVigikPlus, formData.presence_platine]);
+
   const vigikPortailPhotosEnabled =
     formData.presence_portail === false ||
     (formData.presence_portail === true &&
@@ -1402,9 +1418,15 @@ const RapportForm = ({
       presence_platine: formData.presence_platine,
       presence_portail: formData.presence_portail,
       presence_platine_portail: formData.presence_platine_portail,
-      devis_a_faire: !!formData.devis_a_faire,
-      devis_fait: !!formData.devis_fait,
-      devis_lie: formData.devis_lie || null,
+      devis_a_faire: isVigikPlus
+        ? (formData.presence_platine === false
+          ? true
+          : formData.presence_platine === true
+            ? false
+            : !!formData.devis_a_faire)
+        : !!formData.devis_a_faire,
+      devis_fait: isVigikPlus && formData.presence_platine === true ? false : !!formData.devis_fait,
+      devis_lie: isVigikPlus && formData.presence_platine === true ? null : (formData.devis_lie || null),
       prestations: isVigikPlus
         ? []
         : formData.prestations.map((p, i) => ({
