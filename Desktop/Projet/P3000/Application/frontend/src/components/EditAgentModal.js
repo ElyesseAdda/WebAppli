@@ -17,6 +17,7 @@ const EditAgentModal = ({ isOpen, handleClose, refreshAgents, agents = [] }) => 
     id: "",
     name: "",
     surname: "",
+    email: "",
     address: "",
     phone_Number: "",
     taux_Horaire: "",
@@ -123,6 +124,7 @@ const EditAgentModal = ({ isOpen, handleClose, refreshAgents, agents = [] }) => 
       const agentDataToSubmit = {
         name: agentData.name,
         surname: agentData.surname,
+        email: agentData.email || null,
         address: agentData.address,
         phone_Number: String(agentData.phone_Number),
         type_paiement: agentData.type_paiement || "horaire",
@@ -273,6 +275,7 @@ const EditAgentModal = ({ isOpen, handleClose, refreshAgents, agents = [] }) => 
                     id: "",
                     name: "",
                     surname: "",
+                    email: "",
                     address: "",
                     phone_Number: "",
                     taux_Horaire: "",
@@ -392,6 +395,14 @@ const EditAgentModal = ({ isOpen, handleClose, refreshAgents, agents = [] }) => 
             label="Prénom"
             name="surname"
             value={agentData.surname}
+            onChange={handleChange}
+            fullWidth
+            margin="normal"
+          />
+          <TextField
+            label="Adresse mail"
+            name="email"
+            value={agentData.email || ""}
             onChange={handleChange}
             fullWidth
             margin="normal"

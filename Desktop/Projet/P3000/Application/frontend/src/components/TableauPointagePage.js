@@ -95,6 +95,25 @@ const tableCommentInputSx = {
   },
 };
 
+const tableEmailInputSx = {
+  width: 190,
+  px: 0.75,
+  py: 0.5,
+  border: "1px solid",
+  borderColor: "#cfd8dc",
+  borderRadius: 0,
+  backgroundColor: "#fff",
+  fontSize: "0.82rem",
+  lineHeight: 1.2,
+  "&:hover": {
+    borderColor: "#b0bec5",
+  },
+  "&.Mui-focused, &:focus-within": {
+    borderColor: "#1976d2",
+    boxShadow: "inset 0 0 0 1px #1976d2",
+  },
+};
+
 const getMonthKey = (date = new Date()) => {
   const year = date.getFullYear();
   const month = String(date.getMonth() + 1).padStart(2, "0");
@@ -114,6 +133,7 @@ const TableauPointagePage = () => {
   const [error, setError] = useState("");
   const [monthKey, setMonthKey] = useState(getMonthKey());
   const [manualValues, setManualValues] = useState({});
+  const [savingEmailAgentId, setSavingEmailAgentId] = useState(null);
 
   useEffect(() => {
     try {
@@ -235,6 +255,28 @@ const TableauPointagePage = () => {
         },
       },
     }));
+  };
+
+  const handleEmailChange = (agentId, value) => {
+    setAgents((prev) =>
+      prev.map((agent) =>
+        String(agent.id) === String(agentId) ? { ...agent, email: value } : agent
+      )
+    );
+  };
+
+  const handleEmailBlur = async (agentId, value) => {
+    const trimmedEmail = String(value || "").trim();
+    try {
+      setSavingEmailAgentId(agentId);
+      await axios.patch(`/api/agent/${agentId}/`, {
+        email: trimmedEmail || null,
+      });
+    } catch {
+      setError("Erreur lors de la sauvegarde de l'adresse mail de l'agent.");
+    } finally {
+      setSavingEmailAgentId(null);
+    }
   };
 
   return (
@@ -381,7 +423,17 @@ const TableauPointagePage = () => {
                         sx={tableInputSx}
                       />
                     </TableCell>
-                    <TableCell sx={commonBodyCellStyle}>{row.email}</TableCell>
+                    <TableCell sx={commonBodyCellStyle}>
+                      <InputBase
+                        type="email"
+                        value={row.email === "-" ? "" : row.email}
+                        onChange={(e) => handleEmailChange(row.id, e.target.value)}
+                        onBlur={(e) => handleEmailBlur(row.id, e.target.value)}
+                        placeholder="Adresse mail"
+                        sx={tableEmailInputSx}
+                        disabled={savingEmailAgentId === row.id}
+                      />
+                    </TableCell>
                     <TableCell sx={commonBodyCellStyle}>
                       <InputBase
                         value={manualValues?.[monthKey]?.[String(row.id)]?.commentaire || ""}
