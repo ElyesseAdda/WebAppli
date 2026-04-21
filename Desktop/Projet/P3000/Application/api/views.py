@@ -36,11 +36,11 @@ import subprocess
 import os
 import json
 import calendar
-from .serializers import  DocumentSerializer, DocumentUploadSerializer, DocumentListSerializer, FolderItemSerializer,AppelOffresSerializer, BanqueSerializer,FournisseurSerializer, SousTraitantSerializer, ContactSousTraitantSerializer, ContactSocieteSerializer, ContratSousTraitanceSerializer, AvenantSousTraitanceSerializer,PaiementFournisseurMaterielSerializer, PaiementSousTraitantSerializer, PaiementGlobalSousTraitantSerializer, FactureSousTraitantSerializer, PaiementFactureSousTraitantSerializer, RecapFinancierSerializer, ChantierSerializer, SocieteSerializer, DevisSerializer, PartieSerializer, SousPartieSerializer,LigneDetailSerializer, ClientSerializer, StockSerializer, AgentSerializer, PresenceSerializer, StockMovementSerializer, StockHistorySerializer, EventSerializer, ScheduleSerializer, LaborCostSerializer, FactureSerializer, ChantierDetailSerializer, BonCommandeSerializer, AgentPrimeSerializer, AvenantSerializer, FactureTSSerializer, FactureTSCreateSerializer, SituationSerializer, SituationCreateSerializer, SituationLigneSerializer, SituationLigneUpdateSerializer, FactureTSListSerializer, SituationLigneAvenantSerializer, SituationLigneSupplementaireSerializer,ChantierLigneSupplementaireSerializer,AgencyExpenseSerializer, AgencyExpenseMonthSerializer, EmetteurSerializer, ColorSerializer, SuiviPaiementSousTraitantMensuelSerializer, FactureSuiviSousTraitantSerializer, DistributeurSerializer, DistributeurMouvementSerializer, DistributeurCellSerializer, DistributeurVenteSerializer, DistributeurReapproSessionSerializer, DistributeurReapproLigneSerializer, DistributeurFraisSerializer, StockProductSerializer, StockPurchaseSerializer, StockPurchaseCreateSerializer, StockLotSerializer, AgenceSerializer
+from .serializers import  DocumentSerializer, DocumentUploadSerializer, DocumentListSerializer, FolderItemSerializer,AppelOffresSerializer, BanqueSerializer,FournisseurSerializer, SousTraitantSerializer, ContactSousTraitantSerializer, ContactSocieteSerializer, ContratSousTraitanceSerializer, AvenantSousTraitanceSerializer,PaiementFournisseurMaterielSerializer, PaiementSousTraitantSerializer, PaiementGlobalSousTraitantSerializer, FactureSousTraitantSerializer, PaiementFactureSousTraitantSerializer, RecapFinancierSerializer, ChantierSerializer, SocieteSerializer, DevisSerializer, PartieSerializer, SousPartieSerializer,LigneDetailSerializer, ClientSerializer, StockSerializer, AgentSerializer, PresenceSerializer, StockMovementSerializer, StockHistorySerializer, EventSerializer, ScheduleSerializer, LaborCostSerializer, FactureSerializer, ChantierDetailSerializer, BonCommandeSerializer, AgentPrimeSerializer, AvenantSerializer, FactureTSSerializer, FactureTSCreateSerializer, SituationSerializer, SituationCreateSerializer, SituationLigneSerializer, SituationLigneUpdateSerializer, FactureTSListSerializer, SituationLigneAvenantSerializer, SituationLigneSupplementaireSerializer,ChantierLigneSupplementaireSerializer,AgencyExpenseSerializer, AgencyExpenseMonthSerializer, EmetteurSerializer, ColorSerializer, SuiviPaiementSousTraitantMensuelSerializer, FactureSuiviSousTraitantSerializer, DistributeurSerializer, DistributeurMouvementSerializer, DistributeurCellSerializer, DistributeurVenteSerializer, DistributeurReapproSessionSerializer, DistributeurReapproLigneSerializer, DistributeurFraisSerializer, StockProductSerializer, StockPurchaseSerializer, StockPurchaseCreateSerializer, StockLotSerializer, AgenceSerializer, PointageMensuelSerializer
 from .models import (
     AppelOffres, TauxFixe, update_chantier_cout_main_oeuvre, Chantier, PaiementSousTraitant, SousTraitant, ContactSousTraitant, ContactSociete, ContratSousTraitance, AvenantSousTraitance, Chantier, Devis, Facture, Quitus, Societe, Partie, SousPartie, 
     LigneDetail, Client, Stock, Agent, Presence, StockMovement, 
-    StockHistory, Event, MonthlyHours, MonthlyPresence, Schedule, 
+    StockHistory, Event, MonthlyHours, MonthlyPresence, Schedule, PointageMensuel,
     LaborCost, DevisLigne, FactureLigne, FacturePartie, 
     FactureSousPartie, FactureLigneDetail, BonCommande, 
     LigneBonCommande, Fournisseur, FournisseurMagasin, TauxFixe, Parametres, Avenant, FactureTS, Situation, SituationLigne, SituationLigneSupplementaire, SituationLigneSpeciale,
@@ -2245,6 +2245,66 @@ def update_days_present(request):
 
     except Exception as e:
         return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+class PointageMensuelViewSet(viewsets.ModelViewSet):
+    queryset = PointageMensuel.objects.select_related('agent').all()
+    serializer_class = PointageMensuelSerializer
+    permission_classes = [AllowAny]
+
+    def get_queryset(self):
+        queryset = super().get_queryset()
+        month_param = self.request.query_params.get('month')
+        agent_id = self.request.query_params.get('agent')
+        if month_param:
+            try:
+                month_date = datetime.strptime(f"{month_param}-01", "%Y-%m-%d").date()
+                queryset = queryset.filter(month=month_date)
+            except ValueError:
+                pass
+        if agent_id:
+            queryset = queryset.filter(agent_id=agent_id)
+        return queryset
+
+    def perform_create(self, serializer):
+        pointage = serializer.save()
+        self._apply_salary_inheritance(pointage, salary_was_explicit=pointage.salaire_overridden)
+
+    def perform_update(self, serializer):
+        previous = self.get_object()
+        old_salary = previous.salaire_net_initial_hors_prime
+        old_overridden = previous.salaire_overridden
+        pointage = serializer.save()
+        salary_changed = old_salary != pointage.salaire_net_initial_hors_prime
+        salary_was_explicit = pointage.salaire_overridden or (salary_changed and not old_overridden)
+        self._apply_salary_inheritance(pointage, salary_was_explicit=salary_was_explicit)
+
+    def _apply_salary_inheritance(self, pointage, salary_was_explicit=False):
+        if salary_was_explicit:
+            pointage.salaire_overridden = True
+            pointage.save(update_fields=['salaire_overridden'])
+            next_overridden = PointageMensuel.objects.filter(
+                agent=pointage.agent,
+                month__gt=pointage.month,
+                salaire_overridden=True,
+            ).order_by('month').first()
+            future_qs = PointageMensuel.objects.filter(
+                agent=pointage.agent,
+                month__gt=pointage.month,
+            )
+            if next_overridden:
+                future_qs = future_qs.filter(month__lt=next_overridden.month)
+            future_qs.update(salaire_net_initial_hors_prime=pointage.salaire_net_initial_hors_prime)
+            return
+
+        if pointage.salaire_net_initial_hors_prime in (None, 0):
+            previous_with_salary = PointageMensuel.objects.filter(
+                agent=pointage.agent,
+                month__lt=pointage.month,
+            ).exclude(salaire_net_initial_hors_prime=0).order_by('-month').first()
+            if previous_with_salary:
+                pointage.salaire_net_initial_hors_prime = previous_with_salary.salaire_net_initial_hors_prime
+                pointage.save(update_fields=['salaire_net_initial_hors_prime'])
 
 
 class PresenceViewSet(viewsets.ModelViewSet):

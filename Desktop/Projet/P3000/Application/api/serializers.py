@@ -2,7 +2,7 @@ from rest_framework import serializers
 from django.db.models import Q
 from .models import (
     Chantier, Societe, Devis, Partie, SousPartie, LigneDetail, Client, 
-    Agent, Stock, Presence, StockMovement, StockHistory, Event, MonthlyHours, 
+    Agent, Stock, Presence, StockMovement, StockHistory, Event, MonthlyHours, PointageMensuel,
     Schedule, LaborCost, DevisLigne, Facture, FactureLigne, BonCommande, LigneBonCommande,
     Avenant, FactureTS, Situation, SituationLigne, SituationLigneSupplementaire, SituationLigneSpeciale,
     ChantierLigneSupplementaire, SituationLigneAvenant, AgencyExpense, AgencyExpenseOverride,
@@ -704,6 +704,21 @@ class AgentSerializer(serializers.ModelSerializer):
     class Meta:
         model = Agent
         fields = '__all__'
+
+
+class PointageMensuelSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = PointageMensuel
+        fields = [
+            'id',
+            'agent',
+            'month',
+            'salaire_net_initial_hors_prime',
+            'accompte',
+            'paiement',
+            'commentaire',
+            'salaire_overridden',
+        ]
 
 
 class PresenceSerializer(serializers.ModelSerializer):

@@ -16,8 +16,6 @@ import {
   Typography,
 } from "@mui/material";
 
-const STORAGE_KEY = "tableau_pointage_values";
-
 const toNumber = (value) => {
   const parsed = Number.parseFloat(value);
   return Number.isFinite(parsed) ? parsed : 0;
@@ -128,28 +126,14 @@ const sumAgentPrimesForMonth = (agent, monthKey) => {
 
 const TableauPointagePage = () => {
   const [agents, setAgents] = useState([]);
-  const [presences, setPresences] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [monthKey, setMonthKey] = useState(getMonthKey());
-  const [manualValues, setManualValues] = useState({});
+  const [draftByAgent, setDraftByAgent] = useState({});
   const [savingEmailAgentId, setSavingEmailAgentId] = useState(null);
+  const [savingPointageKey, setSavingPointageKey] = useState("");
 
-  useEffect(() => {
-    try {
-      const raw = localStorage.getItem(STORAGE_KEY);
-      if (raw) {
-        const parsed = JSON.parse(raw);
-        setManualValues(parsed || {});
-      }
-    } catch {
-      setManualValues({});
-    }
-  }, []);
-
-  useEffect(() => {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(manualValues));
-  }, [manualValues]);
+  const monthDate = `${monthKey}-01`;
 
   useEffect(() => {
     let isCancelled = false;
@@ -157,13 +141,25 @@ const TableauPointagePage = () => {
       setLoading(true);
       setError("");
       try {
-        const [agentsRes, presencesRes] = await Promise.all([
+        const [agentsRes, pointagesRes] = await Promise.all([
           axios.get("/api/agent/"),
-          axios.get("/api/presence/"),
+          axios.get(`/api/pointages-mensuels/?month=${monthKey}`),
         ]);
         if (isCancelled) return;
         setAgents(Array.isArray(agentsRes.data) ? agentsRes.data : []);
-        setPresences(Array.isArray(presencesRes.data) ? presencesRes.data : []);
+        const loadedPointages = Array.isArray(pointagesRes.data) ? pointagesRes.data : [];
+        const initialDraft = {};
+        loadedPointages.forEach((p) => {
+          initialDraft[String(p.agent)] = {
+            id: p.id,
+            salaireInitial: p.salaire_net_initial_hors_prime ?? 0,
+            accompte: p.accompte ?? 0,
+            paiement: p.paiement ?? 0,
+            commentaire: p.commentaire || "",
+            salaireOverridden: Boolean(p.salaire_overridden),
+          };
+        });
+        setDraftByAgent(initialDraft);
       } catch {
         if (!isCancelled) {
           setError("Impossible de charger les données du tableau de pointage.");
@@ -177,49 +173,41 @@ const TableauPointagePage = () => {
     return () => {
       isCancelled = true;
     };
-  }, []);
+  }, [monthKey]);
+
+  const getMonthlyHours = (agent) => {
+    const monthlyHours = Array.isArray(agent?.monthly_hours) ? agent.monthly_hours : [];
+    const found = monthlyHours.find((item) =>
+      String(item?.month || "").startsWith(monthKey)
+    );
+    return toNumber(found?.hours);
+  };
 
   const rows = useMemo(() => {
     return agents
       .filter((agent) => agent?.is_active !== false)
       .map((agent) => {
         const agentId = String(agent.id);
-        const monthlyPresenceHours = presences
-          .filter(
-            (presence) =>
-              String(presence.agent) === agentId &&
-              String(presence.date || "").startsWith(monthKey)
-          )
-          .reduce((acc, presence) => acc + toNumber(presence.heures_travail), 0);
-
-        const computedInitialSalary =
-          agent.type_paiement === "journalier"
-            ? (monthlyPresenceHours / 8) * toNumber(agent.taux_journalier)
-            : monthlyPresenceHours * toNumber(agent.taux_Horaire);
-
-        const monthValues = manualValues?.[monthKey]?.[agentId] || {};
-        const initialSalary = toNumber(
-          monthValues.salaireInitial ?? computedInitialSalary
-        );
-        const accompte = toNumber(monthValues.accompte);
-        const paiement = toNumber(monthValues.paiement);
-        const prime = toNumber(
-          monthValues.prime ?? sumAgentPrimesForMonth(agent, monthKey)
-        );
+        const draft = draftByAgent[agentId] || {};
+        const prime = toNumber(sumAgentPrimesForMonth(agent, monthKey));
+        const totalHeures = getMonthlyHours(agent);
 
         return {
           id: agent.id,
           prenom: agent.name || "-",
           nom: agent.surname || "-",
-          email: agent.email || "-",
-          totalHeures: monthlyPresenceHours,
-          salaireInitial: initialSalary,
-          accompte,
-          paiement,
+          email: agent.email || "",
+          totalHeures,
+          salaireInitial: toNumber(draft.salaireInitial),
+          accompte: toNumber(draft.accompte),
+          paiement: toNumber(draft.paiement),
+          commentaire: draft.commentaire || "",
+          pointageId: draft.id || null,
+          salaireOverridden: Boolean(draft.salaireOverridden),
           prime,
         };
       });
-  }, [agents, manualValues, monthKey, presences]);
+  }, [agents, draftByAgent, monthKey]);
 
   const totals = useMemo(() => {
     const totalNetVerseSalaries = rows.reduce(
@@ -245,16 +233,74 @@ const TableauPointagePage = () => {
   }, [rows]);
 
   const handleCellChange = (agentId, field, value) => {
-    setManualValues((prev) => ({
+    setDraftByAgent((prev) => ({
       ...prev,
-      [monthKey]: {
-        ...(prev[monthKey] || {}),
-        [agentId]: {
-          ...(prev[monthKey]?.[agentId] || {}),
-          [field]: value,
-        },
+      [agentId]: {
+        ...(prev[agentId] || {}),
+        [field]: value,
       },
     }));
+  };
+
+  const savePointageField = async (agentId, field, value, isSalaryField = false) => {
+    const key = `${agentId}-${field}`;
+    try {
+      setSavingPointageKey(key);
+      const agentDraft = draftByAgent[String(agentId)] || {};
+      const payload = {};
+      if (field === "commentaire") {
+        payload.commentaire = String(value || "");
+      } else {
+        payload[field] = toNumber(value);
+      }
+      if (isSalaryField) {
+        payload.salaire_overridden = true;
+      }
+
+      if (agentDraft.id) {
+        const { data } = await axios.patch(`/api/pointages-mensuels/${agentDraft.id}/`, payload);
+        setDraftByAgent((prev) => ({
+          ...prev,
+          [String(agentId)]: {
+            ...(prev[String(agentId)] || {}),
+            id: data.id,
+            salaireInitial: data.salaire_net_initial_hors_prime,
+            accompte: data.accompte,
+            paiement: data.paiement,
+            commentaire: data.commentaire || "",
+            salaireOverridden: Boolean(data.salaire_overridden),
+          },
+        }));
+      } else {
+        const createPayload = {
+          agent: agentId,
+          month: monthDate,
+          salaire_net_initial_hors_prime: toNumber(agentDraft.salaireInitial),
+          accompte: toNumber(agentDraft.accompte),
+          paiement: toNumber(agentDraft.paiement),
+          commentaire: String(agentDraft.commentaire || ""),
+          salaire_overridden: Boolean(agentDraft.salaireOverridden),
+          ...payload,
+        };
+        const { data } = await axios.post("/api/pointages-mensuels/", createPayload);
+        setDraftByAgent((prev) => ({
+          ...prev,
+          [String(agentId)]: {
+            ...(prev[String(agentId)] || {}),
+            id: data.id,
+            salaireInitial: data.salaire_net_initial_hors_prime,
+            accompte: data.accompte,
+            paiement: data.paiement,
+            commentaire: data.commentaire || "",
+            salaireOverridden: Boolean(data.salaire_overridden),
+          },
+        }));
+      }
+    } catch {
+      setError("Erreur lors de la sauvegarde du pointage mensuel.");
+    } finally {
+      setSavingPointageKey("");
+    }
   };
 
   const handleEmailChange = (agentId, value) => {
@@ -384,8 +430,18 @@ const TableauPointagePage = () => {
                         onChange={(e) =>
                           handleCellChange(String(row.id), "salaireInitial", e.target.value)
                         }
+                        onBlur={(e) => {
+                          handleCellChange(String(row.id), "salaireOverridden", true);
+                          savePointageField(
+                            row.id,
+                            "salaire_net_initial_hors_prime",
+                            e.target.value,
+                            true
+                          );
+                        }}
                         inputProps={{ min: 0, step: "0.01", max: 999999 }}
                         sx={tableInputSx}
+                        disabled={savingPointageKey === `${row.id}-salaire_net_initial_hors_prime`}
                       />
                     </TableCell>
                     <TableCell sx={commonBodyCellStyle}>
@@ -395,8 +451,12 @@ const TableauPointagePage = () => {
                         onChange={(e) =>
                           handleCellChange(String(row.id), "accompte", e.target.value)
                         }
+                        onBlur={(e) =>
+                          savePointageField(row.id, "accompte", e.target.value)
+                        }
                         inputProps={{ min: 0, step: "0.01", max: 999999 }}
                         sx={tableInputSx}
+                        disabled={savingPointageKey === `${row.id}-accompte`}
                       />
                     </TableCell>
                     <TableCell sx={commonBodyCellStyle}>
@@ -406,22 +466,18 @@ const TableauPointagePage = () => {
                         onChange={(e) =>
                           handleCellChange(String(row.id), "paiement", e.target.value)
                         }
+                        onBlur={(e) =>
+                          savePointageField(row.id, "paiement", e.target.value)
+                        }
                         inputProps={{ min: 0, step: "0.01", max: 999999 }}
                         sx={tableInputSx}
+                        disabled={savingPointageKey === `${row.id}-paiement`}
                       />
                     </TableCell>
                     <TableCell sx={commonBodyCellStyle}>{row.prenom}</TableCell>
                     <TableCell sx={commonBodyCellStyle}>{row.nom}</TableCell>
                     <TableCell sx={commonBodyCellStyle}>
-                      <InputBase
-                        type="number"
-                        value={row.prime}
-                        onChange={(e) =>
-                          handleCellChange(String(row.id), "prime", e.target.value)
-                        }
-                        inputProps={{ min: 0, step: "0.01", max: 999999 }}
-                        sx={tableInputSx}
-                      />
+                      {formatCurrency(row.prime)}
                     </TableCell>
                     <TableCell sx={commonBodyCellStyle}>
                       <InputBase
@@ -436,12 +492,16 @@ const TableauPointagePage = () => {
                     </TableCell>
                     <TableCell sx={commonBodyCellStyle}>
                       <InputBase
-                        value={manualValues?.[monthKey]?.[String(row.id)]?.commentaire || ""}
+                        value={row.commentaire}
                         onChange={(e) =>
                           handleCellChange(String(row.id), "commentaire", e.target.value)
                         }
+                        onBlur={(e) =>
+                          savePointageField(row.id, "commentaire", e.target.value)
+                        }
                         placeholder="Commentaire"
                         sx={tableCommentInputSx}
+                        disabled={savingPointageKey === `${row.id}-commentaire`}
                       />
                     </TableCell>
                     <TableCell align="right" sx={commonBodyCellStyle}>

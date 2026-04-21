@@ -7,7 +7,7 @@ from .dashboard.views import DashboardViewSet, get_pending_payments, get_late_pa
 from .views import (
     dashboard_data, SocieteViewSet, ChantierViewSet, DevisViewSet, PartieViewSet, 
     SousPartieViewSet, LigneDetailViewSet, preview_devis, ClientViewSet, 
-    generate_pdf_from_preview, StockViewSet, AgentViewSet, PresenceViewSet, 
+    generate_pdf_from_preview, StockViewSet, AgentViewSet, PresenceViewSet, PointageMensuelViewSet,
     historique_stock, get_latest_code_produit, EventViewSet, delete_events_by_agent_and_period, 
     get_agents_with_work_days, update_days_present, recalculate_monthly_hours, assign_chantier, get_schedule,copy_schedule, 
     delete_schedule, update_schedule_comment, save_labor_costs, get_labor_costs, create_chantier_from_devis, create_devis, get_next_devis_number, 
@@ -214,6 +214,7 @@ router.register(r'stock-purchases', StockPurchaseViewSet, basename='stock-purcha
 router.register(r'stock-lots', StockLotViewSet, basename='stock-lots')
 router.register(r'agent', AgentViewSet, basename='agent')
 router.register(r'presence', PresenceViewSet, basename='presence')
+router.register(r'pointages-mensuels', PointageMensuelViewSet, basename='pointages-mensuels')
 router.register(r'events', EventViewSet, basename='event')
 router.register(r'facture', FactureViewSet, basename='facture')
 router.register(r'bons-commande', BonCommandeViewSet)
