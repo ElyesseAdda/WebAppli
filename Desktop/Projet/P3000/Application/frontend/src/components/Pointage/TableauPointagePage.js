@@ -3,12 +3,7 @@ import axios from "axios";
 import {
   Alert,
   Box,
-  Button,
   CircularProgress,
-  Dialog,
-  DialogActions,
-  DialogContent,
-  DialogTitle,
   Paper,
   Table,
   TableBody,
@@ -19,6 +14,8 @@ import {
   TextField,
   Typography,
 } from "@mui/material";
+import PointageRecapCards from "./PointageRecapCards";
+import PointageEditDialog from "./PointageEditDialog";
 
 const toNumber = (value) => {
   const parsed = Number.parseFloat(value);
@@ -564,6 +561,8 @@ const TableauPointagePage = () => {
 
       {!loading && !error && (
         <>
+          <PointageRecapCards totals={totals} formatCurrency={formatCurrency} />
+
           <TableContainer
             component={Paper}
             sx={{
@@ -599,9 +598,9 @@ const TableauPointagePage = () => {
                     Salaire net initiale hors prime
                   </TableCell>
                   <TableCell sx={compactNumberColumnSx}>Paiement</TableCell>
+                  <TableCell sx={compactNumberColumnSx}>Montant brut</TableCell>
                   <TableCell sx={compactNumberColumnSx}>Montant charge</TableCell>
                   <TableCell sx={compactNumberColumnSx}>Accompte</TableCell>
-                  <TableCell sx={compactNumberColumnSx}>Montant brut</TableCell>
                   <TableCell sx={compactNumberColumnSx}>Prime</TableCell>
                   <TableCell sx={headerCellSx}>Adresse mail</TableCell>
                   <TableCell sx={headerCellSx}>Commentaire</TableCell>
@@ -636,63 +635,63 @@ const TableauPointagePage = () => {
                           "&:hover": { backgroundColor: "#f5f5f5" },
                         }}
                       >
-                    <TableCell sx={commonBodyCellStyle}>{row.prenom}</TableCell>
-                    <TableCell sx={commonBodyCellStyle}>{row.nom}</TableCell>
-                    <TableCell sx={commonBodyCellStyle}>
-                      <Box sx={clickableValueSx} onClick={() => openEditor(row, "salaireInitial")}>
-                        <Typography sx={amountTextSx}>
-                          {formatCurrencyInTable(row.salaireInitial)}
-                        </Typography>
-                      </Box>
-                    </TableCell>
-                    <TableCell sx={commonBodyCellStyle}>
-                      <Box sx={getPaiementCellSx(row.paiement)} onClick={() => openEditor(row, "paiement")}>
-                        <Typography sx={amountTextSx}>
-                          {formatCurrencyInTable(row.paiement)}
-                        </Typography>
-                      </Box>
-                    </TableCell>
-                    <TableCell sx={commonBodyCellStyle}>
-                      <Box sx={clickableValueSx} onClick={() => openEditor(row, "montantCharge")}>
-                        <Typography sx={amountTextSx}>
-                          {formatCurrencyInTable(row.montantCharge)}
-                        </Typography>
-                      </Box>
-                    </TableCell>
-                    <TableCell sx={commonBodyCellStyle}>
-                      <Box sx={clickableValueSx} onClick={() => openEditor(row, "accompte")}>
-                        <Typography sx={amountTextSx}>
-                          {formatCurrencyInTable(row.accompte)}
-                        </Typography>
-                      </Box>
-                    </TableCell>
-                    <TableCell sx={commonBodyCellStyle}>
-                      <Box sx={readOnlyValueSx}>
-                        <Typography sx={amountTextSx}>
-                          {formatCurrencyInTable(row.montantBrut)}
-                        </Typography>
-                      </Box>
-                    </TableCell>
-                    <TableCell sx={commonBodyCellStyle}>
-                      {formatCurrencyInTable(row.prime)}
-                    </TableCell>
-                    <TableCell sx={commonBodyCellStyle}>
-                      <Box sx={clickableValueSx} onClick={() => openEditor(row, "email")}>
-                        <Typography sx={{ textAlign: "left" }}>
-                          {row.email || "-"}
-                        </Typography>
-                      </Box>
-                    </TableCell>
-                    <TableCell sx={commonBodyCellStyle}>
-                      <Box sx={clickableValueSx} onClick={() => openEditor(row, "commentaire")}>
-                        <Typography sx={{ textAlign: "left" }}>
-                          {row.commentaire || "-"}
-                        </Typography>
-                      </Box>
-                    </TableCell>
-                    <TableCell align="right" sx={commonBodyCellStyle}>
-                      {formatWorkedTime(row.totalHeures, agents.find((a) => a.id === row.id)?.type_paiement)}
-                    </TableCell>
+                        <TableCell sx={commonBodyCellStyle}>{row.prenom}</TableCell>
+                        <TableCell sx={commonBodyCellStyle}>{row.nom}</TableCell>
+                        <TableCell sx={commonBodyCellStyle}>
+                          <Box sx={clickableValueSx} onClick={() => openEditor(row, "salaireInitial")}>
+                            <Typography sx={amountTextSx}>
+                              {formatCurrencyInTable(row.salaireInitial)}
+                            </Typography>
+                          </Box>
+                        </TableCell>
+                        <TableCell sx={commonBodyCellStyle}>
+                          <Box sx={getPaiementCellSx(row.paiement)} onClick={() => openEditor(row, "paiement")}>
+                            <Typography sx={amountTextSx}>
+                              {formatCurrencyInTable(row.paiement)}
+                            </Typography>
+                          </Box>
+                        </TableCell>
+                        <TableCell sx={commonBodyCellStyle}>
+                          <Box sx={readOnlyValueSx}>
+                            <Typography sx={amountTextSx}>
+                              {formatCurrencyInTable(row.montantBrut)}
+                            </Typography>
+                          </Box>
+                        </TableCell>
+                        <TableCell sx={commonBodyCellStyle}>
+                          <Box sx={clickableValueSx} onClick={() => openEditor(row, "montantCharge")}>
+                            <Typography sx={amountTextSx}>
+                              {formatCurrencyInTable(row.montantCharge)}
+                            </Typography>
+                          </Box>
+                        </TableCell>
+                        <TableCell sx={commonBodyCellStyle}>
+                          <Box sx={clickableValueSx} onClick={() => openEditor(row, "accompte")}>
+                            <Typography sx={amountTextSx}>
+                              {formatCurrencyInTable(row.accompte)}
+                            </Typography>
+                          </Box>
+                        </TableCell>
+                        <TableCell sx={commonBodyCellStyle}>
+                          {formatCurrencyInTable(row.prime)}
+                        </TableCell>
+                        <TableCell sx={commonBodyCellStyle}>
+                          <Box sx={clickableValueSx} onClick={() => openEditor(row, "email")}>
+                            <Typography sx={{ textAlign: "left" }}>
+                              {row.email || "-"}
+                            </Typography>
+                          </Box>
+                        </TableCell>
+                        <TableCell sx={commonBodyCellStyle}>
+                          <Box sx={clickableValueSx} onClick={() => openEditor(row, "commentaire")}>
+                            <Typography sx={{ textAlign: "left" }}>
+                              {row.commentaire || "-"}
+                            </Typography>
+                          </Box>
+                        </TableCell>
+                        <TableCell align="right" sx={commonBodyCellStyle}>
+                          {formatWorkedTime(row.totalHeures, agents.find((a) => a.id === row.id)?.type_paiement)}
+                        </TableCell>
                       </TableRow>
                     ))}
                   </React.Fragment>
@@ -700,90 +699,16 @@ const TableauPointagePage = () => {
               </TableBody>
             </Table>
           </TableContainer>
-
-          <Paper
-            sx={{
-              mt: 2,
-              p: 2,
-              borderRadius: 2,
-              backgroundColor: "rgba(27, 120, 188, 0.1)",
-              border: "2px solid rgba(27, 120, 188, 0.3)",
-            }}
-          >
-            <Typography
-              variant="h6"
-              sx={{ mb: 1.5, fontWeight: 700, color: "rgba(27, 120, 188, 1)" }}
-            >
-              Récapitulatif pointage
-            </Typography>
-            <Box sx={{ display: "flex", gap: 3, flexWrap: "wrap" }}>
-              <Box sx={{ textAlign: "center" }}>
-                <Typography sx={{ fontSize: "0.85rem", color: "text.secondary" }}>
-                  Total Net verse au salaries
-                </Typography>
-                <Typography sx={{ fontSize: "1.1rem", fontWeight: "bold", color: "rgba(46, 125, 50, 1)" }}>
-                  {formatCurrency(totals.totalNetVerseSalaries)}
-                </Typography>
-              </Box>
-              <Box sx={{ textAlign: "center" }}>
-                <Typography sx={{ fontSize: "0.85rem", color: "text.secondary" }}>
-                  Total Net verse par l'employeur
-                </Typography>
-                <Typography sx={{ fontSize: "1.1rem", fontWeight: "bold", color: "rgba(27, 120, 188, 1)" }}>
-                  {formatCurrency(totals.totalNetVerseEmployeur)}
-                </Typography>
-              </Box>
-              <Box sx={{ textAlign: "center" }}>
-                <Typography sx={{ fontSize: "0.85rem", color: "text.secondary" }}>
-                  Cumul mensuel charges du personnel
-                </Typography>
-                <Typography sx={{ fontSize: "1.1rem", fontWeight: "bold", color: "rgba(27, 120, 188, 1)" }}>
-                  {formatCurrency(totals.cumulMensuelCharges)}
-                </Typography>
-              </Box>
-              <Box sx={{ textAlign: "center" }}>
-                <Typography sx={{ fontSize: "0.85rem", color: "text.secondary" }}>
-                  Total verse
-                </Typography>
-                <Typography sx={{ fontSize: "1.1rem", fontWeight: "bold", color: "rgba(46, 125, 50, 1)" }}>
-                  {formatCurrency(totals.totalVerse)}
-                </Typography>
-              </Box>
-            </Box>
-          </Paper>
         </>
       )}
-      <Dialog open={editorState.open} onClose={closeEditor} maxWidth="xs" fullWidth>
-        <DialogTitle>{editorState.label}</DialogTitle>
-        <DialogContent>
-          <TextField
-            autoFocus
-            margin="dense"
-            fullWidth
-            type={editorState.inputType}
-            value={editorState.value}
-            onChange={(e) =>
-              setEditorState((prev) => ({ ...prev, value: e.target.value }))
-            }
-            label={editorState.label}
-            placeholder={editorState.isCurrency ? "0,00" : ""}
-            helperText={editorState.isCurrency ? "Montant en euros" : ""}
-          />
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={closeEditor}>Annuler</Button>
-          <Button
-            variant="contained"
-            onClick={saveEditor}
-            disabled={
-              Boolean(savingPointageKey) ||
-              (savingEmailAgentId !== null && savingEmailAgentId === editorState.agentId)
-            }
-          >
-            Enregistrer
-          </Button>
-        </DialogActions>
-      </Dialog>
+      <PointageEditDialog
+        editorState={editorState}
+        setEditorState={setEditorState}
+        closeEditor={closeEditor}
+        saveEditor={saveEditor}
+        savingPointageKey={savingPointageKey}
+        savingEmailAgentId={savingEmailAgentId}
+      />
     </Box>
   );
 };

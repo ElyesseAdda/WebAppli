@@ -54,7 +54,7 @@ import PaiementsSousTraitantPage from "./PaiementsSousTraitantPage";
 import PlanningContainer from "./PlanningContainer";
 import StockForm from "./StockForm";
 import TableauSuivi from "./TableauSuivi";
-import TableauPointagePage from "./TableauPointagePage";
+import TableauPointagePage from "./Pointage/TableauPointagePage";
 import Test from "./Test";
 import TestDragDrop from "./TestDragDrop";
 import TestDragSimple from "./TestDragSimple";
