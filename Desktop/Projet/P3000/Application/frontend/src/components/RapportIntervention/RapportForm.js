@@ -1526,12 +1526,19 @@ const RapportForm = ({
           { headers: { "Content-Type": "multipart/form-data" } }
         );
         if (data.s3_key) photos_platine_s3_keys.push(data.s3_key);
-        if (p.previewUrl && String(p.previewUrl).startsWith("blob:")) URL.revokeObjectURL(p.previewUrl);
+        const nextPreviewUrl = data.presigned_url || p.previewUrl || null;
+        if (
+          p.previewUrl &&
+          String(p.previewUrl).startsWith("blob:") &&
+          nextPreviewUrl !== p.previewUrl
+        ) {
+          URL.revokeObjectURL(p.previewUrl);
+        }
         nextPlatState.push({
           _draftS3Key: data.s3_key,
           name: p.name || "photo.jpg",
           file: null,
-          previewUrl: data.presigned_url || null,
+          previewUrl: nextPreviewUrl,
         });
       }
       setPendingPhotosPlatine(nextPlatState);
@@ -1558,12 +1565,19 @@ const RapportForm = ({
             { headers: { "Content-Type": "multipart/form-data" } }
           );
           if (data.s3_key) photos_platine_portail_s3_keys.push(data.s3_key);
-          if (p.previewUrl && String(p.previewUrl).startsWith("blob:")) URL.revokeObjectURL(p.previewUrl);
+          const nextPreviewUrl = data.presigned_url || p.previewUrl || null;
+          if (
+            p.previewUrl &&
+            String(p.previewUrl).startsWith("blob:") &&
+            nextPreviewUrl !== p.previewUrl
+          ) {
+            URL.revokeObjectURL(p.previewUrl);
+          }
           nextPortState.push({
             _draftS3Key: data.s3_key,
             name: p.name || "photo.jpg",
             file: null,
-            previewUrl: data.presigned_url || null,
+            previewUrl: nextPreviewUrl,
           });
         }
         setPendingPhotosPlatinePortail(nextPortState);
