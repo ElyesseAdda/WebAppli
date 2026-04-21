@@ -155,12 +155,6 @@ const getMonthKey = (date = new Date()) => {
   return `${year}-${month}`;
 };
 
-const sumAgentPrimesForMonth = (agent, monthKey) => {
-  const monthPrimes = agent?.primes?.[monthKey];
-  if (!Array.isArray(monthPrimes)) return 0;
-  return monthPrimes.reduce((acc, prime) => acc + toNumber(prime?.montant), 0);
-};
-
 const TableauPointagePage = () => {
   const [agents, setAgents] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -168,6 +162,7 @@ const TableauPointagePage = () => {
   const [monthKey, setMonthKey] = useState(getMonthKey());
   const [draftByAgent, setDraftByAgent] = useState({});
   const [hoursByAgent, setHoursByAgent] = useState({});
+  const [primeByAgent, setPrimeByAgent] = useState({});
   const [savingEmailAgentId, setSavingEmailAgentId] = useState(null);
   const [savingPointageKey, setSavingPointageKey] = useState("");
 
@@ -179,10 +174,16 @@ const TableauPointagePage = () => {
       setLoading(true);
       setError("");
       try {
-        const [agentsRes, pointagesRes, scheduleSummaryRes] = await Promise.all([
+        const [agentsRes, pointagesRes, scheduleSummaryRes, agentPrimesRes] = await Promise.all([
           axios.get("/api/agent/"),
           axios.get(`/api/pointages-mensuels/?month=${monthKey}`),
           axios.get(`/api/schedule/monthly_summary/?month=${monthKey}`).catch(() => ({ data: [] })),
+          axios.get("/api/agent-primes/", {
+            params: {
+              mois: Number(monthKey.split("-")[1]),
+              annee: Number(monthKey.split("-")[0]),
+            },
+          }).catch(() => ({ data: [] })),
         ]);
         if (isCancelled) return;
         setAgents(Array.isArray(agentsRes.data) ? agentsRes.data : []);
@@ -205,6 +206,14 @@ const TableauPointagePage = () => {
           });
         });
         setHoursByAgent(aggregatedHours);
+        const primes = Array.isArray(agentPrimesRes.data) ? agentPrimesRes.data : [];
+        const aggregatedPrimes = {};
+        primes.forEach((prime) => {
+          const agentId = String(prime?.agent || "");
+          if (!agentId) return;
+          aggregatedPrimes[agentId] = toNumber(aggregatedPrimes[agentId]) + toNumber(prime?.montant);
+        });
+        setPrimeByAgent(aggregatedPrimes);
 
         const initialDraft = {};
         loadedPointages.forEach((p) => {
@@ -250,7 +259,7 @@ const TableauPointagePage = () => {
       .map((agent) => {
         const agentId = String(agent.id);
         const draft = draftByAgent[agentId] || {};
-        const prime = toNumber(sumAgentPrimesForMonth(agent, monthKey));
+        const prime = toNumber(primeByAgent[agentId]);
         const totalHeures = getMonthlyHours(agent);
 
         return {
@@ -268,7 +277,7 @@ const TableauPointagePage = () => {
           prime,
         };
       });
-  }, [agents, draftByAgent, hoursByAgent, monthKey]);
+  }, [agents, draftByAgent, hoursByAgent, monthKey, primeByAgent]);
 
   const totals = useMemo(() => {
     const totalNetVerseSalaries = rows.reduce(
