@@ -707,6 +707,7 @@ class AgentSerializer(serializers.ModelSerializer):
 
 
 class PointageMensuelSerializer(serializers.ModelSerializer):
+    # Champs complets du pointage mensuel utilises par le tableau de pointage
     class Meta:
         model = PointageMensuel
         fields = [

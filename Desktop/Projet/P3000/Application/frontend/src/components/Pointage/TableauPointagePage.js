@@ -46,11 +46,25 @@ const formatMoneyInput = (value) =>
   });
 
 const parseMoneyInput = (rawValue) => {
-  const sanitized = String(rawValue || "")
-    .replace(/\s/g, "")
-    .replace(",", ".");
+  const raw = String(rawValue || "").trim();
+  if (!raw) return 0;
+
+  let sanitized = raw.replace(/[^\d,.\-]/g, "").replace(/\s/g, "");
+  const lastComma = sanitized.lastIndexOf(",");
+  const lastDot = sanitized.lastIndexOf(".");
+
+  if (lastComma > -1 && lastDot > -1) {
+    if (lastComma > lastDot) {
+      sanitized = sanitized.replace(/\./g, "").replace(",", ".");
+    } else {
+      sanitized = sanitized.replace(/,/g, "");
+    }
+  } else if (lastComma > -1) {
+    sanitized = sanitized.replace(",", ".");
+  }
+
   const parsed = Number.parseFloat(sanitized);
-  return Number.isFinite(parsed) ? parsed : 0;
+  return Number.isFinite(parsed) ? parsed : null;
 };
 
 const formatWorkedTime = (hoursValue, agentTypePaiement) => {
@@ -471,7 +485,9 @@ const TableauPointagePage = () => {
       open: true,
       agentId: row.id,
       ...next,
-      value: next.isCurrency ? formatMoneyInput(next.value) : next.value,
+      value: next.isCurrency
+        ? (toNumber(next.value) === 0 ? "" : formatMoneyInput(next.value))
+        : next.value,
     });
   };
 
@@ -488,6 +504,10 @@ const TableauPointagePage = () => {
       return;
     }
     const normalizedValue = isCurrency ? parseMoneyInput(value) : value;
+    if (isCurrency && normalizedValue === null) {
+      setError("Montant invalide. Utilise un format du type 1234,56.");
+      return;
+    }
     if (field === "salaire_net_initial_hors_prime") {
       handleCellChange(String(agentId), "salaireInitial", normalizedValue);
       handleCellChange(String(agentId), "salaireOverridden", true);
