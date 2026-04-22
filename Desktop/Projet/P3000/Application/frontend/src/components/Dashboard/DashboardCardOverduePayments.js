@@ -1,13 +1,22 @@
 import React from "react";
 import DashboardMetricCardShell from "./DashboardMetricCardShell";
 
-const DashboardCardOverduePayments = () => (
+const formatCurrency = (amount) =>
+  new Intl.NumberFormat("fr-FR", {
+    style: "currency",
+    currency: "EUR",
+    maximumFractionDigits: 0,
+  }).format(Number(amount || 0));
+
+const DashboardCardOverduePayments = ({ value = 0, totalCA = 0, loading = false }) => (
   <DashboardMetricCardShell
-    title="Paiements en retard"
-    value="96 300 EUR"
-    subtitle="12 dossiers critiques"
-    accent="#dc2626"
+    title="COUT MAIN D'OEUVRE"
+    value={loading ? "Chargement..." : formatCurrency(value)}
+    subtitle="Periode selectionnee"
+    accent="#0d9488"
     variant={7}
+    percentValue={loading ? null : value}
+    percentBase={loading ? null : totalCA}
   />
 );
 

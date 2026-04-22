@@ -86,9 +86,20 @@ const DashboardMetricCardShell = ({
   label,
   footerItems = [],
   valueColor,
+  percentValue,
+  percentBase,
 }) => {
   const variantStyles = getVariantStyles(variant, accent);
   const darkCard = variant === 3;
+  const hasPercent =
+    percentValue != null &&
+    percentBase != null &&
+    !Number.isNaN(Number(percentValue)) &&
+    !Number.isNaN(Number(percentBase)) &&
+    Number(percentBase) !== 0;
+  const percentLabel = hasPercent
+    ? `${((Number(percentValue) / Number(percentBase)) * 100).toFixed(1)}%`
+    : null;
 
   return (
     <Paper
@@ -106,7 +117,7 @@ const DashboardMetricCardShell = ({
         ...variantStyles,
       }}
     >
-      {label && (
+      {(label || percentLabel) && (
         <Box
           sx={{
             position: "absolute",
@@ -122,7 +133,7 @@ const DashboardMetricCardShell = ({
             color: darkCard ? "#e5e7eb" : accent,
           }}
         >
-          {label}
+          {label || percentLabel}
         </Box>
       )}
       <Typography

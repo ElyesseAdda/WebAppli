@@ -25,6 +25,7 @@ const formatProgressLabel = (progressPercent, comparisonYear) => {
 
 const DashboardCardGrossMargin = ({
   value = 0,
+  totalCA = 0,
   ratePercent = 0,
   loading = false,
   progressPercent = null,
@@ -44,6 +45,8 @@ const DashboardCardGrossMargin = ({
     }
     accent="#059669"
     variant={7}
+    percentValue={loading ? null : value}
+    percentBase={loading ? null : totalCA}
   />
 );
 

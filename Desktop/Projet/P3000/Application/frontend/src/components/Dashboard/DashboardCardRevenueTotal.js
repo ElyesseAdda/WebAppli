@@ -25,6 +25,7 @@ const formatProgressLabel = (progressPercent, comparisonYear) => {
 
 const DashboardCardRevenueTotal = ({
   value = 0,
+  totalCA = 0,
   loading = false,
   progressPercent = null,
   comparisonYear = null,
@@ -41,6 +42,8 @@ const DashboardCardRevenueTotal = ({
       }
       accent="#2563eb"
       variant={7}
+      percentValue={loading ? null : value}
+      percentBase={loading ? null : totalCA}
     />
   );
 };

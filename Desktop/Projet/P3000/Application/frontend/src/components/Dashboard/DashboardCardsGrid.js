@@ -39,12 +39,14 @@ const DashboardCardsGrid = ({
     >
       <DashboardCardRevenueTotal
         value={totalCA}
+        totalCA={totalCA}
         loading={totalCALoading}
         progressPercent={totalCAProgress}
         comparisonYear={totalCAComparisonYear}
       />
       <DashboardCardGrossMargin
         value={margeBrute}
+        totalCA={totalCA}
         ratePercent={margeBruteRate}
         loading={margeBruteLoading}
         progressPercent={margeBruteProgress}
@@ -52,18 +54,28 @@ const DashboardCardsGrid = ({
       />
       <DashboardCardProjectCostTotal
         value={coutChantierGlobal}
-        coutMateriel={coutMateriel}
-        coutMainOeuvre={coutMainOeuvre}
-        coutSousTraitance={coutSousTraitance}
+        totalCA={totalCA}
         loading={coutChantierLoading}
       />
-      <DashboardCardCashIn />
-      <DashboardCardOverduePayments />
-      <DashboardCardActiveProjects />
-      <DashboardCardAverageTicket />
-      <DashboardCardYearlyGrowth />
-      <DashboardCardClientReceivables />
-      <DashboardCardCashBurn />
+      <DashboardCardCashIn totalCA={totalCA} />
+      <DashboardCardOverduePayments
+        value={coutMainOeuvre}
+        totalCA={totalCA}
+        loading={coutChantierLoading}
+      />
+      <DashboardCardActiveProjects totalCA={totalCA} />
+      <DashboardCardAverageTicket
+        value={coutMateriel}
+        totalCA={totalCA}
+        loading={coutChantierLoading}
+      />
+      <DashboardCardYearlyGrowth totalCA={totalCA} />
+      <DashboardCardClientReceivables
+        value={coutSousTraitance}
+        totalCA={totalCA}
+        loading={coutChantierLoading}
+      />
+      <DashboardCardCashBurn totalCA={totalCA} />
     </Box>
   );
 };
