@@ -81,6 +81,7 @@ const SlideBar = ({ toggleSidebar, isSidebarVisible, user }) => {
           { label: "Tableau Facturation", to: "/TableauFacturation" },
           { label: "Tableau Fournisseur", to: "/TableauFournisseur" },
           { label: "Tableau Sous-Traitant", to: "/TableauSousTraitant" },
+          { label: "Tableau de pointage", to: "/TableauPointage" },
         ],
       },
       {
@@ -90,7 +91,6 @@ const SlideBar = ({ toggleSidebar, isSidebarVisible, user }) => {
         children: [
           { label: "Gestion agent", to: "/CalendrierAgentContainer" },
           { label: "Planning hebdo", to: "/PlanningContainer" },
-          { label: "Tableau de pointage", to: "/TableauPointage" },
         ],
       },
       {
