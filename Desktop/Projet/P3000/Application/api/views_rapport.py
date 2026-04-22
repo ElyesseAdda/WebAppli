@@ -438,10 +438,6 @@ class RapportInterventionViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_400_BAD_REQUEST,
             )
         try:
-            rapport = RapportIntervention.objects.get(id=rapport_id)
-        except RapportIntervention.DoesNotExist:
-            return Response({'error': 'Rapport introuvable'}, status=status.HTTP_404_NOT_FOUND)
-        try:
             from .utils import (
                 generate_presigned_url_for_display,
                 get_s3_bucket_name,
@@ -467,16 +463,26 @@ class RapportInterventionViewSet(viewsets.ModelViewSet):
                 Body=file.read(),
                 ContentType=file.content_type or 'image/jpeg',
             )
-            keys = list(rapport.photos_platine_s3_keys or [])
-            keys.append(s3_key)
-            rapport.photos_platine_s3_keys = keys
-            rapport.save(update_fields=['photos_platine_s3_keys', 'updated_at'])
+            with transaction.atomic():
+                try:
+                    rapport = RapportIntervention.objects.select_for_update().get(id=rapport_id)
+                except RapportIntervention.DoesNotExist:
+                    return Response({'error': 'Rapport introuvable'}, status=status.HTTP_404_NOT_FOUND)
+                keys = list(rapport.photos_platine_s3_keys or [])
+                keys.append(s3_key)
+                rapport.photos_platine_s3_keys = keys
+                rapport.save(update_fields=['photos_platine_s3_keys', 'updated_at'])
+            url = generate_presigned_url_for_display(s3_key)
             return Response(
                 {
                     'success': True,
                     's3_key': s3_key,
-                    'photo_platine_url': generate_presigned_url_for_display(s3_key),
+                    'url': url,
+                    'presigned_url': url,
+                    'photo_platine_url': url,
+                    'item': {'s3_key': s3_key, 'url': url, 'question': 'platine'},
                     'photos_platine_s3_keys': keys,
+                    'media_version': str(getattr(rapport, 'updated_at', '') or ''),
                 },
                 status=status.HTTP_201_CREATED,
             )
@@ -493,10 +499,6 @@ class RapportInterventionViewSet(viewsets.ModelViewSet):
                 {'error': 'rapport_id et photo requis'},
                 status=status.HTTP_400_BAD_REQUEST,
             )
-        try:
-            rapport = RapportIntervention.objects.get(id=rapport_id)
-        except RapportIntervention.DoesNotExist:
-            return Response({'error': 'Rapport introuvable'}, status=status.HTTP_404_NOT_FOUND)
         try:
             from .utils import (
                 generate_presigned_url_for_display,
@@ -523,16 +525,26 @@ class RapportInterventionViewSet(viewsets.ModelViewSet):
                 Body=file.read(),
                 ContentType=file.content_type or 'image/jpeg',
             )
-            keys = list(rapport.photos_platine_portail_s3_keys or [])
-            keys.append(s3_key)
-            rapport.photos_platine_portail_s3_keys = keys
-            rapport.save(update_fields=['photos_platine_portail_s3_keys', 'updated_at'])
+            with transaction.atomic():
+                try:
+                    rapport = RapportIntervention.objects.select_for_update().get(id=rapport_id)
+                except RapportIntervention.DoesNotExist:
+                    return Response({'error': 'Rapport introuvable'}, status=status.HTTP_404_NOT_FOUND)
+                keys = list(rapport.photos_platine_portail_s3_keys or [])
+                keys.append(s3_key)
+                rapport.photos_platine_portail_s3_keys = keys
+                rapport.save(update_fields=['photos_platine_portail_s3_keys', 'updated_at'])
+            url = generate_presigned_url_for_display(s3_key)
             return Response(
                 {
                     'success': True,
                     's3_key': s3_key,
-                    'photo_platine_portail_url': generate_presigned_url_for_display(s3_key),
+                    'url': url,
+                    'presigned_url': url,
+                    'photo_platine_portail_url': url,
+                    'item': {'s3_key': s3_key, 'url': url, 'question': 'portail'},
                     'photos_platine_portail_s3_keys': keys,
+                    'media_version': str(getattr(rapport, 'updated_at', '') or ''),
                 },
                 status=status.HTTP_201_CREATED,
             )
@@ -562,18 +574,26 @@ class RapportInterventionViewSet(viewsets.ModelViewSet):
                 if question == 'platine'
                 else 'photos_platine_portail_s3_keys'
             )
-            keys = list(getattr(rapport, attr) or [])
-            if s3_key not in keys:
-                return Response({'error': 'Clé absente du rapport'}, status=status.HTTP_404_NOT_FOUND)
-            keys = [k for k in keys if k != s3_key]
-            setattr(rapport, attr, keys)
-            rapport.save(update_fields=[attr, 'updated_at'])
+            with transaction.atomic():
+                rapport = RapportIntervention.objects.select_for_update().get(id=rapport.id)
+                keys = list(getattr(rapport, attr) or [])
+                if s3_key not in keys:
+                    return Response({'error': 'Clé absente du rapport'}, status=status.HTTP_404_NOT_FOUND)
+                keys = [k for k in keys if k != s3_key]
+                setattr(rapport, attr, keys)
+                rapport.save(update_fields=[attr, 'updated_at'])
             if is_s3_available():
                 try:
                     get_s3_client().delete_object(Bucket=get_s3_bucket_name(), Key=s3_key)
                 except Exception:
                     pass
-            return Response({'success': True, attr: keys}, status=status.HTTP_200_OK)
+            return Response({
+                'success': True,
+                attr: keys,
+                'question': question,
+                's3_key': s3_key,
+                'media_version': str(getattr(rapport, 'updated_at', '') or ''),
+            }, status=status.HTTP_200_OK)
         except Exception as e:
             return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
@@ -1063,7 +1083,14 @@ class RapportInterventionBrouillonViewSet(viewsets.ModelViewSet):
             except Exception:
                 pass
             return Response(
-                {"success": True, "s3_key": s3_key, "presigned_url": presigned_url}
+                {
+                    "success": True,
+                    "s3_key": s3_key,
+                    "url": presigned_url,
+                    "presigned_url": presigned_url,
+                    "item": {"s3_key": s3_key, "url": presigned_url, "question": "platine"},
+                    "media_version": str(getattr(brouillon, "updated_at", "") or ""),
+                }
             )
         except Exception as e:
             return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
@@ -1106,7 +1133,14 @@ class RapportInterventionBrouillonViewSet(viewsets.ModelViewSet):
             except Exception:
                 pass
             return Response(
-                {"success": True, "s3_key": s3_key, "presigned_url": presigned_url}
+                {
+                    "success": True,
+                    "s3_key": s3_key,
+                    "url": presigned_url,
+                    "presigned_url": presigned_url,
+                    "item": {"s3_key": s3_key, "url": presigned_url, "question": "portail"},
+                    "media_version": str(getattr(brouillon, "updated_at", "") or ""),
+                }
             )
         except Exception as e:
             return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
@@ -1168,44 +1202,55 @@ class RapportInterventionBrouillonViewSet(viewsets.ModelViewSet):
         try:
             from .utils import get_s3_bucket_name, get_s3_client, is_s3_available
 
-            p = dict(brouillon.payload or {})
-            dm = dict(p.get("_draft_media") or {})
-            attr = (
-                "photos_platine_s3_keys"
-                if question == "platine"
-                else "photos_platine_portail_s3_keys"
-            )
-            keys = list(dm.get(attr) or [])
-            if question == "platine" and not keys and dm.get("photo_platine_s3_key"):
-                keys = [dm["photo_platine_s3_key"]]
-            if (
-                question == "portail"
-                and not keys
-                and dm.get("photo_platine_portail_s3_key")
-            ):
-                keys = [dm["photo_platine_portail_s3_key"]]
-            if s3_key not in keys:
-                return Response(
-                    {"error": "Clé absente du brouillon"},
-                    status=status.HTTP_404_NOT_FOUND,
+            with transaction.atomic():
+                brouillon = RapportInterventionBrouillon.objects.select_for_update().get(pk=brouillon.pk)
+                p = dict(brouillon.payload or {})
+                dm = dict(p.get("_draft_media") or {})
+                attr = (
+                    "photos_platine_s3_keys"
+                    if question == "platine"
+                    else "photos_platine_portail_s3_keys"
                 )
-            keys = [k for k in keys if k != s3_key]
-            dm[attr] = keys
-            dm.pop("photo_platine_s3_key", None)
-            dm.pop("photo_platine_presigned_url", None)
-            dm.pop("photo_platine_portail_s3_key", None)
-            dm.pop("photo_platine_portail_presigned_url", None)
-            dm.pop("photo_platine_presigned_urls", None)
-            dm.pop("photo_platine_portail_presigned_urls", None)
-            p["_draft_media"] = dm
-            brouillon.payload = p
-            brouillon.save(update_fields=["payload", "updated_at"])
+                keys = list(dm.get(attr) or [])
+                if question == "platine" and not keys and dm.get("photo_platine_s3_key"):
+                    keys = [dm["photo_platine_s3_key"]]
+                if (
+                    question == "portail"
+                    and not keys
+                    and dm.get("photo_platine_portail_s3_key")
+                ):
+                    keys = [dm["photo_platine_portail_s3_key"]]
+                if s3_key not in keys:
+                    return Response(
+                        {"error": "Clé absente du brouillon"},
+                        status=status.HTTP_404_NOT_FOUND,
+                    )
+                keys = [k for k in keys if k != s3_key]
+                dm[attr] = keys
+                dm.pop("photo_platine_s3_key", None)
+                dm.pop("photo_platine_presigned_url", None)
+                dm.pop("photo_platine_portail_s3_key", None)
+                dm.pop("photo_platine_portail_presigned_url", None)
+                dm.pop("photo_platine_presigned_urls", None)
+                dm.pop("photo_platine_portail_presigned_urls", None)
+                p["_draft_media"] = dm
+                brouillon.payload = p
+                brouillon.save(update_fields=["payload", "updated_at"])
             if is_s3_available():
                 try:
                     get_s3_client().delete_object(Bucket=get_s3_bucket_name(), Key=s3_key)
                 except Exception:
                     pass
-            return Response({"success": True, attr: keys}, status=status.HTTP_200_OK)
+            return Response(
+                {
+                    "success": True,
+                    attr: keys,
+                    "question": question,
+                    "s3_key": s3_key,
+                    "media_version": str(getattr(brouillon, "updated_at", "") or ""),
+                },
+                status=status.HTTP_200_OK,
+            )
         except Exception as e:
             return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 

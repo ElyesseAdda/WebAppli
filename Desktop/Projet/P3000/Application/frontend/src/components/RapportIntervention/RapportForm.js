@@ -49,6 +49,14 @@ const safeGetSignatureDataUrl = (padRef) => {
   }
 };
 
+const createVigikClientPhotoId = () =>
+  `vigik-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
+
+const ensureVigikClientId = (item) => ({
+  ...item,
+  clientId: item?.clientId || createVigikClientPhotoId(),
+});
+
 /** Libellés français pour les clés d'erreur API (DRF). */
 const RAPPORT_FIELD_LABELS = {
   technicien: "Technicien",
@@ -646,6 +654,7 @@ const RapportForm = ({
           platRows
             .filter((row) => row?.s3_key || row?.url)
             .map((row, i) => ({
+              clientId: createVigikClientPhotoId(),
               file: null,
               previewUrl: row.url || null,
               name: `photo-${i + 1}`,
@@ -657,6 +666,7 @@ const RapportForm = ({
           portRows
             .filter((row) => row?.s3_key || row?.url)
             .map((row, i) => ({
+              clientId: createVigikClientPhotoId(),
               file: null,
               previewUrl: row.url || null,
               name: `photo-portail-${i + 1}`,
@@ -752,11 +762,15 @@ const RapportForm = ({
             setPendingPhotos({});
             const platKeys = Array.isArray(dm.photos_platine_s3_keys)
               ? dm.photos_platine_s3_keys
+              : Array.isArray(dm.vigik?.platine)
+                ? dm.vigik.platine.map((item) => item?.s3_key).filter(Boolean)
               : dm.photo_platine_s3_key
                 ? [dm.photo_platine_s3_key]
                 : [];
             const platUrls = Array.isArray(dm.photo_platine_presigned_urls)
               ? dm.photo_platine_presigned_urls
+              : Array.isArray(dm.vigik?.platine)
+                ? dm.vigik.platine.map((item) => item?.url || null)
               : dm.photo_platine_presigned_url
                 ? [dm.photo_platine_presigned_url]
                 : [];
@@ -782,15 +796,19 @@ const RapportForm = ({
                 platOut.push({ name: `platine-${i + 1}.jpg`, previewUrl: null, _draftS3Key: k, file: null });
               }
             }
-            setPendingPhotosPlatine(platOut);
+            setPendingPhotosPlatine((platOut || []).map(ensureVigikClientId));
 
             const portKeys = Array.isArray(dm.photos_platine_portail_s3_keys)
               ? dm.photos_platine_portail_s3_keys
+              : Array.isArray(dm.vigik?.portail)
+                ? dm.vigik.portail.map((item) => item?.s3_key).filter(Boolean)
               : dm.photo_platine_portail_s3_key
                 ? [dm.photo_platine_portail_s3_key]
                 : [];
             const portUrls = Array.isArray(dm.photo_platine_portail_presigned_urls)
               ? dm.photo_platine_portail_presigned_urls
+              : Array.isArray(dm.vigik?.portail)
+                ? dm.vigik.portail.map((item) => item?.url || null)
               : dm.photo_platine_portail_presigned_url
                 ? [dm.photo_platine_portail_presigned_url]
                 : [];
@@ -821,7 +839,7 @@ const RapportForm = ({
                 portOut.push({ name: `platine-portail-${i + 1}.jpg`, previewUrl: null, _draftS3Key: k, file: null });
               }
             }
-            setPendingPhotosPlatinePortail(portOut);
+            setPendingPhotosPlatinePortail((portOut || []).map(ensureVigikClientId));
           } else {
             setPendingPhotosPlatine([]);
             setPendingPhotosPlatinePortail([]);
@@ -833,8 +851,8 @@ const RapportForm = ({
           if (snap && !photoSnapshotIsEmpty(snap)) {
             const applied = applyPhotoSnapshotToState(snap);
             setPendingPhotos(applied.pendingPhotos);
-            setPendingPhotosPlatine(applied.pendingPhotosPlatine || []);
-            setPendingPhotosPlatinePortail(applied.pendingPhotosPlatinePortail || []);
+            setPendingPhotosPlatine((applied.pendingPhotosPlatine || []).map(ensureVigikClientId));
+            setPendingPhotosPlatinePortail((applied.pendingPhotosPlatinePortail || []).map(ensureVigikClientId));
           } else {
             setPendingPhotos({});
             setPendingPhotosPlatine([]);
@@ -912,12 +930,6 @@ const RapportForm = ({
 
   const handleVigikPlatinePortailChange = (value) => {
     setFormData((prev) => ({ ...prev, presence_platine_portail: value }));
-    if (value === false) {
-      (pendingPhotosPlatinePortail || []).forEach((p) => {
-        if (p?.previewUrl && String(p.previewUrl).startsWith("blob:")) URL.revokeObjectURL(p.previewUrl);
-      });
-      setPendingPhotosPlatinePortail([]);
-    }
     scheduleDraftPersistence();
   };
 
@@ -1199,7 +1211,8 @@ const RapportForm = ({
   const isVigikPlus = formData.type_rapport === "vigik_plus";
   const vigikPortailPhotosEnabled =
     formData.presence_portail === false ||
-    (formData.presence_portail === true && formData.presence_platine_portail === true);
+    (formData.presence_portail === true &&
+      (formData.presence_platine_portail === true || formData.presence_platine_portail === false));
   const vigikPhotos = useMemo(() => {
     const out = [];
     const datePlat =
@@ -1427,7 +1440,8 @@ const RapportForm = ({
       if (
         formDataRef.current?.presence_portail === false ||
         (formDataRef.current?.presence_portail === true &&
-          formDataRef.current?.presence_platine_portail === true)
+          (formDataRef.current?.presence_platine_portail === true ||
+            formDataRef.current?.presence_platine_portail === false))
       ) {
         for (const p of pendingPhotosPlatinePortailRef.current || []) {
           if (!p?.file) continue;
@@ -1509,10 +1523,13 @@ const RapportForm = ({
     const photos_platine_portail_s3_keys = [];
     if (vigik) {
       const nextPlatState = [];
+      const replacedPlatClientIds = new Set();
+      const platBlobUrlsToRevoke = [];
       for (const p of platItems) {
+        const clientId = p?.clientId || createVigikClientPhotoId();
         if (p._draftS3Key) {
           photos_platine_s3_keys.push(p._draftS3Key);
-          nextPlatState.push({ ...p, file: null });
+          nextPlatState.push({ ...p, clientId, file: null });
           continue;
         }
         if (!p.file) continue;
@@ -1523,27 +1540,64 @@ const RapportForm = ({
           fd,
           { headers: { "Content-Type": "multipart/form-data" } }
         );
+        replacedPlatClientIds.add(clientId);
         if (data.s3_key) photos_platine_s3_keys.push(data.s3_key);
-        if (p.previewUrl && String(p.previewUrl).startsWith("blob:")) URL.revokeObjectURL(p.previewUrl);
+        const nextPreviewUrl = data.url || data.presigned_url || p.previewUrl || null;
+        if (
+          p.previewUrl &&
+          String(p.previewUrl).startsWith("blob:") &&
+          nextPreviewUrl !== p.previewUrl
+        ) {
+          platBlobUrlsToRevoke.push(p.previewUrl);
+        }
         nextPlatState.push({
+          clientId,
           _draftS3Key: data.s3_key,
           name: p.name || "photo.jpg",
           file: null,
-          previewUrl: data.presigned_url || null,
+          previewUrl: nextPreviewUrl,
         });
       }
-      setPendingPhotosPlatine(nextPlatState);
+      setPendingPhotosPlatine((prev) => {
+        const next = [...nextPlatState];
+        const seenClientIds = new Set(next.map((p) => p.clientId).filter(Boolean));
+        const seenS3 = new Set(next.map((p) => p?._draftS3Key).filter(Boolean));
+        for (const pRaw of prev || []) {
+          const p = ensureVigikClientId(pRaw);
+          if (seenClientIds.has(p.clientId)) continue;
+          if (replacedPlatClientIds.has(p.clientId)) continue;
+          if (p?._draftS3Key && seenS3.has(p._draftS3Key)) continue;
+          if (p?.previewUrl && String(p.previewUrl).startsWith("blob:") && !p?.file) continue;
+          if (p?.file || p?._draftS3Key) {
+            next.push(p);
+            seenClientIds.add(p.clientId);
+            if (p?._draftS3Key) seenS3.add(p._draftS3Key);
+          }
+        }
+        return next;
+      });
+      platBlobUrlsToRevoke.forEach((u) => {
+        try {
+          URL.revokeObjectURL(u);
+        } catch {
+          /* noop */
+        }
+      });
 
       const fdVigik = formDataRef.current;
       const allowPortailPhoto =
         fdVigik?.presence_portail === false ||
-        (fdVigik?.presence_portail === true && fdVigik?.presence_platine_portail === true);
+        (fdVigik?.presence_portail === true &&
+          (fdVigik?.presence_platine_portail === true || fdVigik?.presence_platine_portail === false));
       const nextPortState = [];
+      const replacedPortClientIds = new Set();
+      const portBlobUrlsToRevoke = [];
       if (allowPortailPhoto) {
         for (const p of portItems) {
+          const clientId = p?.clientId || createVigikClientPhotoId();
           if (p._draftS3Key) {
             photos_platine_portail_s3_keys.push(p._draftS3Key);
-            nextPortState.push({ ...p, file: null });
+            nextPortState.push({ ...p, clientId, file: null });
             continue;
           }
           if (!p.file) continue;
@@ -1554,18 +1608,49 @@ const RapportForm = ({
             fd,
             { headers: { "Content-Type": "multipart/form-data" } }
           );
+          replacedPortClientIds.add(clientId);
           if (data.s3_key) photos_platine_portail_s3_keys.push(data.s3_key);
-          if (p.previewUrl && String(p.previewUrl).startsWith("blob:")) URL.revokeObjectURL(p.previewUrl);
+          const nextPreviewUrl = data.url || data.presigned_url || p.previewUrl || null;
+          if (
+            p.previewUrl &&
+            String(p.previewUrl).startsWith("blob:") &&
+            nextPreviewUrl !== p.previewUrl
+          ) {
+            portBlobUrlsToRevoke.push(p.previewUrl);
+          }
           nextPortState.push({
+            clientId,
             _draftS3Key: data.s3_key,
             name: p.name || "photo.jpg",
             file: null,
-            previewUrl: data.presigned_url || null,
+            previewUrl: nextPreviewUrl,
           });
         }
-        setPendingPhotosPlatinePortail(nextPortState);
-      } else if (fdVigik?.presence_portail === true && fdVigik?.presence_platine_portail === false) {
-        setPendingPhotosPlatinePortail([]);
+        setPendingPhotosPlatinePortail((prev) => {
+          const next = [...nextPortState];
+          const seenClientIds = new Set(next.map((p) => p.clientId).filter(Boolean));
+          const seenS3 = new Set(next.map((p) => p?._draftS3Key).filter(Boolean));
+          for (const pRaw of prev || []) {
+            const p = ensureVigikClientId(pRaw);
+            if (seenClientIds.has(p.clientId)) continue;
+            if (replacedPortClientIds.has(p.clientId)) continue;
+            if (p?._draftS3Key && seenS3.has(p._draftS3Key)) continue;
+            if (p?.previewUrl && String(p.previewUrl).startsWith("blob:") && !p?.file) continue;
+            if (p?.file || p?._draftS3Key) {
+              next.push(p);
+              seenClientIds.add(p.clientId);
+              if (p?._draftS3Key) seenS3.add(p._draftS3Key);
+            }
+          }
+          return next;
+        });
+        portBlobUrlsToRevoke.forEach((u) => {
+          try {
+            URL.revokeObjectURL(u);
+          } catch {
+            /* noop */
+          }
+        });
       }
     }
 
@@ -1832,9 +1917,14 @@ const RapportForm = ({
     try {
       const processed = await Promise.all(arr.map((f) => compressImage(f, VIGIK_REPORT_PHOTO_OPTIONS)));
       setPendingPhotosPlatine((prev) => {
-        const next = [...prev];
+        const next = (prev || []).map(ensureVigikClientId);
         for (const file of processed) {
-          next.push({ file, name: file.name, previewUrl: URL.createObjectURL(file) });
+          next.push({
+            clientId: createVigikClientPhotoId(),
+            file,
+            name: file.name,
+            previewUrl: URL.createObjectURL(file),
+          });
         }
         return next;
       });
@@ -1881,9 +1971,14 @@ const RapportForm = ({
     try {
       const processed = await Promise.all(arr.map((f) => compressImage(f, VIGIK_REPORT_PHOTO_OPTIONS)));
       setPendingPhotosPlatinePortail((prev) => {
-        const next = [...prev];
+        const next = (prev || []).map(ensureVigikClientId);
         for (const file of processed) {
-          next.push({ file, name: file.name, previewUrl: URL.createObjectURL(file) });
+          next.push({
+            clientId: createVigikClientPhotoId(),
+            file,
+            name: file.name,
+            previewUrl: URL.createObjectURL(file),
+          });
         }
         return next;
       });
@@ -2538,7 +2633,7 @@ const RapportForm = ({
                 <Box sx={{ display: "flex", alignItems: "flex-start", gap: 1.5, flexWrap: "wrap" }}>
                   {(pendingPhotosPlatine || []).map((p, i) => (
                     <Box
-                      key={`plat-${i}-${p._draftS3Key || p.name || ""}`}
+                      key={p.clientId || p._draftS3Key || `plat-${i}-${p.name || ""}`}
                       sx={{
                         width: 140,
                         borderRadius: 1,
@@ -2703,7 +2798,7 @@ const RapportForm = ({
                     const platCount = (pendingPhotosPlatine || []).length;
                     return (
                       <Box
-                        key={`port-${i}-${p._draftS3Key || p.name || ""}`}
+                        key={p.clientId || p._draftS3Key || `port-${i}-${p.name || ""}`}
                         sx={{
                           width: 140,
                           borderRadius: 1,

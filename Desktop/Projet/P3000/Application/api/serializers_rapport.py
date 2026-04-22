@@ -37,7 +37,8 @@ def _normalize_vigik_portail_answers(validated_data, instance=None):
 
     Sans portail : pas de réponse « platine au portail », mais des photos
     facultatives peuvent rester associées au rapport.
-    Portail oui sans platine : pas de photos portail.
+    Les photos « portail » (facultatives) ne sont pas liées au booléen
+    « présence de platine au portail ».
     """
     type_r = validated_data.get('type_rapport')
     if type_r is None and instance is not None:
@@ -47,17 +48,8 @@ def _normalize_vigik_portail_answers(validated_data, instance=None):
     pp = validated_data.get('presence_portail')
     if pp is None and instance is not None:
         pp = instance.presence_portail
-    if 'presence_platine_portail' in validated_data:
-        ppp = validated_data.get('presence_platine_portail')
-    elif instance is not None:
-        ppp = instance.presence_platine_portail
-    else:
-        ppp = None
-
     if pp is False:
         validated_data['presence_platine_portail'] = None
-    elif pp is True and ppp is False:
-        validated_data['photos_platine_portail_s3_keys'] = []
     return validated_data
 
 
