@@ -6,7 +6,9 @@ from django.utils import timezone
 from datetime import datetime, timedelta, date
 from ..models import (
     Chantier,
+    Devis,
     Facture,
+    FactureTS,
     BonCommande,
     Event,
     Situation,
@@ -32,6 +34,19 @@ class DashboardViewSet(viewsets.ViewSet):
         year = int(year_param) if year_param else datetime.now().year
         month = request.query_params.get('month')
         chantier_id = request.query_params.get('chantier_id')
+        period_start_raw = request.query_params.get('period_start')
+        period_end_raw = request.query_params.get('period_end')
+
+        period_start = None
+        period_end = None
+        try:
+            if period_start_raw:
+                period_start = datetime.strptime(period_start_raw, "%Y-%m-%d").date()
+            if period_end_raw:
+                period_end = datetime.strptime(period_end_raw, "%Y-%m-%d").date()
+        except ValueError:
+            period_start = None
+            period_end = None
 
         # Filtrer les chantiers
         chantiers_query = Chantier.objects.all()
@@ -42,7 +57,12 @@ class DashboardViewSet(viewsets.ViewSet):
         chantiers_stats = self.get_chantiers_stats(chantiers_query, year, month)
 
         # Récupérer les statistiques globales
-        global_stats = self.get_global_stats(chantiers_query)
+        global_stats = self.get_global_stats(
+            chantiers_query,
+            year=year,
+            period_start=period_start,
+            period_end=period_end,
+        )
 
         # Récupérer les statistiques temporelles
         stats_temporelles = self.get_stats_temporelles(chantiers_query, year, month, request)
@@ -347,12 +367,59 @@ class DashboardViewSet(viewsets.ViewSet):
         
         return chantiers_stats
 
-    def get_global_stats(self, chantiers_query):
+    def get_global_stats(self, chantiers_query, year=None, period_start=None, period_end=None):
         """Calcule les statistiques globales pour tous les chantiers"""
         try:
+            # CA dashboard aligné métier :
+            # montant marché (devis_chantier) + factures + avenants (FactureTS)
+            devis_marche_query = Devis.objects.filter(
+                chantier__in=chantiers_query,
+                devis_chantier=True,
+            )
+            factures_query = Facture.objects.filter(chantier__in=chantiers_query)
+            avenants_query = FactureTS.objects.filter(chantier__in=chantiers_query)
+
+            # Filtrage temporel : si une période est fournie, elle prime.
+            if period_start and period_end:
+                devis_marche_query = devis_marche_query.filter(
+                    date_creation__date__gte=period_start,
+                    date_creation__date__lte=period_end,
+                )
+                factures_query = factures_query.filter(
+                    date_creation__date__gte=period_start,
+                    date_creation__date__lte=period_end,
+                )
+                avenants_query = avenants_query.filter(
+                    date_creation__date__gte=period_start,
+                    date_creation__date__lte=period_end,
+                )
+            elif year is not None:
+                devis_marche_query = devis_marche_query.filter(date_creation__year=year)
+                factures_query = factures_query.filter(date_creation__year=year)
+                avenants_query = avenants_query.filter(date_creation__year=year)
+
+            total_devis_marche_ht = float(
+                devis_marche_query.aggregate(total=Sum('price_ht'))['total'] or 0
+            )
+            total_factures_ht = float(
+                factures_query.aggregate(total=Sum('price_ht'))['total'] or 0
+            )
+            total_avenants_ht = float(
+                avenants_query.aggregate(total=Sum('montant_ht'))['total'] or 0
+            )
+            total_devis_marche_ttc = float(
+                devis_marche_query.aggregate(total=Sum('price_ttc'))['total'] or 0
+            )
+            total_factures_ttc = float(
+                factures_query.aggregate(total=Sum('price_ttc'))['total'] or 0
+            )
+            total_avenants_ttc = float(
+                avenants_query.aggregate(total=Sum('montant_ttc'))['total'] or 0
+            )
+
             # Calculer les totaux pour tous les chantiers
-            total_montant_ttc = sum(float(c.montant_ttc or 0) for c in chantiers_query)
-            total_montant_ht = sum(float(c.montant_ht or 0) for c in chantiers_query)
+            total_montant_ttc = total_devis_marche_ttc + total_factures_ttc + total_avenants_ttc
+            total_montant_ht = total_devis_marche_ht + total_factures_ht + total_avenants_ht
             total_cout_materiel = sum(float(c.cout_materiel or 0) for c in chantiers_query)
             total_cout_main_oeuvre = sum(float(c.cout_main_oeuvre or 0) for c in chantiers_query)
             total_cout_sous_traitance = sum(float(c.cout_sous_traitance or 0) for c in chantiers_query)
@@ -373,6 +440,9 @@ class DashboardViewSet(viewsets.ViewSet):
             return {
                 'total_montant_ttc': total_montant_ttc,
                 'total_montant_ht': total_montant_ht,
+                'total_devis_marche_ht': total_devis_marche_ht,
+                'total_factures_ht': total_factures_ht,
+                'total_avenants_ht': total_avenants_ht,
                 'total_montant_estime_ht': total_montant_ht,
                 'total_cout_materiel': total_cout_materiel,
                 'total_cout_main_oeuvre': total_cout_main_oeuvre,
@@ -391,6 +461,9 @@ class DashboardViewSet(viewsets.ViewSet):
             return {
                 'total_montant_ttc': 0,
                 'total_montant_ht': 0,
+                'total_devis_marche_ht': 0,
+                'total_factures_ht': 0,
+                'total_avenants_ht': 0,
                 'total_montant_estime_ht': 0,
                 'total_cout_materiel': 0,
                 'total_cout_main_oeuvre': 0,
