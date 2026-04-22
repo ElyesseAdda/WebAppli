@@ -8,6 +8,8 @@ import DashboardCardOverduePayments from "./DashboardCardOverduePayments";
 import DashboardCardActiveProjects from "./DashboardCardActiveProjects";
 import DashboardCardAverageTicket from "./DashboardCardAverageTicket";
 import DashboardCardYearlyGrowth from "./DashboardCardYearlyGrowth";
+import DashboardCardClientReceivables from "./DashboardCardClientReceivables";
+import DashboardCardCashBurn from "./DashboardCardCashBurn";
 
 const DashboardCardsGrid = ({
   totalCA,
@@ -30,9 +32,9 @@ const DashboardCardsGrid = ({
       sx={{
         display: "grid",
         gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
-        gridTemplateRows: "repeat(4, minmax(0, 1fr))",
+        gridTemplateRows: "repeat(5, minmax(0, 1fr))",
         gap: 1.5,
-        height: 460,
+        height: 580,
       }}
     >
       <DashboardCardRevenueTotal
@@ -60,6 +62,8 @@ const DashboardCardsGrid = ({
       <DashboardCardActiveProjects />
       <DashboardCardAverageTicket />
       <DashboardCardYearlyGrowth />
+      <DashboardCardClientReceivables />
+      <DashboardCardCashBurn />
     </Box>
   );
 };

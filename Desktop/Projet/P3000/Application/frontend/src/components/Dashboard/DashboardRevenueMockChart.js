@@ -17,8 +17,8 @@ const monthlyRevenue = [
 ];
 
 const DashboardRevenueMockChart = () => {
-  const chartWidth = 680;
-  const chartHeight = 420;
+  const chartWidth = 760;
+  const chartHeight = 520;
   const padding = { top: 32, right: 20, bottom: 36, left: 42 };
   const graphWidth = chartWidth - padding.left - padding.right;
   const graphHeight = chartHeight - padding.top - padding.bottom;
@@ -48,7 +48,7 @@ const DashboardRevenueMockChart = () => {
           transform: "translateY(-2px)",
           boxShadow: "0 10px 24px rgba(17, 24, 39, 0.12)",
         },
-        height: 460,
+        height: 580,
         p: 2,
         position: "relative",
         overflow: "hidden",

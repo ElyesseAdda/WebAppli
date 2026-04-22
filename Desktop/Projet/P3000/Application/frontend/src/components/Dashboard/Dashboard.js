@@ -188,7 +188,6 @@ const DashboardFilters = () => {
         elevation={2}
         sx={{
           p: 2,
-          mb: 3,
           display: "flex",
           alignItems: "center",
           gap: 2,
@@ -295,11 +294,12 @@ const Dashboard = () => {
         <Box
           sx={{
             display: "flex",
-            alignItems: "center",
+            alignItems: "flex-start",
             justifyContent: "space-between",
             mb: 4,
             gap: 2,
             maxWidth: "1360px",
+            width: "100%",
           }}
         >
           <Typography variant="h4" component="h1" sx={{ color: "white", fontWeight: "bold" }}>
@@ -307,7 +307,9 @@ const Dashboard = () => {
           </Typography>
 
           {/* Section des filtres */}
-          <DashboardFilters />
+          <Box sx={{ ml: "auto", display: "flex", justifyContent: "flex-end" }}>
+            <DashboardFilters />
+          </Box>
         </Box>
 
         {/* Contenu du dashboard avec accès aux filtres */}

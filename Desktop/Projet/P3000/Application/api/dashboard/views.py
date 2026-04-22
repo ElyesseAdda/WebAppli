@@ -10,6 +10,9 @@ from ..models import (
     Facture,
     FactureTS,
     BonCommande,
+    LaborCost,
+    PaiementFournisseurMateriel,
+    FactureSousTraitant,
     Event,
     Situation,
 )
@@ -370,6 +373,18 @@ class DashboardViewSet(viewsets.ViewSet):
     def get_global_stats(self, chantiers_query, year=None, period_start=None, period_end=None):
         """Calcule les statistiques globales pour tous les chantiers"""
         try:
+            # Définir la fenêtre temporelle de référence
+            # - période explicite si fournie
+            # - sinon année complète
+            date_start = None
+            date_end = None
+            if period_start and period_end:
+                date_start = period_start
+                date_end = period_end
+            elif year is not None:
+                date_start = date(int(year), 1, 1)
+                date_end = date(int(year), 12, 31)
+
             # CA dashboard aligné métier :
             # montant marché (devis_chantier) + factures + avenants (FactureTS)
             devis_marche_query = Devis.objects.filter(
@@ -420,9 +435,78 @@ class DashboardViewSet(viewsets.ViewSet):
             # Calculer les totaux pour tous les chantiers
             total_montant_ttc = total_devis_marche_ttc + total_factures_ttc + total_avenants_ttc
             total_montant_ht = total_devis_marche_ht + total_factures_ht + total_avenants_ht
-            total_cout_materiel = sum(float(c.cout_materiel or 0) for c in chantiers_query)
-            total_cout_main_oeuvre = sum(float(c.cout_main_oeuvre or 0) for c in chantiers_query)
-            total_cout_sous_traitance = sum(float(c.cout_sous_traitance or 0) for c in chantiers_query)
+
+            # Coûts time-aware alignés avec les tableaux métier
+            # - Fournisseur : PaiementFournisseurMateriel (mois/année du tableau fournisseur)
+            # - Sous-traitance : FactureSousTraitant (mois/année métier du tableau sous-traitant)
+            # Utilitaires de filtrage période sur base mois/année.
+            def month_year_to_date(y, m):
+                try:
+                    return date(int(y), int(m), 1)
+                except (TypeError, ValueError):
+                    return None
+
+            def in_period(month_date):
+                if month_date is None:
+                    return False
+                if date_start and date_end:
+                    return date_start <= month_date <= date_end
+                return True
+
+            # Fournisseur (tableau fournisseur)
+            fournisseurs_query = PaiementFournisseurMateriel.objects.filter(
+                chantier__in=chantiers_query
+            )
+            if year is not None and not (period_start and period_end):
+                fournisseurs_query = fournisseurs_query.filter(annee=year)
+
+            total_cout_materiel = 0.0
+            for pfm in fournisseurs_query:
+                month_date = month_year_to_date(pfm.annee, pfm.mois)
+                if not in_period(month_date):
+                    continue
+                montant = (
+                    float(pfm.montant_a_payer)
+                    if pfm.montant_a_payer is not None
+                    else float(pfm.montant or 0)
+                )
+                total_cout_materiel += montant
+
+            # Sous-traitance (tableau sous-traitant)
+            st_factures_query = FactureSousTraitant.objects.filter(chantier__in=chantiers_query)
+            if year is not None and not (period_start and period_end):
+                st_factures_query = st_factures_query.filter(annee=year)
+
+            total_cout_sous_traitance = 0.0
+            for facture_st in st_factures_query:
+                month_date = month_year_to_date(facture_st.annee, facture_st.mois)
+                if month_date is None and facture_st.date_reception:
+                    month_date = date(facture_st.date_reception.year, facture_st.date_reception.month, 1)
+                if not in_period(month_date):
+                    continue
+                total_cout_sous_traitance += float(facture_st.montant_facture_ht or 0)
+
+            # Main d'oeuvre : LaborCost est stocké en week/year -> conversion en date
+            labor_query = LaborCost.objects.filter(chantier__in=chantiers_query)
+            if date_start and date_end:
+                labor_query = labor_query.filter(year__gte=date_start.year, year__lte=date_end.year)
+
+            total_cout_main_oeuvre = 0.0
+            for labor in labor_query:
+                try:
+                    week_start = date.fromisocalendar(int(labor.year), int(labor.week), 1)
+                except ValueError:
+                    continue
+                if date_start and date_end and not (date_start <= week_start <= date_end):
+                    continue
+                total_cout_main_oeuvre += float(
+                    (labor.cost_normal or 0)
+                    + (labor.cost_samedi or 0)
+                    + (labor.cost_dimanche or 0)
+                    + (labor.cost_ferie or 0)
+                    + (labor.cost_overtime or 0)
+                )
+
             total_cout_estime_materiel = sum(float(c.cout_estime_materiel or 0) for c in chantiers_query)
             total_cout_estime_main_oeuvre = sum(float(c.cout_estime_main_oeuvre or 0) for c in chantiers_query)
             
