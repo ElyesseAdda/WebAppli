@@ -1,7 +1,7 @@
 import React from "react";
 import DashboardMetricCardShell from "./DashboardMetricCardShell";
 
-const DashboardCardRetards = () => (
+const DashboardCardOverduePayments = () => (
   <DashboardMetricCardShell
     title="Paiements en retard"
     value="96 300 EUR"
@@ -11,4 +11,4 @@ const DashboardCardRetards = () => (
   />
 );
 
-export default DashboardCardRetards;
+export default DashboardCardOverduePayments;

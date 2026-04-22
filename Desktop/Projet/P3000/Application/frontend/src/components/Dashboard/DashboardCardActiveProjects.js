@@ -1,7 +1,7 @@
 import React from "react";
 import DashboardMetricCardShell from "./DashboardMetricCardShell";
 
-const DashboardCardDossiersActifs = () => (
+const DashboardCardActiveProjects = () => (
   <DashboardMetricCardShell
     title="Dossiers actifs"
     value="58"
@@ -11,4 +11,4 @@ const DashboardCardDossiersActifs = () => (
   />
 );
 
-export default DashboardCardDossiersActifs;
+export default DashboardCardActiveProjects;

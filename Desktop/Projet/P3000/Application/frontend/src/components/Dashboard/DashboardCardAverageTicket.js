@@ -1,7 +1,7 @@
 import React from "react";
 import DashboardMetricCardShell from "./DashboardMetricCardShell";
 
-const DashboardCardTicketMoyen = () => (
+const DashboardCardAverageTicket = () => (
   <DashboardMetricCardShell
     title="Ticket moyen"
     value="5 687 EUR"
@@ -11,4 +11,4 @@ const DashboardCardTicketMoyen = () => (
   />
 );
 
-export default DashboardCardTicketMoyen;
+export default DashboardCardAverageTicket;

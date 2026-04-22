@@ -1,7 +1,7 @@
 import React from "react";
 import DashboardMetricCardShell from "./DashboardMetricCardShell";
 
-const DashboardCardCroissance = () => (
+const DashboardCardYearlyGrowth = () => (
   <DashboardMetricCardShell
     title="Croissance annuelle"
     value="+11.6%"
@@ -11,4 +11,4 @@ const DashboardCardCroissance = () => (
   />
 );
 
-export default DashboardCardCroissance;
+export default DashboardCardYearlyGrowth;

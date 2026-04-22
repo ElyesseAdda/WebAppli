@@ -1,13 +1,13 @@
 import { Box } from "@mui/material";
 import React from "react";
-import DashboardCardTotalCA from "./DashboardCardTotalCA";
-import DashboardCardMargeBrute from "./DashboardCardMargeBrute";
-import DashboardCardFacturesEmises from "./DashboardCardFacturesEmises";
-import DashboardCardEncaissement from "./DashboardCardEncaissement";
-import DashboardCardRetards from "./DashboardCardRetards";
-import DashboardCardDossiersActifs from "./DashboardCardDossiersActifs";
-import DashboardCardTicketMoyen from "./DashboardCardTicketMoyen";
-import DashboardCardCroissance from "./DashboardCardCroissance";
+import DashboardCardRevenueTotal from "./DashboardCardRevenueTotal";
+import DashboardCardGrossMargin from "./DashboardCardGrossMargin";
+import DashboardCardProjectCostTotal from "./DashboardCardProjectCostTotal";
+import DashboardCardCashIn from "./DashboardCardCashIn";
+import DashboardCardOverduePayments from "./DashboardCardOverduePayments";
+import DashboardCardActiveProjects from "./DashboardCardActiveProjects";
+import DashboardCardAverageTicket from "./DashboardCardAverageTicket";
+import DashboardCardYearlyGrowth from "./DashboardCardYearlyGrowth";
 
 const DashboardCardsGrid = ({
   totalCA,
@@ -35,31 +35,31 @@ const DashboardCardsGrid = ({
         height: 460,
       }}
     >
-      <DashboardCardTotalCA
+      <DashboardCardRevenueTotal
         value={totalCA}
         loading={totalCALoading}
         progressPercent={totalCAProgress}
         comparisonYear={totalCAComparisonYear}
       />
-      <DashboardCardMargeBrute
+      <DashboardCardGrossMargin
         value={margeBrute}
         ratePercent={margeBruteRate}
         loading={margeBruteLoading}
         progressPercent={margeBruteProgress}
         comparisonYear={margeBruteComparisonYear}
       />
-      <DashboardCardFacturesEmises
+      <DashboardCardProjectCostTotal
         value={coutChantierGlobal}
         coutMateriel={coutMateriel}
         coutMainOeuvre={coutMainOeuvre}
         coutSousTraitance={coutSousTraitance}
         loading={coutChantierLoading}
       />
-      <DashboardCardEncaissement />
-      <DashboardCardRetards />
-      <DashboardCardDossiersActifs />
-      <DashboardCardTicketMoyen />
-      <DashboardCardCroissance />
+      <DashboardCardCashIn />
+      <DashboardCardOverduePayments />
+      <DashboardCardActiveProjects />
+      <DashboardCardAverageTicket />
+      <DashboardCardYearlyGrowth />
     </Box>
   );
 };

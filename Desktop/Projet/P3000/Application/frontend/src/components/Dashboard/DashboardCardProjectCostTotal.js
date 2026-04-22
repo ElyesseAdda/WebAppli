@@ -11,7 +11,7 @@ const formatCurrency = (amount) =>
     maximumFractionDigits: 0,
   }).format(Number(amount || 0));
 
-const DashboardCardFacturesEmises = ({
+const DashboardCardProjectCostTotal = ({
   value = 0,
   coutMateriel = 0,
   coutMainOeuvre = 0,
@@ -51,4 +51,4 @@ const DashboardCardFacturesEmises = ({
   />
 );
 
-export default DashboardCardFacturesEmises;
+export default DashboardCardProjectCostTotal;

@@ -1,7 +1,7 @@
 import React from "react";
 import DashboardMetricCardShell from "./DashboardMetricCardShell";
 
-const DashboardCardEncaissement = () => (
+const DashboardCardCashIn = () => (
   <DashboardMetricCardShell
     title="Encaissement"
     value="1 502 000 EUR"
@@ -11,4 +11,4 @@ const DashboardCardEncaissement = () => (
   />
 );
 
-export default DashboardCardEncaissement;
+export default DashboardCardCashIn;

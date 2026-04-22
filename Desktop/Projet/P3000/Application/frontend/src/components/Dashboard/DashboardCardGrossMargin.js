@@ -23,26 +23,28 @@ const formatProgressLabel = (progressPercent, comparisonYear) => {
   return `0.0% stable${yearSuffix}`;
 };
 
-const DashboardCardTotalCA = ({
+const DashboardCardGrossMargin = ({
   value = 0,
+  ratePercent = 0,
   loading = false,
   progressPercent = null,
   comparisonYear = null,
-}) => {
-  return (
-    <DashboardMetricCardShell
-      title="CA total"
-      value={loading ? "Chargement..." : formatCurrency(value)}
-      valueColor="#2196f3"
-      subtitle={
-        loading
-          ? "Calcul de progression..."
-          : formatProgressLabel(progressPercent, comparisonYear)
-      }
-      accent="#2563eb"
-      variant={7}
-    />
-  );
-};
+}) => (
+  <DashboardMetricCardShell
+    title="Marge brute"
+    value={loading ? "Chargement..." : formatCurrency(value)}
+    valueColor={loading ? undefined : Number(value || 0) >= 0 ? "#0d9488" : "#dc2626"}
+    subtitle={
+      loading
+        ? "Calcul du taux..."
+        : `Taux ${Number(ratePercent || 0).toFixed(1)}% | ${formatProgressLabel(
+            progressPercent,
+            comparisonYear
+          )}`
+    }
+    accent="#059669"
+    variant={7}
+  />
+);
 
-export default DashboardCardTotalCA;
+export default DashboardCardGrossMargin;
