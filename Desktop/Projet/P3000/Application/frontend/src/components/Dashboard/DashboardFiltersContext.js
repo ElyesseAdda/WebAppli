@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState } from "react";
+import React, { createContext, useCallback, useContext, useState } from "react";
 
 // Création du contexte pour les filtres du Dashboard
 const DashboardFiltersContext = createContext();
@@ -27,6 +27,14 @@ export const DashboardFiltersProvider = ({ children }) => {
 
   // État pour gérer l'accordéon ouvert (un seul à la fois)
   const [openAccordion, setOpenAccordion] = useState(null);
+
+  // Sélection des agences pour le montant de la carte « Dépenses agence »
+  // null = défaut (première agence par id dans le breakdown) ; [] = aucune (0 € + consigne)
+  const [depensesAgenceIncludedAgenceIds, setDepensesAgenceIncludedAgenceIds] = useState(null);
+
+  const clearDepensesAgenceSelection = useCallback(() => {
+    setDepensesAgenceIncludedAgenceIds(null);
+  }, []);
 
   // Fonction pour mettre à jour l'année
   const updateYear = (year) => {
@@ -67,6 +75,9 @@ export const DashboardFiltersProvider = ({ children }) => {
     clearPeriod,
     openAccordion,
     toggleAccordion,
+    depensesAgenceIncludedAgenceIds,
+    setDepensesAgenceIncludedAgenceIds,
+    clearDepensesAgenceSelection,
   };
 
   return (

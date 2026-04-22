@@ -1,12 +1,6 @@
 import React from "react";
 import DashboardMetricCardShell from "./DashboardMetricCardShell";
-
-const formatCurrency = (amount) =>
-  new Intl.NumberFormat("fr-FR", {
-    style: "currency",
-    currency: "EUR",
-    maximumFractionDigits: 0,
-  }).format(Number(amount || 0));
+import { formatDashboardCurrency } from "./dashboardCurrency";
 
 const formatProgressLabel = (progressPercent, comparisonYear) => {
   const yearSuffix = comparisonYear ? ` vs ${comparisonYear}` : "";
@@ -33,7 +27,7 @@ const DashboardCardRevenueTotal = ({
   return (
     <DashboardMetricCardShell
       title="CA total"
-      value={loading ? "Chargement..." : formatCurrency(value)}
+      value={loading ? "Chargement..." : formatDashboardCurrency(value)}
       valueColor="#2196f3"
       subtitle={
         loading

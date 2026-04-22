@@ -88,6 +88,8 @@ const DashboardMetricCardShell = ({
   valueColor,
   percentValue,
   percentBase,
+  extraContent = null,
+  toolbarPrefix = null,
 }) => {
   const variantStyles = getVariantStyles(variant, accent);
   const darkCard = variant === 3;
@@ -117,23 +119,34 @@ const DashboardMetricCardShell = ({
         ...variantStyles,
       }}
     >
-      {(label || percentLabel) && (
+      {(toolbarPrefix || label || percentLabel) && (
         <Box
           sx={{
             position: "absolute",
-            top: 10,
+            top: 8,
             right: 10,
-            px: 1,
-            py: 0.2,
-            borderRadius: "999px",
-            fontSize: "0.65rem",
-            fontWeight: 800,
-            letterSpacing: "0.3px",
-            bgcolor: darkCard ? "rgba(255,255,255,0.14)" : `${accent}20`,
-            color: darkCard ? "#e5e7eb" : accent,
+            display: "flex",
+            alignItems: "center",
+            gap: 0.5,
           }}
         >
-          {label || percentLabel}
+          {toolbarPrefix}
+          {(label || percentLabel) && (
+            <Box
+              sx={{
+                px: 1,
+                py: 0.2,
+                borderRadius: "999px",
+                fontSize: "0.65rem",
+                fontWeight: 800,
+                letterSpacing: "0.3px",
+                bgcolor: darkCard ? "rgba(255,255,255,0.14)" : `${accent}20`,
+                color: darkCard ? "#e5e7eb" : accent,
+              }}
+            >
+              {label || percentLabel}
+            </Box>
+          )}
         </Box>
       )}
       <Typography
@@ -174,6 +187,9 @@ const DashboardMetricCardShell = ({
         >
           {subtitle}
         </Typography>
+      ) : null}
+      {extraContent ? (
+        <Box sx={{ mt: 0.75, flex: 1, minHeight: 0, overflow: "auto" }}>{extraContent}</Box>
       ) : null}
       {footerItems.length > 0 && (
         <Box

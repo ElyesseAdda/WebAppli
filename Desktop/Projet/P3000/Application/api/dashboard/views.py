@@ -1,9 +1,13 @@
+from collections import defaultdict
+
 from rest_framework import viewsets, status
-from rest_framework.decorators import api_view, action
+from rest_framework.decorators import api_view, action, permission_classes
+from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from django.db.models import Sum, Q
 from django.utils import timezone
 from datetime import datetime, timedelta, date
+from .agency_planning import planning_montant_chantier_periode
 from ..models import (
     Chantier,
     Devis,
@@ -15,6 +19,9 @@ from ..models import (
     FactureSousTraitant,
     Event,
     Situation,
+    Agence,
+    AgencyExpenseMonth,
+    DashboardSettings,
 )
 
 
@@ -453,6 +460,14 @@ class DashboardViewSet(viewsets.ViewSet):
                     return date_start <= month_date <= date_end
                 return True
 
+            # Chantiers rattachés à une agence (pseudo-chantiers agence) : exclus des totaux
+            # MO / matériel / sous-traitance ; ces coûts sont suivis dans le module Agences.
+            agency_chantier_ids = set(
+                Agence.objects.exclude(chantier_id__isnull=True).values_list(
+                    "chantier_id", flat=True
+                )
+            )
+
             # Fournisseur (tableau fournisseur)
             fournisseurs_query = PaiementFournisseurMateriel.objects.filter(
                 chantier__in=chantiers_query
@@ -462,6 +477,8 @@ class DashboardViewSet(viewsets.ViewSet):
 
             total_cout_materiel = 0.0
             for pfm in fournisseurs_query:
+                if pfm.chantier_id in agency_chantier_ids:
+                    continue
                 month_date = month_year_to_date(pfm.annee, pfm.mois)
                 if not in_period(month_date):
                     continue
@@ -479,6 +496,8 @@ class DashboardViewSet(viewsets.ViewSet):
 
             total_cout_sous_traitance = 0.0
             for facture_st in st_factures_query:
+                if facture_st.chantier_id in agency_chantier_ids:
+                    continue
                 month_date = month_year_to_date(facture_st.annee, facture_st.mois)
                 if month_date is None and facture_st.date_reception:
                     month_date = date(facture_st.date_reception.year, facture_st.date_reception.month, 1)
@@ -493,6 +512,8 @@ class DashboardViewSet(viewsets.ViewSet):
 
             total_cout_main_oeuvre = 0.0
             for labor in labor_query:
+                if labor.chantier_id in agency_chantier_ids:
+                    continue
                 try:
                     week_start = date.fromisocalendar(int(labor.year), int(labor.week), 1)
                 except ValueError:
@@ -510,6 +531,75 @@ class DashboardViewSet(viewsets.ViewSet):
             total_cout_estime_materiel = sum(float(c.cout_estime_materiel or 0) for c in chantiers_query)
             total_cout_estime_main_oeuvre = sum(float(c.cout_estime_main_oeuvre or 0) for c in chantiers_query)
             
+            # Dépenses module Agences (AgencyExpenseMonth), aligné période — hors templates récurrence
+            def _agency_expense_month_line_amount(aem):
+                """Montant suivi : montant_paye si renseigné et non nul, sinon amount (comme le tableau)."""
+                paye = aem.montant_paye
+                if paye is not None and float(paye) != 0:
+                    return float(paye)
+                return float(aem.amount or 0)
+
+            totals_depenses_par_agence = defaultdict(float)
+            aem_qs = AgencyExpenseMonth.objects.filter(
+                Q(chantier__isnull=True) | Q(chantier__in=chantiers_query)
+            ).exclude(is_recurring_template=True)
+            for aem in aem_qs:
+                month_date_aem = month_year_to_date(aem.year, aem.month)
+                if not in_period(month_date_aem):
+                    continue
+                line_amt = _agency_expense_month_line_amount(aem)
+                aid = aem.agence_id
+                totals_depenses_par_agence[aid] += line_amt
+
+            agences = list(Agence.objects.all().order_by("id"))
+            # Même total que l'écran Agences (année) : dépenses mensuelles + planning sur le chantier lié
+            if date_start and date_end:
+                for ag in agences:
+                    cid = getattr(ag, "chantier_id", None)
+                    if cid:
+                        totals_depenses_par_agence[ag.id] += planning_montant_chantier_periode(
+                            cid, date_start, date_end
+                        )
+            main_agence = agences[0] if agences else None
+            main_agence_id = main_agence.id if main_agence else None
+            depenses_agence_principale_ht = float(
+                totals_depenses_par_agence.get(main_agence_id, 0.0)
+            )
+            depenses_agence_autres = []
+            for ag in agences[1:]:
+                tot = float(totals_depenses_par_agence.get(ag.id, 0.0))
+                if tot > 0:
+                    depenses_agence_autres.append(
+                        {"agence_id": ag.id, "nom": ag.nom, "total_ht": tot}
+                    )
+            none_total = float(totals_depenses_par_agence.get(None, 0.0))
+            if none_total > 0:
+                depenses_agence_autres.append(
+                    {
+                        "agence_id": None,
+                        "nom": "Non rattaché",
+                        "total_ht": none_total,
+                    }
+                )
+            total_depenses_agence_ht = float(sum(totals_depenses_par_agence.values()))
+
+            # Détail complet pour sélection multi-agences côté dashboard
+            depenses_agence_breakdown = [
+                {
+                    "agence_id": ag.id,
+                    "nom": ag.nom,
+                    "total_ht": float(totals_depenses_par_agence.get(ag.id, 0.0)),
+                }
+                for ag in agences
+            ]
+            depenses_agence_breakdown.append(
+                {
+                    "agence_id": None,
+                    "nom": "Non rattaché",
+                    "total_ht": none_total,
+                }
+            )
+
             # Calculer les marges
             marge_brute = total_montant_ht - (total_cout_materiel + total_cout_main_oeuvre + total_cout_sous_traitance)
             marge_estimee = total_montant_ht - (total_cout_estime_materiel + total_cout_estime_main_oeuvre)
@@ -538,7 +628,12 @@ class DashboardViewSet(viewsets.ViewSet):
                 'taux_marge_brute': taux_marge_brute,
                 'taux_marge_estimee': taux_marge_estimee,
                 'nombre_chantiers': chantiers_query.count(),
-                'nombre_chantiers_en_cours': nombre_chantiers_en_cours
+                'nombre_chantiers_en_cours': nombre_chantiers_en_cours,
+                'depenses_agence_principale_ht': depenses_agence_principale_ht,
+                'depenses_agence_main_agence_nom': main_agence.nom if main_agence else "",
+                'depenses_agence_autres': depenses_agence_autres,
+                'total_depenses_agence_ht': total_depenses_agence_ht,
+                'depenses_agence_breakdown': depenses_agence_breakdown,
             }
         except Exception as e:
             print(f"Erreur dans get_global_stats: {str(e)}")
@@ -559,7 +654,12 @@ class DashboardViewSet(viewsets.ViewSet):
                 'taux_marge_brute': 0,
                 'taux_marge_estimee': 0,
                 'nombre_chantiers': 0,
-                'nombre_chantiers_en_cours': 0
+                'nombre_chantiers_en_cours': 0,
+                'depenses_agence_principale_ht': 0,
+                'depenses_agence_main_agence_nom': "",
+                'depenses_agence_autres': [],
+                'total_depenses_agence_ht': 0,
+                'depenses_agence_breakdown': [],
             }
 
     def get_stats_temporelles(self, chantiers_query, year, month, request=None):
@@ -661,6 +761,67 @@ class DashboardViewSet(viewsets.ViewSet):
             stats[year_key][month_key]['cout_sous_traitance'] = cout_sous_traitance
         
         return stats
+
+
+def _sanitize_depenses_agence_id_list(raw):
+    if not isinstance(raw, list):
+        raise ValueError("depenses_agence_included_agence_ids doit être une liste")
+    out = []
+    for x in raw:
+        if x is None:
+            out.append(None)
+        elif isinstance(x, bool):
+            raise ValueError("Valeur booléenne non autorisée dans la liste d'identifiants")
+        elif isinstance(x, int):
+            out.append(int(x))
+        elif isinstance(x, str) and x.strip().lstrip("-").isdigit():
+            out.append(int(x))
+        else:
+            raise ValueError(f"Élément invalide dans la liste : {x!r}")
+    return out
+
+
+@api_view(["GET", "PUT"])
+@permission_classes([IsAuthenticated])
+def dashboard_settings(request):
+    """
+    Préférences du tableau de bord (singleton applicatif).
+    GET : lecture ; PUT : mise à jour partielle possible.
+    """
+    row = DashboardSettings.get_singleton()
+    if request.method == "GET":
+        return Response(
+            {
+                "depenses_agence_use_default": row.depenses_agence_use_default,
+                "depenses_agence_included_agence_ids": row.depenses_agence_included_agence_ids,
+                "extra": row.extra,
+                "updated_at": row.updated_at.isoformat() if row.updated_at else None,
+            }
+        )
+    try:
+        if "depenses_agence_use_default" in request.data:
+            v = request.data["depenses_agence_use_default"]
+            if isinstance(v, str):
+                row.depenses_agence_use_default = v.strip().lower() in ("true", "1", "yes", "on")
+            else:
+                row.depenses_agence_use_default = bool(v)
+        if "depenses_agence_included_agence_ids" in request.data:
+            row.depenses_agence_included_agence_ids = _sanitize_depenses_agence_id_list(
+                request.data["depenses_agence_included_agence_ids"]
+            )
+        if "extra" in request.data and isinstance(request.data["extra"], dict):
+            row.extra = request.data["extra"]
+        row.save()
+    except ValueError as exc:
+        return Response({"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+    return Response(
+        {
+            "depenses_agence_use_default": row.depenses_agence_use_default,
+            "depenses_agence_included_agence_ids": row.depenses_agence_included_agence_ids,
+            "extra": row.extra,
+            "updated_at": row.updated_at.isoformat() if row.updated_at else None,
+        }
+    )
 
 
 @api_view(['GET'])

@@ -9619,18 +9619,24 @@ class AgencyExpenseMonthViewSet(viewsets.ModelViewSet):
         expenses = self.queryset.filter(
             month=int(month),
             year=int(year)
-        )
+        ).exclude(is_recurring_template=True)
         if agence_id:
             expenses = expenses.filter(agence_id=int(agence_id))
-        
-        total = sum(float(e.amount) for e in expenses)
+
+        def _line_amount(e):
+            paye = e.montant_paye
+            if paye is not None and float(paye) != 0:
+                return float(paye)
+            return float(e.amount or 0)
+
+        total = sum(_line_amount(e) for e in expenses)
         totals_by_category = {}
         
         for expense in expenses:
             cat = expense.category
             if cat not in totals_by_category:
                 totals_by_category[cat] = 0
-            totals_by_category[cat] += float(expense.amount)
+            totals_by_category[cat] += _line_amount(expense)
         
         return Response({
             'expenses': self.serializer_class(expenses, many=True).data,
@@ -9646,16 +9652,22 @@ class AgencyExpenseMonthViewSet(viewsets.ModelViewSet):
         if not year:
             return Response({"error": "year is required"}, status=status.HTTP_400_BAD_REQUEST)
         year = int(year)
-        expenses = self.queryset.filter(year=year)
+        expenses = self.queryset.filter(year=year).exclude(is_recurring_template=True)
         if agence_id:
             expenses = expenses.filter(agence_id=int(agence_id))
+
+        def _line_amount_y(exp):
+            paye = exp.montant_paye
+            if paye is not None and float(paye) != 0:
+                return float(paye)
+            return float(exp.amount or 0)
 
         months = {}
         for exp in expenses:
             m = exp.month
             if m not in months:
                 months[m] = {'total': 0, 'by_category': {}}
-            amt = float(exp.amount)
+            amt = _line_amount_y(exp)
             months[m]['total'] += amt
             cat = exp.category or 'Autres'
             months[m]['by_category'][cat] = months[m]['by_category'].get(cat, 0) + amt

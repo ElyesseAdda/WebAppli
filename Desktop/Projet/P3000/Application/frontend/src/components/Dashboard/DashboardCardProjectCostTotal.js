@@ -1,12 +1,6 @@
 import React from "react";
 import DashboardMetricCardShell from "./DashboardMetricCardShell";
-
-const formatCurrency = (amount) =>
-  new Intl.NumberFormat("fr-FR", {
-    style: "currency",
-    currency: "EUR",
-    maximumFractionDigits: 0,
-  }).format(Number(amount || 0));
+import { formatDashboardCurrency } from "./dashboardCurrency";
 
 const DashboardCardProjectCostTotal = ({
   value = 0,
@@ -15,7 +9,7 @@ const DashboardCardProjectCostTotal = ({
 }) => (
   <DashboardMetricCardShell
     title="Cout chantier global"
-    value={loading ? "Chargement..." : formatCurrency(value)}
+    value={loading ? "Chargement..." : formatDashboardCurrency(value)}
     valueColor="#dc2626"
     subtitle=""
     accent="#7c3aed"

@@ -39,6 +39,15 @@ function formatMontantEuroFR(value) {
   }).format(n);
 }
 
+/** Montant utilisé pour totaux et affichage : montant_paye si suivi non nul, sinon amount (planning : amount uniquement). */
+function effectiveAgencyTableAmount(row) {
+  if (!row) return 0;
+  if (row.isPlanningRow) return parseFloat(row.amount) || 0;
+  const paye = row.montant_paye;
+  if (paye != null && paye !== "" && Number(paye) !== 0) return Number(paye);
+  return parseFloat(row.amount) || 0;
+}
+
 const AgencyExpenses = () => {
   const { agenceId } = useParams();
   const [expenses, setExpenses] = useState([]);
@@ -62,6 +71,9 @@ const AgencyExpenses = () => {
   const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
   const [expenseToDelete, setExpenseToDelete] = useState(null);
   const [yearlyTotal, setYearlyTotal] = useState(0);
+  /** Décomposition du total annuel (tableau vs planning, aligné dashboard sur la somme). */
+  const [yearlyTotalTableau, setYearlyTotalTableau] = useState(0);
+  const [yearlyTotalPlanning, setYearlyTotalPlanning] = useState(0);
   /** Totaux annuels par catégorie (dépenses saisies + planning agence sur 12 mois) */
   const [yearlyCategoryTotals, setYearlyCategoryTotals] = useState({});
   const [yearlyCategoryLoading, setYearlyCategoryLoading] = useState(false);
@@ -146,10 +158,16 @@ const AgencyExpenses = () => {
 
         const categoryMerged = {};
         let yearTotal = 0;
+        let sumTableau = 0;
+        let sumPlanning = 0;
         for (let i = 0; i < 12; i++) {
           const em = expMonths[i] || { total: 0, totals_by_category: [] };
           const sm = schedMonths[i] || { total_montant: 0 };
-          yearTotal += (Number(em.total) || 0) + (Number(sm.total_montant) || 0);
+          const tEm = Number(em.total) || 0;
+          const tSm = Number(sm.total_montant) || 0;
+          sumTableau += tEm;
+          sumPlanning += tSm;
+          yearTotal += tEm + tSm;
           (em.totals_by_category || []).forEach(({ category, total }) => {
             const c = category || "Autres";
             categoryMerged[c] = (categoryMerged[c] || 0) + (Number(total) || 0);
@@ -160,12 +178,16 @@ const AgencyExpenses = () => {
 
         setYearlyCategoryTotals(categoryMerged);
         setYearlyTotal(yearTotal);
+        setYearlyTotalTableau(sumTableau);
+        setYearlyTotalPlanning(sumPlanning);
         setPlanningAgence(planMonthRes.data);
       } catch (e) {
         console.error("Erreur chargement données annuelles/planning:", e);
         if (!cancelled) {
           setYearlyCategoryTotals({});
           setYearlyTotal(0);
+          setYearlyTotalTableau(0);
+          setYearlyTotalPlanning(0);
           setPlanningAgence(null);
         }
       } finally {
@@ -506,7 +528,7 @@ const AgencyExpenses = () => {
     const result = [...standaloneRows];
     
     Object.entries(agentGroups).forEach(([key, group]) => {
-      const totalAmount = group.rows.reduce((sum, r) => sum + (parseFloat(r.amount) || 0), 0);
+      const totalAmount = group.rows.reduce((sum, r) => sum + effectiveAgencyTableAmount(r), 0);
       
       // Ligne de header (total agent)
       result.push({
@@ -553,11 +575,13 @@ const AgencyExpenses = () => {
     return rows;
   }, [yearlyCategoryTotals]);
 
-  const calculateMonthlyTotal = () => {
+  /** Total mensuel : une seule fois chaque ligne réelle (pas les en-têtes de groupe qui dupliquent la somme). */
+  const monthlyTotalDisplayed = useMemo(() => {
     return tableRowsCombined.reduce((total, row) => {
-      return total + parseFloat(row.amount || 0);
+      if (row.isGroupHeader) return total;
+      return total + effectiveAgencyTableAmount(row);
     }, 0);
-  };
+  }, [tableRowsCombined]);
 
 
   const getExpenseCommentaire = (expense) => {
@@ -791,7 +815,7 @@ const AgencyExpenses = () => {
                       align="center"
                       sx={{ fontWeight: 700, color: "rgba(27, 120, 188, 1)", fontSize: "0.9rem" }}
                     >
-                      {formatMontantEuroFR(row.amount)}
+                      {formatMontantEuroFR(effectiveAgencyTableAmount(row))}
                     </TableCell>
                     <TableCell />
                     <TableCell />
@@ -855,7 +879,7 @@ const AgencyExpenses = () => {
                       {row.category}
                     </TableCell>
                     <TableCell align="center" sx={{ color: sourceColor }}>
-                      {formatMontantEuroFR(row.amount)}
+                      {formatMontantEuroFR(effectiveAgencyTableAmount(row))}
                     </TableCell>
                     <TableCell sx={{ minWidth: 160, maxWidth: 280, verticalAlign: "top" }}>
                       {row.isPlanningRow ? (
@@ -948,7 +972,7 @@ const AgencyExpenses = () => {
                   </TableCell>
                   <TableCell align="center">{row.category}</TableCell>
                   <TableCell align="center">
-                    {formatMontantEuroFR(row.amount)}
+                    {formatMontantEuroFR(effectiveAgencyTableAmount(row))}
                   </TableCell>
                   <TableCell sx={{ minWidth: 160, maxWidth: 280, verticalAlign: "top" }}>
                     <TextField
@@ -1000,7 +1024,7 @@ const AgencyExpenses = () => {
                 align="center"
                 sx={{ fontWeight: "bold", color: "rgba(27, 120, 188, 1)" }}
               >
-                {formatMontantEuroFR(calculateMonthlyTotal())}
+                {formatMontantEuroFR(monthlyTotalDisplayed)}
               </TableCell>
               <TableCell />
               <TableCell />
@@ -1047,6 +1071,11 @@ const AgencyExpenses = () => {
               </Typography>
               <Typography variant="caption" sx={{ color: "text.secondary", display: "block", mt: 0.35 }}>
                 Dépenses saisies + planning agence (12 mois)
+              </Typography>
+              <Typography variant="caption" sx={{ color: "text.secondary", display: "block", mt: 0.5, lineHeight: 1.4 }}>
+                Détail : tableau mensuel {formatMontantEuroFR(yearlyTotalTableau)} · planning{" "}
+                {formatMontantEuroFR(yearlyTotalPlanning)}
+                {" (le dashboard « dépenses agence » reprend la même logique sur l'année ou la période filtrée)"}
               </Typography>
             </Box>
             <Box

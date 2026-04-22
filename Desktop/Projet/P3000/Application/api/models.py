@@ -3614,6 +3614,56 @@ class Document(models.Model):
         return f"/api/drive/download/{self.id}/"
 
 
+class DashboardSettings(models.Model):
+    """
+    Préférences du tableau de bord (ligne logique unique via singleton_key).
+    Stocke notamment la sélection des agences pour la carte « Dépenses agence »
+    et un JSON libre pour d'autres besoins futurs du dashboard.
+    """
+
+    singleton_key = models.CharField(
+        max_length=40,
+        unique=True,
+        default="default",
+        editable=False,
+        help_text="Clé fixe pour une seule configuration applicative.",
+    )
+    depenses_agence_use_default = models.BooleanField(
+        default=True,
+        help_text="Si vrai, la carte applique la règle « première agence » (id minimal).",
+    )
+    depenses_agence_included_agence_ids = models.JSONField(
+        default=list,
+        blank=True,
+        help_text="Ids d'agence et/ou null pour « Non rattaché » ; utilisé si use_default est faux.",
+    )
+    extra = models.JSONField(
+        default=dict,
+        blank=True,
+        help_text="Champs futurs (filtres, options d'affichage, etc.).",
+    )
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = "Paramètres dashboard"
+        verbose_name_plural = "Paramètres dashboard"
+
+    @classmethod
+    def get_singleton(cls):
+        obj, _ = cls.objects.get_or_create(
+            singleton_key="default",
+            defaults={
+                "depenses_agence_use_default": True,
+                "depenses_agence_included_agence_ids": [],
+                "extra": {},
+            },
+        )
+        return obj
+
+    def __str__(self):
+        return "Paramètres dashboard"
+
+
 # Signal pour créer automatiquement les émetteurs après les migrations
 @receiver(post_migrate)
 def create_default_emetteurs(sender, **kwargs):

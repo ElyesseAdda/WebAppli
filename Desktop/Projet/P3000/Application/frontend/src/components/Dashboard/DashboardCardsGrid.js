@@ -5,7 +5,7 @@ import DashboardCardGrossMargin from "./DashboardCardGrossMargin";
 import DashboardCardProjectCostTotal from "./DashboardCardProjectCostTotal";
 import DashboardCardCashIn from "./DashboardCardCashIn";
 import DashboardCardOverduePayments from "./DashboardCardOverduePayments";
-import DashboardCardActiveProjects from "./DashboardCardActiveProjects";
+import DashboardCardAgencyExpenses from "./DashboardCardAgencyExpenses";
 import DashboardCardAverageTicket from "./DashboardCardAverageTicket";
 import DashboardCardYearlyGrowth from "./DashboardCardYearlyGrowth";
 import DashboardCardClientReceivables from "./DashboardCardClientReceivables";
@@ -26,6 +26,7 @@ const DashboardCardsGrid = ({
   coutMainOeuvre,
   coutSousTraitance,
   coutChantierLoading,
+  depensesAgenceBreakdown,
 }) => {
   return (
     <Box
@@ -63,7 +64,11 @@ const DashboardCardsGrid = ({
         totalCA={totalCA}
         loading={coutChantierLoading}
       />
-      <DashboardCardActiveProjects totalCA={totalCA} />
+      <DashboardCardAgencyExpenses
+        breakdown={depensesAgenceBreakdown}
+        loading={coutChantierLoading}
+        totalCA={totalCA}
+      />
       <DashboardCardAverageTicket
         value={coutMateriel}
         totalCA={totalCA}

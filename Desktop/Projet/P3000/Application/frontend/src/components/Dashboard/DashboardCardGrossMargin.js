@@ -1,12 +1,6 @@
 import React from "react";
 import DashboardMetricCardShell from "./DashboardMetricCardShell";
-
-const formatCurrency = (amount) =>
-  new Intl.NumberFormat("fr-FR", {
-    style: "currency",
-    currency: "EUR",
-    maximumFractionDigits: 0,
-  }).format(Number(amount || 0));
+import { formatDashboardCurrency } from "./dashboardCurrency";
 
 const formatProgressLabel = (progressPercent, comparisonYear) => {
   const yearSuffix = comparisonYear ? ` vs ${comparisonYear}` : "";
@@ -33,7 +27,7 @@ const DashboardCardGrossMargin = ({
 }) => (
   <DashboardMetricCardShell
     title="Marge brute"
-    value={loading ? "Chargement..." : formatCurrency(value)}
+    value={loading ? "Chargement..." : formatDashboardCurrency(value)}
     valueColor={loading ? undefined : Number(value || 0) >= 0 ? "#0d9488" : "#dc2626"}
     subtitle={
       loading

@@ -17,7 +17,7 @@ import {
   DialogActions,
   TextField,
 } from "@mui/material";
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import axios from "axios";
 import {
   DashboardFiltersProvider,
@@ -28,11 +28,42 @@ import DashboardCardsGrid from "./DashboardCardsGrid";
 
 // Composant interne qui utilise les filtres
 const DashboardContent = () => {
-  const { selectedYear, comparisonYears, periodStart, periodEnd } = useDashboardFilters();
+  const {
+    selectedYear,
+    comparisonYears,
+    periodStart,
+    periodEnd,
+    setDepensesAgenceIncludedAgenceIds,
+  } = useDashboardFilters();
   const [dashboardData, setDashboardData] = useState(null);
   const [comparisonDashboardData, setComparisonDashboardData] = useState(null);
   const [dashboardLoading, setDashboardLoading] = useState(true);
   const [dashboardError, setDashboardError] = useState(null);
+
+  const depensesSettingsHydrated = useRef(false);
+
+  useEffect(() => {
+    if (depensesSettingsHydrated.current) return;
+    let cancelled = false;
+    const load = async () => {
+      try {
+        const { data } = await axios.get("/api/dashboard/settings/");
+        if (cancelled) return;
+        depensesSettingsHydrated.current = true;
+        if (data.depenses_agence_use_default) {
+          setDepensesAgenceIncludedAgenceIds(null);
+        } else if (Array.isArray(data.depenses_agence_included_agence_ids)) {
+          setDepensesAgenceIncludedAgenceIds(data.depenses_agence_included_agence_ids);
+        }
+      } catch (err) {
+        console.error("Chargement parametres dashboard:", err);
+      }
+    };
+    load();
+    return () => {
+      cancelled = true;
+    };
+  }, [setDepensesAgenceIncludedAgenceIds]);
 
   const getPeriodBoundaries = (startMonth, endMonth) => {
     if (!startMonth || !endMonth) return {};
@@ -105,6 +136,7 @@ const DashboardContent = () => {
     dashboardData?.global_stats?.total_cout_sous_traitance || 0
   );
   const coutChantierGlobal = coutMateriel + coutMainOeuvre + coutSousTraitance;
+  const depensesAgenceBreakdown = dashboardData?.global_stats?.depenses_agence_breakdown || [];
 
   return (
     <Box sx={{ position: "relative" }}>
@@ -139,6 +171,7 @@ const DashboardContent = () => {
           coutMainOeuvre={coutMainOeuvre}
           coutSousTraitance={coutSousTraitance}
           coutChantierLoading={dashboardLoading}
+          depensesAgenceBreakdown={depensesAgenceBreakdown}
         />
       </Box>
     </Box>

@@ -1,17 +1,11 @@
 import React from "react";
 import DashboardMetricCardShell from "./DashboardMetricCardShell";
-
-const formatCurrency = (amount) =>
-  new Intl.NumberFormat("fr-FR", {
-    style: "currency",
-    currency: "EUR",
-    maximumFractionDigits: 0,
-  }).format(Number(amount || 0));
+import { formatDashboardCurrency } from "./dashboardCurrency";
 
 const DashboardCardAverageTicket = ({ value = 0, totalCA = 0, loading = false }) => (
   <DashboardMetricCardShell
     title="COUT MATERIEL"
-    value={loading ? "Chargement..." : formatCurrency(value)}
+    value={loading ? "Chargement..." : formatDashboardCurrency(value)}
     subtitle="Periode selectionnee"
     accent="#ff9800"
     variant={7}
