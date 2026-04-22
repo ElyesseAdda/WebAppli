@@ -39,6 +39,7 @@ const DashboardCardTotalCA = ({
           : formatProgressLabel(progressPercent, comparisonYear)
       }
       accent="#2563eb"
+      variant={7}
     />
   );
 };

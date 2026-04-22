@@ -7,6 +7,7 @@ const DashboardCardEncaissement = () => (
     value="1 502 000 EUR"
     subtitle="81.5% du CA"
     accent="#0ea5e9"
+    variant={7}
   />
 );
 

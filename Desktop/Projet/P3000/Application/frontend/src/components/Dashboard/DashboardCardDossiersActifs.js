@@ -7,6 +7,7 @@ const DashboardCardDossiersActifs = () => (
     value="58"
     subtitle="9 nouveaux ce trimestre"
     accent="#f59e0b"
+    variant={7}
   />
 );
 

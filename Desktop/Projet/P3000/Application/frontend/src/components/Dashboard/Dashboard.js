@@ -93,30 +93,11 @@ const DashboardContent = () => {
 
   return (
     <Box sx={{ position: "relative" }}>
-      <Paper
-        elevation={0}
-        sx={{
-          mb: 2,
-          p: 1.5,
-          borderRadius: "12px",
-          border: "1px dashed #d1d5db",
-          bgcolor: "#f9fafb",
-        }}
-      >
-        <Typography variant="body2" sx={{ color: "#374151", fontWeight: 600 }}>
-          Maquette visuelle - donnees en dur
+      {dashboardError && (
+        <Typography variant="caption" sx={{ display: "block", color: "#b91c1c", mb: 1.5 }}>
+          {dashboardError}
         </Typography>
-        <Typography variant="caption" sx={{ color: "#6b7280" }}>
-          Annee base: {selectedYear} | Comparaison:{" "}
-          {comparisonYears.length ? comparisonYears.join(", ") : "Aucune"} | Periode:{" "}
-          {periodStart && periodEnd ? `${periodStart} a ${periodEnd}` : "Non definie"}
-        </Typography>
-        {dashboardError && (
-          <Typography variant="caption" sx={{ display: "block", color: "#b91c1c", mt: 0.5 }}>
-            {dashboardError}
-          </Typography>
-        )}
-      </Paper>
+      )}
 
       <Box
         sx={{

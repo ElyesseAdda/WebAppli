@@ -7,6 +7,7 @@ const DashboardCardFacturesEmises = () => (
     value="324"
     subtitle="Moyenne 27 / mois"
     accent="#7c3aed"
+    variant={7}
   />
 );
 

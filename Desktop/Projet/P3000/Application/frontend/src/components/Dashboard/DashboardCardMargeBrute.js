@@ -7,6 +7,7 @@ const DashboardCardMargeBrute = () => (
     value="412 900 EUR"
     subtitle="Taux 22.4%"
     accent="#059669"
+    variant={7}
   />
 );
 

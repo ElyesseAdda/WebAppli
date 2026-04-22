@@ -7,6 +7,7 @@ const DashboardCardRetards = () => (
     value="96 300 EUR"
     subtitle="12 dossiers critiques"
     accent="#dc2626"
+    variant={7}
   />
 );
 

@@ -7,6 +7,7 @@ const DashboardCardCroissance = () => (
     value="+11.6%"
     subtitle="Projection stable"
     accent="#22c55e"
+    variant={7}
   />
 );
 
