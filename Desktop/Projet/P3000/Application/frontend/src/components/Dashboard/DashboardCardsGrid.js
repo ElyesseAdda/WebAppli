@@ -19,6 +19,11 @@ const DashboardCardsGrid = ({
   margeBruteLoading,
   margeBruteProgress,
   margeBruteComparisonYear,
+  coutChantierGlobal,
+  coutMateriel,
+  coutMainOeuvre,
+  coutSousTraitance,
+  coutChantierLoading,
 }) => {
   return (
     <Box
@@ -43,7 +48,13 @@ const DashboardCardsGrid = ({
         progressPercent={margeBruteProgress}
         comparisonYear={margeBruteComparisonYear}
       />
-      <DashboardCardFacturesEmises />
+      <DashboardCardFacturesEmises
+        value={coutChantierGlobal}
+        coutMateriel={coutMateriel}
+        coutMainOeuvre={coutMainOeuvre}
+        coutSousTraitance={coutSousTraitance}
+        loading={coutChantierLoading}
+      />
       <DashboardCardEncaissement />
       <DashboardCardRetards />
       <DashboardCardDossiersActifs />

@@ -33,6 +33,7 @@ const DashboardCardMargeBrute = ({
   <DashboardMetricCardShell
     title="Marge brute"
     value={loading ? "Chargement..." : formatCurrency(value)}
+    valueColor={loading ? undefined : Number(value || 0) >= 0 ? "#0d9488" : "#dc2626"}
     subtitle={
       loading
         ? "Calcul du taux..."

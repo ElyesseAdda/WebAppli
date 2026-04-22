@@ -33,6 +33,7 @@ const DashboardCardTotalCA = ({
     <DashboardMetricCardShell
       title="CA total"
       value={loading ? "Chargement..." : formatCurrency(value)}
+      valueColor="#2196f3"
       subtitle={
         loading
           ? "Calcul de progression..."

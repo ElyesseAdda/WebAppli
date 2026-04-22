@@ -84,6 +84,8 @@ const DashboardMetricCardShell = ({
   accent = "#1976d2",
   variant = 1,
   label,
+  footerItems = [],
+  valueColor,
 }) => {
   const variantStyles = getVariantStyles(variant, accent);
   const darkCard = variant === 3;
@@ -137,7 +139,7 @@ const DashboardMetricCardShell = ({
       <Typography
         variant="h6"
         sx={{
-          color: darkCard ? "#f8fafc" : "#111827",
+          color: valueColor || (darkCard ? "#f8fafc" : "#111827"),
           fontWeight: 800,
           lineHeight: 1.1,
           mt: 0.5,
@@ -154,12 +156,57 @@ const DashboardMetricCardShell = ({
           mb: 0.5,
         }}
       />
-      <Typography
-        variant="body2"
-        sx={{ color: darkCard ? "#cbd5e1" : "#6b7280", fontSize: "0.75rem" }}
-      >
-        {subtitle}
-      </Typography>
+      {subtitle ? (
+        <Typography
+          variant="body2"
+          sx={{ color: darkCard ? "#cbd5e1" : "#6b7280", fontSize: "0.75rem" }}
+        >
+          {subtitle}
+        </Typography>
+      ) : null}
+      {footerItems.length > 0 && (
+        <Box
+          sx={{
+            mt: 1,
+            pt: 1,
+            borderTop: "1px solid",
+            borderTopColor: darkCard ? "rgba(203,213,225,0.28)" : "#e5e7eb",
+            display: "flex",
+            alignItems: "center",
+            flexWrap: "wrap",
+            gap: 1,
+          }}
+        >
+          {footerItems.map((item) => (
+            <Box
+              key={item.key || item.label}
+              sx={{ display: "flex", alignItems: "center", gap: 0.4 }}
+            >
+              {item.icon ? (
+                <Box
+                  sx={{
+                    display: "inline-flex",
+                    alignItems: "center",
+                    color: item.color || (darkCard ? "#cbd5e1" : "#6b7280"),
+                  }}
+                >
+                  {item.icon}
+                </Box>
+              ) : null}
+              <Typography
+                variant="caption"
+                sx={{
+                  color: item.color || (darkCard ? "#f8fafc" : "#111827"),
+                  fontWeight: 800,
+                  lineHeight: 1.2,
+                }}
+              >
+                {item.value}
+              </Typography>
+            </Box>
+          ))}
+        </Box>
+      )}
     </Paper>
   );
 };

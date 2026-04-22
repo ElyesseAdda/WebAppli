@@ -99,6 +99,12 @@ const DashboardContent = () => {
     comparisonMargeBrute > 0
       ? ((margeBrute - comparisonMargeBrute) / comparisonMargeBrute) * 100
       : null;
+  const coutMateriel = Number(dashboardData?.global_stats?.total_cout_materiel || 0);
+  const coutMainOeuvre = Number(dashboardData?.global_stats?.total_cout_main_oeuvre || 0);
+  const coutSousTraitance = Number(
+    dashboardData?.global_stats?.total_cout_sous_traitance || 0
+  );
+  const coutChantierGlobal = coutMateriel + coutMainOeuvre + coutSousTraitance;
 
   return (
     <Box sx={{ position: "relative" }}>
@@ -128,6 +134,11 @@ const DashboardContent = () => {
           margeBruteLoading={dashboardLoading}
           margeBruteProgress={margeBruteProgress}
           margeBruteComparisonYear={comparisonYear}
+          coutChantierGlobal={coutChantierGlobal}
+          coutMateriel={coutMateriel}
+          coutMainOeuvre={coutMainOeuvre}
+          coutSousTraitance={coutSousTraitance}
+          coutChantierLoading={dashboardLoading}
         />
       </Box>
     </Box>
