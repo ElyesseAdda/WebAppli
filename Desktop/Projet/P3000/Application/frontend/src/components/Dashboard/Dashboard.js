@@ -90,6 +90,15 @@ const DashboardContent = () => {
   );
   const caProgress =
     comparisonTotalCA > 0 ? ((totalCA - comparisonTotalCA) / comparisonTotalCA) * 100 : null;
+  const margeBrute = Number(dashboardData?.global_stats?.marge_brute || 0);
+  const margeBruteRate = Number(dashboardData?.global_stats?.taux_marge_brute || 0);
+  const comparisonMargeBrute = Number(
+    comparisonDashboardData?.global_stats?.marge_brute || 0
+  );
+  const margeBruteProgress =
+    comparisonMargeBrute > 0
+      ? ((margeBrute - comparisonMargeBrute) / comparisonMargeBrute) * 100
+      : null;
 
   return (
     <Box sx={{ position: "relative" }}>
@@ -114,6 +123,11 @@ const DashboardContent = () => {
           totalCALoading={dashboardLoading}
           totalCAProgress={caProgress}
           totalCAComparisonYear={comparisonYear}
+          margeBrute={margeBrute}
+          margeBruteRate={margeBruteRate}
+          margeBruteLoading={dashboardLoading}
+          margeBruteProgress={margeBruteProgress}
+          margeBruteComparisonYear={comparisonYear}
         />
       </Box>
     </Box>
