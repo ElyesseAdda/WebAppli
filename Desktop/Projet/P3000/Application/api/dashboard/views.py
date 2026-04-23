@@ -435,6 +435,14 @@ class DashboardViewSet(viewsets.ViewSet):
             total_factures_ttc = float(
                 factures_query.aggregate(total=Sum('price_ttc'))['total'] or 0
             )
+            total_factures_payees_ht = float(
+                factures_query.filter(state_facture='Payée').aggregate(total=Sum('price_ht'))['total'] or 0
+            )
+            total_factures_attente_ht = float(
+                factures_query.filter(
+                    Q(state_facture='En attente') | Q(state_facture='Attente paiement')
+                ).aggregate(total=Sum('price_ht'))['total'] or 0
+            )
             total_avenants_ttc = float(
                 avenants_query.aggregate(total=Sum('montant_ttc'))['total'] or 0
             )
@@ -466,6 +474,35 @@ class DashboardViewSet(viewsets.ViewSet):
                 Agence.objects.exclude(chantier_id__isnull=True).values_list(
                     "chantier_id", flat=True
                 )
+            )
+
+            # Encaissement (logique Tableau Facturation / récap) :
+            # - Montant facturé HT = situations (montant_apres_retenues) + factures (price_ht)
+            # - Montant payé HT = situations (montant_reel_ht) + factures Payée (price_ht)
+            # - Montant en attente HT = facturé - payé
+            total_encaissement_facture_ht = 0.0
+            total_encaissement_paye_ht = 0.0
+
+            situations_query = Situation.objects.filter(chantier__in=chantiers_query)
+            if year is not None and not (period_start and period_end):
+                situations_query = situations_query.filter(annee=year)
+            for sit in situations_query:
+                sit_month_date = month_year_to_date(sit.annee, sit.mois)
+                if not in_period(sit_month_date):
+                    continue
+                total_encaissement_facture_ht += float(sit.montant_apres_retenues or 0)
+                total_encaissement_paye_ht += float(sit.montant_reel_ht or 0)
+
+            for fac in factures_query:
+                fac_date = fac.date_envoi or (fac.date_creation.date() if fac.date_creation else None)
+                if date_start and date_end and (fac_date is None or not (date_start <= fac_date <= date_end)):
+                    continue
+                total_encaissement_facture_ht += float(fac.price_ht or 0)
+                if fac.state_facture == 'Payée':
+                    total_encaissement_paye_ht += float(fac.price_ht or 0)
+
+            total_encaissement_attente_ht = (
+                total_encaissement_facture_ht - total_encaissement_paye_ht
             )
 
             # Fournisseur (tableau fournisseur)
@@ -623,6 +660,11 @@ class DashboardViewSet(viewsets.ViewSet):
                 'total_devis_marche_ht': total_devis_marche_ht,
                 'total_factures_ht': total_factures_ht,
                 'total_avenants_ht': total_avenants_ht,
+                'total_factures_payees_ht': total_factures_payees_ht,
+                'total_factures_attente_ht': total_factures_attente_ht,
+                'encaissement_facture_ht': total_encaissement_facture_ht,
+                'encaissement_paye_ht': total_encaissement_paye_ht,
+                'encaissement_attente_ht': total_encaissement_attente_ht,
                 'total_montant_estime_ht': total_montant_ht,
                 'total_cout_materiel': total_cout_materiel,
                 'total_cout_main_oeuvre': total_cout_main_oeuvre,
@@ -649,6 +691,11 @@ class DashboardViewSet(viewsets.ViewSet):
                 'total_devis_marche_ht': 0,
                 'total_factures_ht': 0,
                 'total_avenants_ht': 0,
+                'total_factures_payees_ht': 0,
+                'total_factures_attente_ht': 0,
+                'encaissement_facture_ht': 0,
+                'encaissement_paye_ht': 0,
+                'encaissement_attente_ht': 0,
                 'total_montant_estime_ht': 0,
                 'total_cout_materiel': 0,
                 'total_cout_main_oeuvre': 0,

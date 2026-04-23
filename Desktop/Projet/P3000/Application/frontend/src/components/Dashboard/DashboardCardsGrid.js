@@ -27,6 +27,9 @@ const DashboardCardsGrid = ({
   coutSousTraitance,
   coutChantierLoading,
   depensesAgenceBreakdown,
+  montantFactureHt,
+  montantFacturePayeHt,
+  montantFactureAttenteHt,
 }) => {
   return (
     <Box
@@ -58,16 +61,22 @@ const DashboardCardsGrid = ({
         totalCA={totalCA}
         loading={coutChantierLoading}
       />
-      <DashboardCardCashIn totalCA={totalCA} />
+      <DashboardCardAgencyExpenses
+        breakdown={depensesAgenceBreakdown}
+        loading={coutChantierLoading}
+        totalCA={totalCA}
+      />
       <DashboardCardOverduePayments
         value={coutMainOeuvre}
         totalCA={totalCA}
         loading={coutChantierLoading}
       />
-      <DashboardCardAgencyExpenses
-        breakdown={depensesAgenceBreakdown}
-        loading={coutChantierLoading}
+      <DashboardCardCashIn
         totalCA={totalCA}
+        montantFacture={montantFactureHt}
+        montantPaye={montantFacturePayeHt}
+        montantAttente={montantFactureAttenteHt}
+        loading={totalCALoading}
       />
       <DashboardCardAverageTicket
         value={coutMateriel}

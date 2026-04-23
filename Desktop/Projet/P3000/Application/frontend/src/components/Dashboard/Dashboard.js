@@ -137,6 +137,13 @@ const DashboardContent = () => {
   );
   const coutChantierGlobal = coutMateriel + coutMainOeuvre + coutSousTraitance;
   const depensesAgenceBreakdown = dashboardData?.global_stats?.depenses_agence_breakdown || [];
+  const montantFactureHt = Number(dashboardData?.global_stats?.encaissement_facture_ht || 0);
+  const montantFacturePayeHt = Number(
+    dashboardData?.global_stats?.encaissement_paye_ht || 0
+  );
+  const montantFactureAttenteHt = Number(
+    dashboardData?.global_stats?.encaissement_attente_ht || 0
+  );
 
   return (
     <Box sx={{ position: "relative" }}>
@@ -172,6 +179,9 @@ const DashboardContent = () => {
           coutSousTraitance={coutSousTraitance}
           coutChantierLoading={dashboardLoading}
           depensesAgenceBreakdown={depensesAgenceBreakdown}
+          montantFactureHt={montantFactureHt}
+          montantFacturePayeHt={montantFacturePayeHt}
+          montantFactureAttenteHt={montantFactureAttenteHt}
         />
       </Box>
     </Box>
