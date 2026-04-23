@@ -3,13 +3,14 @@ import React from "react";
 import DashboardCardRevenueTotal from "./DashboardCardRevenueTotal";
 import DashboardCardGrossMargin from "./DashboardCardGrossMargin";
 import DashboardCardProjectCostTotal from "./DashboardCardProjectCostTotal";
-import DashboardCardCashIn from "./DashboardCardCashIn";
-import DashboardCardOverduePayments from "./DashboardCardOverduePayments";
+import DashboardCardInvoicedAmount from "./DashboardCardInvoicedAmount";
+import DashboardCardLaborCost from "./DashboardCardLaborCost";
 import DashboardCardAgencyExpenses from "./DashboardCardAgencyExpenses";
-import DashboardCardAverageTicket from "./DashboardCardAverageTicket";
-import DashboardCardYearlyGrowth from "./DashboardCardYearlyGrowth";
-import DashboardCardClientReceivables from "./DashboardCardClientReceivables";
-import DashboardCardCashBurn from "./DashboardCardCashBurn";
+import DashboardCardMaterialCost from "./DashboardCardMaterialCost";
+import DashboardCardAnnualGrowth from "./DashboardCardAnnualGrowth";
+import DashboardCardSubcontractingCost from "./DashboardCardSubcontractingCost";
+import DashboardCardAnnualBurn from "./DashboardCardAnnualBurn";
+import DashboardCardLatePayments from "./DashboardCardLatePayments";
 
 const DashboardCardsGrid = ({
   totalCA,
@@ -30,13 +31,15 @@ const DashboardCardsGrid = ({
   montantFactureHt,
   montantFacturePayeHt,
   montantFactureAttenteHt,
+  burn15JHt,
+  latePaymentsHt,
 }) => {
   return (
     <Box
       sx={{
         display: "grid",
         gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
-        gridTemplateRows: "repeat(5, minmax(0, 1fr))",
+        gridTemplateRows: "repeat(6, minmax(0, 1fr))",
         gap: 1.5,
         height: 580,
       }}
@@ -66,30 +69,44 @@ const DashboardCardsGrid = ({
         loading={coutChantierLoading}
         totalCA={totalCA}
       />
-      <DashboardCardOverduePayments
+      <DashboardCardLaborCost
         value={coutMainOeuvre}
         totalCA={totalCA}
         loading={coutChantierLoading}
       />
-      <DashboardCardCashIn
+      <DashboardCardInvoicedAmount
         totalCA={totalCA}
         montantFacture={montantFactureHt}
         montantPaye={montantFacturePayeHt}
         montantAttente={montantFactureAttenteHt}
         loading={totalCALoading}
       />
-      <DashboardCardAverageTicket
+      <DashboardCardMaterialCost
         value={coutMateriel}
         totalCA={totalCA}
         loading={coutChantierLoading}
       />
-      <DashboardCardYearlyGrowth totalCA={totalCA} />
-      <DashboardCardClientReceivables
+      <DashboardCardAnnualGrowth
+        totalCA={totalCA}
+        montantEncaisseReel={montantFacturePayeHt}
+        loading={totalCALoading}
+      />
+      <DashboardCardSubcontractingCost
         value={coutSousTraitance}
         totalCA={totalCA}
         loading={coutChantierLoading}
       />
-      <DashboardCardCashBurn totalCA={totalCA} />
+      <DashboardCardAnnualBurn
+        totalCA={totalCA}
+        burnMontant={burn15JHt}
+        loading={totalCALoading}
+      />
+      <Box />
+      <DashboardCardLatePayments
+        totalCA={totalCA}
+        montantRetard={latePaymentsHt}
+        loading={totalCALoading}
+      />
     </Box>
   );
 };

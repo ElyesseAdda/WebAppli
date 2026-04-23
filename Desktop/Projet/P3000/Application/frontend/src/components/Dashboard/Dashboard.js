@@ -144,6 +144,8 @@ const DashboardContent = () => {
   const montantFactureAttenteHt = Number(
     dashboardData?.global_stats?.encaissement_attente_ht || 0
   );
+  const burn15JHt = Number(dashboardData?.global_stats?.burn_15j_ht || 0);
+  const latePaymentsHt = Number(dashboardData?.global_stats?.late_payments_ht || 0);
 
   return (
     <Box sx={{ position: "relative" }}>
@@ -182,6 +184,8 @@ const DashboardContent = () => {
           montantFactureHt={montantFactureHt}
           montantFacturePayeHt={montantFacturePayeHt}
           montantFactureAttenteHt={montantFactureAttenteHt}
+          burn15JHt={burn15JHt}
+          latePaymentsHt={latePaymentsHt}
         />
       </Box>
     </Box>

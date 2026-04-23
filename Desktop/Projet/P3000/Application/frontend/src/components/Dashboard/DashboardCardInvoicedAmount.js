@@ -2,7 +2,7 @@ import React from "react";
 import DashboardMetricCardShell from "./DashboardMetricCardShell";
 import { formatDashboardCurrency } from "./dashboardCurrency";
 
-const DashboardCardCashIn = ({
+const DashboardCardInvoicedAmount = ({
   totalCA = 0,
   montantFacture = 0,
   montantPaye = 0,
@@ -11,20 +11,20 @@ const DashboardCardCashIn = ({
 }) => {
   const subtitle = loading
     ? "Chargement..."
-    : `Facturé HT ${formatDashboardCurrency(montantFacture)} · En attente HT ${formatDashboardCurrency(
+    : `Payé HT ${formatDashboardCurrency(montantPaye)} · En attente HT ${formatDashboardCurrency(
         montantAttente
-      )} (récap facturation)`;
+      )}`;
   return (
     <DashboardMetricCardShell
-      title="Encaissement"
-      value={loading ? "Chargement..." : formatDashboardCurrency(montantPaye)}
+      title="Facturé HT"
+      value={loading ? "Chargement..." : formatDashboardCurrency(montantFacture)}
       subtitle={subtitle}
       accent="#0ea5e9"
       variant={7}
-      percentValue={loading ? null : montantPaye}
+      percentValue={loading ? null : montantFacture}
       percentBase={loading ? null : totalCA}
     />
   );
 };
 
-export default DashboardCardCashIn;
+export default DashboardCardInvoicedAmount;

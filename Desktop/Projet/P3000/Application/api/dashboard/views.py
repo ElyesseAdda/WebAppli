@@ -505,6 +505,55 @@ class DashboardViewSet(viewsets.ViewSet):
                 total_encaissement_facture_ht - total_encaissement_paye_ht
             )
 
+            # Burn mensuel (échéances à 15 jours) :
+            # montants HT dont la date de paiement attendue est > today et <= today+15j.
+            total_burn_15j_ht = 0.0
+            total_late_payments_ht = 0.0
+            today = date.today()
+            upcoming_limit_date = today + timedelta(days=15)
+
+            pending_situations = Situation.objects.filter(
+                chantier__in=chantiers_query,
+                date_paiement_reel__isnull=True,
+            )
+            pending_factures = Facture.objects.filter(
+                chantier__in=chantiers_query,
+                date_paiement__isnull=True,
+                type_facture='classique',
+            )
+
+            for situation in pending_situations:
+                if not (situation.date_envoi and situation.delai_paiement):
+                    continue
+                due_date = situation.date_envoi + timedelta(days=situation.delai_paiement)
+                if due_date <= today or due_date > upcoming_limit_date:
+                    continue
+                total_burn_15j_ht += float(situation.montant_apres_retenues or situation.montant_total or 0)
+
+            for situation in pending_situations:
+                if not (situation.date_envoi and situation.delai_paiement):
+                    continue
+                due_date = situation.date_envoi + timedelta(days=situation.delai_paiement)
+                if due_date >= today:
+                    continue
+                total_late_payments_ht += float(situation.montant_apres_retenues or situation.montant_total or 0)
+
+            for facture in pending_factures:
+                due_date = facture.date_echeance
+                if due_date is None and facture.date_envoi and facture.delai_paiement:
+                    due_date = facture.date_envoi + timedelta(days=facture.delai_paiement)
+                if due_date is None or due_date <= today or due_date > upcoming_limit_date:
+                    continue
+                total_burn_15j_ht += float(facture.price_ht or 0)
+
+            for facture in pending_factures:
+                due_date = facture.date_echeance
+                if due_date is None and facture.date_envoi and facture.delai_paiement:
+                    due_date = facture.date_envoi + timedelta(days=facture.delai_paiement)
+                if due_date is None or due_date >= today:
+                    continue
+                total_late_payments_ht += float(facture.price_ht or 0)
+
             # Fournisseur (tableau fournisseur)
             fournisseurs_query = PaiementFournisseurMateriel.objects.filter(
                 chantier__in=chantiers_query
@@ -665,6 +714,8 @@ class DashboardViewSet(viewsets.ViewSet):
                 'encaissement_facture_ht': total_encaissement_facture_ht,
                 'encaissement_paye_ht': total_encaissement_paye_ht,
                 'encaissement_attente_ht': total_encaissement_attente_ht,
+                'burn_15j_ht': total_burn_15j_ht,
+                'late_payments_ht': total_late_payments_ht,
                 'total_montant_estime_ht': total_montant_ht,
                 'total_cout_materiel': total_cout_materiel,
                 'total_cout_main_oeuvre': total_cout_main_oeuvre,
@@ -696,6 +747,8 @@ class DashboardViewSet(viewsets.ViewSet):
                 'encaissement_facture_ht': 0,
                 'encaissement_paye_ht': 0,
                 'encaissement_attente_ht': 0,
+                'burn_15j_ht': 0,
+                'late_payments_ht': 0,
                 'total_montant_estime_ht': 0,
                 'total_cout_materiel': 0,
                 'total_cout_main_oeuvre': 0,

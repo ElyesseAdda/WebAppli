@@ -2,16 +2,16 @@ import React from "react";
 import DashboardMetricCardShell from "./DashboardMetricCardShell";
 import { formatDashboardCurrency } from "./dashboardCurrency";
 
-const DashboardCardAverageTicket = ({ value = 0, totalCA = 0, loading = false }) => (
+const DashboardCardLaborCost = ({ value = 0, totalCA = 0, loading = false }) => (
   <DashboardMetricCardShell
-    title="COUT MATERIEL"
+    title="Coût main d'œuvre"
     value={loading ? "Chargement..." : formatDashboardCurrency(value)}
-    subtitle="Periode selectionnee"
-    accent="#ff9800"
+    subtitle="Période sélectionnée"
+    accent="#0d9488"
     variant={7}
     percentValue={loading ? null : value}
     percentBase={loading ? null : totalCA}
   />
 );
 
-export default DashboardCardAverageTicket;
+export default DashboardCardLaborCost;
