@@ -601,7 +601,13 @@ class DashboardViewSet(viewsets.ViewSet):
             )
 
             # Calculer les marges
-            marge_brute = total_montant_ht - (total_cout_materiel + total_cout_main_oeuvre + total_cout_sous_traitance)
+            # Marge brute dashboard = CA total - coûts chantier réels - dépenses agence.
+            marge_brute = total_montant_ht - (
+                total_cout_materiel
+                + total_cout_main_oeuvre
+                + total_cout_sous_traitance
+                + total_depenses_agence_ht
+            )
             marge_estimee = total_montant_ht - (total_cout_estime_materiel + total_cout_estime_main_oeuvre)
             
             # Calculer les pourcentages
