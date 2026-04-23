@@ -10,10 +10,10 @@ const DashboardRevenueMockChart = ({
 }) => {
   const companyBlue = "#1B78BC";
   const comparisonPalette = ["#f97316", "#22c55e", "#a855f7", "#ef4444", "#eab308", "#14b8a6"];
-  const legendItems = [{ label: "CA HT (année sélectionnée)", color: companyBlue }];
+  const legendItems = [{ label: "Période actuelle", color: companyBlue }];
   (comparisonYearSeries || []).forEach((series, idx) => {
     legendItems.push({
-      label: `CA HT (${series.year})`,
+      label: `Année ${series.year}`,
       color: comparisonPalette[idx % comparisonPalette.length],
     });
   });
@@ -52,10 +52,10 @@ const DashboardRevenueMockChart = ({
         variant="caption"
         sx={{ color: "#6b7280", fontWeight: 700, textTransform: "uppercase" }}
       >
-        Évolution du CA mensuel
+        Vue mensuelle
       </Typography>
       <Typography variant="h6" sx={{ color: "#111827", fontWeight: 800, lineHeight: 1.1, mt: 0.5 }}>
-        CA HT par mois (comparaison dynamique)
+        Montants facturés hors taxes (comparatif)
       </Typography>
       <Box
         sx={{
@@ -84,7 +84,7 @@ const DashboardRevenueMockChart = ({
               />
               <Bar
                 dataKey="ca_ht_current"
-                name="CA HT (année sélectionnée)"
+                name="Période actuelle"
                 fill={companyBlue}
                 radius={[4, 4, 0, 0]}
               />
@@ -92,7 +92,7 @@ const DashboardRevenueMockChart = ({
                 <Bar
                   key={`cmp-${series.year}-${idx}`}
                   dataKey={`ca_ht_cmp_${idx}`}
-                  name={`CA HT (${series.year})`}
+                  name={`Année ${series.year}`}
                   fill={comparisonPalette[idx % comparisonPalette.length]}
                   radius={[4, 4, 0, 0]}
                 />

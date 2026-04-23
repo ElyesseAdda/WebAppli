@@ -392,8 +392,9 @@ class DashboardViewSet(viewsets.ViewSet):
                 date_start = date(int(year), 1, 1)
                 date_end = date(int(year), 12, 31)
 
-            # CA dashboard aligné métier :
-            # montant marché (devis_chantier) + factures + avenants (FactureTS)
+            # Agrégats devis marché + factures + avenants (FactureTS) — utilisés pour le TTC global.
+            # Le CA HT affiché sur le dashboard (total_montant_ht) est aligné plus bas sur la même
+            # logique que le tableau Facturation : situations + factures uniquement.
             devis_marche_query = Devis.objects.filter(
                 chantier__in=chantiers_query,
                 devis_chantier=True,
@@ -447,9 +448,9 @@ class DashboardViewSet(viewsets.ViewSet):
                 avenants_query.aggregate(total=Sum('montant_ttc'))['total'] or 0
             )
 
-            # Calculer les totaux pour tous les chantiers
+            # Totaux TTC / HT « construction » (devis marché + factures + avenants)
             total_montant_ttc = total_devis_marche_ttc + total_factures_ttc + total_avenants_ttc
-            total_montant_ht = total_devis_marche_ht + total_factures_ht + total_avenants_ht
+            total_ca_construction_ht = total_devis_marche_ht + total_factures_ht + total_avenants_ht
 
             # Coûts time-aware alignés avec les tableaux métier
             # - Fournisseur : PaiementFournisseurMateriel (mois/année du tableau fournisseur)
@@ -504,6 +505,9 @@ class DashboardViewSet(viewsets.ViewSet):
             total_encaissement_attente_ht = (
                 total_encaissement_facture_ht - total_encaissement_paye_ht
             )
+
+            # CA total HT = tableau Facturation (calculateTotaux côté front) : facturé HT uniquement.
+            total_montant_ht = total_encaissement_facture_ht
 
             # Série mensuelle (barres dashboard) alignée sur la période sélectionnée.
             # Colonnes : facturé HT / encaissé HT / en attente HT.
@@ -824,6 +828,7 @@ class DashboardViewSet(viewsets.ViewSet):
             return {
                 'total_montant_ttc': total_montant_ttc,
                 'total_montant_ht': total_montant_ht,
+                'total_ca_construction_ht': total_ca_construction_ht,
                 'total_devis_marche_ht': total_devis_marche_ht,
                 'total_factures_ht': total_factures_ht,
                 'total_avenants_ht': total_avenants_ht,
@@ -859,6 +864,7 @@ class DashboardViewSet(viewsets.ViewSet):
             return {
                 'total_montant_ttc': 0,
                 'total_montant_ht': 0,
+                'total_ca_construction_ht': 0,
                 'total_devis_marche_ht': 0,
                 'total_factures_ht': 0,
                 'total_avenants_ht': 0,
