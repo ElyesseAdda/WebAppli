@@ -6,6 +6,7 @@ const DashboardCardSubcontractingCost = ({ value = 0, totalCA = 0, loading = fal
   <DashboardMetricCardShell
     title="Coût sous-traitance"
     value={loading ? "Chargement..." : formatDashboardCurrency(value)}
+    valueColor="#1d4ed8"
     subtitle="Période sélectionnée"
     accent="#2196f3"
     variant={7}

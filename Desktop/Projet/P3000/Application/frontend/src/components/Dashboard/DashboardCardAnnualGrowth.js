@@ -4,8 +4,9 @@ import { formatDashboardCurrency } from "./dashboardCurrency";
 
 const DashboardCardAnnualGrowth = ({ totalCA = 0, montantEncaisseReel = 0, loading = false }) => (
   <DashboardMetricCardShell
-    title="Croissance annuelle"
+    title="Encaissement"
     value={loading ? "Chargement..." : formatDashboardCurrency(montantEncaisseReel)}
+    valueColor="#15803d"
     subtitle="Montant encaissé (HT)"
     accent="#22c55e"
     variant={7}

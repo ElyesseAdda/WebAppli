@@ -1,40 +1,33 @@
 import { Box, Paper, Typography } from "@mui/material";
 import React from "react";
+import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
+import { formatDashboardCurrency } from "./dashboardCurrency";
 
-const monthlyRevenue = [
-  { month: "Jan", value: 102000 },
-  { month: "Fev", value: 114000 },
-  { month: "Mar", value: 121000 },
-  { month: "Avr", value: 132000 },
-  { month: "Mai", value: 149000 },
-  { month: "Jun", value: 138000 },
-  { month: "Jul", value: 156000 },
-  { month: "Aou", value: 162000 },
-  { month: "Sep", value: 170000 },
-  { month: "Oct", value: 179000 },
-  { month: "Nov", value: 186000 },
-  { month: "Dec", value: 195000 },
-];
-
-const DashboardRevenueMockChart = () => {
-  const chartWidth = 760;
-  const chartHeight = 520;
-  const padding = { top: 32, right: 20, bottom: 36, left: 42 };
-  const graphWidth = chartWidth - padding.left - padding.right;
-  const graphHeight = chartHeight - padding.top - padding.bottom;
-
-  const max = Math.max(...monthlyRevenue.map((d) => d.value));
-  const min = Math.min(...monthlyRevenue.map((d) => d.value));
-  const range = max - min || 1;
-
-  const points = monthlyRevenue.map((d, index) => {
-    const x = padding.left + (index / (monthlyRevenue.length - 1)) * graphWidth;
-    const y = padding.top + graphHeight - ((d.value - min) / range) * graphHeight;
-    return { ...d, x, y };
+const DashboardRevenueMockChart = ({
+  monthlyCashflow = [],
+  comparisonYearSeries = [],
+  loading = false,
+}) => {
+  const comparisonPalette = ["#f97316", "#22c55e", "#a855f7", "#ef4444", "#eab308", "#14b8a6"];
+  const legendItems = [{ label: "CA HT (année sélectionnée)", color: "#2563eb" }];
+  (comparisonYearSeries || []).forEach((series, idx) => {
+    legendItems.push({
+      label: `CA HT (${series.year})`,
+      color: comparisonPalette[idx % comparisonPalette.length],
+    });
   });
 
-  const path = points.map((p, index) => `${index === 0 ? "M" : "L"} ${p.x} ${p.y}`).join(" ");
-
+  const data = (monthlyCashflow || []).map((m, idx) => {
+    const row = {
+    month: m.label,
+    ca_ht_current: Number(m.facture_ht || 0),
+    };
+    (comparisonYearSeries || []).forEach((series, sIdx) => {
+      const val = Number(series?.monthlyCashflow?.[idx]?.facture_ht || 0);
+      row[`ca_ht_cmp_${sIdx}`] = val;
+    });
+    return row;
+  });
   return (
     <Paper
       elevation={0}
@@ -48,91 +41,76 @@ const DashboardRevenueMockChart = () => {
           transform: "translateY(-2px)",
           boxShadow: "0 10px 24px rgba(17, 24, 39, 0.12)",
         },
-        height: 580,
+        height: 487,
         p: 2,
         position: "relative",
         overflow: "hidden",
       }}
     >
-      <Box
-        sx={{
-          position: "absolute",
-          top: 10,
-          right: 10,
-          px: 1,
-          py: 0.2,
-          borderRadius: "999px",
-          fontSize: "0.65rem",
-          fontWeight: 800,
-          letterSpacing: "0.3px",
-          bgcolor: "#2563eb20",
-          color: "#2563eb",
-        }}
-      >
-        Style 7
-      </Box>
       <Typography
         variant="caption"
-        sx={{
-          color: "#6b7280",
-          fontWeight: 700,
-          textTransform: "uppercase",
-          pr: 7,
-        }}
+        sx={{ color: "#6b7280", fontWeight: 700, textTransform: "uppercase" }}
       >
-        Evolution du CA mensuel (mock)
+        Évolution du CA mensuel
       </Typography>
-      <Typography variant="h6" sx={{ color: "#111827", fontWeight: 800, lineHeight: 1.1, mt: 0.5, mb: 1 }}>
-        Courbe de tendance annuelle
+      <Typography variant="h6" sx={{ color: "#111827", fontWeight: 800, lineHeight: 1.1, mt: 0.5 }}>
+        CA HT par mois (comparaison dynamique)
       </Typography>
-      <Box
-        sx={{
-          height: 4,
-          width: 52,
-          borderRadius: 999,
-          background: "linear-gradient(90deg, #2563eb 0%, #2563eb66 100%)",
-          mb: 1,
-        }}
-      />
-      <Box sx={{ width: "100%", overflowX: "auto" }}>
-        <svg width={chartWidth} height={chartHeight}>
-          <line
-            x1={padding.left}
-            y1={padding.top + graphHeight}
-            x2={padding.left + graphWidth}
-            y2={padding.top + graphHeight}
-            stroke="#cbd5e1"
-            strokeWidth="1.5"
-          />
-          <line
-            x1={padding.left}
-            y1={padding.top}
-            x2={padding.left}
-            y2={padding.top + graphHeight}
-            stroke="#cbd5e1"
-            strokeWidth="1.5"
-          />
+      <Box sx={{ height: 4, width: 70, borderRadius: 999, background: "linear-gradient(90deg, #2563eb 0%, #22c55e 100%)", my: 1 }} />
 
-          <defs>
-            <linearGradient id="chartLineGradient" x1="0%" y1="0%" x2="100%" y2="0%">
-              <stop offset="0%" stopColor="#2563eb" />
-              <stop offset="100%" stopColor="#60a5fa" />
-            </linearGradient>
-          </defs>
-
-          <path d={path} fill="none" stroke="url(#chartLineGradient)" strokeWidth="3" strokeLinejoin="round" />
-
-          {points.map((point) => (
-            <g key={point.month}>
-              <circle cx={point.x} cy={point.y} r="4" fill="#2563eb" />
-              <circle cx={point.x} cy={point.y} r="7" fill="#2563eb22" />
-              <text x={point.x} y={padding.top + graphHeight + 18} textAnchor="middle" fontSize="11" fill="#6b7280">
-                {point.month}
-              </text>
-            </g>
-          ))}
-        </svg>
+      <Box sx={{ height: 365, mt: 1 }}>
+        {loading ? (
+          <Typography variant="body2" sx={{ color: "#94a3b8" }}>
+            Chargement du graphique...
+          </Typography>
+        ) : (
+          <ResponsiveContainer width="100%" height="100%">
+            <BarChart data={data} margin={{ top: 10, right: 12, left: -10, bottom: 4 }} barGap={6}>
+              <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+              <XAxis dataKey="month" tick={{ fill: "#64748b", fontSize: 11 }} />
+              <YAxis tick={{ fill: "#64748b", fontSize: 11 }} tickFormatter={(v) => `${Math.round(v / 1000)}k`} />
+              <Tooltip
+                formatter={(value, name) => [formatDashboardCurrency(value), name]}
+                contentStyle={{ borderRadius: 10, border: "1px solid #cbd5e1" }}
+              />
+              <Bar
+                dataKey="ca_ht_current"
+                name="CA HT (année sélectionnée)"
+                fill="#2563eb"
+                radius={[4, 4, 0, 0]}
+              />
+              {(comparisonYearSeries || []).map((series, idx) => (
+                <Bar
+                  key={`cmp-${series.year}-${idx}`}
+                  dataKey={`ca_ht_cmp_${idx}`}
+                  name={`CA HT (${series.year})`}
+                  fill={comparisonPalette[idx % comparisonPalette.length]}
+                  radius={[4, 4, 0, 0]}
+                />
+              ))}
+            </BarChart>
+          </ResponsiveContainer>
+        )}
       </Box>
+      <Box sx={{ mt: 1, display: "flex", gap: 2, flexWrap: "wrap", alignItems: "center" }}>
+        {legendItems.map((item) => (
+          <Box key={item.label} sx={{ display: "flex", alignItems: "center", gap: 0.8 }}>
+            <Box
+              sx={{
+                width: 10,
+                height: 10,
+                borderRadius: "2px",
+                bgcolor: item.color,
+                border: "1px solid rgba(15,23,42,0.08)",
+              }}
+            />
+            <Typography variant="caption" sx={{ color: "#64748b", fontWeight: 700 }}>
+              {item.label}
+            </Typography>
+          </Box>
+        ))}
+      </Box>
+
     </Paper>
   );
 };

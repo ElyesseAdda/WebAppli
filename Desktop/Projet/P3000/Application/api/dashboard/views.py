@@ -505,6 +505,63 @@ class DashboardViewSet(viewsets.ViewSet):
                 total_encaissement_facture_ht - total_encaissement_paye_ht
             )
 
+            # Série mensuelle (barres dashboard) alignée sur la période sélectionnée.
+            # Colonnes : facturé HT / encaissé HT / en attente HT.
+            if date_start and date_end:
+                chart_start = date_start
+                chart_end = date_end
+            elif year is not None:
+                chart_start = date(int(year), 1, 1)
+                chart_end = date(int(year), 12, 31)
+            else:
+                chart_start = date.today().replace(month=1, day=1)
+                chart_end = date.today()
+            month_labels_fr = ["Jan", "Fev", "Mar", "Avr", "Mai", "Jun", "Jul", "Aou", "Sep", "Oct", "Nov", "Dec"]
+            monthly_cashflow_map = {}
+            cursor_month = chart_start.replace(day=1)
+            while cursor_month <= chart_end:
+                k = f"{cursor_month.year:04d}-{cursor_month.month:02d}"
+                monthly_cashflow_map[k] = {
+                    "key": k,
+                    "label": f"{month_labels_fr[cursor_month.month - 1]} {str(cursor_month.year)[-2:]}",
+                    "facture_ht": 0.0,
+                    "paye_ht": 0.0,
+                    "attente_ht": 0.0,
+                    "couts_ht": 0.0,
+                }
+                if cursor_month.month == 12:
+                    cursor_month = cursor_month.replace(year=cursor_month.year + 1, month=1)
+                else:
+                    cursor_month = cursor_month.replace(month=cursor_month.month + 1)
+
+            for sit in situations_query:
+                sit_month_date = month_year_to_date(sit.annee, sit.mois)
+                if sit_month_date is None or not (chart_start <= sit_month_date <= chart_end):
+                    continue
+                k = f"{sit_month_date.year:04d}-{sit_month_date.month:02d}"
+                if k not in monthly_cashflow_map:
+                    continue
+                fact = float(sit.montant_apres_retenues or 0)
+                paye = float(sit.montant_reel_ht or 0)
+                monthly_cashflow_map[k]["facture_ht"] += fact
+                monthly_cashflow_map[k]["paye_ht"] += paye
+
+            for fac in factures_query:
+                fac_date = fac.date_envoi or (fac.date_creation.date() if fac.date_creation else None)
+                if fac_date is None or not (chart_start <= fac_date <= chart_end):
+                    continue
+                k = f"{fac_date.year:04d}-{fac_date.month:02d}"
+                if k not in monthly_cashflow_map:
+                    continue
+                fact = float(fac.price_ht or 0)
+                paye = fact if fac.state_facture == 'Payée' else 0.0
+                monthly_cashflow_map[k]["facture_ht"] += fact
+                monthly_cashflow_map[k]["paye_ht"] += paye
+            for row in monthly_cashflow_map.values():
+                row["attente_ht"] = max(0.0, row["facture_ht"] - row["paye_ht"])
+
+            monthly_cashflow = list(monthly_cashflow_map.values())
+
             # Burn mensuel (échéances à 15 jours) :
             # montants HT dont la date de paiement attendue est > today et <= today+15j.
             total_burn_15j_ht = 0.0
@@ -614,6 +671,57 @@ class DashboardViewSet(viewsets.ViewSet):
                     + (labor.cost_overtime or 0)
                 )
 
+            # Coûts chantier mensuels pour la courbe (hors chantiers agence)
+            for pfm in fournisseurs_query:
+                month_date = month_year_to_date(pfm.annee, pfm.mois)
+                if month_date is None or not (chart_start <= month_date <= chart_end):
+                    continue
+                if pfm.chantier_id in agency_chantier_ids:
+                    continue
+                k = f"{month_date.year:04d}-{month_date.month:02d}"
+                if k not in monthly_cashflow_map:
+                    continue
+                montant = (
+                    float(pfm.montant_a_payer)
+                    if pfm.montant_a_payer is not None
+                    else float(pfm.montant or 0)
+                )
+                monthly_cashflow_map[k]["couts_ht"] += montant
+
+            for facture_st in st_factures_query:
+                month_date = month_year_to_date(facture_st.annee, facture_st.mois)
+                if month_date is None and facture_st.date_reception:
+                    month_date = date(facture_st.date_reception.year, facture_st.date_reception.month, 1)
+                if month_date is None or not (chart_start <= month_date <= chart_end):
+                    continue
+                if facture_st.chantier_id in agency_chantier_ids:
+                    continue
+                k = f"{month_date.year:04d}-{month_date.month:02d}"
+                if k not in monthly_cashflow_map:
+                    continue
+                monthly_cashflow_map[k]["couts_ht"] += float(facture_st.montant_facture_ht or 0)
+
+            for labor in labor_query:
+                try:
+                    week_start = date.fromisocalendar(int(labor.year), int(labor.week), 1)
+                except ValueError:
+                    continue
+                if not (chart_start <= week_start <= chart_end):
+                    continue
+                if labor.chantier_id in agency_chantier_ids:
+                    continue
+                k = f"{week_start.year:04d}-{week_start.month:02d}"
+                if k not in monthly_cashflow_map:
+                    continue
+                monthly_cashflow_map[k]["couts_ht"] += float(
+                    (labor.cost_normal or 0)
+                    + (labor.cost_samedi or 0)
+                    + (labor.cost_dimanche or 0)
+                    + (labor.cost_ferie or 0)
+                    + (labor.cost_overtime or 0)
+                )
+            monthly_cashflow = list(monthly_cashflow_map.values())
+
             total_cout_estime_materiel = sum(float(c.cout_estime_materiel or 0) for c in chantiers_query)
             total_cout_estime_main_oeuvre = sum(float(c.cout_estime_main_oeuvre or 0) for c in chantiers_query)
             
@@ -716,6 +824,7 @@ class DashboardViewSet(viewsets.ViewSet):
                 'encaissement_attente_ht': total_encaissement_attente_ht,
                 'burn_15j_ht': total_burn_15j_ht,
                 'late_payments_ht': total_late_payments_ht,
+                'monthly_cashflow': monthly_cashflow,
                 'total_montant_estime_ht': total_montant_ht,
                 'total_cout_materiel': total_cout_materiel,
                 'total_cout_main_oeuvre': total_cout_main_oeuvre,
@@ -749,6 +858,7 @@ class DashboardViewSet(viewsets.ViewSet):
                 'encaissement_attente_ht': 0,
                 'burn_15j_ht': 0,
                 'late_payments_ht': 0,
+                'monthly_cashflow': [],
                 'total_montant_estime_ht': 0,
                 'total_cout_materiel': 0,
                 'total_cout_main_oeuvre': 0,

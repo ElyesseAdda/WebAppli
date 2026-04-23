@@ -6,6 +6,7 @@ const DashboardCardAnnualBurn = ({ totalCA = 0, burnMontant = 0, loading = false
   <DashboardMetricCardShell
     title="Prochain paiement"
     value={loading ? "Chargement..." : formatDashboardCurrency(burnMontant)}
+    valueColor="#b45309"
     subtitle="Paiements à échéance sous 15 jours (HT)"
     accent="#f97316"
     variant={7}

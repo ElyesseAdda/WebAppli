@@ -6,6 +6,7 @@ const DashboardCardLaborCost = ({ value = 0, totalCA = 0, loading = false }) => 
   <DashboardMetricCardShell
     title="Coût main d'œuvre"
     value={loading ? "Chargement..." : formatDashboardCurrency(value)}
+    valueColor="#0f766e"
     subtitle="Période sélectionnée"
     accent="#0d9488"
     variant={7}

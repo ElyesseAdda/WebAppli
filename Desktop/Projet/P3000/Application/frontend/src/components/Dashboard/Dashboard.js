@@ -37,6 +37,7 @@ const DashboardContent = () => {
   } = useDashboardFilters();
   const [dashboardData, setDashboardData] = useState(null);
   const [comparisonDashboardData, setComparisonDashboardData] = useState(null);
+  const [comparisonDashboardsByYear, setComparisonDashboardsByYear] = useState({});
   const [dashboardLoading, setDashboardLoading] = useState(true);
   const [dashboardError, setDashboardError] = useState(null);
 
@@ -75,15 +76,43 @@ const DashboardContent = () => {
     return { startDate, endDate };
   };
 
+  const shiftDateByYears = (isoDate, yearsDelta) => {
+    if (!isoDate) return undefined;
+    const [y, m, d] = isoDate.split("-").map(Number);
+    if (!y || !m || !d) return undefined;
+    const targetYear = y + yearsDelta;
+    const maxDay = new Date(targetYear, m, 0).getDate();
+    const safeDay = Math.min(d, maxDay);
+    return `${targetYear}-${String(m).padStart(2, "0")}-${String(safeDay).padStart(2, "0")}`;
+  };
+
+  const referenceYears =
+    comparisonYears.length > 0
+      ? comparisonYears.map((y) => Number(y)).filter((y) => Number.isFinite(y))
+      : [selectedYear - 1];
+
   useEffect(() => {
     const fetchDashboardData = async () => {
       try {
         setDashboardLoading(true);
         setDashboardError(null);
         const { startDate, endDate } = getPeriodBoundaries(periodStart, periodEnd);
-        const referenceYear = comparisonYears.length ? Number(comparisonYears[0]) : selectedYear - 1;
+        const referenceRequests = referenceYears.map((referenceYear) => {
+          const yearsDelta = referenceYear - selectedYear;
+          const referenceStartDate =
+            startDate && endDate ? shiftDateByYears(startDate, yearsDelta) : undefined;
+          const referenceEndDate =
+            startDate && endDate ? shiftDateByYears(endDate, yearsDelta) : undefined;
+          return axios.get("/api/dashboard/", {
+            params: {
+              year: referenceYear,
+              period_start: referenceStartDate,
+              period_end: referenceEndDate,
+            },
+          });
+        });
 
-        const [currentResponse, referenceResponse] = await Promise.all([
+        const [currentResponse, ...referenceResponses] = await Promise.all([
           axios.get("/api/dashboard/", {
             params: {
               year: selectedYear,
@@ -92,17 +121,16 @@ const DashboardContent = () => {
               period_end: endDate,
             },
           }),
-          axios.get("/api/dashboard/", {
-            params: {
-              year: referenceYear,
-              period_start: startDate,
-              period_end: endDate,
-            },
-          }),
+          ...referenceRequests,
         ]);
 
         setDashboardData(currentResponse.data || null);
-        setComparisonDashboardData(referenceResponse.data || null);
+        setComparisonDashboardData(referenceResponses[0]?.data || null);
+        const byYear = {};
+        referenceYears.forEach((yr, idx) => {
+          byYear[yr] = referenceResponses[idx]?.data || null;
+        });
+        setComparisonDashboardsByYear(byYear);
       } catch (err) {
         console.error("Erreur chargement dashboard:", err);
         setDashboardError("Erreur lors de la recuperation des donnees.");
@@ -115,7 +143,7 @@ const DashboardContent = () => {
   }, [selectedYear, comparisonYears, periodStart, periodEnd]);
 
   const totalCA = Number(dashboardData?.global_stats?.total_montant_ht || 0);
-  const comparisonYear = comparisonYears.length ? Number(comparisonYears[0]) : selectedYear - 1;
+  const comparisonYear = referenceYears[0];
   const comparisonTotalCA = Number(
     comparisonDashboardData?.global_stats?.total_montant_ht || 0
   );
@@ -146,6 +174,11 @@ const DashboardContent = () => {
   );
   const burn15JHt = Number(dashboardData?.global_stats?.burn_15j_ht || 0);
   const latePaymentsHt = Number(dashboardData?.global_stats?.late_payments_ht || 0);
+  const monthlyCashflow = dashboardData?.global_stats?.monthly_cashflow || [];
+  const comparisonYearSeries = referenceYears.map((yr) => ({
+    year: yr,
+    monthlyCashflow: comparisonDashboardsByYear?.[yr]?.global_stats?.monthly_cashflow || [],
+  }));
 
   return (
     <Box sx={{ position: "relative" }}>
@@ -161,10 +194,14 @@ const DashboardContent = () => {
           display: "grid",
           gridTemplateColumns: { xs: "1fr", xl: "1fr 1fr" },
           gap: 2,
-          alignItems: "stretch",
+          alignItems: "start",
         }}
       >
-        <DashboardRevenueMockChart />
+        <DashboardRevenueMockChart
+          monthlyCashflow={monthlyCashflow}
+          comparisonYearSeries={comparisonYearSeries}
+          loading={dashboardLoading}
+        />
         <DashboardCardsGrid
           totalCA={totalCA}
           totalCALoading={dashboardLoading}

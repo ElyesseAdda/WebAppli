@@ -77,8 +77,6 @@ const DashboardCardsGrid = ({
       <DashboardCardInvoicedAmount
         totalCA={totalCA}
         montantFacture={montantFactureHt}
-        montantPaye={montantFacturePayeHt}
-        montantAttente={montantFactureAttenteHt}
         loading={totalCALoading}
       />
       <DashboardCardMaterialCost
