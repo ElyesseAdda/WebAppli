@@ -209,7 +209,7 @@ const DashboardCardAgencyExpenses = ({ breakdown = [], loading = false, totalCA 
     <DashboardMetricCardShell
       title="Depenses agence"
       value={loading ? "Chargement..." : formatDashboardCurrency(montantSelection)}
-      valueColor="#b45309"
+      valueColor={loading ? undefined : Number(montantSelection || 0) >= 0 ? "rgba(27, 120, 188, 1)" : "#dc2626"}
       subtitle={loading ? "..." : subtitleParts.join(" · ")}
       accent="#d97706"
       variant={7}

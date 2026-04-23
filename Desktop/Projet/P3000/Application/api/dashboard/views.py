@@ -560,8 +560,6 @@ class DashboardViewSet(viewsets.ViewSet):
             for row in monthly_cashflow_map.values():
                 row["attente_ht"] = max(0.0, row["facture_ht"] - row["paye_ht"])
 
-            monthly_cashflow = list(monthly_cashflow_map.values())
-
             # Burn mensuel (échéances à 15 jours) :
             # montants HT dont la date de paiement attendue est > today et <= today+15j.
             total_burn_15j_ht = 0.0
@@ -653,6 +651,7 @@ class DashboardViewSet(viewsets.ViewSet):
             if date_start and date_end:
                 labor_query = labor_query.filter(year__gte=date_start.year, year__lte=date_end.year)
 
+            main_oeuvre_month_map = defaultdict(float)
             total_cout_main_oeuvre = 0.0
             for labor in labor_query:
                 if labor.chantier_id in agency_chantier_ids:
@@ -663,13 +662,16 @@ class DashboardViewSet(viewsets.ViewSet):
                     continue
                 if date_start and date_end and not (date_start <= week_start <= date_end):
                     continue
-                total_cout_main_oeuvre += float(
+                line_mo = float(
                     (labor.cost_normal or 0)
                     + (labor.cost_samedi or 0)
                     + (labor.cost_dimanche or 0)
                     + (labor.cost_ferie or 0)
                     + (labor.cost_overtime or 0)
                 )
+                total_cout_main_oeuvre += line_mo
+                mk = f"{week_start.year:04d}-{week_start.month:02d}"
+                main_oeuvre_month_map[mk] += line_mo
 
             # Coûts chantier mensuels pour la courbe (hors chantiers agence)
             for pfm in fournisseurs_query:
@@ -720,6 +722,14 @@ class DashboardViewSet(viewsets.ViewSet):
                     + (labor.cost_ferie or 0)
                     + (labor.cost_overtime or 0)
                 )
+            main_oeuvre_monthly_breakdown = [
+                {
+                    "key": row["key"],
+                    "label": row["label"],
+                    "montant_ht": round(float(main_oeuvre_month_map.get(row["key"], 0.0)), 2),
+                }
+                for row in monthly_cashflow_map.values()
+            ]
             monthly_cashflow = list(monthly_cashflow_map.values())
 
             total_cout_estime_materiel = sum(float(c.cout_estime_materiel or 0) for c in chantiers_query)
@@ -828,6 +838,7 @@ class DashboardViewSet(viewsets.ViewSet):
                 'total_montant_estime_ht': total_montant_ht,
                 'total_cout_materiel': total_cout_materiel,
                 'total_cout_main_oeuvre': total_cout_main_oeuvre,
+                'main_oeuvre_monthly_breakdown': main_oeuvre_monthly_breakdown,
                 'total_cout_sous_traitance': total_cout_sous_traitance,
                 'total_cout_estime_materiel': total_cout_estime_materiel,
                 'total_cout_estime_main_oeuvre': total_cout_estime_main_oeuvre,
@@ -862,6 +873,7 @@ class DashboardViewSet(viewsets.ViewSet):
                 'total_montant_estime_ht': 0,
                 'total_cout_materiel': 0,
                 'total_cout_main_oeuvre': 0,
+                'main_oeuvre_monthly_breakdown': [],
                 'total_cout_sous_traitance': 0,
                 'total_cout_estime_materiel': 0,
                 'total_cout_estime_main_oeuvre': 0,

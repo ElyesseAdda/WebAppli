@@ -6,7 +6,7 @@ const DashboardCardLatePayments = ({ totalCA = 0, montantRetard = 0, loading = f
   <DashboardMetricCardShell
     title="Paiements en retard"
     value={loading ? "Chargement..." : formatDashboardCurrency(montantRetard)}
-    valueColor="#b91c1c"
+    valueColor="#dc2626"
     subtitle="Date prévue dépassée, non payé (HT)"
     accent="#dc2626"
     variant={7}

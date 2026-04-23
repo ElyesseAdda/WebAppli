@@ -8,8 +8,9 @@ const DashboardRevenueMockChart = ({
   comparisonYearSeries = [],
   loading = false,
 }) => {
+  const companyBlue = "#1B78BC";
   const comparisonPalette = ["#f97316", "#22c55e", "#a855f7", "#ef4444", "#eab308", "#14b8a6"];
-  const legendItems = [{ label: "CA HT (année sélectionnée)", color: "#2563eb" }];
+  const legendItems = [{ label: "CA HT (année sélectionnée)", color: companyBlue }];
   (comparisonYearSeries || []).forEach((series, idx) => {
     legendItems.push({
       label: `CA HT (${series.year})`,
@@ -34,8 +35,8 @@ const DashboardRevenueMockChart = ({
       sx={{
         borderRadius: "14px",
         backgroundColor: "#ffffff",
-        border: "1px solid #2563eb30",
-        boxShadow: "0 2px 10px #2563eb25",
+        border: "1px solid rgba(27, 120, 188, 0.19)",
+        boxShadow: "0 2px 10px rgba(27, 120, 188, 0.15)",
         transition: "all 0.25s ease",
         "&:hover": {
           transform: "translateY(-2px)",
@@ -56,7 +57,15 @@ const DashboardRevenueMockChart = ({
       <Typography variant="h6" sx={{ color: "#111827", fontWeight: 800, lineHeight: 1.1, mt: 0.5 }}>
         CA HT par mois (comparaison dynamique)
       </Typography>
-      <Box sx={{ height: 4, width: 70, borderRadius: 999, background: "linear-gradient(90deg, #2563eb 0%, #22c55e 100%)", my: 1 }} />
+      <Box
+        sx={{
+          height: 4,
+          width: 70,
+          borderRadius: 999,
+          background: `linear-gradient(90deg, ${companyBlue} 0%, #22c55e 100%)`,
+          my: 1,
+        }}
+      />
 
       <Box sx={{ height: 365, mt: 1 }}>
         {loading ? (
@@ -76,7 +85,7 @@ const DashboardRevenueMockChart = ({
               <Bar
                 dataKey="ca_ht_current"
                 name="CA HT (année sélectionnée)"
-                fill="#2563eb"
+                fill={companyBlue}
                 radius={[4, 4, 0, 0]}
               />
               {(comparisonYearSeries || []).map((series, idx) => (

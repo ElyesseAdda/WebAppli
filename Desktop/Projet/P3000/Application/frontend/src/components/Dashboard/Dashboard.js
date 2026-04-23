@@ -160,6 +160,8 @@ const DashboardContent = () => {
       : null;
   const coutMateriel = Number(dashboardData?.global_stats?.total_cout_materiel || 0);
   const coutMainOeuvre = Number(dashboardData?.global_stats?.total_cout_main_oeuvre || 0);
+  const mainOeuvreMonthlyBreakdown =
+    dashboardData?.global_stats?.main_oeuvre_monthly_breakdown ?? [];
   const coutSousTraitance = Number(
     dashboardData?.global_stats?.total_cout_sous_traitance || 0
   );
@@ -215,6 +217,7 @@ const DashboardContent = () => {
           coutChantierGlobal={coutChantierGlobal}
           coutMateriel={coutMateriel}
           coutMainOeuvre={coutMainOeuvre}
+          mainOeuvreMonthlyBreakdown={mainOeuvreMonthlyBreakdown}
           coutSousTraitance={coutSousTraitance}
           coutChantierLoading={dashboardLoading}
           depensesAgenceBreakdown={depensesAgenceBreakdown}

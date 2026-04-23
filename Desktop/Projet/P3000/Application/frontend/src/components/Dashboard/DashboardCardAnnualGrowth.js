@@ -6,7 +6,7 @@ const DashboardCardAnnualGrowth = ({ totalCA = 0, montantEncaisseReel = 0, loadi
   <DashboardMetricCardShell
     title="Encaissement"
     value={loading ? "Chargement..." : formatDashboardCurrency(montantEncaisseReel)}
-    valueColor="#15803d"
+    valueColor={loading ? undefined : Number(montantEncaisseReel || 0) >= 0 ? "#22c55e" : "#dc2626"}
     subtitle="Montant encaissé (HT)"
     accent="#22c55e"
     variant={7}

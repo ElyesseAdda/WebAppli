@@ -25,6 +25,7 @@ const DashboardCardsGrid = ({
   coutChantierGlobal,
   coutMateriel,
   coutMainOeuvre,
+  mainOeuvreMonthlyBreakdown,
   coutSousTraitance,
   coutChantierLoading,
   depensesAgenceBreakdown,
@@ -73,6 +74,7 @@ const DashboardCardsGrid = ({
         value={coutMainOeuvre}
         totalCA={totalCA}
         loading={coutChantierLoading}
+        mainOeuvreMonthlyBreakdown={mainOeuvreMonthlyBreakdown}
       />
       <DashboardCardInvoicedAmount
         totalCA={totalCA}

@@ -58,8 +58,8 @@ const getVariantStyles = (variant, accent) => {
       return {
         ...commonHover,
         backgroundColor: "#ffffff",
-        border: `1px solid ${accent}30`,
-        boxShadow: `0 2px 10px ${accent}25`,
+        border: "1px solid #e5e7eb",
+        boxShadow: "0 1px 3px rgba(15, 23, 42, 0.06)",
       };
     case 8:
       return {
@@ -102,6 +102,7 @@ const DashboardMetricCardShell = ({
   const percentLabel = hasPercent
     ? `${((Number(percentValue) / Number(percentBase)) * 100).toFixed(1)}%`
     : null;
+  const badgeShowsPercent = Boolean(percentLabel) && !label;
 
   return (
     <Paper
@@ -132,30 +133,37 @@ const DashboardMetricCardShell = ({
         >
           {toolbarPrefix}
           {(label || percentLabel) && (
-            <Box
+            <Typography
+              component="span"
+              variant="caption"
               sx={{
-                px: 1,
-                py: 0.2,
-                borderRadius: "999px",
                 fontSize: "0.65rem",
-                fontWeight: 800,
-                letterSpacing: "0.3px",
-                bgcolor: darkCard ? "rgba(255,255,255,0.14)" : `${accent}20`,
-                color: darkCard ? "#e5e7eb" : accent,
+                fontWeight: 700,
+                letterSpacing: "0.02em",
+                lineHeight: 1.2,
+                ...(badgeShowsPercent
+                  ? {
+                      color: darkCard ? "#94a3b8" : "#64748b",
+                    }
+                  : {
+                      color: darkCard ? "#e5e7eb" : accent,
+                    }),
               }}
             >
               {label || percentLabel}
-            </Box>
+            </Typography>
           )}
         </Box>
       )}
       <Typography
         variant="caption"
+        component="span"
         sx={{
-          color: darkCard ? "#cbd5e1" : "#6b7280",
-          fontWeight: 700,
+          color: darkCard ? "#cbd5e1" : "#334155",
+          fontWeight: 800,
           textTransform: "uppercase",
           pr: 7,
+          letterSpacing: "0.04em",
         }}
       >
         {title}
