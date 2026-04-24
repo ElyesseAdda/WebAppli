@@ -7,7 +7,7 @@ const DashboardCardLatePayments = ({ totalCA = 0, montantRetard = 0, loading = f
     title="Paiements en retard"
     value={loading ? "Chargement..." : formatDashboardCurrency(montantRetard)}
     valueColor="#dc2626"
-    subtitle="Date prévue dépassée, non payé (HT)"
+    subtitle="Date prévue dépassée"
     accent="#dc2626"
     variant={7}
     percentValue={loading ? null : montantRetard}

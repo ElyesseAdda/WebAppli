@@ -2,7 +2,6 @@ import {
   Box,
   Container,
   Typography,
-  Paper,
   Button,
   Select,
   MenuItem,
@@ -17,13 +16,13 @@ import {
   DialogActions,
   TextField,
 } from "@mui/material";
+import FilterAltOutlinedIcon from "@mui/icons-material/FilterAltOutlined";
 import React, { useEffect, useRef, useState } from "react";
 import axios from "axios";
 import {
   DashboardFiltersProvider,
   useDashboardFilters,
 } from "./DashboardFiltersContext";
-import DashboardRevenueMockChart from "./DashboardRevenueMockChart";
 import DashboardCardsGrid from "./DashboardCardsGrid";
 
 // Composant interne qui utilise les filtres
@@ -167,12 +166,8 @@ const DashboardContent = () => {
   );
   const coutChantierGlobal = coutMateriel + coutMainOeuvre + coutSousTraitance;
   const depensesAgenceBreakdown = dashboardData?.global_stats?.depenses_agence_breakdown || [];
-  const montantFactureHt = Number(dashboardData?.global_stats?.encaissement_facture_ht || 0);
   const montantFacturePayeHt = Number(
     dashboardData?.global_stats?.encaissement_paye_ht || 0
-  );
-  const montantFactureAttenteHt = Number(
-    dashboardData?.global_stats?.encaissement_attente_ht || 0
   );
   const burn15JHt = Number(dashboardData?.global_stats?.burn_15j_ht || 0);
   const latePaymentsHt = Number(dashboardData?.global_stats?.late_payments_ht || 0);
@@ -189,45 +184,32 @@ const DashboardContent = () => {
           {dashboardError}
         </Typography>
       )}
-
-      <Box
-        sx={{
-          width: "100%",
-          display: "grid",
-          gridTemplateColumns: { xs: "1fr", xl: "1fr 1fr" },
-          gap: 2,
-          alignItems: "start",
-        }}
-      >
-        <DashboardRevenueMockChart
-          monthlyCashflow={monthlyCashflow}
-          comparisonYearSeries={comparisonYearSeries}
-          loading={dashboardLoading}
-        />
-        <DashboardCardsGrid
-          totalCA={totalCA}
-          totalCALoading={dashboardLoading}
-          totalCAProgress={caProgress}
-          totalCAComparisonYear={comparisonYear}
-          margeBrute={margeBrute}
-          margeBruteRate={margeBruteRate}
-          margeBruteLoading={dashboardLoading}
-          margeBruteProgress={margeBruteProgress}
-          margeBruteComparisonYear={comparisonYear}
-          coutChantierGlobal={coutChantierGlobal}
-          coutMateriel={coutMateriel}
-          coutMainOeuvre={coutMainOeuvre}
-          mainOeuvreMonthlyBreakdown={mainOeuvreMonthlyBreakdown}
-          coutSousTraitance={coutSousTraitance}
-          coutChantierLoading={dashboardLoading}
-          depensesAgenceBreakdown={depensesAgenceBreakdown}
-          montantFactureHt={montantFactureHt}
-          montantFacturePayeHt={montantFacturePayeHt}
-          montantFactureAttenteHt={montantFactureAttenteHt}
-          burn15JHt={burn15JHt}
-          latePaymentsHt={latePaymentsHt}
-        />
-      </Box>
+      <DashboardCardsGrid
+        totalCA={totalCA}
+        totalCALoading={dashboardLoading}
+        totalCAProgress={caProgress}
+        totalCAComparisonYear={comparisonYear}
+        margeBrute={margeBrute}
+        margeBruteRate={margeBruteRate}
+        margeBruteLoading={dashboardLoading}
+        margeBruteProgress={margeBruteProgress}
+        margeBruteComparisonYear={comparisonYear}
+        coutChantierGlobal={coutChantierGlobal}
+        coutMateriel={coutMateriel}
+        coutMainOeuvre={coutMainOeuvre}
+        mainOeuvreMonthlyBreakdown={mainOeuvreMonthlyBreakdown}
+        coutSousTraitance={coutSousTraitance}
+        coutChantierLoading={dashboardLoading}
+        depensesAgenceBreakdown={depensesAgenceBreakdown}
+        montantFacturePayeHt={montantFacturePayeHt}
+        burn15JHt={burn15JHt}
+        latePaymentsHt={latePaymentsHt}
+        monthlyCashflow={monthlyCashflow}
+        comparisonYearSeries={comparisonYearSeries}
+        selectedYear={selectedYear}
+        periodStart={periodStart}
+        periodEnd={periodEnd}
+      />
     </Box>
   );
 };
@@ -269,69 +251,103 @@ const DashboardFilters = () => {
     setPeriodModalOpen(false);
   };
 
+  const compactSelectSx = {
+    "& .MuiOutlinedInput-root": {
+      fontSize: "0.8125rem",
+      minHeight: 36,
+      "& .MuiSelect-select": { py: 0.65, display: "flex", alignItems: "center" },
+    },
+    "& .MuiInputLabel-root": { fontSize: "0.8125rem" },
+  };
+
   return (
     <>
-      <Paper
-        elevation={2}
+      <Box
         sx={{
-          p: 2,
-          display: "flex",
+          display: "inline-flex",
           alignItems: "center",
-          gap: 2,
           flexWrap: "wrap",
+          gap: 1.25,
+          rowGap: 1,
+          px: 1.5,
+          py: 1,
+          width: "fit-content",
+          maxWidth: "none",
+          backgroundColor: "#f8fafc",
+          border: "1px solid #e2e8f0",
+          borderRadius: "8px",
         }}
       >
-        <Typography variant="body1" sx={{ fontWeight: 500 }}>
-          Filtres :
-        </Typography>
-        <FormControl size="small" sx={{ minWidth: 160 }}>
-          <InputLabel id="year-select-label">Année de base</InputLabel>
+        <FilterAltOutlinedIcon
+          sx={{ fontSize: 18, color: "#94a3b8", flexShrink: 0, display: { xs: "none", sm: "block" } }}
+        />
+        <FormControl size="small" sx={{ minWidth: { xs: 120, sm: 132 }, ...compactSelectSx }}>
+          <InputLabel id="year-select-label">Année</InputLabel>
           <Select
             labelId="year-select-label"
             id="year-select"
             value={selectedYear}
-            label="Année de base"
+            label="Année"
             onChange={(e) => updateYear(Number(e.target.value))}
           >
             {years.map((year) => (
-              <MenuItem key={year} value={year}>
+              <MenuItem key={year} value={year} sx={{ fontSize: "0.8125rem" }}>
                 {year}
               </MenuItem>
             ))}
           </Select>
         </FormControl>
 
-        <FormControl size="small" sx={{ minWidth: 220 }}>
-          <InputLabel id="comparison-years-label">Comparer avec</InputLabel>
+        <FormControl size="small" sx={{ minWidth: { xs: 160, sm: 200 }, ...compactSelectSx }}>
+          <InputLabel id="comparison-years-label">Comparaison</InputLabel>
           <Select
             labelId="comparison-years-label"
             id="comparison-years"
             multiple
             value={comparisonYears}
             onChange={(e) => updateComparisonYears(e.target.value)}
-            input={<OutlinedInput label="Comparer avec" />}
+            input={<OutlinedInput label="Comparaison" />}
             renderValue={(selected) => (selected.length ? selected.join(", ") : "Aucune")}
           >
             {years
               .filter((year) => year !== selectedYear)
               .map((year) => (
-                <MenuItem key={year} value={year}>
-                  <Checkbox checked={comparisonYears.indexOf(year) > -1} />
+                <MenuItem key={year} value={year} dense sx={{ fontSize: "0.8125rem" }}>
+                  <Checkbox size="small" checked={comparisonYears.indexOf(year) > -1} />
                   <ListItemText primary={String(year)} />
                 </MenuItem>
               ))}
           </Select>
         </FormControl>
 
-        <Button variant="outlined" onClick={openPeriodModal}>
-          Periode personnalisee
+        <Button
+          size="small"
+          variant="outlined"
+          onClick={openPeriodModal}
+          sx={{
+            textTransform: "none",
+            fontSize: "0.8125rem",
+            py: 0.45,
+            px: 1.25,
+            minHeight: 36,
+            borderColor: "#e2e8f0",
+            color: "#475569",
+            "&:hover": { borderColor: "#cbd5e1", bgcolor: "rgba(148,163,184,0.08)" },
+          }}
+        >
+          Période…
         </Button>
         {periodStart && periodEnd && (
-          <Button variant="text" color="inherit" onClick={clearPeriod}>
-            Reinitialiser periode
+          <Button
+            size="small"
+            variant="text"
+            onClick={clearPeriod}
+            sx={{ fontSize: "0.75rem", color: "#64748b", textTransform: "none", minHeight: 36 }}
+          >
+            Réinitialiser période
           </Button>
         )}
-      </Paper>
+      </Box>
 
       <Dialog open={periodModalOpen} onClose={() => setPeriodModalOpen(false)} maxWidth="xs" fullWidth>
         <DialogTitle>Filtrer par periode</DialogTitle>
@@ -377,30 +393,31 @@ const DashboardFilters = () => {
 const Dashboard = () => {
   return (
     <DashboardFiltersProvider>
-      <Container maxWidth={false} sx={{ mt: 4, mb: 4, px: 3 }}>
-        <Box
-          sx={{
-            display: "flex",
-            alignItems: "flex-start",
-            justifyContent: "space-between",
-            mb: 4,
-            gap: 2,
-            maxWidth: "1360px",
-            width: "100%",
-          }}
-        >
-          <Typography variant="h4" component="h1" sx={{ color: "white", fontWeight: "bold" }}>
-            Tableau de Bord
+      <Container maxWidth={false} sx={{ mt: 2, mb: 4, px: 3 }}>
+        <Box sx={{ maxWidth: "1360px", width: "100%", mx: "auto" }}>
+          <Typography
+            component="h1"
+            variant="subtitle1"
+            sx={{
+              color: "white",
+              fontWeight: 700,
+              mb: 0.8,
+              fontSize: "1.35rem",
+              letterSpacing: "-0.01em",
+              lineHeight: 1.3,
+            }}
+          >
+            Tableau de bord
           </Typography>
 
-          {/* Section des filtres */}
-          <Box sx={{ ml: "auto", display: "flex", justifyContent: "flex-end" }}>
+          <Box sx={{ mt: 0.25 }}>
             <DashboardFilters />
           </Box>
-        </Box>
 
-        {/* Contenu du dashboard avec accès aux filtres */}
-        <DashboardContent />
+          <Box sx={{ mt: 2 }}>
+            <DashboardContent />
+          </Box>
+        </Box>
       </Container>
     </DashboardFiltersProvider>
   );

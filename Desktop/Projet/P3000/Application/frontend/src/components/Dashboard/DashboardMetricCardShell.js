@@ -1,6 +1,16 @@
 import { Box, Paper, Typography } from "@mui/material";
 import React from "react";
 
+// Couleurs des badges (Pill-like) par tone — alignées avec le canvas
+const BADGE_TONE = {
+  success: { bg: "#f0fdf4", color: "#15803d", border: "#bbf7d0" },
+  info:    { bg: "#eff6ff", color: "#1d4ed8", border: "#bfdbfe" },
+  brandBlue: { bg: "#ffffff", color: "#1B78BC", border: "#1B78BC" },
+  warning: { bg: "#fff7ed", color: "#c2410c", border: "#fed7aa" },
+  danger:  { bg: "#fef2f2", color: "#b91c1c", border: "#fecaca" },
+  neutral: { bg: "#f1f5f9", color: "#475569", border: "#e2e8f0" },
+};
+
 const getVariantStyles = (variant, accent) => {
   const commonHover = {
     transition: "all 0.25s ease",
@@ -68,6 +78,16 @@ const getVariantStyles = (variant, accent) => {
           "radial-gradient(circle at top right, rgba(59,130,246,0.14) 0%, rgba(255,255,255,1) 45%)",
         border: "1px solid #e5e7eb",
       };
+    // variant 9 = hero : seulement la bordure gauche, pas d'outer border (canvas exact)
+    case 9:
+      return {
+        ...commonHover,
+        backgroundColor: "#ffffff",
+        border: "1px solid #e5e7eb",
+        borderLeft: `8px solid ${accent}`,
+        borderTopLeftRadius: "4px",
+        borderBottomLeftRadius: "4px",
+      };
     default:
       return {
         ...commonHover,
@@ -90,9 +110,15 @@ const DashboardMetricCardShell = ({
   percentBase,
   extraContent = null,
   toolbarPrefix = null,
+  // Hero mode (variant 9) : valeur 32 px + layout canal
+  largeValue = false,
+  // Badge Pill affiché en row sous la valeur (hero mode)
+  subtitleBadge = null,
+  subtitleBadgeTone = "neutral",
 }) => {
   const variantStyles = getVariantStyles(variant, accent);
   const darkCard = variant === 3;
+
   const hasPercent =
     percentValue != null &&
     percentBase != null &&
@@ -104,23 +130,30 @@ const DashboardMetricCardShell = ({
     : null;
   const badgeShowsPercent = Boolean(percentLabel) && !label;
 
+  // En mode hero, on cache le badge top-right (l'info est dans la row badge/subtitle)
+  const showTopBadge = !largeValue && (toolbarPrefix || label || percentLabel);
+
+  const badgeStyle = BADGE_TONE[subtitleBadgeTone] || BADGE_TONE.neutral;
+
   return (
     <Paper
       elevation={0}
       sx={{
-        p: 2,
-        borderRadius: "14px",
+        px: largeValue ? 2.25 : 2,
+        py: largeValue ? 1.5 : 2,
+        borderRadius: "10px",
         height: "100%",
-        minHeight: 92,
+        minHeight: largeValue ? 98 : 92,
         display: "flex",
         flexDirection: "column",
-        justifyContent: "space-between",
+        justifyContent: largeValue ? "flex-start" : "space-between",
         position: "relative",
         overflow: "hidden",
         ...variantStyles,
       }}
     >
-      {(toolbarPrefix || label || percentLabel) && (
+      {/* Badge % en haut à droite — uniquement pour les cartes standards */}
+      {showTopBadge && (
         <Box
           sx={{
             position: "absolute",
@@ -142,12 +175,8 @@ const DashboardMetricCardShell = ({
                 letterSpacing: "0.02em",
                 lineHeight: 1.2,
                 ...(badgeShowsPercent
-                  ? {
-                      color: darkCard ? "#94a3b8" : "#64748b",
-                    }
-                  : {
-                      color: darkCard ? "#e5e7eb" : accent,
-                    }),
+                  ? { color: darkCard ? "#94a3b8" : "#64748b" }
+                  : { color: darkCard ? "#e5e7eb" : accent }),
               }}
             >
               {label || percentLabel}
@@ -155,50 +184,129 @@ const DashboardMetricCardShell = ({
           )}
         </Box>
       )}
+
+      {/* Toolbar en hero mode (icône agence) — reste accessible */}
+      {largeValue && toolbarPrefix && (
+        <Box sx={{ position: "absolute", top: 10, right: 10 }}>
+          {toolbarPrefix}
+        </Box>
+      )}
+
+      {/* ── Titre ── */}
       <Typography
         variant="caption"
         component="span"
         sx={{
-          color: darkCard ? "#cbd5e1" : "#334155",
-          fontWeight: 800,
+          // Hero : secondaire, 600, letterspacing 0.06em — canvas exact
+          // Standard : plus foncé, 700
+          color: largeValue
+            ? "#64748b"
+            : darkCard
+            ? "#cbd5e1"
+            : "#475569",
+          fontWeight: largeValue ? 600 : 700,
           textTransform: "uppercase",
-          pr: 7,
-          letterSpacing: "0.04em",
+          pr: largeValue ? 0 : 7,
+          letterSpacing: largeValue ? "0.06em" : "0.04em",
+          fontSize: largeValue ? "0.72rem" : undefined,
         }}
       >
         {title}
       </Typography>
+
+      {/* ── Valeur ── */}
       <Typography
-        variant="h6"
+        component="div"
         sx={{
           color: valueColor || (darkCard ? "#f8fafc" : "#111827"),
           fontWeight: 800,
-          lineHeight: 1.1,
-          mt: 0.5,
+          lineHeight: largeValue ? 1 : 1.1,
+          mt: largeValue ? 0.7 : 0.5,
+          letterSpacing: largeValue ? "-0.02em" : undefined,
+          // Hero : 32 px (canvas exact) — Standard : h6 MUI (~1.25 rem)
+          fontSize: largeValue ? "1.85rem" : "1.25rem",
         }}
       >
         {value}
       </Typography>
-      <Box
-        sx={{
-          height: 4,
-          width: 52,
-          borderRadius: 999,
-          background: `linear-gradient(90deg, ${accent} 0%, ${accent}66 100%)`,
-          mb: 0.5,
-        }}
-      />
-      {subtitle ? (
-        <Typography
-          variant="body2"
-          sx={{ color: darkCard ? "#cbd5e1" : "#6b7280", fontSize: "0.75rem" }}
+
+      {/* Barre décorative — uniquement pour les cartes standards */}
+      {!largeValue && (
+        <Box
+          sx={{
+            height: 4,
+            width: 52,
+            borderRadius: 999,
+            background: `linear-gradient(90deg, ${accent} 0%, ${accent}66 100%)`,
+            mb: 0.5,
+          }}
+        />
+      )}
+
+      {/* ── Zone sous-titre ── */}
+      {largeValue ? (
+        // Hero mode : row avec Pill badge + texte secondaire (canvas exact)
+        <Box
+          sx={{
+            display: "flex",
+            alignItems: "center",
+            gap: 1,
+            mt: 0.8,
+            flexWrap: "wrap",
+          }}
         >
-          {subtitle}
-        </Typography>
-      ) : null}
+          {subtitleBadge && (
+            <Box
+              component="span"
+              sx={{
+                display: "inline-flex",
+                alignItems: "center",
+                px: 1.4,
+                py: 0.45,
+                borderRadius: "999px",
+                bgcolor: "#ffffff",
+                border: `1.5px solid ${badgeStyle.border}`,
+                fontSize: "0.8rem",
+                fontWeight: 700,
+                color: badgeStyle.color,
+                lineHeight: 1.5,
+                whiteSpace: "nowrap",
+              }}
+            >
+              {subtitleBadge}
+            </Box>
+          )}
+          {subtitle && (
+            <Typography
+              component="span"
+              variant="caption"
+              sx={{
+                color: "#94a3b8",
+                fontSize: "0.72rem",
+                fontWeight: 500,
+                lineHeight: 1.4,
+              }}
+            >
+              {subtitle}
+            </Typography>
+          )}
+        </Box>
+      ) : (
+        // Standard mode : texte subtitle classique
+        subtitle ? (
+          <Typography
+            variant="body2"
+            sx={{ color: darkCard ? "#cbd5e1" : "#6b7280", fontSize: "0.72rem" }}
+          >
+            {subtitle}
+          </Typography>
+        ) : null
+      )}
+
       {extraContent ? (
         <Box sx={{ mt: 0.75, flex: 1, minHeight: 0, overflow: "auto" }}>{extraContent}</Box>
       ) : null}
+
       {footerItems.length > 0 && (
         <Box
           sx={{

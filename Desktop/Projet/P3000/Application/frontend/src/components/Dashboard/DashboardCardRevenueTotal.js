@@ -2,19 +2,14 @@ import React from "react";
 import DashboardMetricCardShell from "./DashboardMetricCardShell";
 import { formatDashboardCurrency } from "./dashboardCurrency";
 
-const formatProgressLabel = (progressPercent, comparisonYear) => {
+const formatProgressBadge = (progressPercent, comparisonYear) => {
   const yearSuffix = comparisonYear ? ` vs ${comparisonYear}` : "";
-  if (progressPercent == null || Number.isNaN(progressPercent)) {
-    return `Progression indisponible${yearSuffix}`;
-  }
-  const absValue = Math.abs(progressPercent).toFixed(1);
-  if (progressPercent > 0) {
-    return `+${absValue}% de hausse${yearSuffix}`;
-  }
-  if (progressPercent < 0) {
-    return `-${absValue}% de baisse${yearSuffix}`;
-  }
-  return `0.0% stable${yearSuffix}`;
+  const parsed = Number(progressPercent);
+  if (progressPercent == null || Number.isNaN(parsed)) return comparisonYear ? `0.0%${yearSuffix}` : null;
+  const abs = Math.abs(parsed).toFixed(1);
+  if (parsed > 0) return `+${abs}%${yearSuffix}`;
+  if (parsed < 0) return `−${abs}%${yearSuffix}`;
+  return `0.0%${yearSuffix}`;
 };
 
 const DashboardCardRevenueTotal = ({
@@ -24,18 +19,28 @@ const DashboardCardRevenueTotal = ({
   progressPercent = null,
   comparisonYear = null,
 }) => {
+  const parsedProgress = Number(progressPercent);
+  const badge = loading ? null : formatProgressBadge(progressPercent, comparisonYear);
+  const badgeTone =
+    loading || !badge
+      ? "neutral"
+      : Number.isNaN(parsedProgress)
+      ? "brandBlue"
+      : parsedProgress < 0
+      ? "danger"
+      : "brandBlue";
+
   return (
     <DashboardMetricCardShell
-      title="CA total"
+      title="CA Total HT"
       value={loading ? "Chargement..." : formatDashboardCurrency(value)}
-      valueColor={loading ? undefined : Number(value || 0) >= 0 ? "rgba(27, 120, 188, 1)" : "#dc2626"}
-      subtitle={
-        loading
-          ? "Calcul de progression..."
-          : formatProgressLabel(progressPercent, comparisonYear)
-      }
-      accent="#2563eb"
-      variant={7}
+      valueColor={loading ? undefined : "rgba(27, 120, 188, 1)"}
+      subtitle="Situations + factures"
+      subtitleBadge={badge}
+      subtitleBadgeTone={badgeTone}
+      accent="#1B78BC"
+      variant={9}
+      largeValue
       percentValue={loading ? null : value}
       percentBase={loading ? null : totalCA}
     />

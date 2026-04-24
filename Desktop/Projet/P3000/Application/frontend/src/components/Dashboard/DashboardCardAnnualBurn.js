@@ -7,7 +7,7 @@ const DashboardCardAnnualBurn = ({ totalCA = 0, burnMontant = 0, loading = false
     title="Prochain paiement"
     value={loading ? "Chargement..." : formatDashboardCurrency(burnMontant)}
     valueColor={loading ? undefined : Number(burnMontant || 0) >= 0 ? "#fb923c" : "#dc2626"}
-    subtitle="Paiements à échéance sous 15 jours (HT)"
+    subtitle="Échéance ≤ 15 jours (HT)"
     accent="#f97316"
     variant={7}
     percentValue={loading ? null : burnMontant}

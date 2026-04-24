@@ -1,125 +1,265 @@
 import { Box, Paper, Typography } from "@mui/material";
 import React from "react";
-import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
+import {
+  Bar,
+  BarChart,
+  CartesianGrid,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
+} from "recharts";
 import { formatDashboardCurrency } from "./dashboardCurrency";
+
+const COMPANY_BLUE = "#1B78BC";
+const COMPARISON_PALETTE = ["#f97316", "#22c55e", "#a855f7", "#ef4444", "#eab308", "#14b8a6"];
+
+// Tones canvas : neutral pour la période actuelle, warning pour les années de comparaison
+const PILL_TONE = {
+  neutral: { color: "#475569", border: "#e2e8f0" },
+  warning: { color: "#c2410c", border: "#fed7aa" },
+  info: { color: "#1d4ed8", border: "#bfdbfe" },
+  danger: { color: "#b91c1c", border: "#fecaca" },
+};
+
+// Pill légère pour la légende dans le header du chart (canvas exact)
+const LegendPill = ({ label, tone = "neutral" }) => {
+  const t = PILL_TONE[tone] || PILL_TONE.neutral;
+  return (
+    <Box
+      component="span"
+      sx={{
+        display: "inline-flex",
+        alignItems: "center",
+        gap: 0.6,
+        px: 1.2,
+        py: 0.45,
+        borderRadius: "999px",
+        border: `1.5px solid ${t.border}`,
+        bgcolor: "#ffffff",
+      }}
+    >
+      <Typography
+        component="span"
+        sx={{ fontSize: "0.76rem", fontWeight: 700, color: t.color, lineHeight: 1.1 }}
+      >
+        {label}
+      </Typography>
+    </Box>
+  );
+};
 
 const DashboardRevenueMockChart = ({
   monthlyCashflow = [],
   comparisonYearSeries = [],
+  selectedYear = null,
+  periodStart = null,
+  periodEnd = null,
   loading = false,
+  cardHeight = 487,
 }) => {
-  const companyBlue = "#1B78BC";
-  const comparisonPalette = ["#f97316", "#22c55e", "#a855f7", "#ef4444", "#eab308", "#14b8a6"];
-  const legendItems = [{ label: "Période actuelle", color: companyBlue }];
+  const formatBottomLegendLabel = (label) => {
+    const match = String(label || "").match(/^Année\s+(\d{4})$/i);
+    return match ? match[1] : label;
+  };
+
+  const formatMonthLabel = (value) => {
+    const raw = String(value || "").trim();
+    if (!raw) return "";
+    if (/^\d{4}[-/]\d{2}$/.test(raw)) {
+      const [y, m] = raw.split(/[-/]/).map(Number);
+      return new Date(y, m - 1, 1).toLocaleDateString("fr-FR", { month: "long" });
+    }
+    if (/^\d{2}[-/]\d{4}$/.test(raw)) {
+      const [m, y] = raw.split(/[-/]/).map(Number);
+      return new Date(y, m - 1, 1).toLocaleDateString("fr-FR", { month: "long" });
+    }
+    const cleaned = raw
+      .replace(/\b\d{4}\b/g, "")
+      .replace(/\b\d{2}\b/g, "")
+      .replace(/[,/()-]/g, " ")
+      .replace(/\s+/g, " ")
+      .trim();
+    const monthOnly = cleaned.split(" ")[0];
+    return monthOnly || cleaned || raw;
+  };
+
+  const formatPeriodLegend = () => {
+    if (!selectedYear) return "Période actuelle";
+    if (!periodStart || !periodEnd) return `Année ${selectedYear}`;
+    const formatMonthYear = (monthValue) => {
+      const [year, month] = String(monthValue || "").split("-").map(Number);
+      if (!year || !month) return monthValue;
+      return new Date(year, month - 1, 1).toLocaleDateString("fr-FR", {
+        month: "long",
+        year: "2-digit",
+      });
+    };
+    return `${selectedYear} de ${formatMonthYear(periodStart)} à ${formatMonthYear(periodEnd)}`;
+  };
+
+  const legendItems = [{ label: formatPeriodLegend(), color: COMPANY_BLUE, tone: "neutral" }];
   (comparisonYearSeries || []).forEach((series, idx) => {
     legendItems.push({
       label: `Année ${series.year}`,
-      color: comparisonPalette[idx % comparisonPalette.length],
+      color: COMPARISON_PALETTE[idx % COMPARISON_PALETTE.length],
+      tone: "warning",
     });
   });
 
   const data = (monthlyCashflow || []).map((m, idx) => {
-    const row = {
-    month: m.label,
-    ca_ht_current: Number(m.facture_ht || 0),
-    };
+    const row = { month: m.label, ca_ht_current: Number(m.facture_ht || 0) };
     (comparisonYearSeries || []).forEach((series, sIdx) => {
-      const val = Number(series?.monthlyCashflow?.[idx]?.facture_ht || 0);
-      row[`ca_ht_cmp_${sIdx}`] = val;
+      row[`ca_ht_cmp_${sIdx}`] = Number(series?.monthlyCashflow?.[idx]?.facture_ht || 0);
     });
     return row;
   });
+
+  // Hauteur de la zone chart = cardHeight − header − légende bas
+  const chartAreaHeight = cardHeight - 126;
+
   return (
     <Paper
       elevation={0}
       sx={{
-        borderRadius: "14px",
+        borderRadius: "10px",
         backgroundColor: "#ffffff",
-        border: "1px solid rgba(27, 120, 188, 0.19)",
-        boxShadow: "0 2px 10px rgba(27, 120, 188, 0.15)",
+        border: "1px solid #e5e7eb",          // neutre (canvas exact, pas de blue tint)
+        boxShadow: "0 1px 3px rgba(15, 23, 42, 0.06)",
         transition: "all 0.25s ease",
         "&:hover": {
           transform: "translateY(-2px)",
           boxShadow: "0 10px 24px rgba(17, 24, 39, 0.12)",
         },
-        height: 487,
+        height: cardHeight,
         p: 2,
-        position: "relative",
+        display: "flex",
+        flexDirection: "column",
         overflow: "hidden",
       }}
     >
-      <Typography
-        variant="caption"
-        sx={{ color: "#6b7280", fontWeight: 700, textTransform: "uppercase" }}
-      >
-        Vue mensuelle
-      </Typography>
-      <Typography variant="h6" sx={{ color: "#111827", fontWeight: 800, lineHeight: 1.1, mt: 0.5 }}>
-        Montants facturés hors taxes (comparatif)
-      </Typography>
+      {/* ── Header : titre H3 + pills légende (canvas exact) ── */}
       <Box
         sx={{
-          height: 4,
-          width: 70,
-          borderRadius: 999,
-          background: `linear-gradient(90deg, ${companyBlue} 0%, #22c55e 100%)`,
-          my: 1,
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          mb: 1,
+          gap: 1,
+          flexWrap: "wrap",
         }}
-      />
+      >
+        <Typography
+          component="h3"
+          sx={{
+            fontSize: "0.88rem",
+            fontWeight: 700,
+            color: "#111827",
+            lineHeight: 1.2,
+            letterSpacing: "-0.01em",
+          }}
+        >
+          Montants facturés HT — mensuel
+        </Typography>
+        <Box sx={{ display: "flex", gap: 0.6, flexWrap: "wrap" }}>
+          {legendItems.map((item) => (
+            <LegendPill
+              key={item.label}
+              label={item.label}
+              tone={item.tone}
+            />
+          ))}
+        </Box>
+      </Box>
 
-      <Box sx={{ height: 365, mt: 1 }}>
+      {/* ── Zone graphique ── */}
+      <Box sx={{ flex: 1, minHeight: 0, height: chartAreaHeight }}>
         {loading ? (
           <Typography variant="body2" sx={{ color: "#94a3b8" }}>
             Chargement du graphique...
           </Typography>
         ) : (
           <ResponsiveContainer width="100%" height="100%">
-            <BarChart data={data} margin={{ top: 10, right: 12, left: -10, bottom: 4 }} barGap={6}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
-              <XAxis dataKey="month" tick={{ fill: "#64748b", fontSize: 11 }} />
-              <YAxis tick={{ fill: "#64748b", fontSize: 11 }} tickFormatter={(v) => `${Math.round(v / 1000)}k`} />
+            <BarChart
+              data={data}
+              margin={{ top: 8, right: 8, left: -14, bottom: 4 }}
+              barGap={4}
+            >
+              <CartesianGrid strokeDasharray="3 3" stroke="#f0f4f8" vertical={false} />
+              <XAxis
+                dataKey="month"
+                tickFormatter={formatMonthLabel}
+                tick={{ fill: "#94a3b8", fontSize: 11, fontWeight: 500 }}
+                axisLine={false}
+                tickLine={false}
+              />
+              <YAxis
+                tick={{ fill: "#94a3b8", fontSize: 11 }}
+                tickFormatter={(v) => `${Math.round(v / 1000)}k`}
+                axisLine={false}
+                tickLine={false}
+              />
               <Tooltip
-                formatter={(value, name) => [formatDashboardCurrency(value), name]}
-                contentStyle={{ borderRadius: 10, border: "1px solid #cbd5e1" }}
+                formatter={(val, name) => [formatDashboardCurrency(val), name]}
+                contentStyle={{
+                  borderRadius: 10,
+                  border: "1px solid #e5e7eb",
+                  boxShadow: "0 4px 12px rgba(0,0,0,0.08)",
+                  fontSize: "0.78rem",
+                }}
+                cursor={{ fill: "rgba(0,0,0,0.03)" }}
               />
               <Bar
                 dataKey="ca_ht_current"
                 name="Période actuelle"
-                fill={companyBlue}
-                radius={[4, 4, 0, 0]}
+                fill={COMPANY_BLUE}
+                radius={[0, 0, 0, 0]}
+                maxBarSize={32}
               />
               {(comparisonYearSeries || []).map((series, idx) => (
                 <Bar
                   key={`cmp-${series.year}-${idx}`}
                   dataKey={`ca_ht_cmp_${idx}`}
                   name={`Année ${series.year}`}
-                  fill={comparisonPalette[idx % comparisonPalette.length]}
-                  radius={[4, 4, 0, 0]}
+                  fill={COMPARISON_PALETTE[idx % COMPARISON_PALETTE.length]}
+                  radius={[0, 0, 0, 0]}
+                  maxBarSize={32}
                 />
               ))}
             </BarChart>
           </ResponsiveContainer>
         )}
       </Box>
-      <Box sx={{ mt: 1, display: "flex", gap: 2, flexWrap: "wrap", alignItems: "center" }}>
-        {legendItems.map((item) => (
-          <Box key={item.label} sx={{ display: "flex", alignItems: "center", gap: 0.8 }}>
-            <Box
-              sx={{
-                width: 10,
-                height: 10,
-                borderRadius: "2px",
-                bgcolor: item.color,
-                border: "1px solid rgba(15,23,42,0.08)",
-              }}
-            />
-            <Typography variant="caption" sx={{ color: "#64748b", fontWeight: 700 }}>
-              {item.label}
-            </Typography>
-          </Box>
-        ))}
-      </Box>
-
+      {!loading && (
+        <Box
+          sx={{
+            mt: 0.75,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            gap: 1.5,
+            flexWrap: "wrap",
+            width: "100%",
+          }}
+        >
+          {legendItems.map((item) => (
+            <Box key={`bottom-${item.label}`} sx={{ display: "inline-flex", alignItems: "center", gap: 0.5 }}>
+              <Box
+                sx={{
+                  width: 10,
+                  height: 10,
+                  borderRadius: "2px",
+                  bgcolor: item.color,
+                  flexShrink: 0,
+                }}
+              />
+              <Typography component="span" sx={{ fontSize: "0.72rem", color: "#64748b", fontWeight: 600 }}>
+                {formatBottomLegendLabel(item.label)}
+              </Typography>
+            </Box>
+          ))}
+        </Box>
+      )}
     </Paper>
   );
 };

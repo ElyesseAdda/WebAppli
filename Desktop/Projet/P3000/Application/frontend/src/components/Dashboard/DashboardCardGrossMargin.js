@@ -2,19 +2,14 @@ import React from "react";
 import DashboardMetricCardShell from "./DashboardMetricCardShell";
 import { formatDashboardCurrency } from "./dashboardCurrency";
 
-const formatProgressLabel = (progressPercent, comparisonYear) => {
+const formatProgressSubtitle = (progressPercent, comparisonYear) => {
   const yearSuffix = comparisonYear ? ` vs ${comparisonYear}` : "";
-  if (progressPercent == null || Number.isNaN(progressPercent)) {
+  if (progressPercent == null || Number.isNaN(progressPercent))
     return `Progression indisponible${yearSuffix}`;
-  }
-  const absValue = Math.abs(progressPercent).toFixed(1);
-  if (progressPercent > 0) {
-    return `+${absValue}% de hausse${yearSuffix}`;
-  }
-  if (progressPercent < 0) {
-    return `-${absValue}% de baisse${yearSuffix}`;
-  }
-  return `0.0% stable${yearSuffix}`;
+  const abs = Math.abs(progressPercent).toFixed(1);
+  if (progressPercent > 0) return `+${abs} % de hausse${yearSuffix}`;
+  if (progressPercent < 0) return `−${abs} % de baisse${yearSuffix}`;
+  return `Stable${yearSuffix}`;
 };
 
 const DashboardCardGrossMargin = ({
@@ -24,24 +19,26 @@ const DashboardCardGrossMargin = ({
   loading = false,
   progressPercent = null,
   comparisonYear = null,
-}) => (
-  <DashboardMetricCardShell
-    title="Marge brute"
-    value={loading ? "Chargement..." : formatDashboardCurrency(value)}
-    valueColor={loading ? undefined : Number(value || 0) >= 0 ? "#0d9488" : "#dc2626"}
-    subtitle={
-      loading
-        ? "Calcul du taux..."
-        : `Taux ${Number(ratePercent || 0).toFixed(1)}% | ${formatProgressLabel(
-            progressPercent,
-            comparisonYear
-          )}`
-    }
-    accent="#059669"
-    variant={7}
-    percentValue={loading ? null : value}
-    percentBase={loading ? null : totalCA}
-  />
-);
+}) => {
+  const rate = Number(ratePercent || 0);
+  const badge = loading ? null : `${rate.toFixed(1)} % du CA`;
+  const badgeTone = !loading ? (rate >= 0 ? "success" : "danger") : "neutral";
+
+  return (
+    <DashboardMetricCardShell
+      title="Marge Brute"
+      value={loading ? "Chargement..." : formatDashboardCurrency(value)}
+      valueColor={loading ? undefined : Number(value || 0) >= 0 ? "#16a34a" : "#dc2626"}
+      subtitle="CA — coûts réels — agence"
+      subtitleBadge={badge}
+      subtitleBadgeTone={badgeTone}
+      accent="#16a34a"
+      variant={9}
+      largeValue
+      percentValue={loading ? null : value}
+      percentBase={loading ? null : totalCA}
+    />
+  );
+};
 
 export default DashboardCardGrossMargin;
