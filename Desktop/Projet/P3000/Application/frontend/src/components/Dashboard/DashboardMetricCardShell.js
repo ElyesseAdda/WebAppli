@@ -112,6 +112,8 @@ const DashboardMetricCardShell = ({
   toolbarPrefix = null,
   // Hero mode (variant 9) : valeur 32 px + layout canal
   largeValue = false,
+  // Mode KPI compact : montant centré en haut, titre centré dessous, sous-texte en bas à gauche
+  valueFirstCentered = false,
   // Badge Pill affiché en row sous la valeur (hero mode)
   subtitleBadge = null,
   subtitleBadgeTone = "neutral",
@@ -131,7 +133,7 @@ const DashboardMetricCardShell = ({
   const badgeShowsPercent = Boolean(percentLabel) && !label;
 
   // En mode hero, on cache le badge top-right (l'info est dans la row badge/subtitle)
-  const showTopBadge = !largeValue && (toolbarPrefix || label || percentLabel);
+  const showTopBadge = !largeValue && !valueFirstCentered && (toolbarPrefix || label || percentLabel);
 
   const badgeStyle = BADGE_TONE[subtitleBadgeTone] || BADGE_TONE.neutral;
 
@@ -140,10 +142,10 @@ const DashboardMetricCardShell = ({
       elevation={0}
       sx={{
         px: largeValue ? 2.25 : 2,
-        py: largeValue ? 1.5 : 2,
+        py: largeValue ? 1.5 : valueFirstCentered ? 1.25 : 2,
         borderRadius: "10px",
         height: "100%",
-        minHeight: largeValue ? 98 : 92,
+        minHeight: largeValue ? 98 : valueFirstCentered ? 84 : 92,
         display: "flex",
         flexDirection: "column",
         justifyContent: largeValue ? "flex-start" : "space-between",
@@ -191,56 +193,83 @@ const DashboardMetricCardShell = ({
           {toolbarPrefix}
         </Box>
       )}
+      {valueFirstCentered && !largeValue && toolbarPrefix && (
+        <Box sx={{ position: "absolute", top: 8, right: 10 }}>
+          {toolbarPrefix}
+        </Box>
+      )}
 
-      {/* ── Titre ── */}
-      <Typography
-        variant="caption"
-        component="span"
-        sx={{
-          // Hero : secondaire, 600, letterspacing 0.06em — canvas exact
-          // Standard : plus foncé, 700
-          color: largeValue
-            ? "#64748b"
-            : darkCard
-            ? "#cbd5e1"
-            : "#475569",
-          fontWeight: largeValue ? 600 : 700,
-          textTransform: "uppercase",
-          pr: largeValue ? 0 : 7,
-          letterSpacing: largeValue ? "0.06em" : "0.04em",
-          fontSize: largeValue ? "0.72rem" : undefined,
-        }}
-      >
-        {title}
-      </Typography>
+      {valueFirstCentered && !largeValue ? (
+        <>
+          <Typography
+            component="div"
+            sx={{
+              color: valueColor || (darkCard ? "#f8fafc" : "#111827"),
+              fontWeight: 800,
+              lineHeight: 1.05,
+              mt: 0.1,
+              fontSize: "1.45rem",
+              textAlign: "center",
+            }}
+          >
+            {value}
+          </Typography>
+          <Typography
+            variant="caption"
+            component="span"
+            sx={{
+              color: darkCard ? "#cbd5e1" : "#475569",
+              fontWeight: 600,
+              textTransform: "none",
+              letterSpacing: "0.04em",
+              fontSize: "0.56rem",
+              textAlign: "center",
+              mt: 0.25,
+            }}
+          >
+            {title}
+          </Typography>
+        </>
+      ) : (
+        <>
+          {/* ── Titre ── */}
+          <Typography
+            variant="caption"
+            component="span"
+            sx={{
+              // Hero : secondaire, 600, letterspacing 0.06em — canvas exact
+              // Standard : plus foncé, 700
+              color: largeValue
+                ? "#64748b"
+                : darkCard
+                ? "#cbd5e1"
+                : "#475569",
+              fontWeight: largeValue ? 600 : 700,
+              textTransform: "uppercase",
+              pr: largeValue ? 0 : 7,
+              letterSpacing: largeValue ? "0.06em" : "0.04em",
+              fontSize: largeValue ? "0.72rem" : undefined,
+            }}
+          >
+            {title}
+          </Typography>
 
-      {/* ── Valeur ── */}
-      <Typography
-        component="div"
-        sx={{
-          color: valueColor || (darkCard ? "#f8fafc" : "#111827"),
-          fontWeight: 800,
-          lineHeight: largeValue ? 1 : 1.1,
-          mt: largeValue ? 0.7 : 0.5,
-          letterSpacing: largeValue ? "-0.02em" : undefined,
-          // Hero : 32 px (canvas exact) — Standard : h6 MUI (~1.25 rem)
-          fontSize: largeValue ? "1.85rem" : "1.25rem",
-        }}
-      >
-        {value}
-      </Typography>
-
-      {/* Barre décorative — uniquement pour les cartes standards */}
-      {!largeValue && (
-        <Box
-          sx={{
-            height: 4,
-            width: 52,
-            borderRadius: 999,
-            background: `linear-gradient(90deg, ${accent} 0%, ${accent}66 100%)`,
-            mb: 0.5,
-          }}
-        />
+          {/* ── Valeur ── */}
+          <Typography
+            component="div"
+            sx={{
+              color: valueColor || (darkCard ? "#f8fafc" : "#111827"),
+              fontWeight: 800,
+              lineHeight: largeValue ? 1 : 1.1,
+              mt: largeValue ? 0.7 : 0.5,
+              letterSpacing: largeValue ? "-0.02em" : undefined,
+              // Hero : 32 px (canvas exact) — Standard : h6 MUI (~1.25 rem)
+              fontSize: largeValue ? "1.85rem" : "1.25rem",
+            }}
+          >
+            {value}
+          </Typography>
+        </>
       )}
 
       {/* ── Zone sous-titre ── */}
@@ -296,7 +325,16 @@ const DashboardMetricCardShell = ({
         subtitle ? (
           <Typography
             variant="body2"
-            sx={{ color: darkCard ? "#cbd5e1" : "#6b7280", fontSize: "0.72rem" }}
+            sx={{
+              color: darkCard ? "#cbd5e1" : "#6b7280",
+              fontSize: valueFirstCentered ? "0.62rem" : "0.72rem",
+              lineHeight: valueFirstCentered ? 1.2 : undefined,
+              mt: valueFirstCentered ? "auto" : undefined,
+              textAlign: valueFirstCentered ? "left" : undefined,
+              alignSelf: valueFirstCentered ? "flex-start" : undefined,
+              ml: valueFirstCentered ? 0 : undefined,
+              mb: valueFirstCentered ? -0.2 : undefined,
+            }}
           >
             {subtitle}
           </Typography>

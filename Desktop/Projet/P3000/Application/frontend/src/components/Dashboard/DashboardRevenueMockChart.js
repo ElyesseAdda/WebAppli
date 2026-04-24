@@ -159,7 +159,7 @@ const DashboardRevenueMockChart = ({
             letterSpacing: "-0.01em",
           }}
         >
-          Montants facturés HT — mensuel
+          Facturation HT mensuelle
         </Typography>
         <Box sx={{ display: "flex", gap: 0.6, flexWrap: "wrap" }}>
           {legendItems.map((item) => (

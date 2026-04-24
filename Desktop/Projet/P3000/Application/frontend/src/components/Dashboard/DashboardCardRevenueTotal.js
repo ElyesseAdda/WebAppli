@@ -32,10 +32,10 @@ const DashboardCardRevenueTotal = ({
 
   return (
     <DashboardMetricCardShell
-      title="CA Total HT"
+      title="CA total HT"
       value={loading ? "Chargement..." : formatDashboardCurrency(value)}
       valueColor={loading ? undefined : "rgba(27, 120, 188, 1)"}
-      subtitle="Situations + factures"
+      subtitle="Situations et factures"
       subtitleBadge={badge}
       subtitleBadgeTone={badgeTone}
       accent="#1B78BC"

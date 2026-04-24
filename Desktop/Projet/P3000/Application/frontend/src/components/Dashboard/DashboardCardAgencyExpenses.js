@@ -67,26 +67,10 @@ const DashboardCardAgencyExpenses = ({ breakdown = [], loading = false, totalCA 
   const selectionExplicitementVide =
     depensesAgenceIncludedAgenceIds !== null && depensesAgenceIncludedAgenceIds.length === 0;
 
-  const aucuneAgenceEnDb = !loading && breakdown.filter((r) => r.agence_id != null).length === 0;
-
   const needsManualPick =
     !loading &&
     defaultIds.length === 0 &&
     breakdown.some((r) => Number(r.total_ht) > 0);
-
-  const subtitleParts = [];
-  if (selectionExplicitementVide || needsManualPick) {
-    subtitleParts.push("Choisir une ou plusieurs agences pour le décompte");
-  } else if (aucuneAgenceEnDb) {
-    subtitleParts.push("Aucune agence en base — créer une agence pour le décompte");
-  } else {
-    const n = effectiveIncludedIds.length;
-    subtitleParts.push(
-      n === 0
-        ? "Periode (module Agences)"
-        : `${n} agence(s) dans le total · période (module Agences)`
-    );
-  }
 
   const toggleId = (agenceId) => {
     const base =
@@ -100,26 +84,6 @@ const DashboardCardAgencyExpenses = ({ breakdown = [], loading = false, totalCA 
     setDepensesAgenceIncludedAgenceIds(base);
     void persistDashboardDepensesAgence(false, base);
   };
-
-  const totalToutesAgences = breakdown.reduce((s, r) => s + Number(r.total_ht || 0), 0);
-
-  const extraContent =
-    !loading && breakdown.length > 0 ? (
-      <Box sx={{ pt: 0.5, mt: 0.25 }}>
-        <Typography variant="caption" sx={{ color: "#94a3b8", fontWeight: 600, display: "block" }}>
-          Total toutes agences (période : dépenses mensuelles + planning sur le chantier lié, comme la vue
-          année Agences) :{" "}
-          {formatDashboardCurrency(totalToutesAgences)}
-        </Typography>
-        <Typography
-          variant="caption"
-          sx={{ color: "#cbd5e1", fontWeight: 500, display: "block", mt: 0.75, lineHeight: 1.35 }}
-        >
-          Le montant principal dépend des agences cochées (icône réglages). La MO sur chantier-agence reste
-          exclue de la carte « Main d'œuvre » du dashboard.
-        </Typography>
-      </Box>
-    ) : null;
 
   const toolbarPrefix = (
     <>
@@ -207,16 +171,16 @@ const DashboardCardAgencyExpenses = ({ breakdown = [], loading = false, totalCA 
 
   return (
     <DashboardMetricCardShell
-      title="Dépenses agence"
+      title="Dépenses d'agence"
       value={loading ? "Chargement..." : formatDashboardCurrency(montantSelection)}
       valueColor={loading ? undefined : Number(montantSelection || 0) >= 0 ? "rgba(27, 120, 188, 1)" : "#dc2626"}
-      subtitle="Période sélectionnée"
+      subtitle="Période active"
       accent="#d97706"
       variant={7}
+      valueFirstCentered
       percentValue={hidePercent ? null : montantSelection}
       percentBase={hidePercent ? null : totalCA}
       toolbarPrefix={loading ? null : toolbarPrefix}
-      extraContent={loading ? null : extraContent}
     />
   );
 };

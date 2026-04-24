@@ -129,7 +129,7 @@ const DashboardCostBreakdown = ({
           flexShrink: 0,
         }}
       >
-        Répartition des coûts chantier
+        Répartition des coûts (chantier)
       </Typography>
 
       {/* ── Row : Donut GAUCHE | Données DROITE (canvas exact) ── */}
@@ -232,7 +232,7 @@ const DashboardCostBreakdown = ({
               maxWidth: "40%",
               mt: 1.2,
               alignSelf: "center",
-              transform: "translate(20px, -50px)",
+              transform: "translate(20px, -20px)",
             }}
           >
             {/* Stat "Coût global" */}
