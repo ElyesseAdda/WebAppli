@@ -8,6 +8,7 @@ import DashboardCardAnnualBurn from "./DashboardCardAnnualBurn";
 import DashboardCardLatePayments from "./DashboardCardLatePayments";
 import DashboardRevenueMockChart from "./DashboardRevenueMockChart";
 import DashboardCostBreakdown from "./DashboardCostBreakdown";
+import TresorerieDashboard from "./TresorerieDashboard";
 
 // Hauteur partagée entre le graphique et le donut
 const MID_HEIGHT = 360;
@@ -140,140 +141,15 @@ const DashboardCardsGrid = ({
         />
       </Box>
 
-      {/* ── Divider canvas avant Zone 4 ── */}
+      {/* ── Divider avant Zone 4 ── */}
       <Box sx={{ borderBottom: "1px solid #e5e7eb" }} />
 
-      {/* ── Zone 4 : Tableau "Détail coûts chantier" (canvas exact) ── */}
-      <Box>
-        <Typography
-          component="h3"
-          sx={{
-            fontSize: "0.95rem",
-            fontWeight: 700,
-            color: "#111827",
-            letterSpacing: "-0.01em",
-            lineHeight: 1.2,
-            mb: 1.5,
-          }}
-        >
-          Détail coûts chantier
-        </Typography>
-
-        <table
-          style={{
-            width: "100%",
-            borderCollapse: "collapse",
-            fontSize: 13,
-          }}
-        >
-          <thead>
-            <tr>
-              {["Poste", "Montant HT", "Part du coût global", "Part du CA"].map((h) => (
-                <th
-                  key={h}
-                  style={{
-                    textAlign: "left",
-                    padding: "6px 10px",
-                    fontWeight: 600,
-                    opacity: 0.6,
-                    borderBottom: "1px solid rgba(128,128,128,0.2)",
-                  }}
-                >
-                  {h}
-                </th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {[
-              {
-                label: "Coût chantier global",
-                montant: coutChantierGlobal,
-                partCout: "—",
-                partCA:
-                  totalCA > 0
-                    ? ((coutChantierGlobal / totalCA) * 100).toFixed(1) + " %"
-                    : "—",
-                isGlobal: true,
-              },
-              {
-                label: "Main d'œuvre",
-                montant: coutMainOeuvre,
-                partCout:
-                  coutChantierGlobal > 0
-                    ? ((coutMainOeuvre / coutChantierGlobal) * 100).toFixed(1) + " %"
-                    : "—",
-                partCA:
-                  totalCA > 0
-                    ? ((coutMainOeuvre / totalCA) * 100).toFixed(1) + " %"
-                    : "—",
-                isGlobal: false,
-              },
-              {
-                label: "Matériel",
-                montant: coutMateriel,
-                partCout:
-                  coutChantierGlobal > 0
-                    ? ((coutMateriel / coutChantierGlobal) * 100).toFixed(1) + " %"
-                    : "—",
-                partCA:
-                  totalCA > 0
-                    ? ((coutMateriel / totalCA) * 100).toFixed(1) + " %"
-                    : "—",
-                isGlobal: false,
-              },
-              {
-                label: "Sous-traitance",
-                montant: coutSousTraitance,
-                partCout:
-                  coutChantierGlobal > 0
-                    ? ((coutSousTraitance / coutChantierGlobal) * 100).toFixed(1) + " %"
-                    : "—",
-                partCA:
-                  totalCA > 0
-                    ? ((coutSousTraitance / totalCA) * 100).toFixed(1) + " %"
-                    : "—",
-                isGlobal: false,
-              },
-            ].map(({ label, montant, partCout, partCA, isGlobal }) => (
-              <tr
-                key={label}
-                style={{
-                  background: isGlobal ? "rgba(128,128,128,0.06)" : "transparent",
-                }}
-              >
-                <td
-                  style={{
-                    padding: "7px 10px",
-                    fontWeight: isGlobal ? 600 : 400,
-                  }}
-                >
-                  {label}
-                </td>
-                <td
-                  style={{
-                    padding: "7px 10px",
-                    fontVariantNumeric: "tabular-nums",
-                    color: isGlobal ? "#dc2626" : undefined,
-                    fontWeight: isGlobal ? 600 : 400,
-                  }}
-                >
-                  {coutChantierLoading
-                    ? "..."
-                    : new Intl.NumberFormat("fr-FR", {
-                        style: "currency",
-                        currency: "EUR",
-                        minimumFractionDigits: 2,
-                        maximumFractionDigits: 2,
-                      }).format(Number(montant || 0))}
-                </td>
-                <td style={{ padding: "7px 10px", opacity: 0.7 }}>{partCout}</td>
-                <td style={{ padding: "7px 10px", opacity: 0.7 }}>{partCA}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </Box>
+      {/* ── Zone 4 : Trésorerie mensuelle ── */}
+      <TresorerieDashboard
+        selectedYear={selectedYear}
+        periodStart={periodStart}
+        periodEnd={periodEnd}
+      />
     </Box>
   );
 };
