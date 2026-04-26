@@ -66,6 +66,8 @@ import RapportsPage from "./RapportIntervention/RapportsPage";
 import RapportForm from "./RapportIntervention/RapportForm";
 import RapportPreviewPage from "./RapportIntervention/RapportPreviewPage";
 import RapportMobileLayout from "./RapportIntervention/RapportMobileLayout";
+import MobileHomePage from "./MobileHomePage";
+import DriveMobileLayout from "./DriveV2/DriveMobileLayout";
 
 // Créer un thème par défaut
 const theme = createTheme({
@@ -157,7 +159,7 @@ function App() {
             path="/login"
             element={
               isAuthenticated ? (
-                <Navigate to={isMobile ? "/distributeurs" : "/"} replace />
+                <Navigate to={isMobile ? "/mobile-home" : "/"} replace />
               ) : isMobile ? (
                 // Version mobile : LoginMobile (PWA)
                 <LoginMobile onLoginSuccess={handleLoginSuccess} />
@@ -176,6 +178,24 @@ function App() {
                 <Layout user={user} onLogout={handleLogout}>
                   <Dashboard />
                 </Layout>
+              </ProtectedRoute>
+            }
+          />
+
+          <Route
+            path="/mobile-home"
+            element={
+              <ProtectedRoute isAuthenticated={isAuthenticated}>
+                <MobileHomePage />
+              </ProtectedRoute>
+            }
+          />
+
+          <Route
+            path="/drive-mobile"
+            element={
+              <ProtectedRoute isAuthenticated={isAuthenticated}>
+                <DriveMobileLayout />
               </ProtectedRoute>
             }
           />
@@ -619,7 +639,7 @@ function App() {
                 <OnlyOfficeEditor
                   filePath={new URLSearchParams(window.location.search).get('file_path')}
                   fileName={new URLSearchParams(window.location.search).get('file_name')}
-                  mode="edit"
+                  mode={new URLSearchParams(window.location.search).get('mode') || 'edit'}
                 />
               </ProtectedRoute>
             }

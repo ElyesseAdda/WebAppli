@@ -616,6 +616,15 @@ class DriveV2ViewSet(viewsets.ViewSet):
             file_name = request.data.get('file_name')
             mode = request.data.get('mode', 'edit')
             use_proxy = request.data.get('use_proxy', False)
+
+            # Détection mobile : User-Agent (serveur) + flag explicite du client
+            _MOBILE_UA_KEYWORDS = ('Android', 'iPhone', 'iPad', 'iPod', 'Mobile', 'webOS',
+                                   'BlackBerry', 'IEMobile', 'Opera Mini')
+            user_agent = request.META.get('HTTP_USER_AGENT', '')
+            is_mobile_ua = any(kw in user_agent for kw in _MOBILE_UA_KEYWORDS)
+            # Le frontend peut aussi forcer explicitement le mode mobile
+            is_mobile_flag = bool(request.data.get('is_mobile', False))
+            is_mobile = is_mobile_ua or is_mobile_flag
             
             if not file_path or not file_name:
                 return Response(
@@ -700,7 +709,8 @@ class DriveV2ViewSet(viewsets.ViewSet):
                     user_id=str(request.user.id),
                     user_name=request.user.get_full_name() or request.user.username,
                     mode=mode,
-                    storage_manager=storage_manager
+                    storage_manager=storage_manager,
+                    is_mobile=is_mobile,
                 )
                 return Response(result, status=status.HTTP_200_OK)
             except Exception as config_error:

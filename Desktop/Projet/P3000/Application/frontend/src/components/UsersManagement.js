@@ -23,6 +23,7 @@ import {
   MenuItem,
   Paper,
   Stack,
+  Switch,
   Tab,
   Table,
   TableBody,
@@ -43,6 +44,7 @@ import {
   AdminPanelSettings as AdminPanelSettingsIcon,
   PersonOff as PersonOffIcon,
   PersonAdd as PersonAddIcon,
+  PhoneAndroid as PhoneAndroidIcon,
   Visibility,
   VisibilityOff,
 } from "@mui/icons-material";
@@ -76,6 +78,16 @@ const UsersManagement = () => {
   const [toggleEmetteurLoading, setToggleEmetteurLoading] = useState(false);
   const [showCreatePassword, setShowCreatePassword] = useState(false);
   const [showResetPassword, setShowResetPassword] = useState(false);
+
+  const [mobileAccessDialogOpen, setMobileAccessDialogOpen] = useState(false);
+  const [mobileAccessUser, setMobileAccessUser] = useState(null);
+  const [mobileAccessLoading, setMobileAccessLoading] = useState(false);
+  const [mobileAccessData, setMobileAccessData] = useState({
+    can_access_rapports: false,
+    can_access_distributeur: false,
+    can_access_drive: false,
+  });
+
   const [newEmetteurData, setNewEmetteurData] = useState({
     name: "",
     surname: "",
@@ -317,6 +329,47 @@ const UsersManagement = () => {
     }
   };
 
+  const openMobileAccessDialog = async (targetUser) => {
+    setMobileAccessUser(targetUser);
+    setMobileAccessLoading(true);
+    setMobileAccessDialogOpen(true);
+    try {
+      const response = await axios.get(`/auth/users/${targetUser.id}/mobile-access/`);
+      setMobileAccessData(response.data?.mobile_access ?? {
+        can_access_rapports: false,
+        can_access_distributeur: false,
+        can_access_drive: false,
+      });
+    } catch (error) {
+      setFeedback({ type: "error", message: "Impossible de charger les droits mobiles." });
+      setMobileAccessDialogOpen(false);
+    } finally {
+      setMobileAccessLoading(false);
+    }
+  };
+
+  const closeMobileAccessDialog = () => {
+    setMobileAccessDialogOpen(false);
+    setMobileAccessUser(null);
+    setMobileAccessData({ can_access_rapports: false, can_access_distributeur: false, can_access_drive: false });
+  };
+
+  const handleSaveMobileAccess = async () => {
+    if (!mobileAccessUser) return;
+    try {
+      setActionLoading(true);
+      await axios.put(`/auth/users/${mobileAccessUser.id}/mobile-access/`, mobileAccessData);
+      setFeedback({ type: "success", message: "Droits mobiles mis à jour." });
+      closeMobileAccessDialog();
+      await loadUsers();
+    } catch (error) {
+      const errorMessage = error?.response?.data?.error || "Erreur lors de la mise à jour des droits mobiles.";
+      setFeedback({ type: "error", message: errorMessage });
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
   const openUserActionMenu = (event, row) => {
     setUserActionAnchor(event.currentTarget);
     setUserActionRow(row);
@@ -519,6 +572,34 @@ const UsersManagement = () => {
                           {user.is_superuser && <Chip size="small" color="error" label="Superuser" />}
                           {user.is_staff && !user.is_superuser && <Chip size="small" color="primary" label="Admin" />}
                           {!user.is_staff && !user.is_superuser && <Chip size="small" label="Utilisateur" />}
+                          {!user.is_superuser && !user.is_staff && user.mobile_access && (
+                            <Tooltip
+                              title={[
+                                user.mobile_access.can_access_rapports ? "Rapports" : null,
+                                user.mobile_access.can_access_distributeur ? "Distributeur" : null,
+                                user.mobile_access.can_access_drive ? "Drive" : null,
+                              ].filter(Boolean).join(", ") || "Aucun accès mobile"}
+                              placement="top"
+                            >
+                              <Chip
+                                size="small"
+                                icon={<PhoneAndroidIcon style={{ fontSize: 12 }} />}
+                                label={[
+                                  user.mobile_access.can_access_rapports ? "R" : null,
+                                  user.mobile_access.can_access_distributeur ? "D" : null,
+                                  user.mobile_access.can_access_drive ? "Drive" : null,
+                                ].filter(Boolean).join("/") || "—"}
+                                color={
+                                  user.mobile_access.can_access_rapports ||
+                                  user.mobile_access.can_access_distributeur ||
+                                  user.mobile_access.can_access_drive
+                                    ? "info"
+                                    : "default"
+                                }
+                                variant="outlined"
+                              />
+                            </Tooltip>
+                          )}
                         </Stack>
                       </TableCell>
                       <TableCell>
@@ -715,9 +796,69 @@ const UsersManagement = () => {
               </ListItemIcon>
               <ListItemText primary="Réinitialiser le mot de passe" />
             </MenuItem>
+            {!userActionRow.is_superuser && !userActionRow.is_staff && (
+              <MenuItem
+                disabled={actionLoading}
+                onClick={() => runFromUserMenu((row) => openMobileAccessDialog(row))}
+              >
+                <ListItemIcon>
+                  <PhoneAndroidIcon fontSize="small" />
+                </ListItemIcon>
+                <ListItemText primary="Accès mobile (PWA)" />
+              </MenuItem>
+            )}
           </>
         )}
       </Menu>
+
+      <Dialog open={mobileAccessDialogOpen} onClose={closeMobileAccessDialog} maxWidth="xs" fullWidth>
+        <DialogTitle>
+          <Stack direction="row" alignItems="center" spacing={1}>
+            <PhoneAndroidIcon color="primary" />
+            <span>Accès mobile (PWA)</span>
+          </Stack>
+        </DialogTitle>
+        <DialogContent>
+          {mobileAccessLoading ? (
+            <Box sx={{ display: "flex", justifyContent: "center", py: 3 }}>
+              <CircularProgress size={28} />
+            </Box>
+          ) : (
+            <>
+              <Typography variant="body2" sx={{ mb: 2 }}>
+                Sections accessibles pour <strong>{mobileAccessUser?.username || "—"}</strong> sur l'application mobile.
+              </Typography>
+              <Stack spacing={1}>
+                {[
+                  { key: "can_access_rapports", label: "Rapports d'intervention" },
+                  { key: "can_access_distributeur", label: "Distributeur" },
+                  { key: "can_access_drive", label: "Drive" },
+                ].map(({ key, label }) => (
+                  <FormControlLabel
+                    key={key}
+                    control={
+                      <Switch
+                        checked={Boolean(mobileAccessData[key])}
+                        onChange={(e) =>
+                          setMobileAccessData((prev) => ({ ...prev, [key]: e.target.checked }))
+                        }
+                        size="small"
+                      />
+                    }
+                    label={label}
+                  />
+                ))}
+              </Stack>
+            </>
+          )}
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={closeMobileAccessDialog}>Annuler</Button>
+          <Button variant="contained" onClick={handleSaveMobileAccess} disabled={actionLoading || mobileAccessLoading}>
+            Enregistrer
+          </Button>
+        </DialogActions>
+      </Dialog>
 
       <Dialog open={passwordDialogOpen} onClose={closeResetPasswordDialog} maxWidth="xs" fullWidth>
         <DialogTitle>Réinitialiser le mot de passe</DialogTitle>

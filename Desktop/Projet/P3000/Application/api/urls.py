@@ -192,6 +192,7 @@ from .auth_views import (
     toggle_user_staff_view,
     manage_emetteurs_view,
     toggle_emetteur_active_view,
+    update_user_mobile_access_view,
 )
 
 # Import de la vue de version
@@ -263,6 +264,7 @@ auth_urlpatterns = [
     path('auth/users/<int:user_id>/toggle-staff/', toggle_user_staff_view, name='toggle_user_staff'),
     path('auth/emetteurs/', manage_emetteurs_view, name='manage_emetteurs'),
     path('auth/emetteurs/<int:emetteur_id>/toggle-active/', toggle_emetteur_active_view, name='toggle_emetteur_active'),
+    path('auth/users/<int:user_id>/mobile-access/', update_user_mobile_access_view, name='update_user_mobile_access'),
 ]
 
 urlpatterns = [

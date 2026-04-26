@@ -3693,3 +3693,25 @@ from .models_rapport import (  # noqa: E402  (import après signaux/post_migrate
     assign_numero_rapport_si_absent,
     default_dates_intervention_list,
 )
+
+
+class UserMobileAccess(models.Model):
+    """Droits d'accès aux sections mobiles (PWA) par utilisateur."""
+    user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='mobile_access')
+    can_access_rapports = models.BooleanField(default=False, verbose_name="Accès Rapports")
+    can_access_distributeur = models.BooleanField(default=False, verbose_name="Accès Distributeur")
+    can_access_drive = models.BooleanField(default=False, verbose_name="Accès Drive")
+
+    class Meta:
+        verbose_name = "Accès mobile utilisateur"
+        verbose_name_plural = "Accès mobiles utilisateurs"
+
+    def __str__(self):
+        return f"Accès mobile de {self.user.username}"
+
+
+@receiver(post_save, sender=User)
+def create_user_mobile_access(sender, instance, created, **kwargs):
+    """Crée automatiquement un profil d'accès mobile à la création de chaque utilisateur."""
+    if created:
+        UserMobileAccess.objects.get_or_create(user=instance)

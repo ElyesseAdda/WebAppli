@@ -9,7 +9,7 @@ from rest_framework.response import Response
 from rest_framework import status
 from django.contrib.auth.decorators import login_required
 from django.conf import settings
-from .models import Emetteur
+from .models import Emetteur, UserMobileAccess
 from .serializers import EmetteurSerializer
 import json
 
@@ -17,6 +17,34 @@ import json
 def _is_app_admin(user):
     """Superuser ou compte staff : accès à la gestion applicative (sidebar Admin, utilisateurs)."""
     return bool(user and user.is_authenticated and (user.is_superuser or user.is_staff))
+
+
+def _get_mobile_access(user):
+    """
+    Retourne les droits d'accès mobiles d'un utilisateur.
+    Les superusers et staff ont accès à toutes les sections.
+    Les autres utilisateurs ont les droits définis dans UserMobileAccess.
+    """
+    if user.is_superuser or user.is_staff:
+        return {
+            'can_access_rapports': True,
+            'can_access_distributeur': True,
+            'can_access_drive': True,
+        }
+    try:
+        access = user.mobile_access
+        return {
+            'can_access_rapports': access.can_access_rapports,
+            'can_access_distributeur': access.can_access_distributeur,
+            'can_access_drive': access.can_access_drive,
+        }
+    except UserMobileAccess.DoesNotExist:
+        UserMobileAccess.objects.get_or_create(user=user)
+        return {
+            'can_access_rapports': False,
+            'can_access_distributeur': False,
+            'can_access_drive': False,
+        }
 
 
 def _deny_if_not_app_admin(request):
@@ -73,7 +101,8 @@ def login_view(request):
                     'last_name': user.last_name,
                     'email': user.email,
                     'is_staff': user.is_staff,
-                    'is_superuser': user.is_superuser
+                    'is_superuser': user.is_superuser,
+                    'mobile_access': _get_mobile_access(user),
                 }
             })
             
@@ -167,7 +196,8 @@ def check_auth_view(request):
                 'last_name': request.user.last_name,
                 'email': request.user.email,
                 'is_staff': request.user.is_staff,
-                'is_superuser': request.user.is_superuser
+                'is_superuser': request.user.is_superuser,
+                'mobile_access': _get_mobile_access(request.user),
             }
         })
     else:
@@ -250,7 +280,7 @@ def list_users_view(request):
     if denied:
         return denied
 
-    users = User.objects.all().order_by('username')
+    users = User.objects.select_related('mobile_access').all().order_by('username')
     return Response({
         'success': True,
         'users': [
@@ -263,6 +293,7 @@ def list_users_view(request):
                 'is_active': u.is_active,
                 'is_staff': u.is_staff,
                 'is_superuser': u.is_superuser,
+                'mobile_access': _get_mobile_access(u),
             }
             for u in users
         ]
@@ -422,6 +453,59 @@ def toggle_emetteur_active_view(request, emetteur_id):
         'emetteur': {
             'id': emetteur.id,
             'is_active': emetteur.is_active
+        }
+    })
+
+
+@api_view(['GET', 'PUT'])
+@permission_classes([IsAuthenticated])
+def update_user_mobile_access_view(request, user_id):
+    """
+    GET : Récupérer les droits mobiles d'un utilisateur.
+    PUT : Mettre à jour les droits mobiles d'un utilisateur (admin requis).
+    """
+    denied = _deny_if_not_app_admin(request)
+    if denied:
+        return denied
+
+    try:
+        target_user = User.objects.get(id=user_id)
+    except User.DoesNotExist:
+        return Response({'error': 'Utilisateur introuvable'}, status=status.HTTP_404_NOT_FOUND)
+
+    access, _ = UserMobileAccess.objects.get_or_create(user=target_user)
+
+    if request.method == 'GET':
+        return Response({
+            'success': True,
+            'user_id': target_user.id,
+            'mobile_access': {
+                'can_access_rapports': access.can_access_rapports,
+                'can_access_distributeur': access.can_access_distributeur,
+                'can_access_drive': access.can_access_drive,
+            }
+        })
+
+    try:
+        data = json.loads(request.body)
+    except json.JSONDecodeError:
+        return Response({'error': 'Données JSON invalides'}, status=status.HTTP_400_BAD_REQUEST)
+
+    if 'can_access_rapports' in data:
+        access.can_access_rapports = bool(data['can_access_rapports'])
+    if 'can_access_distributeur' in data:
+        access.can_access_distributeur = bool(data['can_access_distributeur'])
+    if 'can_access_drive' in data:
+        access.can_access_drive = bool(data['can_access_drive'])
+    access.save()
+
+    return Response({
+        'success': True,
+        'message': 'Droits mobiles mis à jour',
+        'mobile_access': {
+            'can_access_rapports': access.can_access_rapports,
+            'can_access_distributeur': access.can_access_distributeur,
+            'can_access_drive': access.can_access_drive,
         }
     })
 

@@ -1,6 +1,8 @@
 import React, { useState } from "react";
 import { Box, BottomNavigation, BottomNavigationAction, Paper, Typography, AppBar, Toolbar, IconButton } from "@mui/material";
 import { MdList, MdAdd, MdDescription, MdLogout } from "react-icons/md";
+import { Home as HomeIcon } from "@mui/icons-material";
+import { useNavigate } from "react-router-dom";
 import RapportsPageMobile from "./RapportsPageMobile";
 import RapportDetailMobile from "./RapportDetailMobile";
 import RapportForm from "./RapportForm";
@@ -13,6 +15,7 @@ const RapportMobileLayout = () => {
   const [selectedServerBrouillonId, setSelectedServerBrouillonId] = useState(null);
   const [navValue, setNavValue] = useState(0);
   const { logout, user } = useAuth();
+  const navigate = useNavigate();
 
   const handleCreateNew = () => {
     setSelectedRapportId(null);
@@ -132,6 +135,15 @@ const RapportMobileLayout = () => {
     >
       <AppBar position="static" sx={{ backgroundColor: COLORS.infoDark || "#1976d2" }}>
         <Toolbar sx={{ minHeight: 56 }}>
+          <IconButton
+            color="inherit"
+            onClick={() => navigate("/mobile-home")}
+            size="small"
+            aria-label="Accueil mobile"
+            sx={{ mr: 0.5 }}
+          >
+            <HomeIcon />
+          </IconButton>
           <MdDescription size={24} style={{ marginRight: 8 }} />
           <Typography variant="h6" sx={{ flexGrow: 1, fontSize: "1rem" }}>
             Rapports d'intervention

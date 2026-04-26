@@ -272,7 +272,8 @@ class OnlyOfficeManager:
     @staticmethod
     def create_config(file_path: str, file_name: str, file_url: str, 
                      callback_url: str, user_id: str, user_name: str, 
-                     mode: str = 'edit', storage_manager=None) -> dict:
+                     mode: str = 'edit', storage_manager=None,
+                     is_mobile: bool = False) -> dict:
         """
         Crée la configuration OnlyOffice
         
@@ -285,6 +286,7 @@ class OnlyOfficeManager:
             user_name: Nom utilisateur
             mode: Mode d'édition ('edit' ou 'view')
             storage_manager: Instance du StorageManager pour récupérer la date de modification
+            is_mobile: True si la requête vient d'un navigateur mobile (active le mode mobile OnlyOffice)
             
         Returns:
             Dict avec config et token
@@ -307,6 +309,34 @@ class OnlyOfficeManager:
         # Stocker la correspondance key -> file_path original dans le cache (7 jours)
         cache.set(f"onlyoffice_key_{document_key}", file_path, timeout=604800)
         
+        # Customization adaptée au device
+        if is_mobile:
+            customization = {
+                "autosave": True,
+                "comments": False,
+                "compactToolbar": True,   # Barre compacte sur mobile
+                "forcesave": True,
+                "help": False,
+                "hideRightMenu": True,
+                "hidePrintButton": False,
+                "logo": {"image": "", "url": ""},
+                "zoom": -1,               # Ajustement auto de zoom sur mobile
+                "plugins": False,
+                "uiTheme": "theme-light",
+            }
+        else:
+            customization = {
+                "autosave": True,
+                "comments": False,
+                "compactToolbar": False,
+                "forcesave": True,
+                "help": False,
+                "hideRightMenu": True,
+                "logo": {"image": "", "url": ""},
+                "zoom": 100,
+                "plugins": False,
+            }
+
         # Configuration OnlyOffice
         config = {
             "document": {
@@ -324,7 +354,7 @@ class OnlyOfficeManager:
                     "modifyFilter": mode == 'edit',
                     "print": True,
                     "review": mode == 'edit',
-                    "chat": False,  # Désactiver chat (déplacé depuis customization)
+                    "chat": False,
                 }
             },
             "documentType": OnlyOfficeManager.get_document_type(file_name),
@@ -333,27 +363,14 @@ class OnlyOfficeManager:
                     "id": user_id,
                     "name": user_name,
                 },
-                "customization": {
-                    "autosave": True,
-                    "comments": False,  # OPTIMISATION : Désactiver commentaires
-                    "compactToolbar": False,  # Laisser la barre d'outils complète et ouverte
-                    "forcesave": True,
-                    "help": False,  # OPTIMISATION : Désactiver aide
-                    "hideRightMenu": True,  # OPTIMISATION : Cacher menu droit
-                    "logo": {
-                        "image": "",
-                        "url": ""
-                    },
-                    "zoom": 100,
-                    "plugins": False,  # OPTIMISATION : Désactiver plugins
-                },
+                "customization": customization,
                 "callbackUrl": OnlyOfficeManager.normalize_callback_url(callback_url),
                 "lang": "fr",
                 "mode": mode,
             },
             "height": "100%",
             "width": "100%",
-            "type": "desktop"
+            "type": "mobile" if is_mobile else "desktop",
         }
         
         # Signer avec JWT si activé

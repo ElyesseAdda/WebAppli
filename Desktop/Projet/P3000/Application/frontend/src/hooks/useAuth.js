@@ -6,6 +6,21 @@ export function userHasAppAdminAccess(user) {
   return Boolean(user?.is_superuser) || Boolean(user?.is_staff);
 }
 
+/**
+ * Retourne les droits d'accès aux sections mobiles PWA pour un utilisateur.
+ * Les superusers/staff ont toujours accès à tout.
+ */
+export function getUserMobileAccess(user) {
+  if (user?.is_superuser || user?.is_staff) {
+    return { can_access_rapports: true, can_access_distributeur: true, can_access_drive: true };
+  }
+  return user?.mobile_access ?? {
+    can_access_rapports: false,
+    can_access_distributeur: false,
+    can_access_drive: false,
+  };
+}
+
 export const useAuth = () => {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [user, setUser] = useState(null);
