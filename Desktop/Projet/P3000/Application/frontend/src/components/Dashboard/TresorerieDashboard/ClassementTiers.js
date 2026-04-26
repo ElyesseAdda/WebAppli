@@ -1,9 +1,14 @@
 /**
- * Composant générique de classement (fournisseurs ou sous-traitants).
+ * Composant générique de classement (fournisseurs, sous-traitants, sociétés…).
  * Props :
- *   classement  – tableau trié [{nom, totalAPayer, totalPaye, resteAPayer, tauxPaiement, chantiers:[]}]
- *   loading     – boolean
- *   nomLabel    – label de l'entité (ex: "fournisseur", "sous-traitant")
+ *   classement   – tableau trié [{nom, totalAPayer, totalPaye, resteAPayer, tauxPaiement, chantiers:[]}]
+ *   loading      – boolean
+ *   nomLabel     – label de l'entité (ex: "fournisseur", "sous-traitant")
+ *   colTotal     – libellé colonne total    (défaut: "Total (payé + reste)")
+ *   colPaye      – libellé colonne payé     (défaut: "Payé")
+ *   colReste     – libellé colonne reste    (défaut: "Reste à payer")
+ *   colorPaye    – couleur montant payé     (défaut: "#16a34a")
+ *   colorReste   – couleur montant reste    (défaut: "#dc2626")
  */
 import {
   Box,
@@ -72,7 +77,7 @@ const ProgressBar = ({ pct }) => {
 };
 
 /** Modal détail par chantier */
-const ChantierDetailModal = ({ tiers, open, onClose, nomLabel }) => {
+const ChantierDetailModal = ({ tiers, open, onClose, colTotal, colPaye, colReste, colorPaye, colorReste }) => {
   if (!tiers) return null;
 
   return (
@@ -116,9 +121,9 @@ const ChantierDetailModal = ({ tiers, open, onClose, nomLabel }) => {
         {/* Récap global */}
         <Box sx={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 1.5, mb: 2.5 }}>
           {[
-            { label: "Total (payé + reste)", value: tiers.totalAPayer, color: "#1B78BC" },
-            { label: "Payé", value: tiers.totalPaye, color: "#16a34a" },
-            { label: "Reste à payer", value: tiers.resteAPayer, color: "#dc2626" },
+            { label: colTotal, value: tiers.totalAPayer, color: "#1B78BC" },
+            { label: colPaye, value: tiers.totalPaye, color: colorPaye },
+            { label: colReste, value: tiers.resteAPayer, color: colorReste },
           ].map(({ label, value, color }) => (
             <Box
               key={label}
@@ -145,7 +150,7 @@ const ChantierDetailModal = ({ tiers, open, onClose, nomLabel }) => {
           <Table size="small">
             <TableHead>
               <TableRow>
-                {["Chantier", "Total", "Payé", "Reste", "Avancement"].map((h) => (
+                {["Chantier", colTotal, colPaye, colReste, "Avancement"].map((h) => (
                   <TableCell
                     key={h}
                     sx={{
@@ -176,10 +181,10 @@ const ChantierDetailModal = ({ tiers, open, onClose, nomLabel }) => {
                     <TableCell sx={{ fontSize: "0.78rem", color: "#1B78BC", fontWeight: 600 }}>
                       {fmt(ch.totalAPayer)}
                     </TableCell>
-                    <TableCell sx={{ fontSize: "0.78rem", color: "#16a34a" }}>
+                    <TableCell sx={{ fontSize: "0.78rem", color: colorPaye }}>
                       {fmt(ch.totalPaye)}
                     </TableCell>
-                    <TableCell sx={{ fontSize: "0.78rem", color: "#dc2626" }}>
+                    <TableCell sx={{ fontSize: "0.78rem", color: colorReste }}>
                       {fmt(ch.resteAPayer)}
                     </TableCell>
                     <TableCell sx={{ minWidth: 120 }}>
@@ -196,7 +201,16 @@ const ChantierDetailModal = ({ tiers, open, onClose, nomLabel }) => {
 };
 
 /** Composant principal — classement générique */
-const ClassementTiers = ({ classement = [], loading, nomLabel = "tiers" }) => {
+const ClassementTiers = ({
+  classement = [],
+  loading,
+  nomLabel = "tiers",
+  colTotal = "Total (payé + reste)",
+  colPaye = "Payé",
+  colReste = "Reste à payer",
+  colorPaye = "#16a34a",
+  colorReste = "#dc2626",
+}) => {
   const [selected, setSelected] = useState(null);
 
   if (loading) {
@@ -221,7 +235,7 @@ const ClassementTiers = ({ classement = [], loading, nomLabel = "tiers" }) => {
         <Table size="small" stickyHeader>
           <TableHead>
             <TableRow>
-              {["#", "Nom", "Total (payé + reste)", "Payé", "Reste à payer", "Avancement", ""].map((h) => (
+              {["#", "Nom", colTotal, colPaye, colReste, "Avancement", ""].map((h) => (
                 <TableCell
                   key={h}
                   sx={{
@@ -299,9 +313,9 @@ const ClassementTiers = ({ classement = [], loading, nomLabel = "tiers" }) => {
                   </Typography>
                 </TableCell>
 
-                {/* Payé */}
+                {/* Payé / Encaissé */}
                 <TableCell sx={{ py: 1 }}>
-                  <Typography sx={{ fontSize: "0.82rem", color: "#16a34a", fontWeight: 600 }}>
+                  <Typography sx={{ fontSize: "0.82rem", color: colorPaye, fontWeight: 600 }}>
                     {fmt(row.totalPaye)}
                   </Typography>
                 </TableCell>
@@ -311,7 +325,7 @@ const ClassementTiers = ({ classement = [], loading, nomLabel = "tiers" }) => {
                   <Typography
                     sx={{
                       fontSize: "0.82rem",
-                      color: row.resteAPayer > 0 ? "#dc2626" : "#6b7280",
+                      color: row.resteAPayer > 0 ? colorReste : "#6b7280",
                       fontWeight: row.resteAPayer > 0 ? 600 : 400,
                     }}
                   >
@@ -345,9 +359,9 @@ const ClassementTiers = ({ classement = [], loading, nomLabel = "tiers" }) => {
       {/* Légende */}
       <Box sx={{ display: "flex", gap: 2, mt: 1.5, flexWrap: "wrap" }}>
         {[
-          { color: "#1B78BC", label: "Total (payé + reste)" },
-          { color: "#16a34a", label: "Payé" },
-          { color: "#dc2626", label: "Reste à payer" },
+          { color: "#1B78BC", label: colTotal },
+          { color: colorPaye, label: colPaye },
+          { color: colorReste, label: colReste },
         ].map(({ color, label }) => (
           <Box key={label} sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
             <Box sx={{ width: 10, height: 10, bgcolor: color, borderRadius: "2px" }} />
@@ -363,7 +377,11 @@ const ClassementTiers = ({ classement = [], loading, nomLabel = "tiers" }) => {
         tiers={selected}
         open={!!selected}
         onClose={() => setSelected(null)}
-        nomLabel={nomLabel}
+        colTotal={colTotal}
+        colPaye={colPaye}
+        colReste={colReste}
+        colorPaye={colorPaye}
+        colorReste={colorReste}
       />
     </>
   );

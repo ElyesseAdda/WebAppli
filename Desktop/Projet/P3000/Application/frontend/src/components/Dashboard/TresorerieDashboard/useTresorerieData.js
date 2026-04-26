@@ -77,6 +77,7 @@ export function useTresorerieData(selectedYear, periodStart, periodEnd) {
   const [factures, setFactures] = useState([]);
   const [fournisseurs, setFournisseurs] = useState([]);
   const [sousTraitants, setSousTraitants] = useState([]);
+  const [chantiers, setChantiers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
@@ -93,8 +94,9 @@ export function useTresorerieData(selectedYear, periodStart, periodEnd) {
       axios.get(`/api/facture/?date_creation__year=${year}`).catch(() => ({ data: [] })),
       axios.get(`/api/tableau-fournisseur-global/`).catch(() => ({ data: [] })),
       axios.get(`/api/tableau-sous-traitant-global/`).catch(() => ({ data: [] })),
+      axios.get(`/api/chantier/`).catch(() => ({ data: [] })),
     ])
-      .then(([sitRes, factEnvoiRes, factCreationRes, fournRes, stRes]) => {
+      .then(([sitRes, factEnvoiRes, factCreationRes, fournRes, stRes, chantierRes]) => {
         setSituations(sitRes.data || []);
 
         // Dédupliquer factures (priorité à date_envoi)
@@ -112,6 +114,7 @@ export function useTresorerieData(selectedYear, periodStart, periodEnd) {
 
         setFournisseurs(fournRes.data || []);
         setSousTraitants(stRes.data || []);
+        setChantiers(chantierRes.data || []);
       })
       .catch((err) => setError(err))
       .finally(() => setLoading(false));
@@ -294,5 +297,157 @@ export function useTresorerieData(selectedYear, periodStart, periodEnd) {
     [sousTraitants]
   );
 
-  return { monthlyData, classementFournisseurs, classementSousTraitants, loading, error };
+  // ── Classement sociétés (clients) ─────────────────────────────────────────
+  // Agrégation par société cliente via situations + factures, mappées sur chantiers
+  const classementSocietes = useMemo(() => {
+    if (!chantiers.length) return [];
+
+    // Map chantier_id → { societe_name, chantier_name }
+    const chantierMap = {};
+    chantiers.forEach((c) => {
+      const societeName =
+        c.maitre_ouvrage_nom_societe ||
+        c.societe?.nom_societe ||
+        c.client_name ||
+        "Société inconnue";
+      chantierMap[c.id] = { societeName, chantierName: c.chantier_name || `Chantier #${c.id}` };
+    });
+
+    const map = {};
+
+    const addEntry = (societeName, chantierId, chantierName, ca, encaisse) => {
+      if (!societeName) return;
+      if (!map[societeName]) {
+        map[societeName] = { nom: societeName, totalAPayer: 0, totalPaye: 0, chantiers: {} };
+      }
+      const entry = map[societeName];
+      entry.totalAPayer += ca;
+      entry.totalPaye += encaisse;
+
+      const key = chantierId || chantierName || "?";
+      if (!entry.chantiers[key]) {
+        entry.chantiers[key] = {
+          chantier_id: chantierId,
+          chantier_name: chantierName || key,
+          totalAPayer: 0,
+          totalPaye: 0,
+        };
+      }
+      entry.chantiers[key].totalAPayer += ca;
+      entry.chantiers[key].totalPaye += encaisse;
+    };
+
+    // Situations
+    situations.forEach((s) => {
+      const chantierId = s.chantier_id || s.chantier;
+      const info = chantierMap[chantierId];
+      if (!info) return;
+      const ca = parseFloat(s.montant_apres_retenues) || parseFloat(s.montant_reel_ht) || 0;
+      const encaisse = s.date_paiement_reel ? (parseFloat(s.montant_reel_ht) || ca) : 0;
+      addEntry(info.societeName, chantierId, info.chantierName, ca, encaisse);
+    });
+
+    // Factures
+    factures.forEach((f) => {
+      const chantierId = f.chantier_id || f.chantier;
+      const info = chantierMap[chantierId];
+      if (!info) return;
+      const ca = parseFloat(f.montant_ht) || parseFloat(f.price_ht) || 0;
+      const encaisse = f.date_paiement ? ca : 0;
+      addEntry(info.societeName, chantierId, info.chantierName, ca, encaisse);
+    });
+
+    return Object.values(map)
+      .map((s) => ({
+        ...s,
+        resteAPayer: Math.max(0, s.totalAPayer - s.totalPaye),
+        tauxPaiement: s.totalAPayer > 0 ? (s.totalPaye / s.totalAPayer) * 100 : 0,
+        chantiers: Object.values(s.chantiers).map((ch) => ({
+          ...ch,
+          resteAPayer: Math.max(0, ch.totalAPayer - ch.totalPaye),
+          tauxPaiement: ch.totalAPayer > 0 ? (ch.totalPaye / ch.totalAPayer) * 100 : 0,
+        })),
+      }))
+      .sort((a, b) => b.totalAPayer - a.totalAPayer);
+  }, [chantiers, situations, factures]);
+
+  // ── Classement chantiers ──────────────────────────────────────────────────
+  const classementChantiers = useMemo(() => {
+    const map = {};
+
+    // Map chantier_id → info chantier
+    const chantierInfo = {};
+    chantiers.forEach((c) => {
+      const societeName =
+        c.maitre_ouvrage_nom_societe ||
+        c.societe?.nom_societe ||
+        c.client_name ||
+        "—";
+      chantierInfo[c.id] = { societeName, chantierName: c.chantier_name || `Chantier #${c.id}` };
+    });
+
+    situations.forEach((s) => {
+      const chantierId = s.chantier_id || s.chantier;
+      if (!chantierId) return;
+
+      const info = chantierInfo[chantierId] || {
+        societeName: "—",
+        chantierName: `Chantier #${chantierId}`,
+      };
+
+      if (!map[chantierId]) {
+        map[chantierId] = {
+          chantier_id: chantierId,
+          chantier_name: info.chantierName,
+          societe: info.societeName,
+          ca: 0,
+          encaisse: 0,
+          avancement: 0,
+          dernierNumero: -1,
+          situations: [],
+        };
+      }
+
+      const entry = map[chantierId];
+      const montant = parseFloat(s.montant_apres_retenues) || parseFloat(s.montant_reel_ht) || 0;
+      entry.ca += montant;
+
+      if (s.date_paiement_reel) {
+        entry.encaisse += parseFloat(s.montant_reel_ht) || montant;
+      }
+
+      // Avancement = pourcentage_avancement de la situation avec le numéro le plus grand
+      const num = parseInt(String(s.numero || s.numero_situation || "0").replace(/\D/g, ""), 10) || 0;
+      if (num > entry.dernierNumero) {
+        entry.dernierNumero = num;
+        entry.avancement = parseFloat(s.pourcentage_avancement) || 0;
+      }
+
+      entry.situations.push({
+        id: s.id,
+        numero:
+          (s.numero_situation != null && String(s.numero_situation).trim()) ||
+          (s.numero != null && String(s.numero)) ||
+          `#${s.id}`,
+        montant,
+        pourcentage_avancement: parseFloat(s.pourcentage_avancement) || 0,
+        date_envoi: s.date_envoi,
+        date_paiement_reel: s.date_paiement_reel,
+        encaisse: s.date_paiement_reel ? (parseFloat(s.montant_reel_ht) || montant) : 0,
+      });
+    });
+
+    return Object.values(map).map((c) => ({
+      ...c,
+      resteAEncaisser: Math.max(0, c.ca - c.encaisse),
+      tauxEncaissement: c.ca > 0 ? (c.encaisse / c.ca) * 100 : 0,
+      situations: c.situations.sort((a, b) => {
+        const na = parseInt(String(a.numero).replace(/\D/g, ""), 10) || 0;
+        const nb = parseInt(String(b.numero).replace(/\D/g, ""), 10) || 0;
+        return na - nb;
+      }),
+    }));
+  }, [situations, chantiers]);
+
+  return { monthlyData, classementFournisseurs, classementSousTraitants, classementSocietes, classementChantiers, loading, error };
 }

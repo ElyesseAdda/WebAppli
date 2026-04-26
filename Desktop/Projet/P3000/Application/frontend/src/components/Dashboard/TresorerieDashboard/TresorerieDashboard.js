@@ -11,12 +11,14 @@ import React, { useState } from "react";
 import TresorerieBarChart from "./TresorerieBarChart";
 import ClassementFournisseurs from "./ClassementFournisseurs";
 import ClassementTiers from "./ClassementTiers";
+import ClassementChantiers from "./ClassementChantiers";
 import { useTresorerieData } from "./useTresorerieData";
 
 const TABS = [
   { label: "Trésorerie", enabled: true },
+  { label: "Chantiers", enabled: true },
+  { label: "Maître d'ouvrage", enabled: true },
   { label: "Fournisseurs", enabled: true },
-  { label: "Sociétés", enabled: false },
   { label: "Sous-traitants", enabled: true },
 ];
 
@@ -47,7 +49,7 @@ const TresorerieDashboard = ({ selectedYear: propYear, periodStart, periodEnd })
   const [localYear, setLocalYear] = useState(propYear || currentYear);
 
   const year = propYear || localYear;
-  const { monthlyData, classementFournisseurs, classementSousTraitants, loading, error } = useTresorerieData(year, periodStart, periodEnd);
+  const { monthlyData, classementFournisseurs, classementSousTraitants, classementSocietes, classementChantiers, loading, error } = useTresorerieData(year, periodStart, periodEnd);
 
   return (
     <Box>
@@ -72,7 +74,7 @@ const TresorerieDashboard = ({ selectedYear: propYear, periodStart, periodEnd })
             lineHeight: 1.2,
           }}
         >
-          Trésorerie mensuelle
+          {activeTab === 0 ? "Trésorerie mensuelle" : TABS[activeTab].label}
         </Typography>
 
         {/* Sélecteur d'année (visible si l'année n'est pas imposée par le parent) */}
@@ -167,10 +169,24 @@ const TresorerieDashboard = ({ selectedYear: propYear, periodStart, periodEnd })
       )}
 
       {activeTab === 1 && (
+        <ClassementChantiers classement={classementChantiers} loading={loading} />
+      )}
+      {activeTab === 2 && (
+        <ClassementTiers
+          classement={classementSocietes}
+          loading={loading}
+          nomLabel="société"
+          colTotal="CA total"
+          colPaye="Encaissé"
+          colReste="Reste à encaisser"
+          colorPaye="#1B78BC"
+          colorReste="#f59e0b"
+        />
+      )}
+      {activeTab === 3 && (
         <ClassementFournisseurs classement={classementFournisseurs} loading={loading} />
       )}
-      {activeTab === 2 && <PlaceholderTab label="sociétés" />}
-      {activeTab === 3 && (
+      {activeTab === 4 && (
         <ClassementTiers
           classement={classementSousTraitants}
           loading={loading}
