@@ -129,7 +129,7 @@ const SlideBar = ({ toggleSidebar, isSidebarVisible, user }) => {
           { label: "Comparateur", to: "/ComparateurFournisseurs" },
         ],
       },
-      ...(user?.is_superuser
+      ...(user?.is_superuser || user?.is_staff
         ? [
             {
               key: "admin",

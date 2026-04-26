@@ -9,7 +9,7 @@ import {
   BrowserRouter as Router,
   Routes,
 } from "react-router-dom";
-import { useAuth } from "../hooks/useAuth";
+import { useAuth, userHasAppAdminAccess } from "../hooks/useAuth";
 import { useIsMobile } from "../hooks/useIsMobile";
 import "./../../static/css/app.css";
 import AgencyExpenses from "./AgencyExpenses";
@@ -89,11 +89,12 @@ const ProtectedRoute = ({ children, isAuthenticated, isMobile }) => {
   return children;
 };
 
-const SuperuserRoute = ({ children, isAuthenticated, user }) => {
+/** Accès aux écrans réservés (ex. gestion utilisateurs) : superuser ou staff (admin minimum requis). */
+const AdminAppRoute = ({ children, isAuthenticated, user }) => {
   if (!isAuthenticated) {
     return <Navigate to="/login" replace />;
   }
-  if (!user?.is_superuser) {
+  if (!userHasAppAdminAccess(user)) {
     return <Navigate to="/" replace />;
   }
   return children;
@@ -533,14 +534,16 @@ function App() {
             }
           />
 
+          <Route path="/Usermanagement" element={<Navigate to="/UsersManagement" replace />} />
+
           <Route
             path="/UsersManagement"
             element={
-              <SuperuserRoute isAuthenticated={isAuthenticated} user={user}>
+              <AdminAppRoute isAuthenticated={isAuthenticated} user={user}>
                 <Layout user={user} onLogout={handleLogout}>
                   <UsersManagement />
                 </Layout>
-              </SuperuserRoute>
+              </AdminAppRoute>
             }
           />
 

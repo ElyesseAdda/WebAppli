@@ -1,6 +1,11 @@
 import { useCallback, useEffect, useState } from "react";
 import authService from "../services/authService";
 
+/** Accès minimum à l'espace admin applicatif (ex. /UsersManagement) : superuser ou staff Django. */
+export function userHasAppAdminAccess(user) {
+  return Boolean(user?.is_superuser) || Boolean(user?.is_staff);
+}
+
 export const useAuth = () => {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [user, setUser] = useState(null);

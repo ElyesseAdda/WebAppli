@@ -189,6 +189,7 @@ from .auth_views import (
     list_users_view,
     toggle_user_active_view,
     reset_user_password_view,
+    toggle_user_staff_view,
     manage_emetteurs_view,
     toggle_emetteur_active_view,
 )
@@ -259,6 +260,7 @@ auth_urlpatterns = [
     path('auth/users/', list_users_view, name='list_users'),
     path('auth/users/<int:user_id>/toggle-active/', toggle_user_active_view, name='toggle_user_active'),
     path('auth/users/<int:user_id>/reset-password/', reset_user_password_view, name='reset_user_password'),
+    path('auth/users/<int:user_id>/toggle-staff/', toggle_user_staff_view, name='toggle_user_staff'),
     path('auth/emetteurs/', manage_emetteurs_view, name='manage_emetteurs'),
     path('auth/emetteurs/<int:emetteur_id>/toggle-active/', toggle_emetteur_active_view, name='toggle_emetteur_active'),
 ]

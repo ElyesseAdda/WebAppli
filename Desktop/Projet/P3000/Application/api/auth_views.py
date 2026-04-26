@@ -13,6 +13,32 @@ from .models import Emetteur
 from .serializers import EmetteurSerializer
 import json
 
+
+def _is_app_admin(user):
+    """Superuser ou compte staff : accès à la gestion applicative (sidebar Admin, utilisateurs)."""
+    return bool(user and user.is_authenticated and (user.is_superuser or user.is_staff))
+
+
+def _deny_if_not_app_admin(request):
+    if not _is_app_admin(request.user):
+        return Response(
+            {'error': 'Accès refusé : administrateur requis'},
+            status=status.HTTP_403_FORBIDDEN,
+        )
+    return None
+
+
+def _staff_may_manage_account(actor, target):
+    """
+    Administrateur non superuser : ne gère que les comptes sans rôle staff ni superuser.
+    """
+    if actor.is_superuser:
+        return True
+    if not actor.is_staff:
+        return False
+    return not target.is_superuser and not target.is_staff
+
+
 @api_view(['POST'])
 @permission_classes([AllowAny])
 def login_view(request):
@@ -157,10 +183,9 @@ def create_user_view(request):
     Créer un nouvel utilisateur (pour l'administration)
     """
     try:
-        if not (request.user and request.user.is_authenticated and request.user.is_superuser):
-            return Response({
-                'error': 'Accès refusé : administrateur requis'
-            }, status=status.HTTP_403_FORBIDDEN)
+        denied = _deny_if_not_app_admin(request)
+        if denied:
+            return denied
 
         data = json.loads(request.body)
         username = data.get('username')
@@ -169,6 +194,8 @@ def create_user_view(request):
         first_name = data.get('first_name', '')
         last_name = data.get('last_name', '')
         is_staff = bool(data.get('is_staff', False))
+        if not request.user.is_superuser:
+            is_staff = False
         
         if not username or not password:
             return Response({
@@ -217,12 +244,11 @@ def create_user_view(request):
 @permission_classes([IsAuthenticated])
 def list_users_view(request):
     """
-    Lister les utilisateurs (réservé superuser)
+    Lister les utilisateurs (superuser ou administrateur staff)
     """
-    if not (request.user and request.user.is_authenticated and request.user.is_superuser):
-        return Response({
-            'error': 'Accès refusé : administrateur requis'
-        }, status=status.HTTP_403_FORBIDDEN)
+    denied = _deny_if_not_app_admin(request)
+    if denied:
+        return denied
 
     users = User.objects.all().order_by('username')
     return Response({
@@ -247,17 +273,24 @@ def list_users_view(request):
 @permission_classes([IsAuthenticated])
 def toggle_user_active_view(request, user_id):
     """
-    Activer / désactiver un utilisateur (réservé superuser)
+    Activer / désactiver un utilisateur (superuser ou administrateur staff)
     """
-    if not (request.user and request.user.is_authenticated and request.user.is_superuser):
-        return Response({
-            'error': 'Accès refusé : administrateur requis'
-        }, status=status.HTTP_403_FORBIDDEN)
+    denied = _deny_if_not_app_admin(request)
+    if denied:
+        return denied
 
     try:
         target_user = User.objects.get(id=user_id)
     except User.DoesNotExist:
         return Response({'error': 'Utilisateur introuvable'}, status=status.HTTP_404_NOT_FOUND)
+
+    if not _staff_may_manage_account(request.user, target_user):
+        return Response(
+            {
+                'error': 'Vous ne pouvez modifier que les comptes utilisateurs sans rôle administrateur.'
+            },
+            status=status.HTTP_403_FORBIDDEN,
+        )
 
     if target_user.id == request.user.id:
         return Response({'error': 'Vous ne pouvez pas vous désactiver vous-même'}, status=status.HTTP_400_BAD_REQUEST)
@@ -279,17 +312,24 @@ def toggle_user_active_view(request, user_id):
 @permission_classes([IsAuthenticated])
 def reset_user_password_view(request, user_id):
     """
-    Réinitialiser le mot de passe d'un utilisateur (réservé superuser)
+    Réinitialiser le mot de passe d'un utilisateur (superuser ou administrateur staff)
     """
-    if not (request.user and request.user.is_authenticated and request.user.is_superuser):
-        return Response({
-            'error': 'Accès refusé : administrateur requis'
-        }, status=status.HTTP_403_FORBIDDEN)
+    denied = _deny_if_not_app_admin(request)
+    if denied:
+        return denied
 
     try:
         target_user = User.objects.get(id=user_id)
     except User.DoesNotExist:
         return Response({'error': 'Utilisateur introuvable'}, status=status.HTTP_404_NOT_FOUND)
+
+    if not _staff_may_manage_account(request.user, target_user):
+        return Response(
+            {
+                'error': 'Vous ne pouvez modifier que les comptes utilisateurs sans rôle administrateur.'
+            },
+            status=status.HTTP_403_FORBIDDEN,
+        )
 
     try:
         data = json.loads(request.body)
@@ -313,12 +353,11 @@ def reset_user_password_view(request, user_id):
 @permission_classes([IsAuthenticated])
 def manage_emetteurs_view(request):
     """
-    Lister / créer des émetteurs (réservé superuser)
+    Lister / créer des émetteurs (superuser ou administrateur staff)
     """
-    if not (request.user and request.user.is_authenticated and request.user.is_superuser):
-        return Response({
-            'error': 'Accès refusé : administrateur requis'
-        }, status=status.HTTP_403_FORBIDDEN)
+    denied = _deny_if_not_app_admin(request)
+    if denied:
+        return denied
 
     if request.method == 'GET':
         emetteurs = Emetteur.objects.all().order_by('surname', 'name')
@@ -363,12 +402,11 @@ def manage_emetteurs_view(request):
 @permission_classes([IsAuthenticated])
 def toggle_emetteur_active_view(request, emetteur_id):
     """
-    Activer / désactiver un émetteur (réservé superuser)
+    Activer / désactiver un émetteur (superuser ou administrateur staff)
     """
-    if not (request.user and request.user.is_authenticated and request.user.is_superuser):
-        return Response({
-            'error': 'Accès refusé : administrateur requis'
-        }, status=status.HTTP_403_FORBIDDEN)
+    denied = _deny_if_not_app_admin(request)
+    if denied:
+        return denied
 
     try:
         emetteur = Emetteur.objects.get(id=emetteur_id)
@@ -385,4 +423,45 @@ def toggle_emetteur_active_view(request, emetteur_id):
             'id': emetteur.id,
             'is_active': emetteur.is_active
         }
+    })
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def toggle_user_staff_view(request, user_id):
+    """
+    Activer / désactiver le rôle administrateur applicatif (is_staff) pour un utilisateur.
+    Interdit sur les superusers et sur soi-même.
+    """
+    denied = _deny_if_not_app_admin(request)
+    if denied:
+        return denied
+
+    try:
+        target_user = User.objects.get(id=user_id)
+    except User.DoesNotExist:
+        return Response({'error': 'Utilisateur introuvable'}, status=status.HTTP_404_NOT_FOUND)
+
+    if target_user.is_superuser:
+        return Response(
+            {'error': 'Le rôle administrateur des superutilisateurs ne peut pas être modifié ici.'},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+
+    if target_user.id == request.user.id:
+        return Response(
+            {'error': 'Vous ne pouvez pas retirer ou vous attribuer le rôle administrateur vous-même.'},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+
+    target_user.is_staff = not target_user.is_staff
+    target_user.save(update_fields=['is_staff'])
+
+    return Response({
+        'success': True,
+        'message': 'Rôle administrateur accordé' if target_user.is_staff else 'Rôle administrateur retiré',
+        'user': {
+            'id': target_user.id,
+            'is_staff': target_user.is_staff,
+        },
     })
