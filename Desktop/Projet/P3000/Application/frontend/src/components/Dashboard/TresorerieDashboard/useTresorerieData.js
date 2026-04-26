@@ -236,29 +236,20 @@ export function useTresorerieData(selectedYear, periodStart, periodEnd) {
     return months;
   }, [selectedYear, periodStart, periodEnd, situations, factures, fournisseurs, sousTraitants]);
 
-  // ── Classement fournisseurs (agrégé par fournisseur) ─────────────────────
-  const classementFournisseurs = useMemo(() => {
+  // ── Helper : agrège un tableau de lignes par clé "nom" ───────────────────
+  const buildClassement = (rows, nomField) => {
     const map = {};
-
-    (fournisseurs || []).forEach((row) => {
-      const key = row.fournisseur || "Inconnu";
+    (rows || []).forEach((row) => {
+      const key = row[nomField] || "Inconnu";
       if (!map[key]) {
-        map[key] = {
-          fournisseur: key,
-          totalFactures: 0,
-          totalAPayer: 0,
-          totalPaye: 0,
-          chantiers: {},
-        };
+        map[key] = { nom: key, totalAPayer: 0, totalPaye: 0, chantiers: {} };
       }
       const entry = map[key];
       const aPayer = parseFloat(row.a_payer) || 0;
       const paye = parseFloat(row.paye) || 0;
-
       entry.totalAPayer += aPayer;
       entry.totalPaye += paye;
 
-      // Détail par chantier (pour le modal)
       const chantierId = row.chantier_id || row.chantier_name || "?";
       if (!entry.chantiers[chantierId]) {
         entry.chantiers[chantierId] = {
@@ -287,7 +278,21 @@ export function useTresorerieData(selectedYear, periodStart, periodEnd) {
         })),
       }))
       .sort((a, b) => b.totalAPayer - a.totalAPayer);
-  }, [fournisseurs]);
+  };
 
-  return { monthlyData, classementFournisseurs, loading, error };
+  // ── Classement fournisseurs ───────────────────────────────────────────────
+  const classementFournisseurs = useMemo(
+    () => buildClassement(fournisseurs, "fournisseur"),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [fournisseurs]
+  );
+
+  // ── Classement sous-traitants ─────────────────────────────────────────────
+  const classementSousTraitants = useMemo(
+    () => buildClassement(sousTraitants, "sous_traitant"),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [sousTraitants]
+  );
+
+  return { monthlyData, classementFournisseurs, classementSousTraitants, loading, error };
 }

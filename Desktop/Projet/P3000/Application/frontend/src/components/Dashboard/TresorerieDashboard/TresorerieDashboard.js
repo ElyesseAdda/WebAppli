@@ -10,13 +10,14 @@ import {
 import React, { useState } from "react";
 import TresorerieBarChart from "./TresorerieBarChart";
 import ClassementFournisseurs from "./ClassementFournisseurs";
+import ClassementTiers from "./ClassementTiers";
 import { useTresorerieData } from "./useTresorerieData";
 
 const TABS = [
   { label: "Trésorerie", enabled: true },
   { label: "Fournisseurs", enabled: true },
   { label: "Sociétés", enabled: false },
-  { label: "Sous-traitants", enabled: false },
+  { label: "Sous-traitants", enabled: true },
 ];
 
 const PlaceholderTab = ({ label }) => (
@@ -46,7 +47,7 @@ const TresorerieDashboard = ({ selectedYear: propYear, periodStart, periodEnd })
   const [localYear, setLocalYear] = useState(propYear || currentYear);
 
   const year = propYear || localYear;
-  const { monthlyData, classementFournisseurs, loading, error } = useTresorerieData(year, periodStart, periodEnd);
+  const { monthlyData, classementFournisseurs, classementSousTraitants, loading, error } = useTresorerieData(year, periodStart, periodEnd);
 
   return (
     <Box>
@@ -169,7 +170,13 @@ const TresorerieDashboard = ({ selectedYear: propYear, periodStart, periodEnd })
         <ClassementFournisseurs classement={classementFournisseurs} loading={loading} />
       )}
       {activeTab === 2 && <PlaceholderTab label="sociétés" />}
-      {activeTab === 3 && <PlaceholderTab label="sous-traitants" />}
+      {activeTab === 3 && (
+        <ClassementTiers
+          classement={classementSousTraitants}
+          loading={loading}
+          nomLabel="sous-traitant"
+        />
+      )}
     </Box>
   );
 };
