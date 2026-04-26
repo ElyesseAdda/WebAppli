@@ -1,5 +1,6 @@
-import { Box, Typography } from "@mui/material";
-import React from "react";
+import { Box, IconButton, Tooltip, Typography } from "@mui/material";
+import ListAltOutlinedIcon from "@mui/icons-material/ListAltOutlined";
+import React, { useState } from "react";
 import DashboardCardRevenueTotal from "./DashboardCardRevenueTotal";
 import DashboardCardGrossMargin from "./DashboardCardGrossMargin";
 import DashboardCardAnnualGrowth from "./DashboardCardAnnualGrowth";
@@ -9,6 +10,8 @@ import DashboardCardLatePayments from "./DashboardCardLatePayments";
 import DashboardRevenueMockChart from "./DashboardRevenueMockChart";
 import DashboardCostBreakdown from "./DashboardCostBreakdown";
 import TresorerieDashboard from "./TresorerieDashboard";
+import PaymentsDetailModal from "./PaymentsDetailModal";
+import { usePaymentsDetail } from "./usePaymentsDetail";
 
 // Hauteur partagée entre le graphique et le donut
 const MID_HEIGHT = 360;
@@ -40,6 +43,28 @@ const DashboardCardsGrid = ({
   periodStart,
   periodEnd,
 }) => {
+  const { encaissementsRecus, paiementsAVenir, paiementsEnRetard, loading: detailLoading } =
+    usePaymentsDetail(selectedYear);
+
+  const [modalConfig, setModalConfig] = useState(null); // { title, items, accentColor }
+
+  const makeDetailBtn = (title, items, accentColor, iconColor) => (
+    <Tooltip title={`Voir le détail : ${title}`}>
+      <IconButton
+        size="small"
+        onClick={() => setModalConfig({ title, items, accentColor })}
+        sx={{
+          p: 0.35,
+          color: iconColor || accentColor,
+          opacity: 0.75,
+          "&:hover": { opacity: 1, bgcolor: `${accentColor}18` },
+        }}
+      >
+        <ListAltOutlinedIcon sx={{ fontSize: "1.05rem" }} />
+      </IconButton>
+    </Tooltip>
+  );
+
   return (
     <Box sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
       {/* ── Zone 1 : KPIs héro (CA Total + Marge Brute) ── */}
@@ -123,6 +148,7 @@ const DashboardCardsGrid = ({
           totalCA={totalCA}
           montantEncaisseReel={montantFacturePayeHt}
           loading={totalCALoading}
+          toolbarPrefix={makeDetailBtn("Encaissements reçus", encaissementsRecus, "#22c55e", "#15803d")}
         />
         <DashboardCardAgencyExpenses
           breakdown={depensesAgenceBreakdown}
@@ -133,11 +159,13 @@ const DashboardCardsGrid = ({
           totalCA={totalCA}
           burnMontant={burn15JHt}
           loading={totalCALoading}
+          toolbarPrefix={makeDetailBtn("Paiements à venir (15 j.)", paiementsAVenir, "#f97316", "#c2410c")}
         />
         <DashboardCardLatePayments
           totalCA={totalCA}
           montantRetard={latePaymentsHt}
           loading={totalCALoading}
+          toolbarPrefix={makeDetailBtn("Paiements en retard", paiementsEnRetard, "#dc2626", "#b91c1c")}
         />
       </Box>
 
@@ -149,6 +177,16 @@ const DashboardCardsGrid = ({
         selectedYear={selectedYear}
         periodStart={periodStart}
         periodEnd={periodEnd}
+      />
+
+      {/* ── Modal détail paiements ── */}
+      <PaymentsDetailModal
+        open={!!modalConfig}
+        onClose={() => setModalConfig(null)}
+        title={modalConfig?.title || ""}
+        items={modalConfig?.items || []}
+        accentColor={modalConfig?.accentColor || "#1B78BC"}
+        loading={detailLoading}
       />
     </Box>
   );

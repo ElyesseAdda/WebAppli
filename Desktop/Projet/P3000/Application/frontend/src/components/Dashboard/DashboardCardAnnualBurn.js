@@ -2,7 +2,7 @@ import React from "react";
 import DashboardMetricCardShell from "./DashboardMetricCardShell";
 import { formatDashboardCurrency } from "./dashboardCurrency";
 
-const DashboardCardAnnualBurn = ({ totalCA = 0, burnMontant = 0, loading = false }) => (
+const DashboardCardAnnualBurn = ({ totalCA = 0, burnMontant = 0, loading = false, toolbarPrefix = null }) => (
   <DashboardMetricCardShell
     title="Paiements à venir"
     value={loading ? "Chargement..." : formatDashboardCurrency(burnMontant)}
@@ -13,6 +13,7 @@ const DashboardCardAnnualBurn = ({ totalCA = 0, burnMontant = 0, loading = false
     valueFirstCentered
     percentValue={loading ? null : burnMontant}
     percentBase={loading ? null : totalCA}
+    toolbarPrefix={toolbarPrefix}
   />
 );
 

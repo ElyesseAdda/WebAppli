@@ -2,7 +2,7 @@ import React from "react";
 import DashboardMetricCardShell from "./DashboardMetricCardShell";
 import { formatDashboardCurrency } from "./dashboardCurrency";
 
-const DashboardCardLatePayments = ({ totalCA = 0, montantRetard = 0, loading = false }) => (
+const DashboardCardLatePayments = ({ totalCA = 0, montantRetard = 0, loading = false, toolbarPrefix = null }) => (
   <DashboardMetricCardShell
     title="Paiements en retard"
     value={loading ? "Chargement..." : formatDashboardCurrency(montantRetard)}
@@ -13,6 +13,7 @@ const DashboardCardLatePayments = ({ totalCA = 0, montantRetard = 0, loading = f
     valueFirstCentered
     percentValue={loading ? null : montantRetard}
     percentBase={loading ? null : totalCA}
+    toolbarPrefix={toolbarPrefix}
   />
 );
 

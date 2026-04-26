@@ -2,7 +2,7 @@ import React from "react";
 import DashboardMetricCardShell from "./DashboardMetricCardShell";
 import { formatDashboardCurrency } from "./dashboardCurrency";
 
-const DashboardCardAnnualGrowth = ({ totalCA = 0, montantEncaisseReel = 0, loading = false }) => {
+const DashboardCardAnnualGrowth = ({ totalCA = 0, montantEncaisseReel = 0, loading = false, toolbarPrefix = null }) => {
   const pct = totalCA > 0 ? `${((montantEncaisseReel / totalCA) * 100).toFixed(1)}% du CA` : null;
   return (
     <DashboardMetricCardShell
@@ -15,6 +15,7 @@ const DashboardCardAnnualGrowth = ({ totalCA = 0, montantEncaisseReel = 0, loadi
       valueFirstCentered
       percentValue={loading ? null : montantEncaisseReel}
       percentBase={loading ? null : totalCA}
+      toolbarPrefix={toolbarPrefix}
     />
   );
 };
