@@ -9,11 +9,12 @@ import {
 } from "@mui/material";
 import React, { useState } from "react";
 import TresorerieBarChart from "./TresorerieBarChart";
+import ClassementFournisseurs from "./ClassementFournisseurs";
 import { useTresorerieData } from "./useTresorerieData";
 
 const TABS = [
   { label: "Trésorerie", enabled: true },
-  { label: "Fournisseurs", enabled: false },
+  { label: "Fournisseurs", enabled: true },
   { label: "Sociétés", enabled: false },
   { label: "Sous-traitants", enabled: false },
 ];
@@ -45,7 +46,7 @@ const TresorerieDashboard = ({ selectedYear: propYear, periodStart, periodEnd })
   const [localYear, setLocalYear] = useState(propYear || currentYear);
 
   const year = propYear || localYear;
-  const { monthlyData, loading, error } = useTresorerieData(year, periodStart, periodEnd);
+  const { monthlyData, classementFournisseurs, loading, error } = useTresorerieData(year, periodStart, periodEnd);
 
   return (
     <Box>
@@ -164,7 +165,9 @@ const TresorerieDashboard = ({ selectedYear: propYear, periodStart, periodEnd })
         </>
       )}
 
-      {activeTab === 1 && <PlaceholderTab label="fournisseurs" />}
+      {activeTab === 1 && (
+        <ClassementFournisseurs classement={classementFournisseurs} loading={loading} />
+      )}
       {activeTab === 2 && <PlaceholderTab label="sociétés" />}
       {activeTab === 3 && <PlaceholderTab label="sous-traitants" />}
     </Box>

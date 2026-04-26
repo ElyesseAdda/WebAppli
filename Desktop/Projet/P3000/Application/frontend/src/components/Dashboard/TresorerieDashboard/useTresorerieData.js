@@ -236,5 +236,58 @@ export function useTresorerieData(selectedYear, periodStart, periodEnd) {
     return months;
   }, [selectedYear, periodStart, periodEnd, situations, factures, fournisseurs, sousTraitants]);
 
-  return { monthlyData, loading, error };
+  // ── Classement fournisseurs (agrégé par fournisseur) ─────────────────────
+  const classementFournisseurs = useMemo(() => {
+    const map = {};
+
+    (fournisseurs || []).forEach((row) => {
+      const key = row.fournisseur || "Inconnu";
+      if (!map[key]) {
+        map[key] = {
+          fournisseur: key,
+          totalFactures: 0,
+          totalAPayer: 0,
+          totalPaye: 0,
+          chantiers: {},
+        };
+      }
+      const entry = map[key];
+      const aPayer = parseFloat(row.a_payer) || 0;
+      const paye = parseFloat(row.paye) || 0;
+
+      entry.totalAPayer += aPayer;
+      entry.totalPaye += paye;
+
+      // Détail par chantier (pour le modal)
+      const chantierId = row.chantier_id || row.chantier_name || "?";
+      if (!entry.chantiers[chantierId]) {
+        entry.chantiers[chantierId] = {
+          chantier_id: row.chantier_id,
+          chantier_name: row.chantier_name || chantierId,
+          totalAPayer: 0,
+          totalPaye: 0,
+          mois: [],
+        };
+      }
+      const ch = entry.chantiers[chantierId];
+      ch.totalAPayer += aPayer;
+      ch.totalPaye += paye;
+      if (row.mois) ch.mois.push(row.mois);
+    });
+
+    return Object.values(map)
+      .map((f) => ({
+        ...f,
+        resteAPayer: Math.max(0, f.totalAPayer - f.totalPaye),
+        tauxPaiement: f.totalAPayer > 0 ? (f.totalPaye / f.totalAPayer) * 100 : 0,
+        chantiers: Object.values(f.chantiers).map((ch) => ({
+          ...ch,
+          resteAPayer: Math.max(0, ch.totalAPayer - ch.totalPaye),
+          tauxPaiement: ch.totalAPayer > 0 ? (ch.totalPaye / ch.totalAPayer) * 100 : 0,
+        })),
+      }))
+      .sort((a, b) => b.totalAPayer - a.totalAPayer);
+  }, [fournisseurs]);
+
+  return { monthlyData, classementFournisseurs, loading, error };
 }
