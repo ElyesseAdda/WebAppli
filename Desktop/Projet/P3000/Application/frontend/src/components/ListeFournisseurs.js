@@ -227,13 +227,13 @@ const ListeFournisseurs = () => {
       <TableContainer component={Paper} sx={{ mt: 2 }}>
         <Table>
           <TableHead>
-            <TableRow sx={{ backgroundColor: "#f5f5f5" }}>
-              <TableCell sx={{ fontWeight: "bold" }}>Nom</TableCell>
-              <TableCell sx={{ fontWeight: "bold" }}>Email</TableCell>
-              <TableCell sx={{ fontWeight: "bold" }}>Téléphone</TableCell>
-              <TableCell sx={{ fontWeight: "bold" }}>Magasins</TableCell>
-              <TableCell sx={{ fontWeight: "bold" }}>Description</TableCell>
-              <TableCell sx={{ fontWeight: "bold", textAlign: "center" }}>
+            <TableRow sx={{ backgroundColor: "#1976d2" }}>
+              <TableCell sx={{ fontWeight: "bold", color: "#fff" }}>Nom</TableCell>
+              <TableCell sx={{ fontWeight: "bold", color: "#fff" }}>Email</TableCell>
+              <TableCell sx={{ fontWeight: "bold", color: "#fff" }}>Téléphone</TableCell>
+              <TableCell sx={{ fontWeight: "bold", color: "#fff" }}>Magasins</TableCell>
+              <TableCell sx={{ fontWeight: "bold", color: "#fff" }}>Description</TableCell>
+              <TableCell sx={{ fontWeight: "bold", textAlign: "center", color: "#fff" }}>
                 Actions
               </TableCell>
             </TableRow>

@@ -261,14 +261,14 @@ const ListeClient = () => {
       <TableContainer component={Paper} elevation={0} sx={{ borderRadius: 2, border: "1px solid #e0e0e0" }}>
         <Table>
           <TableHead>
-            <TableRow sx={{ backgroundColor: "#f5f5f5" }}>
-              <TableCell sx={{ fontWeight: 700, width: 80 }}>Logo</TableCell>
-              <TableCell sx={{ fontWeight: 700 }}>Nom societe</TableCell>
-              <TableCell sx={{ fontWeight: 700 }}>Contact</TableCell>
-              <TableCell sx={{ fontWeight: 700 }}>Ville</TableCell>
-              <TableCell sx={{ fontWeight: 700 }}>Adresse</TableCell>
-              <TableCell sx={{ fontWeight: 700 }}>Code postal</TableCell>
-              <TableCell sx={{ fontWeight: 700, textAlign: "center" }}>Actions</TableCell>
+            <TableRow sx={{ backgroundColor: "#1976d2" }}>
+              <TableCell sx={{ fontWeight: 700, width: 80, color: "#fff" }}>Logo</TableCell>
+              <TableCell sx={{ fontWeight: 700, color: "#fff" }}>Nom societe</TableCell>
+              <TableCell sx={{ fontWeight: 700, color: "#fff" }}>Contact</TableCell>
+              <TableCell sx={{ fontWeight: 700, color: "#fff" }}>Ville</TableCell>
+              <TableCell sx={{ fontWeight: 700, color: "#fff" }}>Adresse</TableCell>
+              <TableCell sx={{ fontWeight: 700, color: "#fff" }}>Code postal</TableCell>
+              <TableCell sx={{ fontWeight: 700, textAlign: "center", color: "#fff" }}>Actions</TableCell>
             </TableRow>
           </TableHead>
           <TableBody>
