@@ -301,6 +301,53 @@ class SocieteViewSet(viewsets.ModelViewSet):
             queryset = queryset.filter(client_name_id=client_id)
         return queryset
 
+    @action(detail=True, methods=['post'])
+    def upload_logo(self, request, pk=None):
+        societe = self.get_object()
+        file = request.FILES.get('logo')
+        if not file:
+            return Response({'error': 'Fichier logo requis'}, status=400)
+        try:
+            from .utils import get_s3_client, get_s3_bucket_name, is_s3_available, generate_presigned_url_for_display
+            if not is_s3_available():
+                return Response({'error': 'S3 non disponible'}, status=503)
+            import uuid as _uuid
+            ext = file.name.split('.')[-1] if '.' in file.name else 'png'
+            s3_key = f"societes/logos/{societe.id}_{_uuid.uuid4().hex[:8]}.{ext}"
+            s3_client = get_s3_client()
+            bucket_name = get_s3_bucket_name()
+            if societe.logo_s3_key:
+                try:
+                    s3_client.delete_object(Bucket=bucket_name, Key=societe.logo_s3_key)
+                except Exception:
+                    pass
+            s3_client.put_object(Bucket=bucket_name, Key=s3_key, Body=file.read(), ContentType=file.content_type or 'image/png')
+            societe.logo_s3_key = s3_key
+            societe.save()
+            logo_url = generate_presigned_url_for_display(s3_key, expires_in=3600)
+            return Response({'success': True, 'logo_s3_key': s3_key, 'logo_url': logo_url})
+        except Exception as e:
+            import traceback
+            traceback.print_exc()
+            return Response({'error': str(e)}, status=500)
+
+    @action(detail=True, methods=['delete'])
+    def delete_logo(self, request, pk=None):
+        societe = self.get_object()
+        if not societe.logo_s3_key:
+            return Response({'error': 'Aucun logo'}, status=400)
+        try:
+            from .utils import get_s3_client, get_s3_bucket_name, is_s3_available
+            if is_s3_available():
+                s3_client = get_s3_client()
+                bucket_name = get_s3_bucket_name()
+                s3_client.delete_object(Bucket=bucket_name, Key=societe.logo_s3_key)
+        except Exception:
+            pass
+        societe.logo_s3_key = None
+        societe.save()
+        return Response({'success': True})
+
 class FactureTSViewSet(viewsets.ModelViewSet):
     queryset = FactureTS.objects.all()
     serializer_class = FactureTSListSerializer
@@ -1215,18 +1262,6 @@ from datetime import datetime, timedelta
 
 
 
-
-class SocieteViewSet(viewsets.ModelViewSet):
-    queryset = Societe.objects.all().order_by('nom_societe')
-    serializer_class = SocieteSerializer
-    permission_classes = [AllowAny]
-
-    def get_queryset(self):
-        queryset = Societe.objects.all().order_by('nom_societe')
-        client_id = self.request.query_params.get('client')
-        if client_id:
-            queryset = queryset.filter(client_name_id=client_id)
-        return queryset
 
 class FactureTSViewSet(viewsets.ModelViewSet):
     queryset = FactureTS.objects.all()

@@ -40,6 +40,7 @@ import GlobalConflictModal from "./GlobalConflictModal";
 import Layout from "./Layout";
 import ListeBonCommande from "./ListeBonCommande";
 import ListeChantier from "./ListeChantier";
+import ListeClient from "./ListeClient";
 import ListeDevis from "./ListeDevis";
 import ListeFactures from "./ListeFactures";
 import ListeSituation from "./ListeSituation";
@@ -441,6 +442,17 @@ function App() {
               <ProtectedRoute isAuthenticated={isAuthenticated}>
                 <Layout user={user} onLogout={handleLogout}>
                   <ListeSituation />
+                </Layout>
+              </ProtectedRoute>
+            }
+          />
+
+          <Route
+            path="/ListeClient"
+            element={
+              <ProtectedRoute isAuthenticated={isAuthenticated}>
+                <Layout user={user} onLogout={handleLogout}>
+                  <ListeClient />
                 </Layout>
               </ProtectedRoute>
             }

@@ -124,6 +124,7 @@ const SlideBar = ({ toggleSidebar, isSidebarVisible, user }) => {
         label: "Collaborateur",
         icon: FaHandshake,
         children: [
+          { label: "Liste Clients", to: "/ListeClient" },
           { label: "Liste Fournisseurs", to: "/ListeFournisseurs" },
           { label: "Sous traitant", to: "/ListeSousTraitants" },
           { label: "Comparateur", to: "/ComparateurFournisseurs" },
