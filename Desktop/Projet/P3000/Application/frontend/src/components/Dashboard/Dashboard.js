@@ -17,13 +17,18 @@ import {
   TextField,
 } from "@mui/material";
 import FilterAltOutlinedIcon from "@mui/icons-material/FilterAltOutlined";
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import axios from "axios";
 import {
   DashboardFiltersProvider,
   useDashboardFilters,
 } from "./DashboardFiltersContext";
 import DashboardCardsGrid from "./DashboardCardsGrid";
+import {
+  defaultIncludedIdsFromBreakdown,
+  getEffectiveIncludedAgenceIds,
+  sumBreakdownFieldForIds,
+} from "./dashboardAgencySelection";
 
 // Composant interne qui utilise les filtres
 const DashboardContent = () => {
@@ -33,6 +38,7 @@ const DashboardContent = () => {
     periodStart,
     periodEnd,
     setDepensesAgenceIncludedAgenceIds,
+    depensesAgenceIncludedAgenceIds,
   } = useDashboardFilters();
   const [dashboardData, setDashboardData] = useState(null);
   const [comparisonDashboardData, setComparisonDashboardData] = useState(null);
@@ -148,15 +154,6 @@ const DashboardContent = () => {
   );
   const caProgress =
     comparisonTotalCA > 0 ? ((totalCA - comparisonTotalCA) / comparisonTotalCA) * 100 : null;
-  const margeBrute = Number(dashboardData?.global_stats?.marge_brute || 0);
-  const margeBruteRate = Number(dashboardData?.global_stats?.taux_marge_brute || 0);
-  const comparisonMargeBrute = Number(
-    comparisonDashboardData?.global_stats?.marge_brute || 0
-  );
-  const margeBruteProgress =
-    comparisonMargeBrute > 0
-      ? ((margeBrute - comparisonMargeBrute) / comparisonMargeBrute) * 100
-      : null;
   const coutMateriel = Number(dashboardData?.global_stats?.total_cout_materiel || 0);
   const coutMainOeuvre = Number(dashboardData?.global_stats?.total_cout_main_oeuvre || 0);
   const mainOeuvreMonthlyBreakdown =
@@ -166,6 +163,46 @@ const DashboardContent = () => {
   );
   const coutChantierGlobal = coutMateriel + coutMainOeuvre + coutSousTraitance;
   const depensesAgenceBreakdown = dashboardData?.global_stats?.depenses_agence_breakdown || [];
+
+  const comparisonCoutMateriel = Number(
+    comparisonDashboardData?.global_stats?.total_cout_materiel || 0
+  );
+  const comparisonCoutMainOeuvre = Number(
+    comparisonDashboardData?.global_stats?.total_cout_main_oeuvre || 0
+  );
+  const comparisonCoutSousTraitance = Number(
+    comparisonDashboardData?.global_stats?.total_cout_sous_traitance || 0
+  );
+  const comparisonCoutChantierGlobal =
+    comparisonCoutMateriel + comparisonCoutMainOeuvre + comparisonCoutSousTraitance;
+  const comparisonDepensesAgenceBreakdown =
+    comparisonDashboardData?.global_stats?.depenses_agence_breakdown || [];
+
+  const defaultAgenceIds = useMemo(
+    () => defaultIncludedIdsFromBreakdown(depensesAgenceBreakdown),
+    [depensesAgenceBreakdown]
+  );
+  const effectiveAgenceIds = useMemo(
+    () => getEffectiveIncludedAgenceIds(depensesAgenceIncludedAgenceIds, defaultAgenceIds),
+    [depensesAgenceIncludedAgenceIds, defaultAgenceIds]
+  );
+  const depensesAgenceSelectionMontant = useMemo(
+    () => sumBreakdownFieldForIds(depensesAgenceBreakdown, effectiveAgenceIds, "total_ht"),
+    [depensesAgenceBreakdown, effectiveAgenceIds]
+  );
+  const depensesAgenceSelectionMontantComparaison = useMemo(
+    () => sumBreakdownFieldForIds(comparisonDepensesAgenceBreakdown, effectiveAgenceIds, "total_ht"),
+    [comparisonDepensesAgenceBreakdown, effectiveAgenceIds]
+  );
+
+  const margeBrute = totalCA - coutChantierGlobal - depensesAgenceSelectionMontant;
+  const margeBruteRate = totalCA > 0 ? (margeBrute / totalCA) * 100 : 0;
+  const margeBruteComparaison =
+    comparisonTotalCA - comparisonCoutChantierGlobal - depensesAgenceSelectionMontantComparaison;
+  const margeBruteProgress =
+    margeBruteComparaison !== 0 && Number.isFinite(margeBruteComparaison)
+      ? ((margeBrute - margeBruteComparaison) / Math.abs(margeBruteComparaison)) * 100
+      : null;
   const montantFacturePayeHt = Number(
     dashboardData?.global_stats?.encaissement_paye_ht || 0
   );

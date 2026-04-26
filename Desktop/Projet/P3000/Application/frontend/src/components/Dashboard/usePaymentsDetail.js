@@ -65,7 +65,7 @@ export function usePaymentsDetail(selectedYear) {
 
       if (s.date_paiement_reel) {
         encaissementsRecus.push({
-          label, chantier, montant,
+          id: s.id, label, chantier, montant,
           date: fmtDate(s.date_paiement_reel),
           type: "Situation",
         });
@@ -73,9 +73,9 @@ export function usePaymentsDetail(selectedYear) {
         const prevue = calcDatePrevue(s.date_envoi, s.delai_paiement);
         if (prevue) {
           if (prevue >= today && prevue <= in15) {
-            paiementsAVenir.push({ label, chantier, montant, date: fmtDate(prevue), type: "Situation" });
+            paiementsAVenir.push({ id: s.id, label, chantier, montant, date: fmtDate(prevue), type: "Situation" });
           } else if (prevue < today) {
-            paiementsEnRetard.push({ label, chantier, montant, date: fmtDate(prevue), type: "Situation" });
+            paiementsEnRetard.push({ id: s.id, label, chantier, montant, date: fmtDate(prevue), type: "Situation" });
           }
         }
       }
@@ -89,7 +89,7 @@ export function usePaymentsDetail(selectedYear) {
 
       if (f.date_paiement) {
         encaissementsRecus.push({
-          label, chantier, montant,
+          id: f.id, label, chantier, montant,
           date: fmtDate(f.date_paiement),
           type: "Facture",
         });
@@ -97,9 +97,9 @@ export function usePaymentsDetail(selectedYear) {
         const prevue = calcDatePrevue(f.date_envoi || f.date_creation, f.delai_paiement);
         if (prevue) {
           if (prevue >= today && prevue <= in15) {
-            paiementsAVenir.push({ label, chantier, montant, date: fmtDate(prevue), type: "Facture" });
+            paiementsAVenir.push({ id: f.id, label, chantier, montant, date: fmtDate(prevue), type: "Facture" });
           } else if (prevue < today) {
-            paiementsEnRetard.push({ label, chantier, montant, date: fmtDate(prevue), type: "Facture" });
+            paiementsEnRetard.push({ id: f.id, label, chantier, montant, date: fmtDate(prevue), type: "Facture" });
           }
         }
       }

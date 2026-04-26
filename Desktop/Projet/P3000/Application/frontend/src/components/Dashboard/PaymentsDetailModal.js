@@ -12,10 +12,17 @@ import {
   TableContainer,
   TableHead,
   TableRow,
+  Tooltip,
   Typography,
 } from "@mui/material";
 import CloseIcon from "@mui/icons-material/Close";
+import OpenInNewIcon from "@mui/icons-material/OpenInNew";
 import React from "react";
+
+const PREVIEW_URL = {
+  Situation: (id) => `/api/preview-situation/${id}/`,
+  Facture: (id) => `/api/preview-facture/${id}/`,
+};
 
 const fmt = (v) =>
   new Intl.NumberFormat("fr-FR", {
@@ -137,8 +144,27 @@ const PaymentsDetailModal = ({ open, onClose, title, items = [], loading = false
                         {item.type}
                       </Typography>
                     </TableCell>
-                    <TableCell sx={{ fontSize: "0.8rem", fontWeight: 600, color: "#111827", py: 0.9 }}>
-                      {item.label}
+                    <TableCell sx={{ py: 0.9 }}>
+                      <Box sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
+                        <Typography sx={{ fontSize: "0.8rem", fontWeight: 600, color: "#111827" }}>
+                          {item.label}
+                        </Typography>
+                        {item.id && PREVIEW_URL[item.type] && (
+                          <Tooltip title="Ouvrir le document">
+                            <IconButton
+                              size="small"
+                              onClick={() => window.open(PREVIEW_URL[item.type](item.id), "_blank")}
+                              sx={{
+                                p: 0.2,
+                                color: "#94a3b8",
+                                "&:hover": { color: "#1B78BC", bgcolor: "#eff6ff" },
+                              }}
+                            >
+                              <OpenInNewIcon sx={{ fontSize: 13 }} />
+                            </IconButton>
+                          </Tooltip>
+                        )}
+                      </Box>
                     </TableCell>
                     <TableCell
                       sx={{

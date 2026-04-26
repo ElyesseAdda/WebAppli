@@ -16,6 +16,10 @@ import React, { useMemo, useState } from "react";
 import DashboardMetricCardShell from "./DashboardMetricCardShell";
 import { formatDashboardCurrency } from "./dashboardCurrency";
 import { useDashboardFilters } from "./DashboardFiltersContext";
+import {
+  defaultIncludedIdsFromBreakdown,
+  getEffectiveIncludedAgenceIds,
+} from "./dashboardAgencySelection";
 
 const persistDashboardDepensesAgence = async (useDefault, ids) => {
   try {
@@ -26,14 +30,6 @@ const persistDashboardDepensesAgence = async (useDefault, ids) => {
   } catch (err) {
     console.error("Sauvegarde parametres dashboard:", err);
   }
-};
-
-const defaultIncludedIdsFromBreakdown = (breakdown) => {
-  if (!breakdown || !breakdown.length) return [];
-  const withId = breakdown.filter((r) => r.agence_id != null);
-  if (!withId.length) return [];
-  const minId = Math.min(...withId.map((r) => r.agence_id));
-  return [minId];
 };
 
 const DashboardCardAgencyExpenses = ({ breakdown = [], loading = false, totalCA = 0 }) => {
@@ -50,12 +46,10 @@ const DashboardCardAgencyExpenses = ({ breakdown = [], loading = false, totalCA 
     [breakdown]
   );
 
-  const effectiveIncludedIds = useMemo(() => {
-    if (depensesAgenceIncludedAgenceIds === null) {
-      return defaultIds;
-    }
-    return depensesAgenceIncludedAgenceIds;
-  }, [depensesAgenceIncludedAgenceIds, defaultIds]);
+  const effectiveIncludedIds = useMemo(
+    () => getEffectiveIncludedAgenceIds(depensesAgenceIncludedAgenceIds, defaultIds),
+    [depensesAgenceIncludedAgenceIds, defaultIds]
+  );
 
   const montantSelection = useMemo(() => {
     if (!breakdown.length) return 0;
