@@ -1,5 +1,5 @@
-import { Box, Typography } from "@mui/material";
-import React, { useEffect, useRef, useState } from "react";
+import { Box, Button, Dialog, DialogContent, DialogTitle, Typography } from "@mui/material";
+import React, { useState } from "react";
 import {
   Bar,
   BarChart,
@@ -12,7 +12,7 @@ import {
 } from "recharts";
 
 const COLOR_ENTREE = "#16a34a";
-const COLOR_ENTREE_PREVU = "#86efac";
+const COLOR_ENTREE_PREVU = "#22c55e";
 const COLOR_SORTIE = "#dc2626";
 const COLOR_SORTIE_PREVU = "#fca5a5";
 
@@ -26,16 +26,18 @@ const fmtShort = (v) => {
   return String(Math.round(abs));
 };
 
+const getEntryDetails = (entry) => {
+  const raw = entry.payload;
+  let detailKey = null;
+  if (entry.dataKey === "entreesReelles") detailKey = "_entreesReellesDetail";
+  if (entry.dataKey === "entreesPrevu") detailKey = "_entreesPrevuDetail";
+  if (entry.dataKey === "sortiesReelles") detailKey = "_sortiesReellesDetail";
+  if (entry.dataKey === "sortiesPrevu") detailKey = "_sortiesPrevuDetail";
+  return detailKey ? (raw[detailKey] || []) : [];
+};
+
 /** Tooltip personnalisé avec détail des lignes */
-const CustomTooltip = ({ active, payload, label, onLockPageScroll, onUnlockPageScroll }) => {
-  const containerRef = useRef(null);
-
-  useEffect(() => {
-    return () => {
-      onUnlockPageScroll?.();
-    };
-  }, [onUnlockPageScroll]);
-
+const CustomTooltip = ({ active, payload, label }) => {
   if (!active || !payload || !payload.length) return null;
 
   const entries = payload.filter((p) => p.value > 0);
@@ -43,7 +45,6 @@ const CustomTooltip = ({ active, payload, label, onLockPageScroll, onUnlockPageS
 
   return (
     <Box
-      ref={containerRef}
       sx={{
         bgcolor: "#fff",
         border: "1px solid #e5e7eb",
@@ -56,31 +57,12 @@ const CustomTooltip = ({ active, payload, label, onLockPageScroll, onUnlockPageS
         overflowY: "auto",
         fontSize: "0.78rem",
       }}
-      onMouseEnter={() => onLockPageScroll?.()}
-      onMouseLeave={() => onUnlockPageScroll?.()}
-      onWheel={(e) => {
-        // Empêche le scroll de la page et force le scroll dans le tooltip
-        e.preventDefault();
-        e.stopPropagation();
-        const el = containerRef.current;
-        if (el) {
-          el.scrollTop += e.deltaY;
-        }
-      }}
     >
       <Typography sx={{ fontWeight: 700, fontSize: "0.82rem", mb: 0.8, color: "#111827" }}>
         {label}
       </Typography>
       {entries.map((entry) => {
-        // Accéder au détail embarqué dans la donnée brute
-        const raw = entry.payload;
-        let detailKey = null;
-        if (entry.dataKey === "entreesReelles") detailKey = "_entreesReellesDetail";
-        if (entry.dataKey === "entreesPrevu") detailKey = "_entreesPrevuDetail";
-        if (entry.dataKey === "sortiesReelles") detailKey = "_sortiesReellesDetail";
-        if (entry.dataKey === "sortiesPrevu") detailKey = "_sortiesPrevuDetail";
-
-        const details = detailKey ? (raw[detailKey] || []) : [];
+        const details = getEntryDetails(entry);
 
         return (
           <Box key={entry.dataKey} sx={{ mb: 0.6 }}>
@@ -127,6 +109,8 @@ const legendItems = [
   { key: "sortiesPrevu", label: "Sorties prévues", color: COLOR_SORTIE_PREVU, hatched: true },
 ];
 
+const legendByKey = Object.fromEntries(legendItems.map((item) => [item.key, item]));
+
 const CustomLegend = () => (
   <Box
     sx={{
@@ -159,24 +143,40 @@ const CustomLegend = () => (
 );
 
 const TresorerieBarChart = ({ data = [], height = 340 }) => {
-  const [pageScrollLocked, setPageScrollLocked] = useState(false);
+  const [hoverTooltip, setHoverTooltip] = useState({
+    active: false,
+    payload: [],
+    label: "",
+    position: undefined,
+  });
+  const [detailsModal, setDetailsModal] = useState({ open: false, label: "", entries: [] });
 
-  useEffect(() => {
-    if (!pageScrollLocked) return undefined;
+  const handleChartMouseMove = (state) => {
+    if (!state?.isTooltipActive || !state?.activePayload?.length) {
+      setHoverTooltip({ active: false, payload: [], label: "", position: undefined });
+      return;
+    }
+    const c = state.activeCoordinate;
+    setHoverTooltip({
+      active: true,
+      payload: state.activePayload || [],
+      label: state.activeLabel || "",
+      position: c ? { x: c.x, y: c.y } : undefined,
+    });
+  };
 
-    const prevOverflow = document.body.style.overflow;
-    const prevOverscroll = document.body.style.overscrollBehavior;
-    document.body.style.overflow = "hidden";
-    document.body.style.overscrollBehavior = "contain";
-
-    return () => {
-      document.body.style.overflow = prevOverflow;
-      document.body.style.overscrollBehavior = prevOverscroll;
-    };
-  }, [pageScrollLocked]);
-
-  const lockPageScroll = () => setPageScrollLocked(true);
-  const unlockPageScroll = () => setPageScrollLocked(false);
+  const handleChartMouseLeave = () => {
+    setHoverTooltip({ active: false, payload: [], label: "", position: undefined });
+  };
+  const handleChartClick = (state) => {
+    if (state?.activePayload?.length) {
+      const entries = (state.activePayload || []).filter((p) => p.value > 0).map((entry) => ({
+        ...entry,
+        details: getEntryDetails(entry),
+      }));
+      setDetailsModal({ open: true, label: state.activeLabel || "", entries });
+    }
+  };
 
   const hasData = data.some(
     (d) => d.entreesReelles > 0 || d.entreesPrevu > 0 || d.sortiesReelles > 0 || d.sortiesPrevu > 0
@@ -204,6 +204,9 @@ const TresorerieBarChart = ({ data = [], height = 340 }) => {
             margin={{ top: 8, right: 12, left: 0, bottom: 28 }}
             barCategoryGap="20%"
             barGap={2}
+            onMouseMove={handleChartMouseMove}
+            onMouseLeave={handleChartMouseLeave}
+            onClick={handleChartClick}
           >
             {/* Patterns SVG pour les barres hachurées */}
             <defs>
@@ -242,12 +245,11 @@ const TresorerieBarChart = ({ data = [], height = 340 }) => {
               width={44}
             />
             <Tooltip
-              content={
-                <CustomTooltip
-                  onLockPageScroll={lockPageScroll}
-                  onUnlockPageScroll={unlockPageScroll}
-                />
-              }
+              content={<CustomTooltip />}
+              active={hoverTooltip.active}
+              payload={hoverTooltip.payload}
+              label={hoverTooltip.label}
+              position={hoverTooltip.position}
               cursor={{ fill: "rgba(0,0,0,0.03)" }}
               reverseDirection={{ y: true }}
               allowEscapeViewBox={{ x: true, y: true }}
@@ -294,6 +296,57 @@ const TresorerieBarChart = ({ data = [], height = 340 }) => {
           </BarChart>
         </ResponsiveContainer>
       )}
+      <Dialog
+        open={detailsModal.open}
+        onClose={() => setDetailsModal({ open: false, label: "", entries: [] })}
+        maxWidth="md"
+        fullWidth
+      >
+        <DialogTitle sx={{ fontWeight: 700 }}>Details tresorerie - {detailsModal.label}</DialogTitle>
+        <DialogContent dividers sx={{ maxHeight: "70vh", overflowY: "auto" }}>
+          {detailsModal.entries.map((entry) => (
+            <Box key={entry.dataKey} sx={{ mb: 2 }}>
+              <Box sx={{ display: "flex", alignItems: "center", gap: 0.8, mb: 0.5 }}>
+                <Box
+                  sx={{
+                    width: 11,
+                    height: 11,
+                    borderRadius: "2px",
+                    bgcolor: legendByKey[entry.dataKey]?.color || entry.fill || entry.color || "#9ca3af",
+                    border: legendByKey[entry.dataKey]?.hatched ? "1.5px dashed #64748b" : "none",
+                    flexShrink: 0,
+                  }}
+                />
+                <Typography
+                  sx={{
+                    fontWeight: 700,
+                    color: legendByKey[entry.dataKey]?.color || "#374151",
+                    fontSize: "0.9rem",
+                  }}
+                >
+                  {entry.name} : {fmt(entry.value)}
+                </Typography>
+              </Box>
+              {(entry.details || []).length ? (
+                entry.details.map((d, i) => (
+                  <Typography key={`${entry.dataKey}-${i}`} sx={{ pl: 1, color: "#4b5563", fontSize: "0.82rem", lineHeight: 1.6 }}>
+                    • {d.label} — {fmt(d.montant)}
+                  </Typography>
+                ))
+              ) : (
+                <Typography sx={{ pl: 1, color: "#9ca3af", fontSize: "0.8rem" }}>
+                  Aucun detail
+                </Typography>
+              )}
+            </Box>
+          ))}
+          <Box sx={{ display: "flex", justifyContent: "flex-end", mt: 1 }}>
+            <Button onClick={() => setDetailsModal({ open: false, label: "", entries: [] })}>
+              Fermer
+            </Button>
+          </Box>
+        </DialogContent>
+      </Dialog>
     </Box>
   );
 };
