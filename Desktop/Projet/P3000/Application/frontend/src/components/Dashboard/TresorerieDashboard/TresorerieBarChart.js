@@ -43,6 +43,8 @@ const CustomTooltip = ({ active, payload, label }) => {
         p: 1.5,
         minWidth: 220,
         maxWidth: 340,
+        maxHeight: "60vh",
+        overflowY: "auto",
         fontSize: "0.78rem",
       }}
     >
@@ -200,7 +202,13 @@ const TresorerieBarChart = ({ data = [], height = 340 }) => {
               tickLine={false}
               width={44}
             />
-            <Tooltip content={<CustomTooltip />} cursor={{ fill: "rgba(0,0,0,0.03)" }} />
+            <Tooltip
+              content={<CustomTooltip />}
+              cursor={{ fill: "rgba(0,0,0,0.03)" }}
+              reverseDirection={{ y: true }}
+              allowEscapeViewBox={{ x: true, y: true }}
+              wrapperStyle={{ zIndex: 1300 }}
+            />
             <Legend content={<CustomLegend />} />
 
             {/* Entrées réelles — barre pleine verte */}
