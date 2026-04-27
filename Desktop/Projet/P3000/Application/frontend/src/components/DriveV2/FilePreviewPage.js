@@ -2,7 +2,7 @@
  * File Preview Page - Page dédiée à la prévisualisation de fichiers
  */
 import React, { useState, useEffect } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { useSearchParams, useNavigate } from 'react-router-dom';
 import {
   Box,
   CircularProgress,
@@ -10,12 +10,16 @@ import {
   Paper,
   Typography,
   Button,
+  IconButton,
 } from '@mui/material';
 import {
+  ArrowBack as ArrowBackIcon,
   Download as DownloadIcon,
+  Share as ShareIcon,
 } from '@mui/icons-material';
 import { styled } from '@mui/material/styles';
 import OnlyOfficeCache from './utils/onlyofficeCache';
+import { useIsMobile } from '../../hooks/useIsMobile';
 
 const PageContainer = styled(Box)(({ theme }) => ({
   width: '100vw',
@@ -26,15 +30,17 @@ const PageContainer = styled(Box)(({ theme }) => ({
   overflow: 'hidden',
 }));
 
-const PreviewContent = styled(Box)(({ theme }) => ({
+const PreviewContent = styled(Box)(({ ismobile }) => ({
   width: '100%',
   height: '100%',
   display: 'flex',
   alignItems: 'center',
   justifyContent: 'center',
-  backgroundColor: '#f5f5f5',
+  backgroundColor: ismobile ? '#000' : '#f5f5f5',
   overflow: 'auto',
   position: 'relative',
+  touchAction: ismobile ? 'manipulation' : 'auto',
+  overscrollBehavior: 'contain',
   // Masquer la barre de scroll verticale
   scrollbarWidth: 'none', // Firefox
   '&::-webkit-scrollbar': {
@@ -44,7 +50,9 @@ const PreviewContent = styled(Box)(({ theme }) => ({
 }));
 
 const FilePreviewPage = () => {
+  const navigate = useNavigate();
   const [searchParams] = useSearchParams();
+  const isMobile = useIsMobile();
   
   const filePath = searchParams.get('file_path');
   const fileName = searchParams.get('file_name') || 'Fichier';
@@ -76,6 +84,11 @@ const FilePreviewPage = () => {
 
   // Vérification simplifiée et forcée - Se base uniquement sur window.DocsAPI
   useEffect(() => {
+    if (isMobile) {
+      setOnlyOfficeAvailable(false);
+      return;
+    }
+
     const forceOnlyOffice = async () => {
       try {
         // 1. On s'assure que le script est chargé
@@ -112,7 +125,7 @@ const FilePreviewPage = () => {
     };
 
     forceOnlyOffice();
-  }, []);
+  }, [isMobile]);
 
   // Récupérer l'URL d'affichage (OPTIMISÉ)
   useEffect(() => {
@@ -194,16 +207,80 @@ const FilePreviewPage = () => {
     return editableExtensions.includes(extension);
   };
 
+  const isExcelFile = () => {
+    const extension = fileName.split('.').pop()?.toLowerCase();
+    return ['xls', 'xlsx', 'xlsm', 'xlt', 'xltx', 'xltm', 'ods', 'fods', 'ots'].includes(extension);
+  };
+
   // Télécharger le fichier
   const handleDownload = async () => {
     try {
       const response = await fetch(
         `/api/drive-v2/download-url/?file_path=${encodeURIComponent(filePath)}`
       );
+      if (!response.ok) {
+        throw new Error('Impossible de préparer le téléchargement');
+      }
+
       const data = await response.json();
-      window.open(data.download_url, '_blank');
+      const downloadUrl = data.download_url;
+      if (!downloadUrl) {
+        throw new Error('URL de téléchargement invalide');
+      }
+
+      // Téléchargement explicite (plus fiable sur Android)
+      const anchor = document.createElement('a');
+      anchor.href = downloadUrl;
+      anchor.target = '_blank';
+      anchor.rel = 'noopener noreferrer';
+      anchor.download = fileName;
+      document.body.appendChild(anchor);
+      anchor.click();
+      document.body.removeChild(anchor);
+
+      // Fallback iOS/Safari: ouverture de l'URL pour enregistrer via "Partager / Fichiers"
+      if (isMobile) {
+        setTimeout(() => {
+          window.open(downloadUrl, '_blank', 'noopener,noreferrer');
+        }, 250);
+      }
     } catch (error) {
-      // Erreur silencieuse
+      // Fallback ultime: si l'URL d'aperçu existe, ouvrir cette URL
+      if (displayUrl) {
+        window.open(displayUrl, '_blank', 'noopener,noreferrer');
+      }
+    }
+  };
+
+  const handleShare = async () => {
+    try {
+      const response = await fetch(
+        `/api/drive-v2/download-url/?file_path=${encodeURIComponent(filePath)}`
+      );
+      if (!response.ok) {
+        throw new Error('Impossible de préparer le partage');
+      }
+
+      const data = await response.json();
+      const shareUrl = data.download_url || displayUrl;
+      if (!shareUrl) {
+        throw new Error('URL de partage introuvable');
+      }
+
+      if (navigator.share) {
+        await navigator.share({
+          title: fileName,
+          text: `Document: ${fileName}`,
+          url: shareUrl,
+        });
+        return;
+      }
+
+      window.open(shareUrl, '_blank', 'noopener,noreferrer');
+    } catch (error) {
+      if (displayUrl) {
+        window.open(displayUrl, '_blank', 'noopener,noreferrer');
+      }
     }
   };
 
@@ -237,6 +314,21 @@ const FilePreviewPage = () => {
 
     switch (fileType) {
       case 'pdf':
+        if (isMobile) {
+          return (
+            <iframe
+              src={displayUrl}
+              title={fileName}
+              style={{
+                width: '100%',
+                height: '100%',
+                border: 'none',
+                backgroundColor: 'white',
+              }}
+            />
+          );
+        }
+
         // DÉSACTIVATION DU FALLBACK : Forcer OnlyOffice pour voir les erreurs
         const docsApiAvailablePdf = window.DocsAPI && window.DocsAPI.DocEditor;
         console.log('[OnlyOffice Debug] PDF file - onlyOfficeAvailable:', onlyOfficeAvailable, 'docsApiAvailable:', docsApiAvailablePdf, 'filePath:', filePath);
@@ -324,6 +416,7 @@ const FilePreviewPage = () => {
                 maxWidth: '100%',
                 maxHeight: '100%',
                 objectFit: 'contain',
+                touchAction: 'manipulation',
               }}
             />
           </Box>
@@ -362,6 +455,37 @@ const FilePreviewPage = () => {
         );
 
       case 'office':
+        if (isMobile) {
+          if (isExcelFile()) {
+            const editorUrl = `/drive-v2/editor?file_path=${encodeURIComponent(filePath)}&file_name=${encodeURIComponent(fileName)}`;
+            return (
+              <iframe
+                src={editorUrl}
+                title={fileName}
+                style={{
+                  width: '100%',
+                  height: '100%',
+                  border: 'none',
+                  backgroundColor: 'white',
+                }}
+              />
+            );
+          }
+
+          return (
+            <iframe
+              src={displayUrl}
+              title={fileName}
+              style={{
+                width: '100%',
+                height: '100%',
+                border: 'none',
+                backgroundColor: 'white',
+              }}
+            />
+          );
+        }
+
         // DÉSACTIVATION DU FALLBACK : Forcer l'utilisation d'OnlyOffice pour voir les erreurs
         const docsApiAvailable = window.DocsAPI && window.DocsAPI.DocEditor;
         const shouldUseOnlyOffice = (onlyOfficeAvailable || docsApiAvailable) && isOfficeEditable() && !onlyOfficeError;
@@ -486,8 +610,69 @@ const FilePreviewPage = () => {
 
   return (
     <PageContainer>
+      <Box
+        sx={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          px: 1.2,
+          py: 0.8,
+          minHeight: 52,
+          borderBottom: '1px solid',
+          borderColor: 'divider',
+          bgcolor: isMobile ? '#111' : '#fff',
+          color: isMobile ? '#fff' : 'inherit',
+          zIndex: 1,
+          position: 'sticky',
+          top: 0,
+          paddingTop: isMobile ? 'calc(env(safe-area-inset-top, 0px) + 6px)' : 0.8,
+        }}
+      >
+        <Box sx={{ display: 'flex', alignItems: 'center', minWidth: 0 }}>
+          <IconButton
+            onClick={() => navigate(-1)}
+            aria-label="Retour à la liste"
+            size="small"
+            sx={{ color: 'inherit' }}
+          >
+            <ArrowBackIcon />
+          </IconButton>
+          <Typography variant="body2" sx={{ ml: 0.5 }} noWrap>
+            Retour
+          </Typography>
+        </Box>
+        <Typography
+          variant="body2"
+          noWrap
+          sx={{
+            maxWidth: '48%',
+            textAlign: 'center',
+            fontWeight: 600,
+          }}
+        >
+          {fileName}
+        </Typography>
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+          <IconButton
+            size="small"
+            onClick={handleShare}
+            aria-label="Partager le fichier"
+            sx={{ color: 'inherit' }}
+          >
+            <ShareIcon fontSize="small" />
+          </IconButton>
+          <Button
+            size="small"
+            onClick={handleDownload}
+            startIcon={<DownloadIcon />}
+            sx={{ color: 'inherit', minWidth: 'auto' }}
+          >
+            Télécharger
+          </Button>
+        </Box>
+      </Box>
       {/* Contenu en plein écran */}
-      <PreviewContent>
+      <PreviewContent ismobile={isMobile ? 1 : 0}>
         {renderPreview()}
       </PreviewContent>
     </PageContainer>
