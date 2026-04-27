@@ -47,6 +47,19 @@ function parseMMYY(mmyy) {
   return { month: m, year };
 }
 
+/**
+ * Supprime un préfixe textuel éventuel et garde le numéro complet utile.
+ * Exemples:
+ * - "SIT-2025-0012" -> "2025-0012"
+ * - "FAC/000345"    -> "000345"
+ */
+function withoutNumberPrefix(value, fallback) {
+  const raw = String(value ?? fallback ?? "").trim();
+  if (!raw) return "";
+  const cleaned = raw.replace(/^[^\d]*[-/:\s]*/u, "");
+  return cleaned || raw;
+}
+
 function buildEmptyMonths(year, periodStart, periodEnd) {
   const start = parseYYYYMM(periodStart);
   const end = parseYYYYMM(periodEnd);
@@ -141,7 +154,8 @@ export function useTresorerieData(selectedYear, periodStart, periodEnd) {
     // Prévues  → date_envoi + delai_paiement (= encaissement attendu)
     (situations || []).forEach((s) => {
       const montant = parseFloat(s.montant_apres_retenues) || parseFloat(s.montant_reel_ht) || 0;
-      const label = `Sit. ${s.numero || s.id} — ${s.chantier_name || s.chantier || ""}`;
+      const numeroSituation = withoutNumberPrefix(s.numero_situation || s.numero, s.id);
+      const label = `${numeroSituation} — ${s.chantier_name || s.chantier || ""}`;
       const dateRef = s.date_envoi || s.date_creation;
 
       // Réelle : placée au mois d'envoi (prestation)
@@ -167,7 +181,8 @@ export function useTresorerieData(selectedYear, periodStart, periodEnd) {
     // Prévues  → date_envoi + delai_paiement (= encaissement attendu)
     (factures || []).forEach((f) => {
       const montant = parseFloat(f.montant_ht) || parseFloat(f.price_ht) || 0;
-      const label = `Fact. ${f.numero || f.id} — ${f.chantier_name || f.chantier || ""}`;
+      const numeroFacture = withoutNumberPrefix(f.numero || f.numero_facture, f.id);
+      const label = `${numeroFacture} — ${f.chantier_name || f.chantier || ""}`;
       const dateRef = f.date_envoi || f.date_creation;
 
       // Réelle : placée au mois d'envoi (prestation)

@@ -1,5 +1,5 @@
 import { Box, Typography } from "@mui/material";
-import React from "react";
+import React, { useEffect, useRef, useState } from "react";
 import {
   Bar,
   BarChart,
@@ -27,7 +27,15 @@ const fmtShort = (v) => {
 };
 
 /** Tooltip personnalisé avec détail des lignes */
-const CustomTooltip = ({ active, payload, label }) => {
+const CustomTooltip = ({ active, payload, label, onLockPageScroll, onUnlockPageScroll }) => {
+  const containerRef = useRef(null);
+
+  useEffect(() => {
+    return () => {
+      onUnlockPageScroll?.();
+    };
+  }, [onUnlockPageScroll]);
+
   if (!active || !payload || !payload.length) return null;
 
   const entries = payload.filter((p) => p.value > 0);
@@ -35,6 +43,7 @@ const CustomTooltip = ({ active, payload, label }) => {
 
   return (
     <Box
+      ref={containerRef}
       sx={{
         bgcolor: "#fff",
         border: "1px solid #e5e7eb",
@@ -46,6 +55,17 @@ const CustomTooltip = ({ active, payload, label }) => {
         maxHeight: "60vh",
         overflowY: "auto",
         fontSize: "0.78rem",
+      }}
+      onMouseEnter={() => onLockPageScroll?.()}
+      onMouseLeave={() => onUnlockPageScroll?.()}
+      onWheel={(e) => {
+        // Empêche le scroll de la page et force le scroll dans le tooltip
+        e.preventDefault();
+        e.stopPropagation();
+        const el = containerRef.current;
+        if (el) {
+          el.scrollTop += e.deltaY;
+        }
       }}
     >
       <Typography sx={{ fontWeight: 700, fontSize: "0.82rem", mb: 0.8, color: "#111827" }}>
@@ -139,6 +159,25 @@ const CustomLegend = () => (
 );
 
 const TresorerieBarChart = ({ data = [], height = 340 }) => {
+  const [pageScrollLocked, setPageScrollLocked] = useState(false);
+
+  useEffect(() => {
+    if (!pageScrollLocked) return undefined;
+
+    const prevOverflow = document.body.style.overflow;
+    const prevOverscroll = document.body.style.overscrollBehavior;
+    document.body.style.overflow = "hidden";
+    document.body.style.overscrollBehavior = "contain";
+
+    return () => {
+      document.body.style.overflow = prevOverflow;
+      document.body.style.overscrollBehavior = prevOverscroll;
+    };
+  }, [pageScrollLocked]);
+
+  const lockPageScroll = () => setPageScrollLocked(true);
+  const unlockPageScroll = () => setPageScrollLocked(false);
+
   const hasData = data.some(
     (d) => d.entreesReelles > 0 || d.entreesPrevu > 0 || d.sortiesReelles > 0 || d.sortiesPrevu > 0
   );
@@ -203,11 +242,16 @@ const TresorerieBarChart = ({ data = [], height = 340 }) => {
               width={44}
             />
             <Tooltip
-              content={<CustomTooltip />}
+              content={
+                <CustomTooltip
+                  onLockPageScroll={lockPageScroll}
+                  onUnlockPageScroll={unlockPageScroll}
+                />
+              }
               cursor={{ fill: "rgba(0,0,0,0.03)" }}
               reverseDirection={{ y: true }}
               allowEscapeViewBox={{ x: true, y: true }}
-              wrapperStyle={{ zIndex: 1300 }}
+              wrapperStyle={{ zIndex: 1300, pointerEvents: "auto" }}
             />
             <Legend content={<CustomLegend />} />
 
