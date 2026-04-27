@@ -7772,12 +7772,21 @@ def update_situation(request, pk):
         if 'devis' in data:
             data['devis'] = Devis.objects.get(pk=data['devis'])
 
+        incoming_lignes_avenant = data.get('lignes_avenant', None)
+        should_replace_lignes_avenant = (
+            'lignes_avenant' in data and
+            (
+                bool(incoming_lignes_avenant) or
+                not situation.lignes_avenant.exists()
+            )
+        )
+
         # Supprimer les anciennes lignes SEULEMENT si de nouvelles sont fournies
         if 'lignes' in data:
             situation.lignes.all().delete()
         if 'lignes_supplementaires' in data:
             situation.lignes_supplementaires.all().delete()
-        if 'lignes_avenant' in data:
+        if should_replace_lignes_avenant:
             situation.lignes_avenant.all().delete()
         if 'lignes_speciales' in data:
             situation.lignes_speciales.all().delete()
@@ -7816,7 +7825,7 @@ def update_situation(request, pk):
                 )
 
         # Création des lignes d'avenant
-        if 'lignes_avenant' in data:
+        if should_replace_lignes_avenant:
             for ligne in data['lignes_avenant']:
                 SituationLigneAvenant.objects.create(
                     situation=situation,
