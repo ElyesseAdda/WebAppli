@@ -32,7 +32,12 @@ const persistDashboardDepensesAgence = async (useDefault, ids) => {
   }
 };
 
-const DashboardCardAgencyExpenses = ({ breakdown = [], loading = false, totalCA = 0 }) => {
+const DashboardCardAgencyExpenses = ({
+  breakdown = [],
+  pointageAgenceMontant = 0,
+  loading = false,
+  totalCA = 0,
+}) => {
   const {
     depensesAgenceIncludedAgenceIds,
     setDepensesAgenceIncludedAgenceIds,
@@ -175,6 +180,17 @@ const DashboardCardAgencyExpenses = ({ breakdown = [], loading = false, totalCA 
       percentValue={hidePercent ? null : montantSelection}
       percentBase={hidePercent ? null : totalCA}
       toolbarPrefix={loading ? null : toolbarPrefix}
+      footerItems={
+        loading
+          ? []
+          : [
+              {
+                key: "pointage-agence",
+                value: `Cumul charges agences: ${formatDashboardCurrency(pointageAgenceMontant)}`,
+                color: "#92400e",
+              },
+            ]
+      }
     />
   );
 };

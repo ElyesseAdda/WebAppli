@@ -3,6 +3,7 @@ import axios from "axios";
 import {
   Alert,
   Box,
+  Checkbox,
   CircularProgress,
   Paper,
   Table,
@@ -283,6 +284,7 @@ const TableauPointagePage = () => {
           initialDraft[String(p.agent)] = {
             id: p.id,
             salaireInitial: p.salaire_net_initial_hors_prime ?? 0,
+            agence: Boolean(p.agence),
             montantCharge: p.montant_charge ?? 0,
             montantBrut: p.montant_brut ?? 0,
             accompte: p.accompte ?? 0,
@@ -310,6 +312,7 @@ const TableauPointagePage = () => {
           if (!existing) {
             initialDraft[id] = {
               salaireInitial: prevSal,
+              agence: false,
               montantCharge: 0,
               montantBrut: 0,
               accompte: 0,
@@ -375,6 +378,7 @@ const TableauPointagePage = () => {
           email: agent.email || "",
           totalHeures,
           salaireInitial: toNumber(draft.salaireInitial),
+          agence: Boolean(draft.agence),
           montantCharge: toNumber(draft.montantCharge),
           montantBrut: montantBrutAffiche,
           accompte: toNumber(draft.accompte),
@@ -459,6 +463,7 @@ const TableauPointagePage = () => {
   const pointageDraftFromApi = (data) => ({
     id: data.id,
     salaireInitial: data.salaire_net_initial_hors_prime,
+    agence: Boolean(data.agence),
     montantCharge: data.montant_charge,
     montantBrut: data.montant_brut,
     accompte: data.accompte,
@@ -476,6 +481,8 @@ const TableauPointagePage = () => {
       const payload = {};
       if (field === "commentaire") {
         payload.commentaire = String(value || "");
+      } else if (field === "agence") {
+        payload.agence = Boolean(value);
       } else if (field === "date_paiement") {
         if (value === null || value === undefined || String(value).trim() === "") {
           payload.date_paiement = null;
@@ -503,6 +510,7 @@ const TableauPointagePage = () => {
           agent: agentId,
           month: monthDate,
           salaire_net_initial_hors_prime: toNumber(agentDraft.salaireInitial),
+          agence: Boolean(agentDraft.agence),
           montant_charge: toNumber(agentDraft.montantCharge),
           montant_brut: toNumber(agentDraft.montantBrut),
           accompte: toNumber(agentDraft.accompte),
@@ -758,6 +766,7 @@ const TableauPointagePage = () => {
                   <TableCell sx={compactNumberColumnSx}>Date de paiement</TableCell>
                   <TableCell sx={compactNumberColumnSx}>Montant brut</TableCell>
                   <TableCell sx={compactNumberColumnSx}>Montant charge</TableCell>
+                  <TableCell sx={headerCellSx}>Agence</TableCell>
                   <TableCell sx={compactNumberColumnSx}>Accompte</TableCell>
                   <TableCell sx={compactNumberColumnSx}>Prime</TableCell>
                   <TableCell sx={headerCellSx}>Adresse mail</TableCell>
@@ -772,7 +781,7 @@ const TableauPointagePage = () => {
                   <React.Fragment key={group.key}>
                     <TableRow>
                       <TableCell
-                        colSpan={12}
+                        colSpan={13}
                         sx={{
                           backgroundColor: "rgba(27, 120, 188, 0.12)",
                           color: "rgba(27, 120, 188, 1)",
@@ -839,6 +848,17 @@ const TableauPointagePage = () => {
                               {formatCurrencyInTable(row.montantCharge)}
                             </Typography>
                           </Box>
+                        </TableCell>
+                        <TableCell sx={commonBodyCellStyle}>
+                          <Checkbox
+                            checked={Boolean(row.agence)}
+                            onChange={async (e) => {
+                              const checked = e.target.checked;
+                              handleCellChange(String(row.id), "agence", checked);
+                              await savePointageField(row.id, "agence", checked);
+                            }}
+                            disabled={savingPointageKey === `${row.id}-agence`}
+                          />
                         </TableCell>
                         <TableCell sx={commonBodyCellStyle}>
                           <Box sx={clickableValueSx} onClick={() => openEditor(row, "accompte")}>

@@ -163,6 +163,9 @@ const DashboardContent = () => {
   );
   const coutChantierGlobal = coutMateriel + coutMainOeuvre + coutSousTraitance;
   const depensesAgenceBreakdown = dashboardData?.global_stats?.depenses_agence_breakdown || [];
+  const depensesAgencePointageHt = Number(
+    dashboardData?.global_stats?.depenses_agence_pointage_ht || 0
+  );
 
   const comparisonCoutMateriel = Number(
     comparisonDashboardData?.global_stats?.total_cout_materiel || 0
@@ -238,6 +241,7 @@ const DashboardContent = () => {
         coutSousTraitance={coutSousTraitance}
         coutChantierLoading={dashboardLoading}
         depensesAgenceBreakdown={depensesAgenceBreakdown}
+        depensesAgencePointageHt={depensesAgencePointageHt}
         montantFacturePayeHt={montantFacturePayeHt}
         burn15JHt={burn15JHt}
         latePaymentsHt={latePaymentsHt}

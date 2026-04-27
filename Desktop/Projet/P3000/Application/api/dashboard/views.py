@@ -7,14 +7,12 @@ from rest_framework.response import Response
 from django.db.models import Sum, Q
 from django.utils import timezone
 from datetime import datetime, timedelta, date
-from .agency_planning import planning_montant_chantier_periode
 from ..models import (
     Chantier,
     Devis,
     Facture,
     FactureTS,
     BonCommande,
-    LaborCost,
     PaiementFournisseurMateriel,
     FactureSousTraitant,
     Event,
@@ -22,6 +20,7 @@ from ..models import (
     Agence,
     AgencyExpenseMonth,
     DashboardSettings,
+    PointageMensuel,
 )
 
 
@@ -650,32 +649,33 @@ class DashboardViewSet(viewsets.ViewSet):
                     continue
                 total_cout_sous_traitance += float(facture_st.montant_facture_ht or 0)
 
-            # Main d'oeuvre : LaborCost est stocké en week/year -> conversion en date
-            labor_query = LaborCost.objects.filter(chantier__in=chantiers_query)
+            # Main d'oeuvre (règle métier): somme des montants chargés des agents hors agence.
+            pointages_query = PointageMensuel.objects.all()
             if date_start and date_end:
-                labor_query = labor_query.filter(year__gte=date_start.year, year__lte=date_end.year)
+                pointages_query = pointages_query.filter(
+                    month__gte=date_start.replace(day=1),
+                    month__lte=date_end.replace(day=1),
+                )
+            elif year is not None:
+                pointages_query = pointages_query.filter(month__year=year)
 
             main_oeuvre_month_map = defaultdict(float)
             total_cout_main_oeuvre = 0.0
-            for labor in labor_query:
-                if labor.chantier_id in agency_chantier_ids:
-                    continue
-                try:
-                    week_start = date.fromisocalendar(int(labor.year), int(labor.week), 1)
-                except ValueError:
-                    continue
-                if date_start and date_end and not (date_start <= week_start <= date_end):
-                    continue
-                line_mo = float(
-                    (labor.cost_normal or 0)
-                    + (labor.cost_samedi or 0)
-                    + (labor.cost_dimanche or 0)
-                    + (labor.cost_ferie or 0)
-                    + (labor.cost_overtime or 0)
-                )
-                total_cout_main_oeuvre += line_mo
-                mk = f"{week_start.year:04d}-{week_start.month:02d}"
-                main_oeuvre_month_map[mk] += line_mo
+            total_pointage_agence_ht = 0.0
+            # Index (agent, month) des pointages agence pour exclure les doublons AEM.
+            pointage_agence_agent_month = set()
+            for pointage in pointages_query:
+                line_montant = float(pointage.montant_charge or 0)
+                month_date = pointage.month
+                mk = f"{month_date.year:04d}-{month_date.month:02d}"
+                if pointage.agence:
+                    total_pointage_agence_ht += line_montant
+                    pointage_agence_agent_month.add(
+                        (pointage.agent_id, month_date.year, month_date.month)
+                    )
+                else:
+                    total_cout_main_oeuvre += line_montant
+                    main_oeuvre_month_map[mk] += line_montant
 
             # Coûts chantier mensuels pour la courbe (hors chantiers agence)
             for pfm in fournisseurs_query:
@@ -707,25 +707,16 @@ class DashboardViewSet(viewsets.ViewSet):
                     continue
                 monthly_cashflow_map[k]["couts_ht"] += float(facture_st.montant_facture_ht or 0)
 
-            for labor in labor_query:
-                try:
-                    week_start = date.fromisocalendar(int(labor.year), int(labor.week), 1)
-                except ValueError:
+            for pointage in pointages_query:
+                if pointage.agence:
                     continue
-                if not (chart_start <= week_start <= chart_end):
+                month_date = pointage.month
+                if month_date is None or not (chart_start <= month_date <= chart_end):
                     continue
-                if labor.chantier_id in agency_chantier_ids:
-                    continue
-                k = f"{week_start.year:04d}-{week_start.month:02d}"
+                k = f"{month_date.year:04d}-{month_date.month:02d}"
                 if k not in monthly_cashflow_map:
                     continue
-                monthly_cashflow_map[k]["couts_ht"] += float(
-                    (labor.cost_normal or 0)
-                    + (labor.cost_samedi or 0)
-                    + (labor.cost_dimanche or 0)
-                    + (labor.cost_ferie or 0)
-                    + (labor.cost_overtime or 0)
-                )
+                monthly_cashflow_map[k]["couts_ht"] += float(pointage.montant_charge or 0)
             main_oeuvre_monthly_breakdown = [
                 {
                     "key": row["key"],
@@ -755,19 +746,24 @@ class DashboardViewSet(viewsets.ViewSet):
                 month_date_aem = month_year_to_date(aem.year, aem.month)
                 if not in_period(month_date_aem):
                     continue
+                # Si agent agence déjà compté par pointage mensuel sur ce mois, on ignore AEM.
+                if aem.agent_id and (
+                    aem.agent_id,
+                    int(aem.year),
+                    int(aem.month),
+                ) in pointage_agence_agent_month:
+                    continue
                 line_amt = _agency_expense_month_line_amount(aem)
                 aid = aem.agence_id
                 totals_depenses_par_agence[aid] += line_amt
 
             agences = list(Agence.objects.all().order_by("id"))
-            # Même total que l'écran Agences (année) : dépenses mensuelles + planning sur le chantier lié
-            if date_start and date_end:
-                for ag in agences:
-                    cid = getattr(ag, "chantier_id", None)
-                    if cid:
-                        totals_depenses_par_agence[ag.id] += planning_montant_chantier_periode(
-                            cid, date_start, date_end
-                        )
+            # Remplace la composante planning hebdo agence par les montants chargés agence saisis.
+            if total_pointage_agence_ht > 0:
+                if agences:
+                    totals_depenses_par_agence[agences[0].id] += total_pointage_agence_ht
+                else:
+                    totals_depenses_par_agence[None] += total_pointage_agence_ht
             main_agence = agences[0] if agences else None
             main_agence_id = main_agence.id if main_agence else None
             depenses_agence_principale_ht = float(
@@ -858,6 +854,7 @@ class DashboardViewSet(viewsets.ViewSet):
                 'depenses_agence_autres': depenses_agence_autres,
                 'total_depenses_agence_ht': total_depenses_agence_ht,
                 'depenses_agence_breakdown': depenses_agence_breakdown,
+                'depenses_agence_pointage_ht': total_pointage_agence_ht,
             }
         except Exception as e:
             print(f"Erreur dans get_global_stats: {str(e)}")
@@ -894,6 +891,7 @@ class DashboardViewSet(viewsets.ViewSet):
                 'depenses_agence_autres': [],
                 'total_depenses_agence_ht': 0,
                 'depenses_agence_breakdown': [],
+                'depenses_agence_pointage_ht': 0,
             }
 
     def get_stats_temporelles(self, chantiers_query, year, month, request=None):

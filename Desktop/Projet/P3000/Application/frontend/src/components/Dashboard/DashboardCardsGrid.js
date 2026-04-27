@@ -33,6 +33,7 @@ const DashboardCardsGrid = ({
   coutSousTraitance,
   coutChantierLoading,
   depensesAgenceBreakdown,
+  depensesAgencePointageHt,
   montantFacturePayeHt,
   burn15JHt,
   latePaymentsHt,
@@ -152,6 +153,7 @@ const DashboardCardsGrid = ({
         />
         <DashboardCardAgencyExpenses
           breakdown={depensesAgenceBreakdown}
+          pointageAgenceMontant={depensesAgencePointageHt}
           loading={coutChantierLoading}
           totalCA={totalCA}
         />
