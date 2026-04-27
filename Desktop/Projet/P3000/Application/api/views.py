@@ -7714,8 +7714,10 @@ def create_situation(request):
         montant_prorata = situation.montant_prorata
         retenue_cie = situation.retenue_cie
         
-        # Calculer le montant après retenues
-        montant_apres_retenues = montant_ht_mois - retenue_garantie - montant_prorata - retenue_cie
+        # Calculer le montant après retenues (la retenue CIE peut être une déduction ou un ajout)
+        type_retenue_cie = situation.type_retenue_cie or 'deduction'
+        retenue_cie_effective = retenue_cie if type_retenue_cie == 'deduction' else -retenue_cie
+        montant_apres_retenues = montant_ht_mois - retenue_garantie - montant_prorata - retenue_cie_effective
         
         # Ajouter l'impact des lignes supplémentaires
         for ligne_suppl in situation.lignes_supplementaires.all():
@@ -7783,7 +7785,7 @@ def update_situation(request, pk):
         # Mise à jour des champs de base
         for field in ['mois', 'annee', 'numero_situation', 'date_creation', 'montant_ht_mois', 'cumul_precedent', 
                      'montant_total_cumul_ht', 'retenue_garantie', 'montant_prorata', 
-                     'retenue_cie', 'montant_apres_retenues', 'tva', 'montant_total_ttc', 
+                     'retenue_cie', 'type_retenue_cie', 'montant_apres_retenues', 'tva', 'montant_total_ttc', 
                      'pourcentage_avancement', 'taux_prorata', 'taux_retenue_garantie', 'statut']:
             if field in data:
                 setattr(situation, field, data[field])
@@ -7914,9 +7916,11 @@ def update_situation(request, pk):
         
         # Retenue CIE (montant fixe, déjà défini)
         retenue_cie_decimal = Decimal(str(situation.retenue_cie or '0'))
+        type_retenue_cie = situation.type_retenue_cie or 'deduction'
+        retenue_cie_effective = retenue_cie_decimal if type_retenue_cie == 'deduction' else -retenue_cie_decimal
         
         # Calculer le montant après retenues
-        montant_apres_retenues = montant_ht_mois - situation.retenue_garantie - situation.montant_prorata - retenue_cie_decimal
+        montant_apres_retenues = montant_ht_mois - situation.retenue_garantie - situation.montant_prorata - retenue_cie_effective
         
         # Ajouter l'impact des lignes supplémentaires
         for ligne_suppl in situation.lignes_supplementaires.all():
@@ -8014,9 +8018,15 @@ def update_situation(request, pk):
             
             # Retenue CIE (montant fixe, déjà défini)
             retenue_cie_suivante_decimal = Decimal(str(situation_suivante.retenue_cie or '0'))
+            type_retenue_cie_suivante = situation_suivante.type_retenue_cie or 'deduction'
+            retenue_cie_suivante_effective = (
+                retenue_cie_suivante_decimal
+                if type_retenue_cie_suivante == 'deduction'
+                else -retenue_cie_suivante_decimal
+            )
             
             # Calculer le montant après retenues
-            montant_apres_retenues_suivante = montant_ht_mois_suivante - situation_suivante.retenue_garantie - situation_suivante.montant_prorata - retenue_cie_suivante_decimal
+            montant_apres_retenues_suivante = montant_ht_mois_suivante - situation_suivante.retenue_garantie - situation_suivante.montant_prorata - retenue_cie_suivante_effective
             
             # Ajouter l'impact des lignes supplémentaires
             for ligne_suppl in situation_suivante.lignes_supplementaires.all():
