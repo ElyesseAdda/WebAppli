@@ -9401,14 +9401,6 @@ class AgenceViewSet(viewsets.ModelViewSet):
         blockers = []
         if (agence.nom or "").strip().lower() == 'agence':
             blockers.append("Agence par défaut protégée")
-        if agence.agency_expenses.exists():
-            blockers.append("Dépenses agence liées")
-        if agence.agency_expenses_month.exists():
-            blockers.append("Dépenses mensuelles liées")
-        if agence.expense_aggregates.exists():
-            blockers.append("Agrégats liés")
-        if agence.primes_agence.exists():
-            blockers.append("Primes agents liées")
         return blockers
 
     def perform_create(self, serializer):
@@ -9426,6 +9418,15 @@ class AgenceViewSet(viewsets.ModelViewSet):
         agence.save(update_fields=['chantier'])
 
     def perform_update(self, serializer):
+        instance = self.get_object()
+        old_nom = (instance.nom or '').strip().lower()
+        new_nom = (serializer.validated_data.get('nom', instance.nom) or '').strip().lower()
+
+        if old_nom == 'agence' and new_nom != old_nom:
+            raise DRFValidationError({
+                "detail": "Le renommage de l'agence par défaut est interdit.",
+            })
+
         agence = serializer.save()
         if agence.chantier:
             agence.chantier.chantier_name = agence.nom

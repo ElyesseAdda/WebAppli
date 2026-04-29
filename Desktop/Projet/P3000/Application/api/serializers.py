@@ -1689,14 +1689,6 @@ class AgenceSerializer(serializers.ModelSerializer):
         blockers = []
         if (obj.nom or "").strip().lower() == "agence":
             blockers.append("Agence par défaut protégée")
-        if obj.agency_expenses.exists():
-            blockers.append("Dépenses agence liées")
-        if obj.agency_expenses_month.exists():
-            blockers.append("Dépenses mensuelles liées")
-        if obj.expense_aggregates.exists():
-            blockers.append("Agrégats liés")
-        if obj.primes_agence.exists():
-            blockers.append("Primes agents liées")
         return blockers
 
     def get_can_delete(self, obj):

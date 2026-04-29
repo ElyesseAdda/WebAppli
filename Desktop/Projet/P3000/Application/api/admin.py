@@ -98,15 +98,6 @@ class AgenceAdmin(admin.ModelAdmin):
         if obj.nom.strip().lower() == "agence":
             blockers.append("Agence par défaut protégée")
 
-        if obj.agency_expenses.exists():
-            blockers.append("dépenses agence liées")
-        if obj.agency_expenses_month.exists():
-            blockers.append("dépenses mensuelles liées")
-        if obj.expense_aggregates.exists():
-            blockers.append("agrégats liés")
-        if obj.primes_agence.exists():
-            blockers.append("primes agents liées")
-
         return blockers
 
     def delete_model(self, request, obj):

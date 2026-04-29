@@ -16,9 +16,13 @@ Including another URLconf
 """
 from django.contrib import admin
 from django.urls import path, include
+from frontend.views import FrontendAppView
 
 
 urlpatterns = [
+    # Route SPA explicite pour éviter le 404 Django admin sur /admin/agences
+    path('admin/agences', FrontendAppView.as_view(), name='admin-agences-spa'),
+    path('admin/agences/', FrontendAppView.as_view(), name='admin-agences-spa-slash'),
     path('admin/', admin.site.urls),
     path('api/', include('api.urls')),
     path('',include('frontend.urls')),
