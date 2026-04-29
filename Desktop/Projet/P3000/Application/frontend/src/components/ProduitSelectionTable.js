@@ -80,6 +80,7 @@ function ProduitSelectionTable({
           .map((product) => ({
             produit: product.id,
             designation: product.designation,
+            unite: product.unite,
             quantite: parseInt(quantities[product.id]) || 0,
             prix_unitaire: parseFloat(product.prix_unitaire),
             total: parseFloat(
@@ -238,6 +239,7 @@ function ProduitSelectionTable({
       .map((product) => ({
         produit: product.id,
         designation: product.designation,
+        unite: product.unite,
         quantite: quantities[product.id] || 0,
         prix_unitaire: product.prix_unitaire,
         total: (quantities[product.id] || 0) * product.prix_unitaire,
@@ -267,6 +269,7 @@ function ProduitSelectionTable({
         .map((product) => ({
           produit: product.id,
           designation: product.designation,
+          unite: product.unite,
           quantite: parseInt(quantities[product.id]) || 0,
           prix_unitaire: parseFloat(product.prix_unitaire),
           total: parseFloat(

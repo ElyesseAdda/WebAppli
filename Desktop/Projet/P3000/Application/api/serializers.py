@@ -1677,11 +1677,33 @@ class AgencyExpenseOverrideSerializer(serializers.ModelSerializer):
 
 class AgenceSerializer(serializers.ModelSerializer):
     chantier_name = serializers.CharField(source='chantier.chantier_name', read_only=True)
+    can_delete = serializers.SerializerMethodField()
+    delete_blockers = serializers.SerializerMethodField()
 
     class Meta:
         model = Agence
-        fields = ['id', 'nom', 'chantier', 'chantier_name', 'created_at']
+        fields = ['id', 'nom', 'chantier', 'chantier_name', 'created_at', 'can_delete', 'delete_blockers']
         read_only_fields = ['chantier', 'chantier_name', 'created_at']
+
+    def _get_delete_blockers(self, obj):
+        blockers = []
+        if (obj.nom or "").strip().lower() == "agence":
+            blockers.append("Agence par défaut protégée")
+        if obj.agency_expenses.exists():
+            blockers.append("Dépenses agence liées")
+        if obj.agency_expenses_month.exists():
+            blockers.append("Dépenses mensuelles liées")
+        if obj.expense_aggregates.exists():
+            blockers.append("Agrégats liés")
+        if obj.primes_agence.exists():
+            blockers.append("Primes agents liées")
+        return blockers
+
+    def get_can_delete(self, obj):
+        return len(self._get_delete_blockers(obj)) == 0
+
+    def get_delete_blockers(self, obj):
+        return self._get_delete_blockers(obj)
 
 
 class AgencyExpenseSerializer(serializers.ModelSerializer):

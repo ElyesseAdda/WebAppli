@@ -62,6 +62,7 @@ import TestDragSimple from "./TestDragSimple";
 import ChantiersDrivePaths from "./ChantiersDrivePaths";
 import PageTitleManager from "./PageTitleManager";
 import UsersManagement from "./UsersManagement";
+import AdminAgences from "./AdminAgences";
 import RapportsPage from "./RapportIntervention/RapportsPage";
 import RapportForm from "./RapportIntervention/RapportForm";
 import RapportPreviewPage from "./RapportIntervention/RapportPreviewPage";
@@ -574,6 +575,17 @@ function App() {
               <AdminAppRoute isAuthenticated={isAuthenticated} user={user}>
                 <Layout user={user} onLogout={handleLogout}>
                   <UsersManagement />
+                </Layout>
+              </AdminAppRoute>
+            }
+          />
+
+          <Route
+            path="/admin/agences"
+            element={
+              <AdminAppRoute isAuthenticated={isAuthenticated} user={user}>
+                <Layout user={user} onLogout={handleLogout}>
+                  <AdminAgences />
                 </Layout>
               </AdminAppRoute>
             }

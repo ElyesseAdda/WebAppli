@@ -81,6 +81,7 @@ function BonCommandeForm({ onBonCommandeCreated, modal, chantierId }) {
       lignes: products.map((product) => ({
         produit: product.produit,
         designation: product.designation,
+        unite: product.unite,
         quantite: product.quantite,
         prix_unitaire: product.prix_unitaire,
         total: product.quantite * product.prix_unitaire,
@@ -116,6 +117,7 @@ function BonCommandeForm({ onBonCommandeCreated, modal, chantierId }) {
       lignes: selectedProducts.map((product) => ({
         produit: product.produit,
         designation: product.designation,
+        unite: product.unite,
         quantite: product.quantite,
         prix_unitaire: product.prix_unitaire,
         total: product.quantite * product.prix_unitaire,

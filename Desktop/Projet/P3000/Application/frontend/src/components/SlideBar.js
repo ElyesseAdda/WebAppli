@@ -138,6 +138,7 @@ const SlideBar = ({ toggleSidebar, isSidebarVisible, user }) => {
               icon: MdAdminPanelSettings,
               children: [
                 { label: "Utilisateurs", to: "/UsersManagement", icon: MdManageAccounts },
+                { label: "Gestion agences", to: "/admin/agences", icon: MdBusiness },
                 { label: "Récupération Drive", to: "/drive-recovery", icon: MdRestorePage },
               ],
             },

@@ -3,6 +3,7 @@ from rest_framework.response import Response
 from rest_framework import viewsets, status
 from rest_framework.decorators import action
 from rest_framework.permissions import IsAuthenticated, AllowAny
+from rest_framework.exceptions import ValidationError as DRFValidationError
 from rest_framework.decorators import permission_classes
 from rest_framework.response import Response
 from django.core.paginator import Paginator
@@ -9396,6 +9397,20 @@ class AgenceViewSet(viewsets.ModelViewSet):
     serializer_class = AgenceSerializer
     permission_classes = [AllowAny]
 
+    def _get_delete_blockers(self, agence):
+        blockers = []
+        if (agence.nom or "").strip().lower() == 'agence':
+            blockers.append("Agence par défaut protégée")
+        if agence.agency_expenses.exists():
+            blockers.append("Dépenses agence liées")
+        if agence.agency_expenses_month.exists():
+            blockers.append("Dépenses mensuelles liées")
+        if agence.expense_aggregates.exists():
+            blockers.append("Agrégats liés")
+        if agence.primes_agence.exists():
+            blockers.append("Primes agents liées")
+        return blockers
+
     def perform_create(self, serializer):
         agence = serializer.save()
         chantier = Chantier.objects.create(
@@ -9418,10 +9433,25 @@ class AgenceViewSet(viewsets.ModelViewSet):
             agence.chantier.save(update_fields=['chantier_name', 'description'])
 
     def perform_destroy(self, instance):
+        blockers = self._get_delete_blockers(instance)
+        if blockers:
+            raise DRFValidationError({
+                "detail": "Suppression refusée pour cette agence.",
+                "delete_blockers": blockers,
+            })
         chantier = instance.chantier
         instance.delete()
         if chantier:
             chantier.delete()
+
+    @action(detail=True, methods=['get'])
+    def delete_preview(self, request, pk=None):
+        agence = self.get_object()
+        blockers = self._get_delete_blockers(agence)
+        return Response({
+            "can_delete": len(blockers) == 0,
+            "delete_blockers": blockers,
+        })
 
 
 class AgencyExpenseViewSet(viewsets.ModelViewSet):

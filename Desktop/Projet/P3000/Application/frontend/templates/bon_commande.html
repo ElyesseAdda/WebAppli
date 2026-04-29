@@ -353,6 +353,7 @@
       <thead>
         <tr>
           <th style="border: 1px solid black; padding: 8px">Désignation</th>
+          <th style="border: 1px solid black; padding: 8px">Unité</th>
           <th style="border: 1px solid black; padding: 8px">Quantité</th>
           <th style="border: 1px solid black; padding: 8px">Prix unitaire</th>
           <th style="border: 1px solid black; padding: 8px">Total HT</th>
@@ -363,6 +364,13 @@
         <tr>
           <td style="border: 1px solid black; padding: 8px">
             {{ ligne.designation }}
+          </td>
+          <td style="border: 1px solid black; padding: 8px; text-align: center">
+            {% if ligne.unite %}
+              {{ ligne.unite }}
+            {% elif ligne.produit.unite %}
+              {{ ligne.produit.unite }}
+            {% endif %}
           </td>
           <td style="border: 1px solid black; padding: 8px; text-align: center">
             {{ ligne.quantite }}
@@ -377,7 +385,7 @@
         {% endfor %}
         <tr>
           <td
-            colspan="3"
+            colspan="4"
             style="border: 1px solid black; padding: 8px; text-align: right"
           >
             <strong>Total HT</strong>
