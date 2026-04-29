@@ -116,6 +116,9 @@ function ProduitSelectionTable({
           bonCommandeData
         );
 
+        // Téléchargement automatique du PDF dans le navigateur
+        await triggerBrowserDownload(bonCommande);
+
         // Téléchargement automatique vers le Drive
         setTimeout(async () => {
           try {
@@ -233,6 +236,43 @@ function ProduitSelectionTable({
     }
   };
 
+  const triggerBrowserDownload = async (bonCommande) => {
+    if (!bonCommande?.id) return;
+
+    try {
+      const response = await axios.post(
+        "/api/generate-pdf-from-preview/",
+        {
+          devis_id: bonCommande.id,
+          preview_url: `/api/preview-saved-bon-commande/${bonCommande.id}/`,
+        },
+        {
+          responseType: "blob",
+          headers: {
+            "Content-Type": "application/json",
+          },
+        }
+      );
+
+      if (response.headers["content-type"] === "application/pdf") {
+        const pdfBlob = new Blob([response.data], { type: "application/pdf" });
+        const pdfUrl = window.URL.createObjectURL(pdfBlob);
+        const link = document.createElement("a");
+        link.href = pdfUrl;
+        link.download = `${bonCommande.numero || "bon_commande"}.pdf`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        window.URL.revokeObjectURL(pdfUrl);
+      }
+    } catch (error) {
+      console.warn(
+        "Erreur lors du téléchargement automatique du PDF du bon de commande:",
+        error
+      );
+    }
+  };
+
   const handleValidate = () => {
     const selectedItems = products
       .filter((product) => selectedProducts[product.id])
@@ -310,6 +350,9 @@ function ProduitSelectionTable({
       const bonCommande = await bonCommandeService.createBonCommande(
         bonCommandeData
       );
+
+      // Téléchargement automatique du PDF dans le navigateur
+      await triggerBrowserDownload(bonCommande);
 
       // Téléchargement automatique vers le Drive après création
       // Attendre un délai pour s'assurer que le bon de commande est bien enregistré en DB
