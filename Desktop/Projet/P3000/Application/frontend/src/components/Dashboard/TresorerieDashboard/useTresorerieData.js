@@ -89,6 +89,48 @@ function buildEmptyMonths(year, periodStart, periodEnd) {
     .filter((m) => m.monthIndex >= startMonth && m.monthIndex <= endMonth);
 }
 
+/** Indices de mois 0–11 inclus pour `year`, alignés sur buildEmptyMonths / filtres dashboard. */
+function getPeriodMonthBoundsInt(year, periodStart, periodEnd) {
+  let ps = periodStart;
+  let pe = periodEnd;
+  if (ps && !pe) pe = ps;
+  if (!ps && pe) ps = pe;
+  const start = parseYYYYMM(ps);
+  const end = parseYYYYMM(pe);
+  const y = parseInt(String(year), 10);
+  const startMonth = start && start.year === y ? start.month : 0;
+  const endMonth = end && end.year === y ? end.month : 11;
+  return { startMonth, endMonth, year: y };
+}
+
+function periodHasExplicitMonthBounds(periodStart, periodEnd) {
+  return Boolean(
+    (periodStart && String(periodStart).trim()) || (periodEnd && String(periodEnd).trim())
+  );
+}
+
+/** Lignes tableau fournisseur / sous-traitant : filtre sur la colonne `mois` (MM/YY). */
+function filterFournisseurLikeRowsByPeriod(rows, year, periodStart, periodEnd) {
+  const { startMonth, endMonth, year: y } = getPeriodMonthBoundsInt(year, periodStart, periodEnd);
+  const explicit = periodHasExplicitMonthBounds(periodStart, periodEnd);
+  return (rows || []).filter((row) => {
+    const m = parseMMYY(row.mois);
+    if (m && m.year === y) return m.month >= startMonth && m.month <= endMonth;
+    if (!explicit) return true;
+    return false;
+  });
+}
+
+/** Situation / facture : mois de date_envoi ou date_creation dans la plage. */
+function dateInYearPeriod(dateInput, year, periodStart, periodEnd) {
+  const dp = parseDateMonthYear(dateInput);
+  if (!dp) return false;
+  const y = parseInt(String(year), 10);
+  if (dp.year !== y) return false;
+  const { startMonth, endMonth } = getPeriodMonthBoundsInt(year, periodStart, periodEnd);
+  return dp.month >= startMonth && dp.month <= endMonth;
+}
+
 export function useTresorerieData(selectedYear, periodStart, periodEnd) {
   const [situations, setSituations] = useState([]);
   const [factures, setFactures] = useState([]);
@@ -354,16 +396,22 @@ export function useTresorerieData(selectedYear, periodStart, periodEnd) {
 
   // ── Classement fournisseurs ───────────────────────────────────────────────
   const classementFournisseurs = useMemo(
-    () => buildClassement(fournisseurs, "fournisseur"),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [fournisseurs]
+    () =>
+      buildClassement(
+        filterFournisseurLikeRowsByPeriod(fournisseurs, selectedYear, periodStart, periodEnd),
+        "fournisseur"
+      ),
+    [fournisseurs, selectedYear, periodStart, periodEnd]
   );
 
   // ── Classement sous-traitants ─────────────────────────────────────────────
   const classementSousTraitants = useMemo(
-    () => buildClassement(sousTraitants, "sous_traitant"),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [sousTraitants]
+    () =>
+      buildClassement(
+        filterFournisseurLikeRowsByPeriod(sousTraitants, selectedYear, periodStart, periodEnd),
+        "sous_traitant"
+      ),
+    [sousTraitants, selectedYear, periodStart, periodEnd]
   );
 
   // ── Classement sociétés (clients) ─────────────────────────────────────────
@@ -408,6 +456,8 @@ export function useTresorerieData(selectedYear, periodStart, periodEnd) {
 
     // Situations
     situations.forEach((s) => {
+      const dateRef = s.date_envoi || s.date_creation;
+      if (!dateInYearPeriod(dateRef, selectedYear, periodStart, periodEnd)) return;
       const chantierId = s.chantier_id || s.chantier;
       const info = chantierMap[chantierId];
       if (!info) return;
@@ -418,6 +468,8 @@ export function useTresorerieData(selectedYear, periodStart, periodEnd) {
 
     // Factures
     factures.forEach((f) => {
+      const dateRef = f.date_envoi || f.date_creation;
+      if (!dateInYearPeriod(dateRef, selectedYear, periodStart, periodEnd)) return;
       const chantierId = f.chantier_id || f.chantier;
       const info = chantierMap[chantierId];
       if (!info) return;
@@ -438,7 +490,7 @@ export function useTresorerieData(selectedYear, periodStart, periodEnd) {
         })),
       }))
       .sort((a, b) => b.totalAPayer - a.totalAPayer);
-  }, [chantiers, situations, factures]);
+  }, [chantiers, situations, factures, selectedYear, periodStart, periodEnd]);
 
   // ── Classement chantiers ──────────────────────────────────────────────────
   const classementChantiers = useMemo(() => {
@@ -456,6 +508,8 @@ export function useTresorerieData(selectedYear, periodStart, periodEnd) {
     });
 
     situations.forEach((s) => {
+      const dateRef = s.date_envoi || s.date_creation;
+      if (!dateInYearPeriod(dateRef, selectedYear, periodStart, periodEnd)) return;
       const chantierId = s.chantier_id || s.chantier;
       if (!chantierId) return;
 
@@ -516,7 +570,7 @@ export function useTresorerieData(selectedYear, periodStart, periodEnd) {
         return na - nb;
       }),
     }));
-  }, [situations, chantiers]);
+  }, [situations, chantiers, selectedYear, periodStart, periodEnd]);
 
   return { monthlyData, classementFournisseurs, classementSousTraitants, classementSocietes, classementChantiers, loading, error };
 }
