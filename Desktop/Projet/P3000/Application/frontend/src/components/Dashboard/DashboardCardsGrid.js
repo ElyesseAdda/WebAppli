@@ -145,17 +145,17 @@ const DashboardCardsGrid = ({
           gap: 2,
         }}
       >
-        <DashboardCardAnnualGrowth
-          totalCA={totalCA}
-          montantEncaisseReel={montantFacturePayeHt}
-          loading={totalCALoading}
-          toolbarPrefix={makeDetailBtn("Encaissements reçus", encaissementsRecus, "#22c55e", "#15803d")}
-        />
         <DashboardCardAgencyExpenses
           breakdown={depensesAgenceBreakdown}
           pointageAgenceMontant={depensesAgencePointageHt}
           loading={coutChantierLoading}
           totalCA={totalCA}
+        />
+        <DashboardCardAnnualGrowth
+          totalCA={totalCA}
+          montantEncaisseReel={montantFacturePayeHt}
+          loading={totalCALoading}
+          toolbarPrefix={makeDetailBtn("Encaissements reçus", encaissementsRecus, "#22c55e", "#15803d")}
         />
         <DashboardCardAnnualBurn
           totalCA={totalCA}

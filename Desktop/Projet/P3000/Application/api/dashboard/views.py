@@ -24,6 +24,41 @@ from ..models import (
 )
 
 
+def _parse_pointage_montant_charge_repartition(pointage):
+    """
+    Liste [(agence_id ou None, montant), ...] si repartition_montant_charge est cohérente
+    avec montant_charge ; None pour le fallback booléen agence.
+    None comme agence_id = part imputée à la main d'œuvre chantier (hors dépenses agence).
+    """
+    montant = float(pointage.montant_charge or 0)
+    raw = getattr(pointage, "repartition_montant_charge", None) or []
+    if montant <= 0 or not isinstance(raw, list) or len(raw) == 0:
+        return None
+    parts = []
+    for item in raw:
+        if not isinstance(item, dict):
+            continue
+        try:
+            amt = float(item.get("montant") or 0)
+        except (TypeError, ValueError):
+            continue
+        aid = item.get("agence_id", "__missing__")
+        if aid is None or aid == "":
+            parts.append((None, amt))
+        else:
+            try:
+                parts.append((int(aid), amt))
+            except (TypeError, ValueError):
+                continue
+    if not parts:
+        return None
+    total_split = round(sum(a for _, a in parts), 2)
+    montant_r = round(montant, 2)
+    if abs(total_split - montant_r) > 0.05:
+        return None
+    return parts
+
+
 class DashboardViewSet(viewsets.ViewSet):
     """
     ViewSet dédié au dashboard pour regrouper les informations
@@ -659,17 +694,32 @@ class DashboardViewSet(viewsets.ViewSet):
             elif year is not None:
                 pointages_query = pointages_query.filter(month__year=year)
 
+            totals_depenses_par_agence = defaultdict(float)
+            pointage_ht_par_agence = defaultdict(float)
             main_oeuvre_month_map = defaultdict(float)
             total_cout_main_oeuvre = 0.0
-            total_pointage_agence_ht = 0.0
-            # Index (agent, month) des pointages agence pour exclure les doublons AEM.
+            legacy_pointage_agence_ht = 0.0
+            repartition_pointage_agence_ht = 0.0
+            # Index (agent, month) : uniquement pointage « tout en agence » (legacy), pour ne pas
+            # doubler une ligne AEM miroir du même montant. Avec répartition découpée, on ne
+            # masque pas les AEM : la ventilation pointage ≠ doublon systématique des factures agence.
             pointage_agence_agent_month = set()
             for pointage in pointages_query:
                 line_montant = float(pointage.montant_charge or 0)
                 month_date = pointage.month
                 mk = f"{month_date.year:04d}-{month_date.month:02d}"
-                if pointage.agence:
-                    total_pointage_agence_ht += line_montant
+                parts = _parse_pointage_montant_charge_repartition(pointage)
+                if parts is not None:
+                    for ag_id, amt in parts:
+                        if ag_id is None:
+                            total_cout_main_oeuvre += amt
+                            main_oeuvre_month_map[mk] += amt
+                        else:
+                            repartition_pointage_agence_ht += amt
+                            totals_depenses_par_agence[ag_id] += amt
+                            pointage_ht_par_agence[ag_id] += amt
+                elif pointage.agence:
+                    legacy_pointage_agence_ht += line_montant
                     pointage_agence_agent_month.add(
                         (pointage.agent_id, month_date.year, month_date.month)
                     )
@@ -708,15 +758,19 @@ class DashboardViewSet(viewsets.ViewSet):
                 monthly_cashflow_map[k]["couts_ht"] += float(facture_st.montant_facture_ht or 0)
 
             for pointage in pointages_query:
-                if pointage.agence:
-                    continue
                 month_date = pointage.month
                 if month_date is None or not (chart_start <= month_date <= chart_end):
                     continue
                 k = f"{month_date.year:04d}-{month_date.month:02d}"
                 if k not in monthly_cashflow_map:
                     continue
-                monthly_cashflow_map[k]["couts_ht"] += float(pointage.montant_charge or 0)
+                parts = _parse_pointage_montant_charge_repartition(pointage)
+                if parts is not None:
+                    for ag_id, amt in parts:
+                        if ag_id is None:
+                            monthly_cashflow_map[k]["couts_ht"] += amt
+                elif not pointage.agence:
+                    monthly_cashflow_map[k]["couts_ht"] += float(pointage.montant_charge or 0)
             main_oeuvre_monthly_breakdown = [
                 {
                     "key": row["key"],
@@ -738,7 +792,6 @@ class DashboardViewSet(viewsets.ViewSet):
                     return float(paye)
                 return float(aem.amount or 0)
 
-            totals_depenses_par_agence = defaultdict(float)
             aem_qs = AgencyExpenseMonth.objects.filter(
                 Q(chantier__isnull=True) | Q(chantier__in=chantiers_query)
             ).exclude(is_recurring_template=True)
@@ -758,12 +811,15 @@ class DashboardViewSet(viewsets.ViewSet):
                 totals_depenses_par_agence[aid] += line_amt
 
             agences = list(Agence.objects.all().order_by("id"))
-            # Remplace la composante planning hebdo agence par les montants chargés agence saisis.
-            if total_pointage_agence_ht > 0:
+            # Pointages « agence » sans répartition détaillée : tout sur l'agence principale (comportement historique).
+            if legacy_pointage_agence_ht > 0:
                 if agences:
-                    totals_depenses_par_agence[agences[0].id] += total_pointage_agence_ht
+                    totals_depenses_par_agence[agences[0].id] += legacy_pointage_agence_ht
+                    pointage_ht_par_agence[agences[0].id] += legacy_pointage_agence_ht
                 else:
-                    totals_depenses_par_agence[None] += total_pointage_agence_ht
+                    totals_depenses_par_agence[None] += legacy_pointage_agence_ht
+                    pointage_ht_par_agence[None] += legacy_pointage_agence_ht
+            total_pointage_agence_ht = legacy_pointage_agence_ht + repartition_pointage_agence_ht
             main_agence = agences[0] if agences else None
             main_agence_id = main_agence.id if main_agence else None
             depenses_agence_principale_ht = float(
@@ -793,6 +849,7 @@ class DashboardViewSet(viewsets.ViewSet):
                     "agence_id": ag.id,
                     "nom": ag.nom,
                     "total_ht": float(totals_depenses_par_agence.get(ag.id, 0.0)),
+                    "pointage_ht": round(float(pointage_ht_par_agence.get(ag.id, 0.0)), 2),
                 }
                 for ag in agences
             ]
@@ -801,6 +858,7 @@ class DashboardViewSet(viewsets.ViewSet):
                     "agence_id": None,
                     "nom": "Non rattaché",
                     "total_ht": none_total,
+                    "pointage_ht": round(float(pointage_ht_par_agence.get(None, 0.0)), 2),
                 }
             )
 

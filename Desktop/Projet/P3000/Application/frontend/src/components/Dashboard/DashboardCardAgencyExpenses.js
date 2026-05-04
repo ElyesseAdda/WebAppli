@@ -63,6 +63,18 @@ const DashboardCardAgencyExpenses = ({
       .reduce((sum, row) => sum + Number(row.total_ht || 0), 0);
   }, [breakdown, effectiveIncludedIds]);
 
+  /** Part pointage mensuel imputée aux agences sélectionnées (aligné sur le filtre de la carte). */
+  const pointageSelectionMontant = useMemo(() => {
+    if (!breakdown.length) return Number(pointageAgenceMontant || 0);
+    const hasPointageField = breakdown.some(
+      (r) => r.pointage_ht !== undefined && r.pointage_ht !== null
+    );
+    if (!hasPointageField) return Number(pointageAgenceMontant || 0);
+    return breakdown
+      .filter((row) => effectiveIncludedIds.includes(row.agence_id))
+      .reduce((sum, row) => sum + Number(row.pointage_ht || 0), 0);
+  }, [breakdown, effectiveIncludedIds, pointageAgenceMontant]);
+
   const selectionExplicitementVide =
     depensesAgenceIncludedAgenceIds !== null && depensesAgenceIncludedAgenceIds.length === 0;
 
@@ -186,7 +198,7 @@ const DashboardCardAgencyExpenses = ({
           : [
               {
                 key: "pointage-agence",
-                value: `Cumul charges agences: ${formatDashboardCurrency(pointageAgenceMontant)}`,
+                value: `Pointage imputé agences (sélection): ${formatDashboardCurrency(pointageSelectionMontant)}`,
                 color: "#92400e",
               },
             ]

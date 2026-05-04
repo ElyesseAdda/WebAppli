@@ -608,6 +608,12 @@ class PointageMensuel(models.Model):
     month = models.DateField(help_text="Premier jour du mois (YYYY-MM-01)")
     salaire_net_initial_hors_prime = models.DecimalField(max_digits=10, decimal_places=2, default=0)
     agence = models.BooleanField(default=False)
+    # Répartition du montant_charge entre agences et main d'œuvre chantier (null = chantier classique).
+    repartition_montant_charge = models.JSONField(
+        default=list,
+        blank=True,
+        help_text='[{"agence_id": <int ou null>, "montant": <nombre>}, ...] ; somme = montant_charge.',
+    )
     montant_charge = models.DecimalField(max_digits=10, decimal_places=2, default=0)
     montant_brut = models.DecimalField(max_digits=10, decimal_places=2, default=0)
     accompte = models.DecimalField(max_digits=10, decimal_places=2, default=0)

@@ -1,10 +1,12 @@
 import React, { useEffect, useMemo, useState } from "react";
 import axios from "axios";
+import PieChartOutline from "@mui/icons-material/PieChartOutline";
 import {
   Alert,
   Box,
   Checkbox,
   CircularProgress,
+  IconButton,
   Paper,
   Table,
   TableBody,
@@ -13,10 +15,14 @@ import {
   TableHead,
   TableRow,
   TextField,
+  Tooltip,
   Typography,
 } from "@mui/material";
 import PointageRecapCards from "./PointageRecapCards";
 import PointageEditDialog from "./PointageEditDialog";
+import PointageRepartitionAgenceModal, {
+  repartitionSumMatchesMontant,
+} from "./PointageRepartitionAgenceModal";
 
 const toNumber = (value) => {
   const parsed = Number.parseFloat(value);
@@ -181,6 +187,22 @@ const getMonthKey = (date = new Date()) => {
 };
 
 /** Mois civil précédent pour une clé `YYYY-MM` (ex. 2024-03 → 2024-02). */
+const normalizeRepartitionFromApi = (raw) => {
+  if (!Array.isArray(raw)) return [];
+  return raw
+    .map((item) => ({
+      agence_id:
+        item?.agence_id === undefined || item?.agence_id === null || item?.agence_id === ""
+          ? null
+          : Number(item.agence_id),
+      montant: toNumber(item?.montant),
+    }))
+    .filter((x) => x.montant > 0);
+};
+
+const hasAgencePartInRepartition = (rep) =>
+  Array.isArray(rep) && rep.some((x) => x.agence_id !== null && toNumber(x.montant) > 0);
+
 const getPreviousMonthKey = (monthKey) => {
   const [ys, ms] = String(monthKey).split("-");
   const y = Number.parseInt(ys, 10);
@@ -202,6 +224,8 @@ const TableauPointagePage = () => {
   const [savingEmailAgentId, setSavingEmailAgentId] = useState(null);
   const [savingPointageKey, setSavingPointageKey] = useState("");
   const [selectedRecapGroup, setSelectedRecapGroup] = useState(null);
+  const [agences, setAgences] = useState([]);
+  const [repartitionModalRow, setRepartitionModalRow] = useState(null);
   const [editorState, setEditorState] = useState({
     open: false,
     agentId: null,
@@ -221,7 +245,7 @@ const TableauPointagePage = () => {
       setError("");
       try {
         const prevMonthKey = getPreviousMonthKey(monthKey);
-        const [agentsRes, pointagesRes, pointagesPrevRes, scheduleSummaryRes, agentPrimesRes] =
+        const [agentsRes, pointagesRes, pointagesPrevRes, scheduleSummaryRes, agentPrimesRes, agencesRes] =
           await Promise.all([
             axios.get("/api/agent/"),
             axios.get(`/api/pointages-mensuels/?month=${monthKey}`),
@@ -237,9 +261,11 @@ const TableauPointagePage = () => {
                 },
               })
               .catch(() => ({ data: [] })),
+            axios.get("/api/agences/").catch(() => ({ data: [] })),
           ]);
         if (isCancelled) return;
         setAgents(Array.isArray(agentsRes.data) ? agentsRes.data : []);
+        setAgences(Array.isArray(agencesRes.data) ? agencesRes.data : []);
         const loadedPointages = Array.isArray(pointagesRes.data) ? pointagesRes.data : [];
         const scheduleSummary = Array.isArray(scheduleSummaryRes.data) ? scheduleSummaryRes.data : [];
 
@@ -285,6 +311,7 @@ const TableauPointagePage = () => {
             id: p.id,
             salaireInitial: p.salaire_net_initial_hors_prime ?? 0,
             agence: Boolean(p.agence),
+            repartition_montant_charge: normalizeRepartitionFromApi(p.repartition_montant_charge),
             montantCharge: p.montant_charge ?? 0,
             montantBrut: p.montant_brut ?? 0,
             accompte: p.accompte ?? 0,
@@ -313,6 +340,7 @@ const TableauPointagePage = () => {
             initialDraft[id] = {
               salaireInitial: prevSal,
               agence: false,
+              repartition_montant_charge: [],
               montantCharge: 0,
               montantBrut: 0,
               accompte: 0,
@@ -379,6 +407,9 @@ const TableauPointagePage = () => {
           totalHeures,
           salaireInitial: toNumber(draft.salaireInitial),
           agence: Boolean(draft.agence),
+          repartition_montant_charge: Array.isArray(draft.repartition_montant_charge)
+            ? draft.repartition_montant_charge
+            : [],
           montantCharge: toNumber(draft.montantCharge),
           montantBrut: montantBrutAffiche,
           accompte: toNumber(draft.accompte),
@@ -403,30 +434,39 @@ const TableauPointagePage = () => {
   }, [rows, selectedRecapGroup]);
 
   const totals = useMemo(() => {
-    const totalNetVerseSalaries = recapRows.reduce(
-      (acc, row) => acc + row.paiement,
-      0
-    );
-    const totalNetVerseEmployeur = recapRows.reduce(
-      (acc, row) => acc + row.montantCharge,
-      0
-    );
-    const cumulMensuelCharges = totalNetVerseEmployeur - totalNetVerseSalaries;
+    const rowsHoraires = rows.filter((row) => row.typePaiement !== "journalier");
 
-    const paiementValideVert = recapRows.reduce((acc, row) => {
+    const cumulChargeAgentsHoraires = rowsHoraires.reduce(
+      (acc, row) => acc + toNumber(row.montantCharge),
+      0
+    );
+
+    const totalNetPaiementHoraires = rowsHoraires.reduce(
+      (acc, row) => acc + toNumber(row.paiement),
+      0
+    );
+    const totalNetPaiementJournaliers = rows
+      .filter((row) => row.typePaiement === "journalier")
+      .reduce((acc, row) => acc + toNumber(row.paiement), 0);
+
+    const cumulMensuelCharges = cumulChargeAgentsHoraires - totalNetPaiementHoraires;
+
+    const totalNetPaiementTousAgents = rows.reduce((acc, row) => acc + toNumber(row.paiement), 0);
+    const paiementValideVertTousAgents = rows.reduce((acc, row) => {
       const ok =
         toNumber(row.paiement) > 0 && Boolean(String(row.datePaiement || "").trim());
       return acc + (ok ? toNumber(row.paiement) : 0);
     }, 0);
-    const resteAPayer = totalNetVerseSalaries - paiementValideVert;
+    const resteAPayer = totalNetPaiementTousAgents - paiementValideVertTousAgents;
 
     return {
-      totalNetVerseSalaries,
-      totalNetVerseEmployeur,
+      cumulChargeAgentsHoraires,
+      totalNetPaiementHoraires,
+      totalNetPaiementJournaliers,
       cumulMensuelCharges,
       resteAPayer,
     };
-  }, [recapRows]);
+  }, [rows]);
 
   const groupedRows = useMemo(() => {
     const sortByPrenom = (a, b) =>
@@ -464,6 +504,7 @@ const TableauPointagePage = () => {
     id: data.id,
     salaireInitial: data.salaire_net_initial_hors_prime,
     agence: Boolean(data.agence),
+    repartition_montant_charge: normalizeRepartitionFromApi(data.repartition_montant_charge),
     montantCharge: data.montant_charge,
     montantBrut: data.montant_brut,
     accompte: data.accompte,
@@ -483,11 +524,26 @@ const TableauPointagePage = () => {
         payload.commentaire = String(value || "");
       } else if (field === "agence") {
         payload.agence = Boolean(value);
+        if (!value) {
+          payload.repartition_montant_charge = [];
+        }
       } else if (field === "date_paiement") {
         if (value === null || value === undefined || String(value).trim() === "") {
           payload.date_paiement = null;
         } else {
           payload.date_paiement = String(value).slice(0, 10);
+        }
+      } else if (field === "montant_charge") {
+        const mcNew = toNumber(value);
+        payload.montant_charge = mcNew;
+        const rep = agentDraft.repartition_montant_charge;
+        if (
+          Array.isArray(rep) &&
+          rep.length > 0 &&
+          !repartitionSumMatchesMontant(rep, mcNew)
+        ) {
+          payload.repartition_montant_charge = [];
+          payload.agence = false;
         }
       } else {
         payload[field] = toNumber(value);
@@ -511,6 +567,9 @@ const TableauPointagePage = () => {
           month: monthDate,
           salaire_net_initial_hors_prime: toNumber(agentDraft.salaireInitial),
           agence: Boolean(agentDraft.agence),
+          repartition_montant_charge: Array.isArray(agentDraft.repartition_montant_charge)
+            ? agentDraft.repartition_montant_charge
+            : [],
           montant_charge: toNumber(agentDraft.montantCharge),
           montant_brut: toNumber(agentDraft.montantBrut),
           accompte: toNumber(agentDraft.accompte),
@@ -534,6 +593,133 @@ const TableauPointagePage = () => {
     } finally {
       setSavingPointageKey("");
     }
+  };
+
+  const rowPointageSavingBusy = (rowId) =>
+    Boolean(savingPointageKey && String(savingPointageKey).startsWith(`${rowId}-`));
+
+  const saveAgenceToutMainOeuvre = async (row) => {
+    const agentId = String(row.id);
+    const key = `${row.id}-agence-reset`;
+    try {
+      setSavingPointageKey(key);
+      setError("");
+      const agentDraft = draftByAgent[agentId] || {};
+      const payload = { repartition_montant_charge: [], agence: false };
+      if (agentDraft.id) {
+        const { data } = await axios.patch(`/api/pointages-mensuels/${agentDraft.id}/`, payload);
+        setDraftByAgent((prev) => ({
+          ...prev,
+          [agentId]: { ...(prev[agentId] || {}), ...pointageDraftFromApi(data) },
+        }));
+      } else if (toNumber(row.montantCharge) > 0 || agentDraft.salaireInitial) {
+        const createPayload = {
+          agent: agentId,
+          month: monthDate,
+          salaire_net_initial_hors_prime: toNumber(agentDraft.salaireInitial),
+          agence: false,
+          repartition_montant_charge: [],
+          montant_charge: toNumber(agentDraft.montantCharge),
+          montant_brut: toNumber(agentDraft.montantBrut),
+          accompte: toNumber(agentDraft.accompte),
+          paiement: toNumber(agentDraft.paiement),
+          date_paiement: normalizeDatePaiement(agentDraft.datePaiement) || null,
+          commentaire: String(agentDraft.commentaire || ""),
+          salaire_overridden: Boolean(agentDraft.salaireOverridden),
+        };
+        const { data } = await axios.post("/api/pointages-mensuels/", createPayload);
+        setDraftByAgent((prev) => ({
+          ...prev,
+          [agentId]: { ...(prev[agentId] || {}), ...pointageDraftFromApi(data) },
+        }));
+      } else {
+        handleCellChange(agentId, "agence", false);
+        handleCellChange(agentId, "repartition_montant_charge", []);
+      }
+    } catch {
+      setError("Erreur lors de la remise en main d'œuvre chantier.");
+    } finally {
+      setSavingPointageKey("");
+    }
+  };
+
+  const saveRepartition = async (repartitionListe, agenceFlag) => {
+    if (!repartitionModalRow) return;
+    const agentId = String(repartitionModalRow.id);
+    const savingKey = `${repartitionModalRow.id}-repartition`;
+    try {
+      setSavingPointageKey(savingKey);
+      setError("");
+      const agentDraft = draftByAgent[agentId] || {};
+      const payload = {
+        repartition_montant_charge: repartitionListe,
+        agence: Boolean(agenceFlag),
+      };
+      if (agentDraft.id) {
+        const { data } = await axios.patch(`/api/pointages-mensuels/${agentDraft.id}/`, payload);
+        setDraftByAgent((prev) => ({
+          ...prev,
+          [agentId]: { ...(prev[agentId] || {}), ...pointageDraftFromApi(data) },
+        }));
+      } else {
+        const createPayload = {
+          agent: agentId,
+          month: monthDate,
+          salaire_net_initial_hors_prime: toNumber(agentDraft.salaireInitial),
+          agence: Boolean(agenceFlag),
+          repartition_montant_charge: repartitionListe,
+          montant_charge: toNumber(agentDraft.montantCharge),
+          montant_brut: toNumber(agentDraft.montantBrut),
+          accompte: toNumber(agentDraft.accompte),
+          paiement: toNumber(agentDraft.paiement),
+          date_paiement: normalizeDatePaiement(agentDraft.datePaiement) || null,
+          commentaire: String(agentDraft.commentaire || ""),
+          salaire_overridden: Boolean(agentDraft.salaireOverridden),
+        };
+        const { data } = await axios.post("/api/pointages-mensuels/", createPayload);
+        setDraftByAgent((prev) => ({
+          ...prev,
+          [agentId]: { ...(prev[agentId] || {}), ...pointageDraftFromApi(data) },
+        }));
+      }
+      setRepartitionModalRow(null);
+    } catch (err) {
+      const data = err?.response?.data;
+      let detail = "";
+      if (data && typeof data === "object") {
+        const first =
+          (Array.isArray(data.non_field_errors) && data.non_field_errors[0]) ||
+          Object.entries(data)
+            .map(([k, v]) => `${k}: ${Array.isArray(v) ? v.join(", ") : String(v)}`)
+            .join(" ; ");
+        detail = first ? ` (${first})` : "";
+      } else if (err?.message) {
+        detail = ` (${err.message})`;
+      }
+      console.error("saveRepartition", err?.response?.status, data || err);
+      setError(`Erreur lors de l'enregistrement de la répartition.${detail}`);
+    } finally {
+      setSavingPointageKey("");
+    }
+  };
+
+  const isAgenceChargeChecked = (row) => {
+    const draft = draftByAgent[String(row.id)] || {};
+    const rep = draft.repartition_montant_charge;
+    const mc = toNumber(row.montantCharge);
+    if (Array.isArray(rep) && rep.length > 0 && repartitionSumMatchesMontant(rep, mc)) {
+      return hasAgencePartInRepartition(rep);
+    }
+    return Boolean(draft.agence);
+  };
+
+  const legacyAgenceSansRepartitionForRow = (row) => {
+    const draft = draftByAgent[String(row.id)] || {};
+    const rep = draft.repartition_montant_charge;
+    const mc = toNumber(row.montantCharge);
+    const hasValid =
+      Array.isArray(rep) && rep.length > 0 && repartitionSumMatchesMontant(rep, mc);
+    return Boolean(draft.agence && !hasValid);
   };
 
   const handleEmailBlur = async (agentId, value) => {
@@ -764,9 +950,17 @@ const TableauPointagePage = () => {
                   </TableCell>
                   <TableCell sx={compactNumberColumnSx}>Paiement</TableCell>
                   <TableCell sx={compactNumberColumnSx}>Date de paiement</TableCell>
-                  <TableCell sx={compactNumberColumnSx}>Montant brut</TableCell>
+                  <TableCell sx={compactNumberColumnSx}>Montant prévisionnel</TableCell>
                   <TableCell sx={compactNumberColumnSx}>Montant charge</TableCell>
-                  <TableCell sx={headerCellSx}>Agence</TableCell>
+                  <TableCell sx={headerCellSx}>
+                    <Tooltip
+                      title={
+                        "Case : cocher pour ouvrir la répartition, décocher pour tout imputer à la main d'œuvre chantier. Icône : ouvrir le détail de répartition."
+                      }
+                    >
+                      <span>Agence</span>
+                    </Tooltip>
+                  </TableCell>
                   <TableCell sx={compactNumberColumnSx}>Accompte</TableCell>
                   <TableCell sx={compactNumberColumnSx}>Prime</TableCell>
                   <TableCell sx={headerCellSx}>Adresse mail</TableCell>
@@ -850,15 +1044,46 @@ const TableauPointagePage = () => {
                           </Box>
                         </TableCell>
                         <TableCell sx={commonBodyCellStyle}>
-                          <Checkbox
-                            checked={Boolean(row.agence)}
-                            onChange={async (e) => {
-                              const checked = e.target.checked;
-                              handleCellChange(String(row.id), "agence", checked);
-                              await savePointageField(row.id, "agence", checked);
+                          <Box
+                            sx={{
+                              display: "flex",
+                              alignItems: "center",
+                              justifyContent: "center",
+                              gap: 0.25,
                             }}
-                            disabled={savingPointageKey === `${row.id}-agence`}
-                          />
+                          >
+                            <Tooltip title="Cocher pour répartir (modal) ; décocher pour tout en main d'œuvre chantier">
+                              <Checkbox
+                                checked={isAgenceChargeChecked(row)}
+                                onChange={(_e, checked) => {
+                                  if (rowPointageSavingBusy(row.id)) return;
+                                  if (checked) {
+                                    setRepartitionModalRow(row);
+                                  } else {
+                                    void saveAgenceToutMainOeuvre(row);
+                                  }
+                                }}
+                                disabled={rowPointageSavingBusy(row.id)}
+                              />
+                            </Tooltip>
+                            <Tooltip title="Répartition détaillée (agences / chantier)">
+                              <span>
+                                <IconButton
+                                  size="small"
+                                  aria-label="Répartition agences et chantier"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    if (rowPointageSavingBusy(row.id)) return;
+                                    setRepartitionModalRow(row);
+                                  }}
+                                  disabled={rowPointageSavingBusy(row.id)}
+                                  sx={{ color: "rgba(27, 120, 188, 0.9)" }}
+                                >
+                                  <PieChartOutline fontSize="small" />
+                                </IconButton>
+                              </span>
+                            </Tooltip>
+                          </Box>
                         </TableCell>
                         <TableCell sx={commonBodyCellStyle}>
                           <Box sx={clickableValueSx} onClick={() => openEditor(row, "accompte")}>
@@ -896,6 +1121,38 @@ const TableauPointagePage = () => {
           </TableContainer>
         </>
       )}
+      <PointageRepartitionAgenceModal
+        open={Boolean(repartitionModalRow)}
+        onClose={() => {
+          const k = savingPointageKey || "";
+          const rid = repartitionModalRow?.id;
+          if (
+            k === `${rid}-repartition` ||
+            k === `${rid}-agence-reset`
+          ) {
+            return;
+          }
+          setRepartitionModalRow(null);
+        }}
+        rowLabel={
+          repartitionModalRow
+            ? `${repartitionModalRow.prenom} ${repartitionModalRow.nom} — mois ${monthKey}`
+            : ""
+        }
+        montantCharge={repartitionModalRow ? repartitionModalRow.montantCharge : 0}
+        agences={agences}
+        initialRepartition={
+          repartitionModalRow ? repartitionModalRow.repartition_montant_charge : []
+        }
+        legacyAgenceSansRepartition={
+          repartitionModalRow ? legacyAgenceSansRepartitionForRow(repartitionModalRow) : false
+        }
+        saving={
+          savingPointageKey === `${repartitionModalRow?.id}-repartition` ||
+          savingPointageKey === `${repartitionModalRow?.id}-agence-reset`
+        }
+        onSubmit={saveRepartition}
+      />
       <PointageEditDialog
         editorState={editorState}
         setEditorState={setEditorState}
