@@ -10,14 +10,10 @@ import {
   OutlinedInput,
   Checkbox,
   ListItemText,
-  Dialog,
-  DialogTitle,
-  DialogContent,
-  DialogActions,
   TextField,
 } from "@mui/material";
 import FilterAltOutlinedIcon from "@mui/icons-material/FilterAltOutlined";
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import axios from "axios";
 import {
   DashboardFiltersProvider,
@@ -85,13 +81,18 @@ const DashboardContent = () => {
     };
   }, [setDepensesAgenceIncludedAgenceIds]);
 
+  /** Si un seul mois est renseigné (début ou fin), la plage API = ce mois uniquement. */
   const getPeriodBoundaries = (startMonth, endMonth) => {
-    if (!startMonth || !endMonth) return {};
-    const startDate = `${startMonth}-01`;
-    const [endYear, endMonthNumber] = endMonth.split("-").map(Number);
+    let sm = (startMonth || "").trim();
+    let em = (endMonth || "").trim();
+    if (sm && !em) em = sm;
+    if (!sm && em) sm = em;
+    if (!sm || !em) return {};
+    const startDate = `${sm}-01`;
+    const [endYear, endMonthNumber] = em.split("-").map(Number);
     if (!endYear || !endMonthNumber) return {};
     const lastDay = new Date(endYear, endMonthNumber, 0).getDate();
-    const endDate = `${endMonth}-${String(lastDay).padStart(2, "0")}`;
+    const endDate = `${em}-${String(lastDay).padStart(2, "0")}`;
     return { startDate, endDate };
   };
 
@@ -353,9 +354,23 @@ const DashboardFilters = () => {
     updatePeriod,
     clearPeriod,
   } = useDashboardFilters();
-  const [periodModalOpen, setPeriodModalOpen] = useState(false);
-  const [draftPeriodStart, setDraftPeriodStart] = useState(periodStart);
-  const [draftPeriodEnd, setDraftPeriodEnd] = useState(periodEnd);
+  const duMoisInputRef = useRef(null);
+  const auMoisInputRef = useRef(null);
+
+  const triggerMonthPicker = useCallback((inputRef) => {
+    const el = inputRef?.current;
+    if (!el) return;
+    if (typeof el.showPicker === "function") {
+      try {
+        el.showPicker();
+        return;
+      } catch {
+        /* contexte non sécurisé ou refus navigateur */
+      }
+    }
+    el.focus();
+    el.click();
+  }, []);
 
   // Générer une liste d'années (année courante - 2 à année courante + 2)
   const currentYear = new Date().getFullYear();
@@ -363,20 +378,6 @@ const DashboardFilters = () => {
     { length: 8 },
     (_, i) => currentYear - 4 + i
   );
-
-  const openPeriodModal = () => {
-    setDraftPeriodStart(periodStart);
-    setDraftPeriodEnd(periodEnd);
-    setPeriodModalOpen(true);
-  };
-
-  const applyPeriod = () => {
-    if (draftPeriodStart && draftPeriodEnd && draftPeriodStart > draftPeriodEnd) {
-      return;
-    }
-    updatePeriod(draftPeriodStart, draftPeriodEnd);
-    setPeriodModalOpen(false);
-  };
 
   const compactSelectSx = {
     "& .MuiOutlinedInput-root": {
@@ -387,9 +388,22 @@ const DashboardFilters = () => {
     "& .MuiInputLabel-root": { fontSize: "0.8125rem" },
   };
 
+  const monthFieldToolbarSx = {
+    minWidth: { xs: 128, sm: 148 },
+    "& .MuiOutlinedInput-root": {
+      fontSize: "0.8125rem",
+      minHeight: 36,
+      cursor: "pointer",
+    },
+    "& .MuiInputLabel-root": {
+      fontSize: "0.72rem",
+      lineHeight: 1.2,
+      cursor: "pointer",
+    },
+  };
+
   return (
-    <>
-      <Box
+    <Box
         sx={{
           display: "inline-flex",
           alignItems: "center",
@@ -447,24 +461,65 @@ const DashboardFilters = () => {
           </Select>
         </FormControl>
 
-        <Button
+        <TextField
           size="small"
-          variant="outlined"
-          onClick={openPeriodModal}
-          sx={{
-            textTransform: "none",
-            fontSize: "0.8125rem",
-            py: 0.45,
-            px: 1.25,
-            minHeight: 36,
-            borderColor: "#e2e8f0",
-            color: "#475569",
-            "&:hover": { borderColor: "#cbd5e1", bgcolor: "rgba(148,163,184,0.08)" },
+          label="Du mois"
+          type="month"
+          value={periodStart}
+          onChange={(e) => {
+            const v = e.target.value;
+            const end = periodEnd || v;
+            if (v && end && v > end) {
+              updatePeriod(v, v);
+            } else {
+              updatePeriod(v, periodEnd || v);
+            }
           }}
-        >
-          Période…
-        </Button>
-        {periodStart && periodEnd && (
+          inputRef={duMoisInputRef}
+          InputLabelProps={{
+            shrink: true,
+            onClick: () => triggerMonthPicker(duMoisInputRef),
+            sx: { cursor: "pointer" },
+          }}
+          InputProps={{
+            sx: { cursor: "pointer" },
+            onClick: (e) => {
+              if (e.target === duMoisInputRef.current) return;
+              triggerMonthPicker(duMoisInputRef);
+            },
+          }}
+          sx={monthFieldToolbarSx}
+        />
+        <TextField
+          size="small"
+          label="Au mois"
+          type="month"
+          value={periodEnd}
+          onChange={(e) => {
+            const v = e.target.value;
+            const start = periodStart || v;
+            if (start && v && start > v) {
+              updatePeriod(v, v);
+            } else {
+              updatePeriod(periodStart || v, v);
+            }
+          }}
+          inputRef={auMoisInputRef}
+          InputLabelProps={{
+            shrink: true,
+            onClick: () => triggerMonthPicker(auMoisInputRef),
+            sx: { cursor: "pointer" },
+          }}
+          InputProps={{
+            sx: { cursor: "pointer" },
+            onClick: (e) => {
+              if (e.target === auMoisInputRef.current) return;
+              triggerMonthPicker(auMoisInputRef);
+            },
+          }}
+          sx={monthFieldToolbarSx}
+        />
+        {(periodStart || periodEnd) && (
           <Button
             size="small"
             variant="text"
@@ -474,45 +529,7 @@ const DashboardFilters = () => {
             Réinitialiser période
           </Button>
         )}
-      </Box>
-
-      <Dialog open={periodModalOpen} onClose={() => setPeriodModalOpen(false)} maxWidth="xs" fullWidth>
-        <DialogTitle>Filtrer par periode</DialogTitle>
-        <DialogContent sx={{ display: "flex", flexDirection: "column", gap: 2, pt: 1 }}>
-          <TextField
-            label="Du mois"
-            type="month"
-            value={draftPeriodStart}
-            onChange={(e) => setDraftPeriodStart(e.target.value)}
-            InputLabelProps={{ shrink: true }}
-            fullWidth
-          />
-          <TextField
-            label="Au mois"
-            type="month"
-            value={draftPeriodEnd}
-            onChange={(e) => setDraftPeriodEnd(e.target.value)}
-            InputLabelProps={{ shrink: true }}
-            fullWidth
-          />
-          {draftPeriodStart && draftPeriodEnd && draftPeriodStart > draftPeriodEnd && (
-            <Typography variant="body2" color="error">
-              La date de debut doit etre anterieure ou egale a la date de fin.
-            </Typography>
-          )}
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setPeriodModalOpen(false)}>Annuler</Button>
-          <Button
-            variant="contained"
-            onClick={applyPeriod}
-            disabled={draftPeriodStart && draftPeriodEnd && draftPeriodStart > draftPeriodEnd}
-          >
-            Appliquer
-          </Button>
-        </DialogActions>
-      </Dialog>
-    </>
+    </Box>
   );
 };
 

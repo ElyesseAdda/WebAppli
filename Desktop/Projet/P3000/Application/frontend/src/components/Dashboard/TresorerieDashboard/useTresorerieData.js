@@ -61,8 +61,12 @@ function withoutNumberPrefix(value, fallback) {
 }
 
 function buildEmptyMonths(year, periodStart, periodEnd) {
-  const start = parseYYYYMM(periodStart);
-  const end = parseYYYYMM(periodEnd);
+  let ps = periodStart;
+  let pe = periodEnd;
+  if (ps && !pe) pe = ps;
+  if (!ps && pe) ps = pe;
+  const start = parseYYYYMM(ps);
+  const end = parseYYYYMM(pe);
 
   // Bornes de filtrage (dans l'année sélectionnée)
   const startMonth = start && start.year === year ? start.month : 0;
