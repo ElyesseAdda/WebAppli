@@ -426,11 +426,20 @@ const TresorerieBarChart = ({ data = [], height = 340 }) => {
       <Dialog
         open={detailsModal.open}
         onClose={() => setDetailsModal({ open: false, label: "", entries: [] })}
-        maxWidth="md"
-        fullWidth
+        maxWidth={false}
+        PaperProps={{
+          sx: {
+            maxWidth: "min(96vw, 1200px)",
+            width: "fit-content",
+            minWidth: { xs: "min(calc(100vw - 32px), 480px)", sm: 560 },
+            m: 2,
+          },
+        }}
       >
-        <DialogTitle sx={{ fontWeight: 700 }}>Details tresorerie - {detailsModal.label}</DialogTitle>
-        <DialogContent dividers sx={{ maxHeight: "70vh", overflowY: "auto" }}>
+        <DialogTitle sx={{ fontWeight: 700, pr: 3, lineHeight: 1.3 }}>
+          Détails trésorerie — {detailsModal.label}
+        </DialogTitle>
+        <DialogContent dividers sx={{ maxHeight: "70vh", overflowY: "auto", overflowX: "hidden" }}>
           {detailsModal.entries.map((entry) => (
             <Box key={entry.dataKey} sx={{ mb: 2 }}>
               <Box sx={{ display: "flex", alignItems: "center", gap: 0.8, mb: 0.5 }}>

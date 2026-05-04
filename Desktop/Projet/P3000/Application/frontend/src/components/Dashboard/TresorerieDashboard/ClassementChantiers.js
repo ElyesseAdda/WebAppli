@@ -60,35 +60,45 @@ const SituationsModal = ({ chantier, open, onClose }) => {
     <Dialog
       open={open}
       onClose={onClose}
-      maxWidth="md"
-      fullWidth
-      PaperProps={{ sx: { borderRadius: "12px", boxShadow: "0 8px 32px rgba(0,0,0,0.12)" } }}
+      maxWidth={false}
+      PaperProps={{
+        sx: {
+          borderRadius: "12px",
+          boxShadow: "0 8px 32px rgba(0,0,0,0.12)",
+          maxWidth: "min(96vw, 1200px)",
+          width: "fit-content",
+          minWidth: { xs: "min(calc(100vw - 32px), 520px)", sm: 600 },
+          m: 2,
+        },
+      }}
     >
       <DialogTitle
         sx={{
           display: "flex",
-          alignItems: "center",
+          alignItems: "flex-start",
           justifyContent: "space-between",
+          gap: 1,
           pb: 1,
-          fontWeight: 700,
-          fontSize: "0.95rem",
+          pr: 1,
           color: "#111827",
         }}
       >
-        <Box>
-          {chantier.chantier_name}
-          <Typography component="span" sx={{ fontSize: "0.78rem", color: "#6b7280", fontWeight: 400, ml: 1.5 }}>
+        <Box sx={{ display: "flex", flexDirection: "column", gap: 0.35, minWidth: 0, pr: 1 }}>
+          <Typography component="div" sx={{ fontWeight: 700, fontSize: "1rem", lineHeight: 1.25, wordBreak: "break-word" }}>
+            {chantier.chantier_name}
+          </Typography>
+          <Typography component="div" sx={{ fontSize: "0.8rem", color: "#64748b", fontWeight: 500 }}>
             {chantier.societe}
           </Typography>
         </Box>
-        <IconButton size="small" onClick={onClose} sx={{ color: "#9ca3af" }}>
+        <IconButton size="small" onClick={onClose} sx={{ color: "#9ca3af", flexShrink: 0, mt: -0.25 }}>
           <CloseIcon fontSize="small" />
         </IconButton>
       </DialogTitle>
 
       <Divider />
 
-      <DialogContent sx={{ pt: 2 }}>
+      <DialogContent sx={{ pt: 2, overflowX: "auto" }}>
         {/* Récap */}
         <Box sx={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 1.5, mb: 2.5 }}>
           {[
@@ -112,14 +122,21 @@ const SituationsModal = ({ chantier, open, onClose }) => {
         </Box>
 
         {/* Tableau des situations */}
-        <TableContainer>
-          <Table size="small">
+        <TableContainer sx={{ maxWidth: "100%" }}>
+          <Table size="small" sx={{ minWidth: 720, tableLayout: "auto" }}>
             <TableHead>
               <TableRow>
                 {["N° situation", "Montant HT", "Avancement", "Envoyée le", "Encaissée le"].map((h) => (
                   <TableCell
                     key={h}
-                    sx={{ fontWeight: 700, fontSize: "0.73rem", color: "#6b7280", borderBottom: "1px solid #e5e7eb", py: 0.8 }}
+                    sx={{
+                      fontWeight: 700,
+                      fontSize: "0.73rem",
+                      color: "#6b7280",
+                      borderBottom: "1px solid #e5e7eb",
+                      py: 0.8,
+                      whiteSpace: "nowrap",
+                    }}
                   >
                     {h}
                   </TableCell>
@@ -131,7 +148,17 @@ const SituationsModal = ({ chantier, open, onClose }) => {
                 .sort((a, b) => (b.pourcentage_avancement || 0) - (a.pourcentage_avancement || 0))
                 .map((s) => (
                 <TableRow key={s.id} sx={{ "&:hover": { bgcolor: "#f8fafc" } }}>
-                  <TableCell sx={{ fontSize: "0.82rem", fontWeight: 600, color: "#111827", py: 1 }}>
+                  <TableCell
+                    sx={{
+                      fontSize: "0.82rem",
+                      fontWeight: 600,
+                      color: "#111827",
+                      py: 1,
+                      minWidth: 140,
+                      maxWidth: 280,
+                      wordBreak: "break-word",
+                    }}
+                  >
                     {s.numero}
                   </TableCell>
                   <TableCell sx={{ fontSize: "0.82rem", color: "#1B78BC", fontWeight: 600 }}>
