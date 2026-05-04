@@ -34,7 +34,7 @@ const persistDashboardDepensesAgence = async (useDefault, ids) => {
 
 const DashboardCardAgencyExpenses = ({
   breakdown = [],
-  pointageAgenceMontant = 0,
+  pointageAgenceMontant: _pointageAgenceMontant = 0,
   loading = false,
   totalCA = 0,
 }) => {
@@ -63,17 +63,28 @@ const DashboardCardAgencyExpenses = ({
       .reduce((sum, row) => sum + Number(row.total_ht || 0), 0);
   }, [breakdown, effectiveIncludedIds]);
 
-  /** Part pointage mensuel imputée aux agences sélectionnées (aligné sur le filtre de la carte). */
-  const pointageSelectionMontant = useMemo(() => {
-    if (!breakdown.length) return Number(pointageAgenceMontant || 0);
-    const hasPointageField = breakdown.some(
-      (r) => r.pointage_ht !== undefined && r.pointage_ht !== null
-    );
-    if (!hasPointageField) return Number(pointageAgenceMontant || 0);
+  /** Mois > mois calendaire courant : engagements dans la période, hors total principal / marge. */
+  const montantPrevuSelection = useMemo(() => {
+    if (!breakdown.length) return 0;
     return breakdown
       .filter((row) => effectiveIncludedIds.includes(row.agence_id))
-      .reduce((sum, row) => sum + Number(row.pointage_ht || 0), 0);
-  }, [breakdown, effectiveIncludedIds, pointageAgenceMontant]);
+      .reduce((sum, row) => sum + Number(row.prevu_ht || 0), 0);
+  }, [breakdown, effectiveIncludedIds]);
+
+  /*
+   * Pied de carte (footerItems) — ligne « Pointage … / futur … » : désactivé (redondant avec total_ht + Réalisé·Prévu).
+   * Pour réactiver : restaurer les deux useMemo ci-dessous (pointageSelectionMontant, pointagePrevuSelectionMontant),
+   * repasser la prop pointageAgenceMontant sans préfixe _, puis footerItems comme avant (voir historique git).
+   * const pointageSelectionMontant = useMemo(() => {
+   *   if (!breakdown.length) return Number(pointageAgenceMontant || 0);
+   *   const hasPointageField = breakdown.some((r) => r.pointage_ht != null);
+   *   if (!hasPointageField) return Number(pointageAgenceMontant || 0);
+   *   return breakdown
+   *     .filter((row) => effectiveIncludedIds.includes(row.agence_id))
+   *     .reduce((sum, row) => sum + Number(row.pointage_ht || 0), 0);
+   * }, [breakdown, effectiveIncludedIds, pointageAgenceMontant]);
+   * const pointagePrevuSelectionMontant = useMemo(() => { ... }, [breakdown, effectiveIncludedIds]);
+   */
 
   const selectionExplicitementVide =
     depensesAgenceIncludedAgenceIds !== null && depensesAgenceIncludedAgenceIds.length === 0;
@@ -81,7 +92,7 @@ const DashboardCardAgencyExpenses = ({
   const needsManualPick =
     !loading &&
     defaultIds.length === 0 &&
-    breakdown.some((r) => Number(r.total_ht) > 0);
+    breakdown.some((r) => Number(r.total_ht) > 0 || Number(r.prevu_ht) > 0);
 
   const toggleId = (agenceId) => {
     const base =
@@ -98,7 +109,7 @@ const DashboardCardAgencyExpenses = ({
 
   const toolbarPrefix = (
     <>
-      <Tooltip title="Agences incluses dans le montant">
+      <Tooltip title="Agences">
         <IconButton
           size="small"
           onClick={(e) => setAnchorEl(e.currentTarget)}
@@ -121,8 +132,8 @@ const DashboardCardAgencyExpenses = ({
         transformOrigin={{ vertical: "top", horizontal: "right" }}
         slotProps={{ paper: { sx: { p: 1.5, maxWidth: 280, borderRadius: 2 } } }}
       >
-        <Typography variant="caption" sx={{ fontWeight: 800, color: "#64748b", display: "block", mb: 1 }}>
-          Inclure dans le montant de la carte
+        <Typography variant="caption" sx={{ fontWeight: 700, color: "#64748b", display: "block", mb: 1 }}>
+          Agences
         </Typography>
         {!breakdown.length ? (
           <Typography variant="body2" sx={{ fontSize: "0.8rem", color: "#94a3b8" }}>
@@ -168,7 +179,7 @@ const DashboardCardAgencyExpenses = ({
           }}
           sx={{ fontSize: "0.7rem", textTransform: "none", color: "#64748b" }}
         >
-          Réinitialiser (1re agence par défaut)
+          Réinitialiser
         </Button>
       </Popover>
     </>
@@ -180,29 +191,31 @@ const DashboardCardAgencyExpenses = ({
     selectionExplicitementVide ||
     needsManualPick;
 
+  const subtitleRealisePrevu = useMemo(() => {
+    if (loading || selectionExplicitementVide || needsManualPick) return null;
+    return `Réalisé ${formatDashboardCurrency(montantSelection)} · Prévu ${formatDashboardCurrency(montantPrevuSelection)}`;
+  }, [
+    loading,
+    selectionExplicitementVide,
+    needsManualPick,
+    montantSelection,
+    montantPrevuSelection,
+  ]);
+
   return (
     <DashboardMetricCardShell
       title="Dépenses d'agence"
       value={loading ? "Chargement..." : formatDashboardCurrency(montantSelection)}
       valueColor={loading ? undefined : Number(montantSelection || 0) >= 0 ? "rgba(27, 120, 188, 1)" : "#dc2626"}
-      subtitle="Période active"
+      subtitle={subtitleRealisePrevu || undefined}
       accent="#d97706"
       variant={7}
       valueFirstCentered
+      subtitlePercentSplit
       percentValue={hidePercent ? null : montantSelection}
       percentBase={hidePercent ? null : totalCA}
       toolbarPrefix={loading ? null : toolbarPrefix}
-      footerItems={
-        loading
-          ? []
-          : [
-              {
-                key: "pointage-agence",
-                value: `Pointage imputé agences (sélection): ${formatDashboardCurrency(pointageSelectionMontant)}`,
-                color: "#92400e",
-              },
-            ]
-      }
+      footerItems={[]}
     />
   );
 };

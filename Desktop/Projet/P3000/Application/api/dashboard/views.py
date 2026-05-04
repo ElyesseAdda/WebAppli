@@ -695,11 +695,23 @@ class DashboardViewSet(viewsets.ViewSet):
                 pointages_query = pointages_query.filter(month__year=year)
 
             totals_depenses_par_agence = defaultdict(float)
+            totals_depenses_prevu_par_agence = defaultdict(float)
             pointage_ht_par_agence = defaultdict(float)
+            pointage_prevu_ht_par_agence = defaultdict(float)
             main_oeuvre_month_map = defaultdict(float)
             total_cout_main_oeuvre = 0.0
             legacy_pointage_agence_ht = 0.0
+            legacy_pointage_agence_ht_prevu = 0.0
             repartition_pointage_agence_ht = 0.0
+            repartition_pointage_agence_ht_prevu = 0.0
+            # Dépenses agence dashboard : réalisé = mois ≤ mois calendaire courant ; au-delà = prévisionnel
+            today_d = timezone.now().date()
+            dashboard_agence_depenses_cap_ym = (today_d.year, today_d.month)
+
+            def month_ym_gt_dashboard_cap(mdate):
+                if mdate is None:
+                    return False
+                return (mdate.year, mdate.month) > dashboard_agence_depenses_cap_ym
             # Index (agent, month) : uniquement pointage « tout en agence » (legacy), pour ne pas
             # doubler une ligne AEM miroir du même montant. Avec répartition découpée, on ne
             # masque pas les AEM : la ventilation pointage ≠ doublon systématique des factures agence.
@@ -708,6 +720,7 @@ class DashboardViewSet(viewsets.ViewSet):
                 line_montant = float(pointage.montant_charge or 0)
                 month_date = pointage.month
                 mk = f"{month_date.year:04d}-{month_date.month:02d}"
+                is_future_agence_cap = month_ym_gt_dashboard_cap(month_date)
                 parts = _parse_pointage_montant_charge_repartition(pointage)
                 if parts is not None:
                     for ag_id, amt in parts:
@@ -715,11 +728,19 @@ class DashboardViewSet(viewsets.ViewSet):
                             total_cout_main_oeuvre += amt
                             main_oeuvre_month_map[mk] += amt
                         else:
-                            repartition_pointage_agence_ht += amt
-                            totals_depenses_par_agence[ag_id] += amt
-                            pointage_ht_par_agence[ag_id] += amt
+                            if is_future_agence_cap:
+                                repartition_pointage_agence_ht_prevu += amt
+                                totals_depenses_prevu_par_agence[ag_id] += amt
+                                pointage_prevu_ht_par_agence[ag_id] += amt
+                            else:
+                                repartition_pointage_agence_ht += amt
+                                totals_depenses_par_agence[ag_id] += amt
+                                pointage_ht_par_agence[ag_id] += amt
                 elif pointage.agence:
-                    legacy_pointage_agence_ht += line_montant
+                    if is_future_agence_cap:
+                        legacy_pointage_agence_ht_prevu += line_montant
+                    else:
+                        legacy_pointage_agence_ht += line_montant
                     pointage_agence_agent_month.add(
                         (pointage.agent_id, month_date.year, month_date.month)
                     )
@@ -792,6 +813,13 @@ class DashboardViewSet(viewsets.ViewSet):
                     return float(paye)
                 return float(aem.amount or 0)
 
+            def _agency_expense_month_prevu_amount(aem):
+                """Reste budgétaire non payé (prévisionnel), pour mois > mois courant dans la période."""
+                return max(
+                    0.0,
+                    float(aem.amount or 0) - float(aem.montant_paye or 0),
+                )
+
             aem_qs = AgencyExpenseMonth.objects.filter(
                 Q(chantier__isnull=True) | Q(chantier__in=chantiers_query)
             ).exclude(is_recurring_template=True)
@@ -808,7 +836,10 @@ class DashboardViewSet(viewsets.ViewSet):
                     continue
                 line_amt = _agency_expense_month_line_amount(aem)
                 aid = aem.agence_id
-                totals_depenses_par_agence[aid] += line_amt
+                if month_ym_gt_dashboard_cap(month_date_aem):
+                    totals_depenses_prevu_par_agence[aid] += _agency_expense_month_prevu_amount(aem)
+                else:
+                    totals_depenses_par_agence[aid] += line_amt
 
             agences = list(Agence.objects.all().order_by("id"))
             # Pointages « agence » sans répartition détaillée : tout sur l'agence principale (comportement historique).
@@ -819,7 +850,17 @@ class DashboardViewSet(viewsets.ViewSet):
                 else:
                     totals_depenses_par_agence[None] += legacy_pointage_agence_ht
                     pointage_ht_par_agence[None] += legacy_pointage_agence_ht
+            if legacy_pointage_agence_ht_prevu > 0:
+                if agences:
+                    totals_depenses_prevu_par_agence[agences[0].id] += legacy_pointage_agence_ht_prevu
+                    pointage_prevu_ht_par_agence[agences[0].id] += legacy_pointage_agence_ht_prevu
+                else:
+                    totals_depenses_prevu_par_agence[None] += legacy_pointage_agence_ht_prevu
+                    pointage_prevu_ht_par_agence[None] += legacy_pointage_agence_ht_prevu
             total_pointage_agence_ht = legacy_pointage_agence_ht + repartition_pointage_agence_ht
+            total_pointage_agence_prevu_ht = (
+                legacy_pointage_agence_ht_prevu + repartition_pointage_agence_ht_prevu
+            )
             main_agence = agences[0] if agences else None
             main_agence_id = main_agence.id if main_agence else None
             depenses_agence_principale_ht = float(
@@ -842,6 +883,7 @@ class DashboardViewSet(viewsets.ViewSet):
                     }
                 )
             total_depenses_agence_ht = float(sum(totals_depenses_par_agence.values()))
+            total_depenses_agence_prevu_ht = float(sum(totals_depenses_prevu_par_agence.values()))
 
             # Détail complet pour sélection multi-agences côté dashboard
             depenses_agence_breakdown = [
@@ -849,7 +891,11 @@ class DashboardViewSet(viewsets.ViewSet):
                     "agence_id": ag.id,
                     "nom": ag.nom,
                     "total_ht": float(totals_depenses_par_agence.get(ag.id, 0.0)),
+                    "prevu_ht": round(float(totals_depenses_prevu_par_agence.get(ag.id, 0.0)), 2),
                     "pointage_ht": round(float(pointage_ht_par_agence.get(ag.id, 0.0)), 2),
+                    "pointage_prevu_ht": round(
+                        float(pointage_prevu_ht_par_agence.get(ag.id, 0.0)), 2
+                    ),
                 }
                 for ag in agences
             ]
@@ -858,7 +904,11 @@ class DashboardViewSet(viewsets.ViewSet):
                     "agence_id": None,
                     "nom": "Non rattaché",
                     "total_ht": none_total,
+                    "prevu_ht": round(float(totals_depenses_prevu_par_agence.get(None, 0.0)), 2),
                     "pointage_ht": round(float(pointage_ht_par_agence.get(None, 0.0)), 2),
+                    "pointage_prevu_ht": round(
+                        float(pointage_prevu_ht_par_agence.get(None, 0.0)), 2
+                    ),
                 }
             )
 
@@ -911,8 +961,10 @@ class DashboardViewSet(viewsets.ViewSet):
                 'depenses_agence_main_agence_nom': main_agence.nom if main_agence else "",
                 'depenses_agence_autres': depenses_agence_autres,
                 'total_depenses_agence_ht': total_depenses_agence_ht,
+                'total_depenses_agence_prevu_ht': total_depenses_agence_prevu_ht,
                 'depenses_agence_breakdown': depenses_agence_breakdown,
                 'depenses_agence_pointage_ht': total_pointage_agence_ht,
+                'depenses_agence_pointage_prevu_ht': total_pointage_agence_prevu_ht,
             }
         except Exception as e:
             print(f"Erreur dans get_global_stats: {str(e)}")
@@ -948,8 +1000,10 @@ class DashboardViewSet(viewsets.ViewSet):
                 'depenses_agence_main_agence_nom': "",
                 'depenses_agence_autres': [],
                 'total_depenses_agence_ht': 0,
+                'total_depenses_agence_prevu_ht': 0,
                 'depenses_agence_breakdown': [],
                 'depenses_agence_pointage_ht': 0,
+                'depenses_agence_pointage_prevu_ht': 0,
             }
 
     def get_stats_temporelles(self, chantiers_query, year, month, request=None):

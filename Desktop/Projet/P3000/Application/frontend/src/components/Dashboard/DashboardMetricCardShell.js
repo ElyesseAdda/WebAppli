@@ -114,6 +114,8 @@ const DashboardMetricCardShell = ({
   largeValue = false,
   // Mode KPI compact : montant centré en haut, titre centré dessous, sous-texte en bas à gauche
   valueFirstCentered = false,
+  /** Si true avec valueFirstCentered : une ligne % CA (gauche) + subtitle (droite). */
+  subtitlePercentSplit = false,
   // Badge Pill affiché en row sous la valeur (hero mode)
   subtitleBadge = null,
   subtitleBadgeTone = "neutral",
@@ -323,21 +325,68 @@ const DashboardMetricCardShell = ({
       ) : (
         // Standard mode : texte subtitle classique
         subtitle ? (
-          <Typography
-            variant="body2"
-            sx={{
-              color: darkCard ? "#cbd5e1" : "#6b7280",
-              fontSize: valueFirstCentered ? "0.62rem" : "0.72rem",
-              lineHeight: valueFirstCentered ? 1.2 : undefined,
-              mt: valueFirstCentered ? "auto" : undefined,
-              textAlign: valueFirstCentered ? "left" : undefined,
-              alignSelf: valueFirstCentered ? "flex-start" : undefined,
-              ml: valueFirstCentered ? 0 : undefined,
-              mb: valueFirstCentered ? -0.2 : undefined,
-            }}
-          >
-            {subtitle}
-          </Typography>
+          valueFirstCentered && subtitlePercentSplit ? (
+            <Box
+              sx={{
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "flex-start",
+                width: "100%",
+                mt: "auto",
+                gap: 1,
+                mb: -0.2,
+              }}
+            >
+              {percentLabel ? (
+                <Typography
+                  component="span"
+                  variant="body2"
+                  sx={{
+                    color: darkCard ? "#cbd5e1" : "#64748b",
+                    fontSize: "0.62rem",
+                    lineHeight: 1.2,
+                    fontWeight: 700,
+                    fontVariantNumeric: "tabular-nums",
+                    flexShrink: 0,
+                  }}
+                >
+                  {percentLabel}
+                </Typography>
+              ) : (
+                <Box sx={{ flexShrink: 0, minWidth: 0 }} aria-hidden />
+              )}
+              <Typography
+                component="span"
+                variant="body2"
+                sx={{
+                  color: darkCard ? "#cbd5e1" : "#6b7280",
+                  fontSize: "0.62rem",
+                  lineHeight: 1.2,
+                  textAlign: "right",
+                  flex: 1,
+                  minWidth: 0,
+                }}
+              >
+                {subtitle}
+              </Typography>
+            </Box>
+          ) : (
+            <Typography
+              variant="body2"
+              sx={{
+                color: darkCard ? "#cbd5e1" : "#6b7280",
+                fontSize: valueFirstCentered ? "0.62rem" : "0.72rem",
+                lineHeight: valueFirstCentered ? 1.2 : undefined,
+                mt: valueFirstCentered ? "auto" : undefined,
+                textAlign: valueFirstCentered ? "left" : undefined,
+                alignSelf: valueFirstCentered ? "flex-start" : undefined,
+                ml: valueFirstCentered ? 0 : undefined,
+                mb: valueFirstCentered ? -0.2 : undefined,
+              }}
+            >
+              {subtitle}
+            </Typography>
+          )
         ) : null
       )}
 
