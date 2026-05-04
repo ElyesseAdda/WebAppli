@@ -2029,6 +2029,9 @@ const DevisTable = ({
           ligneDetail={editContext.ligne}
           onSuccess={(updated) => {
             if (editContext?.ligne) {
+              const ligneId = editContext.ligne.id;
+              const newPrix = parseFloat(updated.prix) || 0;
+
               // Mettre à jour l'objet ligne directement (pour compatibilité)
               Object.assign(editContext.ligne, {
                 description: updated.description,
@@ -2037,13 +2040,20 @@ const DevisTable = ({
                 cout_materiel: updated.cout_materiel,
                 taux_fixe: updated.taux_fixe,
                 marge: updated.marge,
-                prix: updated.prix
+                prix: newPrix,
+                prix_devis: newPrix
+              });
+
+              // Vider la valeur d'édition inline pour que le tableau affiche
+              // le prix fraîchement sauvegardé et non l'ancienne saisie locale
+              setEditingPrices(prev => {
+                const next = { ...prev };
+                delete next[ligneId];
+                return next;
               });
               
-              // ✅ Appeler onLigneDetailEdit pour mettre à jour devisItems via setDevisItems
-              // Cela permet de déclencher un re-render dans ModificationDevisV2.js
+              // Appeler onLigneDetailEdit pour mettre à jour devisItems via setDevisItems
               if (onLigneDetailEdit) {
-                // Créer un objet ligne mis à jour avec toutes les propriétés
                 const updatedLigne = {
                   ...editContext.ligne,
                   description: updated.description,
@@ -2053,8 +2063,8 @@ const DevisTable = ({
                   taux_fixe: parseFloat(updated.taux_fixe) || 0,
                   marge: parseFloat(updated.marge) || 0,
                   marge_devis: parseFloat(updated.marge) || 0,
-                  prix: parseFloat(updated.prix) || 0,
-                  prix_devis: parseFloat(updated.prix) || 0
+                  prix: newPrix,
+                  prix_devis: newPrix
                 };
                 onLigneDetailEdit(updatedLigne);
               }

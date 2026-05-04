@@ -420,32 +420,14 @@ const LigneDetailCreateModal = ({ isOpen, onClose, description, sousPartieId, pa
               </label>
               <div style={{ display: 'flex', gap: '15px', alignItems: 'center' }}>
                 <input
-                  type="range"
-                  name="marge"
-                  min="0"
-                  max="100"
+                  type="number"
                   step="0.01"
+                  min="0"
+                  name="marge"
                   value={formData.marge}
                   onChange={handleChange}
                   style={{
                     flex: '1',
-                    height: '8px',
-                    borderRadius: '5px',
-                    background: '#dee2e6',
-                    outline: 'none',
-                    cursor: 'pointer'
-                  }}
-                />
-                <input
-                  type="number"
-                  step="0.01"
-                  min="0"
-                  max="100"
-                  name="marge"
-                  value={formData.marge}
-                  onChange={handleChange}
-                  style={{
-                    width: '80px',
                     padding: '8px',
                     border: '1px solid #dee2e6',
                     borderRadius: '6px',

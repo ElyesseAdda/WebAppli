@@ -1579,7 +1579,7 @@ class LigneDetail(models.Model):
     taux_fixe = models.DecimalField(
         max_digits=5, decimal_places=2, null=True, blank=True
     )  # en pourcentage
-    marge = models.DecimalField(max_digits=5, decimal_places=2, default=0)  # en pourcentage
+    marge = models.DecimalField(max_digits=8, decimal_places=2, default=0)  # en pourcentage, illimité
     prix = models.DecimalField(max_digits=10, decimal_places=2)
     is_deleted = models.BooleanField(default=False, null=True, blank=True)
     
