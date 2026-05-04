@@ -29,7 +29,6 @@ const DashboardContent = () => {
     periodStart,
     periodEnd,
     setDepensesAgenceIncludedAgenceIds,
-    depensesAgenceIncludedAgenceIds,
     chartFocusMonthKey,
     setChartFocusMonthKey,
   } = useDashboardFilters();
@@ -254,14 +253,6 @@ const DashboardContent = () => {
     dashboardData?.global_stats?.depenses_agence_pointage_ht || 0
   );
 
-  /**
-   * Somme des `total_ht` du breakdown tel qu’affiché dans le popover (même logique agence + pointage
-   * découpé côté API). Équivalent à « toutes les agences cochées » — pas le total brut API isolé.
-   */
-  const sumBreakdownTotalHt = (bd) =>
-    Array.isArray(bd) ? bd.reduce((s, r) => s + Number(r.total_ht || 0), 0) : 0;
-  const depensesAgencePourMargeHt = sumBreakdownTotalHt(depensesAgenceBreakdown);
-
   const comparisonCoutMateriel = Number(
     comparisonDashboardData?.global_stats?.total_cout_materiel || 0
   );
@@ -275,8 +266,16 @@ const DashboardContent = () => {
     comparisonCoutMateriel + comparisonCoutMainOeuvre + comparisonCoutSousTraitance;
   const comparisonDepensesAgenceBreakdown =
     comparisonDashboardData?.global_stats?.depenses_agence_breakdown || [];
+
+  /**
+   * Dépenses agence **réalisées** sur la période : somme des `total_ht` du breakdown (toutes agences).
+   * Indépendant des cases cochées sur la carte « Dépenses d'agence » (le prévu n'est pas soustrait).
+   */
+  const sumBreakdownRealiseTotalHt = (bd) =>
+    Array.isArray(bd) ? bd.reduce((s, r) => s + Number(r.total_ht || 0), 0) : 0;
+  const depensesAgencePourMargeHt = sumBreakdownRealiseTotalHt(depensesAgenceBreakdown);
   const comparisonDepensesAgencePourMargeHt =
-    sumBreakdownTotalHt(comparisonDepensesAgenceBreakdown);
+    sumBreakdownRealiseTotalHt(comparisonDepensesAgenceBreakdown);
 
   const margeBrute = totalCA - coutChantierGlobal - depensesAgencePourMargeHt;
   const margeBruteRate = totalCA > 0 ? (margeBrute / totalCA) * 100 : 0;

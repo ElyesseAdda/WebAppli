@@ -33,7 +33,7 @@ const DashboardCardGrossMargin = ({
       title="Marge brute"
       value={loading ? "Chargement..." : formatDashboardCurrency(value)}
       valueColor={loading ? undefined : Number(value || 0) >= 0 ? "#16a34a" : "#dc2626"}
-      subtitle="CA − coûts chantier − dép. agence (sélection)"
+      subtitle="CA − coûts chantier − dép. agence réalisées (toutes agences)"
       subtitleBadge={subtitleBadge}
       subtitleBadgeTone={badgeTone}
       accent="#16a34a"
