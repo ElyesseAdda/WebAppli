@@ -1,15 +1,17 @@
 import { Box, Paper, Typography } from "@mui/material";
-import React from "react";
+import React, { useCallback } from "react";
 import {
   Bar,
   BarChart,
   CartesianGrid,
+  Cell,
   ResponsiveContainer,
   Tooltip,
   XAxis,
   YAxis,
 } from "recharts";
 import { formatDashboardCurrency } from "./dashboardCurrency";
+import { useDashboardFilters } from "./DashboardFiltersContext";
 
 const COMPANY_BLUE = "#1B78BC";
 const COMPARISON_PALETTE = ["#f97316", "#22c55e", "#a855f7", "#ef4444", "#eab308", "#14b8a6"];
@@ -58,6 +60,8 @@ const DashboardRevenueMockChart = ({
   loading = false,
   cardHeight = 487,
 }) => {
+  const { toggleChartFocusMonthKey, chartFocusMonthKey } = useDashboardFilters();
+
   const formatBottomLegendLabel = (label) => {
     const match = String(label || "").match(/^Année\s+(\d{4})$/i);
     return match ? match[1] : label;
@@ -108,12 +112,31 @@ const DashboardRevenueMockChart = ({
   });
 
   const data = (monthlyCashflow || []).map((m, idx) => {
-    const row = { month: m.label, ca_ht_current: Number(m.facture_ht || 0) };
+    const row = {
+      month: m.label,
+      monthKey: m.key || "",
+      ca_ht_current: Number(m.facture_ht || 0),
+    };
     (comparisonYearSeries || []).forEach((series, sIdx) => {
       row[`ca_ht_cmp_${sIdx}`] = Number(series?.monthlyCashflow?.[idx]?.facture_ht || 0);
     });
     return row;
   });
+
+  const barFillOpacity = useCallback(
+    (entry) =>
+      !chartFocusMonthKey ? 1 : entry.monthKey === chartFocusMonthKey ? 1 : 0.32,
+    [chartFocusMonthKey]
+  );
+
+  /** Clic : sélectionne le mois (stats mois) ; reclic sur le même mois = tout l’année / période. */
+  const handleBarMonthClick = useCallback(
+    (rect) => {
+      const key = rect?.payload?.monthKey;
+      if (key && /^\d{4}-\d{2}$/.test(String(key))) toggleChartFocusMonthKey(String(key));
+    },
+    [toggleChartFocusMonthKey]
+  );
 
   // Hauteur de la zone chart = cardHeight − header − légende bas
   const chartAreaHeight = cardHeight - 126;
@@ -215,7 +238,13 @@ const DashboardRevenueMockChart = ({
                 fill={COMPANY_BLUE}
                 radius={[0, 0, 0, 0]}
                 maxBarSize={32}
-              />
+                cursor="pointer"
+                onClick={handleBarMonthClick}
+              >
+                {data.map((entry, i) => (
+                  <Cell key={`cur-${entry.monthKey || i}`} fillOpacity={barFillOpacity(entry)} />
+                ))}
+              </Bar>
               {(comparisonYearSeries || []).map((series, idx) => (
                 <Bar
                   key={`cmp-${series.year}-${idx}`}
@@ -224,7 +253,13 @@ const DashboardRevenueMockChart = ({
                   fill={COMPARISON_PALETTE[idx % COMPARISON_PALETTE.length]}
                   radius={[0, 0, 0, 0]}
                   maxBarSize={32}
-                />
+                  cursor="pointer"
+                  onClick={handleBarMonthClick}
+                >
+                  {data.map((entry, i) => (
+                    <Cell key={`cmp-${idx}-${entry.monthKey || i}`} fillOpacity={barFillOpacity(entry)} />
+                  ))}
+                </Bar>
               ))}
             </BarChart>
           </ResponsiveContainer>

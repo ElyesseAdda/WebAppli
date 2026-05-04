@@ -17,7 +17,7 @@ import {
   TextField,
 } from "@mui/material";
 import FilterAltOutlinedIcon from "@mui/icons-material/FilterAltOutlined";
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import axios from "axios";
 import {
   DashboardFiltersProvider,
@@ -34,6 +34,8 @@ const DashboardContent = () => {
     periodEnd,
     setDepensesAgenceIncludedAgenceIds,
     depensesAgenceIncludedAgenceIds,
+    chartFocusMonthKey,
+    setChartFocusMonthKey,
   } = useDashboardFilters();
   const [dashboardData, setDashboardData] = useState(null);
   const [comparisonDashboardData, setComparisonDashboardData] = useState(null);
@@ -42,6 +44,23 @@ const DashboardContent = () => {
   const [dashboardError, setDashboardError] = useState(null);
 
   const depensesSettingsHydrated = useRef(false);
+  /** Dernière réponse « période large » (graphique + stats année / plage) pour réappliquer au désengagement mois. */
+  const wideDashboardSnapshotRef = useRef(null);
+
+  const referenceYears = useMemo(
+    () =>
+      comparisonYears.length > 0
+        ? comparisonYears.map((y) => Number(y)).filter((y) => Number.isFinite(y))
+        : [selectedYear - 1],
+    [comparisonYears, selectedYear]
+  );
+
+  const drillFetchParamsRef = useRef({
+    selectedYear,
+    comparisonYears,
+    referenceYears,
+  });
+  drillFetchParamsRef.current = { selectedYear, comparisonYears, referenceYears };
 
   useEffect(() => {
     if (depensesSettingsHydrated.current) return;
@@ -86,12 +105,8 @@ const DashboardContent = () => {
     return `${targetYear}-${String(m).padStart(2, "0")}-${String(safeDay).padStart(2, "0")}`;
   };
 
-  const referenceYears =
-    comparisonYears.length > 0
-      ? comparisonYears.map((y) => Number(y)).filter((y) => Number.isFinite(y))
-      : [selectedYear - 1];
-
   useEffect(() => {
+    let cancelled = false;
     const fetchDashboardData = async () => {
       try {
         setDashboardLoading(true);
@@ -124,23 +139,99 @@ const DashboardContent = () => {
           ...referenceRequests,
         ]);
 
-        setDashboardData(currentResponse.data || null);
-        setComparisonDashboardData(referenceResponses[0]?.data || null);
+        if (cancelled) return;
         const byYear = {};
         referenceYears.forEach((yr, idx) => {
           byYear[yr] = referenceResponses[idx]?.data || null;
         });
+        wideDashboardSnapshotRef.current = {
+          current: currentResponse.data || null,
+          comparison0: referenceResponses[0]?.data || null,
+          byYear,
+        };
+        setDashboardData(currentResponse.data || null);
+        setComparisonDashboardData(referenceResponses[0]?.data || null);
         setComparisonDashboardsByYear(byYear);
+        setChartFocusMonthKey(null);
       } catch (err) {
-        console.error("Erreur chargement dashboard:", err);
-        setDashboardError("Erreur lors de la recuperation des donnees.");
+        if (!cancelled) {
+          console.error("Erreur chargement dashboard:", err);
+          setDashboardError("Erreur lors de la recuperation des donnees.");
+        }
       } finally {
-        setDashboardLoading(false);
+        if (!cancelled) setDashboardLoading(false);
       }
     };
 
     fetchDashboardData();
-  }, [selectedYear, comparisonYears, periodStart, periodEnd]);
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedYear, comparisonYears, periodStart, periodEnd, referenceYears, setChartFocusMonthKey]);
+
+  useEffect(() => {
+    if (!chartFocusMonthKey) {
+      const snap = wideDashboardSnapshotRef.current;
+      if (!snap?.current) return;
+      setDashboardData(snap.current);
+      setComparisonDashboardData(snap.comparison0);
+      setComparisonDashboardsByYear({ ...snap.byYear });
+      return;
+    }
+
+    let cancelled = false;
+    const run = async () => {
+      try {
+        const { selectedYear: sy, comparisonYears: cy, referenceYears: ry } = drillFetchParamsRef.current;
+        const { startDate, endDate } = getPeriodBoundaries(chartFocusMonthKey, chartFocusMonthKey);
+        if (!startDate || !endDate) return;
+
+        const referenceRequests = ry.map((referenceYear) => {
+          const yearsDelta = referenceYear - sy;
+          const referenceStartDate = shiftDateByYears(startDate, yearsDelta);
+          const referenceEndDate = shiftDateByYears(endDate, yearsDelta);
+          return axios.get("/api/dashboard/", {
+            params: {
+              year: referenceYear,
+              period_start: referenceStartDate,
+              period_end: referenceEndDate,
+            },
+          });
+        });
+
+        const [currentResponse, ...referenceResponses] = await Promise.all([
+          axios.get("/api/dashboard/", {
+            params: {
+              year: sy,
+              years: cy.length ? cy.join(",") : undefined,
+              period_start: startDate,
+              period_end: endDate,
+            },
+          }),
+          ...referenceRequests,
+        ]);
+
+        if (cancelled) return;
+        const byYear = {};
+        ry.forEach((yr, idx) => {
+          byYear[yr] = referenceResponses[idx]?.data || null;
+        });
+        setDashboardData(currentResponse.data || null);
+        setComparisonDashboardData(referenceResponses[0]?.data || null);
+        setComparisonDashboardsByYear(byYear);
+      } catch (err) {
+        if (!cancelled) {
+          console.error("Erreur chargement dashboard (mois):", err);
+          setDashboardError("Erreur lors de la recuperation des donnees.");
+        }
+      }
+    };
+
+    void run();
+    return () => {
+      cancelled = true;
+    };
+  }, [chartFocusMonthKey]);
 
   const totalCA = Number(dashboardData?.global_stats?.total_montant_ht || 0);
   const comparisonYear = referenceYears[0];
@@ -199,10 +290,17 @@ const DashboardContent = () => {
   );
   const burn15JHt = Number(dashboardData?.global_stats?.burn_15j_ht || 0);
   const latePaymentsHt = Number(dashboardData?.global_stats?.late_payments_ht || 0);
-  const monthlyCashflow = dashboardData?.global_stats?.monthly_cashflow || [];
+  const wideForChart = wideDashboardSnapshotRef.current;
+  const monthlyCashflow =
+    wideForChart?.current?.global_stats?.monthly_cashflow ??
+    dashboardData?.global_stats?.monthly_cashflow ??
+    [];
   const comparisonYearSeries = referenceYears.map((yr) => ({
     year: yr,
-    monthlyCashflow: comparisonDashboardsByYear?.[yr]?.global_stats?.monthly_cashflow || [],
+    monthlyCashflow:
+      wideForChart?.byYear?.[yr]?.global_stats?.monthly_cashflow ??
+      comparisonDashboardsByYear?.[yr]?.global_stats?.monthly_cashflow ??
+      [],
   }));
 
   return (

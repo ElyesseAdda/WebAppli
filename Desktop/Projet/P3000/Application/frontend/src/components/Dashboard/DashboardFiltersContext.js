@@ -58,6 +58,14 @@ export const DashboardFiltersProvider = ({ children }) => {
     setPeriodEnd("");
   };
 
+  /** Mois YYYY-MM mis en avant sur le graphique CA ; null = stats sur toute la période filtrée. */
+  const [chartFocusMonthKey, setChartFocusMonthKey] = useState(null);
+
+  const toggleChartFocusMonthKey = useCallback((ymKey) => {
+    if (!ymKey || !/^\d{4}-\d{2}$/.test(String(ymKey))) return;
+    setChartFocusMonthKey((prev) => (prev === ymKey ? null : ymKey));
+  }, []);
+
   // Fonction pour ouvrir/fermer un accordéon
   const toggleAccordion = (accordionId) => {
     setOpenAccordion((prev) => (prev === accordionId ? null : accordionId));
@@ -78,6 +86,9 @@ export const DashboardFiltersProvider = ({ children }) => {
     depensesAgenceIncludedAgenceIds,
     setDepensesAgenceIncludedAgenceIds,
     clearDepensesAgenceSelection,
+    chartFocusMonthKey,
+    setChartFocusMonthKey,
+    toggleChartFocusMonthKey,
   };
 
   return (
