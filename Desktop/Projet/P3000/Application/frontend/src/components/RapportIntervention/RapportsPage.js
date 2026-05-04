@@ -126,6 +126,7 @@ const RapportsPage = () => {
       pageSize: RAPPORTS_LIST_PAGE_SIZE,
       ordering: dateSortOrder === "desc" ? "-date" : "date",
       excludeStatutTermine: !showTermines,
+      onlyStatutTermine: showTermines,
     });
   }, [fetchRapports, filters, listPage, dateSortOrder, showTermines, showOnlyDevisAFaireV]);
 
@@ -155,10 +156,13 @@ const RapportsPage = () => {
     });
   }, [brouillonsFiltres, dateSortOrder]);
 
-  const displayRapports = listPage === 1 ? [...brouillonsSorted, ...rapports] : rapports;
+  const displayRapports =
+    listPage === 1 && !showTermines ? [...brouillonsSorted, ...rapports] : rapports;
 
   const showInitialLoading =
-    loading && rapports.length === 0 && (listPage > 1 || brouillonsSorted.length === 0);
+    loading &&
+    rapports.length === 0 &&
+    (listPage > 1 || showTermines || brouillonsSorted.length === 0);
 
   useEffect(() => {
     loadRapports();
@@ -619,14 +623,18 @@ const RapportsPage = () => {
             Chargement...
           </Typography>
         </Paper>
-      ) : !loading && rapportsCount === 0 && brouillonsFiltres.length === 0 ? (
+      ) : !loading && rapportsCount === 0 && (showTermines || brouillonsFiltres.length === 0) ? (
         <Paper elevation={0} sx={{ p: 4, textAlign: "center", borderRadius: 2, border: "1px solid #e0e0e0" }}>
           <Typography variant="body1" color="text.secondary">
             Aucun rapport d&apos;intervention ne correspond à ces critères.
           </Typography>
-          {!showTermines && (
+          {!showTermines ? (
             <Typography variant="body2" color="text.secondary" sx={{ mt: 1.5, maxWidth: 480, mx: "auto" }}>
-              Les rapports terminés sont masqués par défaut — cochez « Afficher terminés » pour les inclure.
+              Les rapports terminés sont masqués par défaut — cochez « Afficher terminés » pour les afficher.
+            </Typography>
+          ) : (
+            <Typography variant="body2" color="text.secondary" sx={{ mt: 1.5, maxWidth: 480, mx: "auto" }}>
+              Aucun rapport terminé ne correspond à ces critères.
             </Typography>
           )}
         </Paper>

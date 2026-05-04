@@ -151,6 +151,7 @@ const RapportsPageMobile = ({ onSelectRapport, onEditRapport }) => {
       pageSize: RAPPORTS_LIST_PAGE_SIZE,
       ordering: dateSortOrder === "desc" ? "-date" : "date",
       excludeStatutTermine: !showTermines,
+      onlyStatutTermine: showTermines,
     });
   }, [fetchRapports, filters.residence, filters.logement, filters.type_rapport, listPage, dateSortOrder, showTermines, showOnlyDevisAFaireV]);
 
@@ -173,10 +174,13 @@ const RapportsPageMobile = ({ onSelectRapport, onEditRapport }) => {
     });
   }, [brouillonsFiltres, dateSortOrder]);
 
-  const displayRapports = listPage === 1 ? [...brouillonsSorted, ...rapports] : rapports;
+  const displayRapports =
+    listPage === 1 && !showTermines ? [...brouillonsSorted, ...rapports] : rapports;
 
   const showInitialLoading =
-    loading && rapports.length === 0 && (listPage > 1 || brouillonsSorted.length === 0);
+    loading &&
+    rapports.length === 0 &&
+    (listPage > 1 || showTermines || brouillonsSorted.length === 0);
 
   useEffect(() => {
     loadRapports();
@@ -680,7 +684,7 @@ const RapportsPageMobile = ({ onSelectRapport, onEditRapport }) => {
         <Typography variant="body2" color="text.secondary" sx={{ py: 4, textAlign: "center" }}>
           Chargement...
         </Typography>
-      ) : !loading && rapportsCount === 0 && brouillonsFiltres.length === 0 ? (
+      ) : !loading && rapportsCount === 0 && (showTermines || brouillonsFiltres.length === 0) ? (
         <Paper
           elevation={0}
           sx={{
@@ -693,9 +697,13 @@ const RapportsPageMobile = ({ onSelectRapport, onEditRapport }) => {
           <Typography variant="body2" color="text.secondary">
             Aucun rapport ne correspond à ces critères.
           </Typography>
-          {!showTermines && (
+          {!showTermines ? (
             <Typography variant="caption" color="text.secondary" sx={{ display: "block", mt: 1.5, px: 1 }}>
-              Les rapports terminés sont masqués — cochez « Afficher terminés » pour les inclure.
+              Les rapports terminés sont masqués — cochez « Afficher terminés » pour les afficher.
+            </Typography>
+          ) : (
+            <Typography variant="caption" color="text.secondary" sx={{ display: "block", mt: 1.5, px: 1 }}>
+              Aucun rapport terminé ne correspond à ces critères.
             </Typography>
           )}
         </Paper>

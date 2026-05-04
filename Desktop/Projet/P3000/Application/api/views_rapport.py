@@ -226,6 +226,10 @@ class RapportInterventionViewSet(viewsets.ModelViewSet):
         if exclude_term in ('1', 'true', 'yes'):
             qs = qs.exclude(statut='termine')
 
+        only_term = self.request.query_params.get('only_statut_termine', '').lower()
+        if only_term in ('1', 'true', 'yes'):
+            qs = qs.filter(statut='termine')
+
         if action_ == 'list':
             ordering = (self.request.query_params.get('ordering') or '-date').strip()
             if ordering == 'date':

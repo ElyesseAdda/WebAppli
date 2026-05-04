@@ -16,6 +16,7 @@ export const useRapports = () => {
       pageSize,
       ordering,
       excludeStatutTermine,
+      onlyStatutTermine,
     } = opts;
     setLoading(true);
     setError(null);
@@ -35,6 +36,9 @@ export const useRapports = () => {
       }
       if (excludeStatutTermine) {
         params.append("exclude_statut_termine", "true");
+      }
+      if (onlyStatutTermine) {
+        params.append("only_statut_termine", "true");
       }
       const response = await axios.get(`/api/rapports-intervention/?${params.toString()}`);
       const data = response.data;
