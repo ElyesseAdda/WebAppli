@@ -204,6 +204,13 @@ class RapportInterventionViewSet(viewsets.ModelViewSet):
         if type_rapport:
             qs = qs.filter(type_rapport=type_rapport)
 
+        titre_id = self.request.query_params.get('titre')
+        if titre_id not in (None, ''):
+            try:
+                qs = qs.filter(titre_id=int(titre_id))
+            except (TypeError, ValueError):
+                pass
+
         devis_a_faire = self.request.query_params.get('devis_a_faire')
         if devis_a_faire is not None and str(devis_a_faire).strip() != '':
             val = str(devis_a_faire).strip().lower()

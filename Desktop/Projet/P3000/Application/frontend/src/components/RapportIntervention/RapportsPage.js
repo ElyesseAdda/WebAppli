@@ -81,8 +81,10 @@ const RapportsPage = () => {
     residence: "",
     date_creation: "",
     type_rapport: "",
+    titre: "",
   });
   const [residences, setResidences] = useState([]);
+  const [titresRapport, setTitresRapport] = useState([]);
   const [snackbar, setSnackbar] = useState({ open: false, message: "", severity: "success" });
   const [showStatusModal, setShowStatusModal] = useState(false);
   const [rapportToUpdate, setRapportToUpdate] = useState(null);
@@ -103,6 +105,13 @@ const RapportsPage = () => {
     axios.get("/api/residences/").then((res) => {
       setResidences(res.data?.results || res.data || []);
     }).catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    axios.get("/api/titres-rapport/").then((res) => {
+      const d = res.data?.results || res.data || [];
+      setTitresRapport(Array.isArray(d) ? d : []);
+    }).catch(() => setTitresRapport([]));
   }, []);
 
   const loadRapports = useCallback(() => {
@@ -144,6 +153,7 @@ const RapportsPage = () => {
       }
       if (filters.client_societe && Number(b.client_societe) !== Number(filters.client_societe)) return false;
       if (showOnlyDevisAFaireV && (!b.devis_a_faire || b.devis_fait)) return false;
+      if (filters.titre && Number(b.titre) !== Number(filters.titre)) return false;
       return true;
     });
   }, [brouillonsServeur, filters, showOnlyDevisAFaireV]);
@@ -443,6 +453,22 @@ const RapportsPage = () => {
               <MenuItem value="vigik_plus">{TYPE_RAPPORT_LABELS.vigik_plus}</MenuItem>
             </Select>
           </FormControl>
+
+          <Autocomplete
+            options={titresRapport}
+            getOptionLabel={(opt) => opt?.nom || ""}
+            isOptionEqualToValue={(a, b) => a?.id === b?.id}
+            value={titresRapport.find((t) => String(t.id) === String(filters.titre)) || null}
+            onChange={(_, val) => handleFilterChange("titre", val?.id != null ? String(val.id) : "")}
+            renderInput={(params) => (
+              <TextField {...params} label="Titre" placeholder="Tapez pour filtrer…" size="small" />
+            )}
+            sx={{ minWidth: 220 }}
+            autoHighlight
+            clearOnEscape
+            noOptionsText="Aucun titre correspondant"
+            slotProps={{ listbox: { sx: { maxHeight: 280 } } }}
+          />
 
           <TextField
             label="Date de création du rapport"
