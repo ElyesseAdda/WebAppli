@@ -14817,14 +14817,16 @@ class AppelOffresViewSet(viewsets.ModelViewSet):
         return Response(serializer.data, status=status.HTTP_201_CREATED, headers=headers)
     
     def get_queryset(self):
-        """Filtrer selon les paramètres. Prefetch du devis de chantier pour les montants affichés."""
+        """Filtrer selon les paramètres. Prefetch des devis pour les montants affichés."""
         queryset = AppelOffres.objects.select_related('societe').prefetch_related(
             Prefetch(
                 'chantier_transformé',
                 Chantier.objects.prefetch_related(
                     Prefetch('devis', Devis.objects.filter(devis_chantier=True))
                 )
-            )
+            ),
+            # Devis liés directement à l'AO (non transformés)
+            Prefetch('devis', Devis.objects.order_by('-date_creation')),
         )
         # Filtre par statut
         statut = self.request.query_params.get('statut', None)

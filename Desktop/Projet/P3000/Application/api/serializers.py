@@ -2046,11 +2046,15 @@ class AppelOffresSerializer(serializers.ModelSerializer):
     chantier_transformé_name = serializers.SerializerMethodField()
 
     def _get_devis_chantier(self, obj):
-        """Retourne le devis de chantier (devis_chantier=True) du chantier transformé si existant.
-        Utilise le prefetch du viewset (chantier_transformé -> devis) en liste pour éviter N+1."""
-        if not obj.chantier_transformé:
-            return None
-        return obj.chantier_transformé.devis.filter(devis_chantier=True).first()
+        """
+        Retourne le devis le plus pertinent pour l'affichage des montants :
+        - AO transformé → devis de chantier (devis_chantier=True) du chantier lié
+        - AO non transformé → devis lié directement via FK appel_offres, le plus récent
+        """
+        if obj.chantier_transformé:
+            return obj.chantier_transformé.devis.filter(devis_chantier=True).first()
+        # Devis lié directement à l'AO (non transformé)
+        return obj.devis.order_by('-date_creation').first()
 
     def get_deja_transforme(self, obj):
         """Vérifie si l'appel d'offres a déjà été transformé en chantier"""
