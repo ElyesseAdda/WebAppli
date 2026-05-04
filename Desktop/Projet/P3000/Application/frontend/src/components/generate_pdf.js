@@ -74,7 +74,7 @@ async function generatePDF() {
       }
 
       const response = await page.goto(previewUrl, {
-        waitUntil: ["load", "networkidle0"],
+        waitUntil: ["load", "networkidle2"],
         timeout: 60000,
       });
 
@@ -85,8 +85,17 @@ async function generatePDF() {
       // Attendre que le contenu soit complètement chargé
       await page.waitForSelector("body", { timeout: 10000 });
 
-      // Attendre que tous les éléments soient chargés pour les PDFs multi-pages
-      await new Promise((resolve) => setTimeout(resolve, 3000));
+      // Attendre que toutes les images soient complètement chargées (photos S3, logo, signature)
+      // plutôt qu'un délai fixe de 3 secondes
+      await page.waitForFunction(
+        () => {
+          const imgs = Array.from(document.querySelectorAll("img"));
+          return imgs.every((img) => img.complete && img.naturalWidth > 0);
+        },
+        { timeout: 20000, polling: 200 }
+      ).catch(() => {
+        // Si certaines images ne se chargent pas (ex: URL expirée), on continue quand même
+      });
 
       await page.pdf({
         path: pdfPath,

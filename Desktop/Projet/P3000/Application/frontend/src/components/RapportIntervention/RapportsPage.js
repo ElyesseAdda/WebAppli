@@ -4,7 +4,7 @@ import {
   TableContainer, TableHead, TableRow, IconButton, TextField,
   Snackbar, Alert, Autocomplete, FormControl, InputLabel, Select, MenuItem,
   Tooltip, FormControlLabel, Checkbox, Pagination, Stack,
-  Dialog, DialogTitle, DialogContent, DialogActions,
+  Dialog, DialogTitle, DialogContent, DialogActions, CircularProgress,
 } from "@mui/material";
 import {
   MdAdd, MdEdit, MdDelete, MdDescription, MdArrowDownward, MdArrowUpward,
@@ -100,6 +100,7 @@ const RapportsPage = () => {
   const [devisOptions, setDevisOptions] = useState([]);
   const [selectedDevis, setSelectedDevis] = useState(null);
   const thumbClickTimeoutRef = useRef(null);
+  const [downloadingIds, setDownloadingIds] = useState(new Set());
 
   useEffect(() => {
     axios.get("/api/residences/").then((res) => {
@@ -242,8 +243,10 @@ const RapportsPage = () => {
   };
 
   const handleGeneratePDF = async (rapport) => {
+    if (downloadingIds.has(rapport.id)) return;
+    setDownloadingIds((prev) => new Set(prev).add(rapport.id));
+    setSnackbar({ open: true, message: "Génération du PDF en cours…", severity: "info" });
     try {
-      setSnackbar({ open: true, message: "Téléchargement en cours...", severity: "info" });
       const response = await axios.post(
         "/api/generate-rapport-intervention-pdf/",
         { rapport_id: rapport.id },
@@ -271,7 +274,7 @@ const RapportsPage = () => {
         link.click();
         document.body.removeChild(link);
         window.URL.revokeObjectURL(pdfUrl);
-        setSnackbar({ open: true, message: "Téléchargement terminé avec succès", severity: "success" });
+        setSnackbar({ open: true, message: "PDF téléchargé avec succès", severity: "success" });
       } else {
         const reader = new FileReader();
         reader.onload = function () {
@@ -289,6 +292,12 @@ const RapportsPage = () => {
         open: true,
         message: error.response?.data?.error || "Erreur lors de la génération du PDF.",
         severity: "error",
+      });
+    } finally {
+      setDownloadingIds((prev) => {
+        const next = new Set(prev);
+        next.delete(rapport.id);
+        return next;
       });
     }
   };
@@ -753,14 +762,26 @@ const RapportsPage = () => {
                     >
                       {!rapport.is_brouillon_serveur && (
                         <>
-                      <IconButton
-                        size="small"
-                        onClick={() => handleGeneratePDF(rapport)}
-                        sx={{ color: "success.main", "&:hover": { backgroundColor: "rgba(46, 125, 50, 0.04)" } }}
-                        title="Télécharger le PDF"
-                      >
-                        <AiFillFilePdf style={{ fontSize: "20px" }} />
-                      </IconButton>
+                      <Tooltip title={downloadingIds.has(rapport.id) ? "Génération en cours…" : "Télécharger le PDF"}>
+                        <span>
+                          <IconButton
+                            size="small"
+                            onClick={() => handleGeneratePDF(rapport)}
+                            disabled={downloadingIds.has(rapport.id)}
+                            sx={{
+                              color: "success.main",
+                              "&:hover": { backgroundColor: "rgba(46, 125, 50, 0.04)" },
+                              "&.Mui-disabled": { color: "success.main", opacity: 0.6 },
+                            }}
+                          >
+                            {downloadingIds.has(rapport.id) ? (
+                              <CircularProgress size={18} thickness={5} sx={{ color: "success.main" }} />
+                            ) : (
+                              <AiFillFilePdf style={{ fontSize: "20px" }} />
+                            )}
+                          </IconButton>
+                        </span>
+                      </Tooltip>
                       <RegeneratePDFIconButton
                         documentType={rapport.type_rapport === "vigik_plus" ? DOCUMENT_TYPES.RAPPORT_VIGIK_PLUS : DOCUMENT_TYPES.RAPPORT_INTERVENTION}
                         documentData={rapport}
