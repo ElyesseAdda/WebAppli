@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import axios from "axios";
 import PieChartOutline from "@mui/icons-material/PieChartOutline";
 import {
@@ -203,6 +203,15 @@ const normalizeRepartitionFromApi = (raw) => {
 const hasAgencePartInRepartition = (rep) =>
   Array.isArray(rep) && rep.some((x) => x.agence_id !== null && toNumber(x.montant) > 0);
 
+/** Inclus dans le tableau pour le mois `YYYY-MM` : effectif actuel, ou encore présent ce mois-là (désactivation). */
+const agentVisibleForPointageMonth = (agent, monthKey) => {
+  if (agent?.is_active === true) return true;
+  const dd = agent?.date_desactivation;
+  if (!dd) return false;
+  const deactivationYm = String(dd).slice(0, 7);
+  return String(monthKey) <= deactivationYm;
+};
+
 const getPreviousMonthKey = (monthKey) => {
   const [ys, ms] = String(monthKey).split("-");
   const y = Number.parseInt(ys, 10);
@@ -235,6 +244,22 @@ const TableauPointagePage = () => {
     inputType: "text",
     isCurrency: false,
   });
+  const monthInputRef = useRef(null);
+
+  const openMonthPicker = () => {
+    const el = monthInputRef.current;
+    if (!el) return;
+    if (typeof el.showPicker === "function") {
+      try {
+        el.showPicker();
+        return;
+      } catch {
+        /* navigateurs sans showPicker ou contexte non sécurisé */
+      }
+    }
+    el.focus();
+    el.click?.();
+  };
 
   const monthDate = `${monthKey}-01`;
 
@@ -245,9 +270,14 @@ const TableauPointagePage = () => {
       setError("");
       try {
         const prevMonthKey = getPreviousMonthKey(monthKey);
+        const [yearStr, monthStr] = monthKey.split("-");
+        const agentListParams = {
+          year: Number(yearStr),
+          month: Number(monthStr),
+        };
         const [agentsRes, pointagesRes, pointagesPrevRes, scheduleSummaryRes, agentPrimesRes, agencesRes] =
           await Promise.all([
-            axios.get("/api/agent/"),
+            axios.get("/api/agent/", { params: agentListParams }),
             axios.get(`/api/pointages-mensuels/?month=${monthKey}`),
             axios
               .get(`/api/pointages-mensuels/?month=${prevMonthKey}`)
@@ -330,7 +360,7 @@ const TableauPointagePage = () => {
 
         const agentsList = Array.isArray(agentsRes.data) ? agentsRes.data : [];
         agentsList.forEach((agent) => {
-          if (agent?.is_active === false) return;
+          if (!agentVisibleForPointageMonth(agent, monthKey)) return;
           const id = String(agent.id);
           const prevSal = prevSalaireByAgent[id];
           if (toNumber(prevSal) <= 0) return;
@@ -388,7 +418,7 @@ const TableauPointagePage = () => {
 
   const rows = useMemo(() => {
     return agents
-      .filter((agent) => agent?.is_active !== false)
+      .filter((agent) => agentVisibleForPointageMonth(agent, monthKey))
       .map((agent) => {
         const agentId = String(agent.id);
         const draft = draftByAgent[agentId] || {};
@@ -879,18 +909,32 @@ const TableauPointagePage = () => {
         <Typography variant="h5" sx={{ fontWeight: 700, color: "#fff" }}>
           Tableau de pointage des agents
         </Typography>
-        <TextField
-          label="Mois"
-          type="month"
-          size="small"
-          value={monthKey}
-          onChange={(e) => setMonthKey(e.target.value)}
-          InputLabelProps={{ shrink: true }}
+        <Box
+          onClick={() => openMonthPicker()}
           sx={{
-            "& .MuiInputLabel-root": { color: "#fff" },
-            "& .MuiInputBase-input": { color: "#fff" },
+            display: "inline-flex",
+            cursor: "pointer",
+            "& .MuiTextField-root": { cursor: "pointer" },
+            "& .MuiInputLabel-root": { cursor: "pointer" },
+            "& .MuiOutlinedInput-root": { cursor: "pointer" },
+            "& input": { cursor: "pointer", minWidth: "10.5rem" },
           }}
-        />
+        >
+          <TextField
+            id="pointage-table-month"
+            inputRef={monthInputRef}
+            label="Mois"
+            type="month"
+            size="small"
+            value={monthKey}
+            onChange={(e) => setMonthKey(e.target.value)}
+            InputLabelProps={{ shrink: true }}
+            sx={{
+              "& .MuiInputLabel-root": { color: "#fff" },
+              "& .MuiInputBase-input": { color: "#fff" },
+            }}
+          />
+        </Box>
       </Box>
 
       {loading && (

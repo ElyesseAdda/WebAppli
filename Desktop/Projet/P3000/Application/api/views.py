@@ -1931,9 +1931,7 @@ class AgentViewSet(viewsets.ModelViewSet):
         
         # Si on a des paramètres de période, appliquer la logique temporelle
         if week and year:
-            from datetime import datetime
-            import calendar
-            
+            # datetime / timedelta : imports en tête du module (évite UnboundLocalError sur la branche month)
             # Convertir semaine/année en date de début de semaine
             try:
                 # Utiliser dayjs-like logic pour calculer le début de semaine
@@ -1947,10 +1945,10 @@ class AgentViewSet(viewsets.ModelViewSet):
                 # Calculer le début de la semaine demandée
                 week_start = first_monday + timedelta(weeks=week_int - 1)
                 
-                # Filtrer : agent actif OU désactivé après le début de la semaine
+                # Filtrer : agent actif OU encore présent sur la semaine (désactivation en fin de semaine incluse)
                 queryset = queryset.filter(
-                    Q(is_active=True) | 
-                    Q(date_desactivation__gt=week_start)
+                    Q(is_active=True) |
+                    Q(date_desactivation__gte=week_start)
                 )
             except (ValueError, TypeError):
                 # En cas d'erreur de conversion, retourner tous les agents actifs
@@ -1963,10 +1961,10 @@ class AgentViewSet(viewsets.ModelViewSet):
                 month_int = int(month)
                 month_start = datetime(year_int, month_int, 1)
                 
-                # Filtrer : agent actif OU désactivé après le début du mois
+                # Filtrer : agent actif OU encore en poste ce mois (désactivation le 1er du mois incluse)
                 queryset = queryset.filter(
-                    Q(is_active=True) | 
-                    Q(date_desactivation__gt=month_start)
+                    Q(is_active=True) |
+                    Q(date_desactivation__gte=month_start)
                 )
             except (ValueError, TypeError):
                 queryset = queryset.filter(is_active=True)
