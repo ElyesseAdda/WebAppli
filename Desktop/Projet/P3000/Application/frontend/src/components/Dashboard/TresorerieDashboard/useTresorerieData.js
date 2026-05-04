@@ -161,12 +161,21 @@ export function useTresorerieData(selectedYear, periodStart, periodEnd) {
       const numeroSituation = withoutNumberPrefix(s.numero_situation || s.numero, s.id);
       const label = `${numeroSituation} — ${s.chantier_name || s.chantier || ""}`;
       const dateRef = s.date_envoi || s.date_creation;
+      const chantierNom = String(s.chantier_name || s.chantier || "Chantier sans nom").trim();
+      const cid = s.chantier_id ?? s.chantier;
+      const groupKeyChantier =
+        cid != null && cid !== "" ? `chantier:id:${cid}` : `chantier:nom:${chantierNom}`;
 
       // Réelle : placée au mois d'envoi (prestation)
       if (dateRef) {
         const dp = parseDateMonthYear(dateRef);
         if (dp && dp.year === year) {
-          addToMonth(dp.month, "entreesReelles", "_entreesReellesDetail", montant, { label, montant });
+          addToMonth(dp.month, "entreesReelles", "_entreesReellesDetail", montant, {
+            label,
+            montant,
+            groupKey: groupKeyChantier,
+            groupLabel: chantierNom,
+          });
         }
       }
 
@@ -175,7 +184,12 @@ export function useTresorerieData(selectedYear, periodStart, periodEnd) {
       if (datePrevue) {
         const dp = parseDateMonthYear(datePrevue);
         if (dp && dp.year === year) {
-          addToMonth(dp.month, "entreesPrevu", "_entreesPrevuDetail", montant, { label, montant });
+          addToMonth(dp.month, "entreesPrevu", "_entreesPrevuDetail", montant, {
+            label,
+            montant,
+            groupKey: groupKeyChantier,
+            groupLabel: chantierNom,
+          });
         }
       }
     });
@@ -188,12 +202,21 @@ export function useTresorerieData(selectedYear, periodStart, periodEnd) {
       const numeroFacture = withoutNumberPrefix(f.numero || f.numero_facture, f.id);
       const label = `${numeroFacture} — ${f.chantier_name || f.chantier || ""}`;
       const dateRef = f.date_envoi || f.date_creation;
+      const chantierNom = String(f.chantier_name || f.chantier || "Chantier sans nom").trim();
+      const cid = f.chantier_id ?? f.chantier;
+      const groupKeyChantier =
+        cid != null && cid !== "" ? `chantier:id:${cid}` : `chantier:nom:${chantierNom}`;
 
       // Réelle : placée au mois d'envoi (prestation)
       if (dateRef) {
         const dp = parseDateMonthYear(dateRef);
         if (dp && dp.year === year) {
-          addToMonth(dp.month, "entreesReelles", "_entreesReellesDetail", montant, { label, montant });
+          addToMonth(dp.month, "entreesReelles", "_entreesReellesDetail", montant, {
+            label,
+            montant,
+            groupKey: groupKeyChantier,
+            groupLabel: chantierNom,
+          });
         }
       }
 
@@ -202,7 +225,12 @@ export function useTresorerieData(selectedYear, periodStart, periodEnd) {
       if (datePrevue) {
         const dp = parseDateMonthYear(datePrevue);
         if (dp && dp.year === year) {
-          addToMonth(dp.month, "entreesPrevu", "_entreesPrevuDetail", montant, { label, montant });
+          addToMonth(dp.month, "entreesPrevu", "_entreesPrevuDetail", montant, {
+            label,
+            montant,
+            groupKey: groupKeyChantier,
+            groupLabel: chantierNom,
+          });
         }
       }
     });
@@ -212,21 +240,32 @@ export function useTresorerieData(selectedYear, periodStart, periodEnd) {
     // Prévues  → date_paiement_prevue (= décaissement attendu)
     (fournisseurs || []).forEach((row) => {
       const mmyy = parseMMYY(row.mois);
-      const label = `${row.fournisseur || "Fournisseur"} — ${row.chantier_name || ""}`;
+      const fournNom = String(row.fournisseur || "Fournisseur").trim();
+      const label = `${fournNom} — ${row.chantier_name || ""}`;
       const aPayer = parseFloat(row.a_payer) || 0;
       const paye = parseFloat(row.paye) || 0;
       const resteAPayer = Math.max(0, aPayer - paye);
 
       // Réelle : montant à payer placé au mois de la dépense
       if (mmyy && mmyy.year === year && aPayer > 0) {
-        addToMonth(mmyy.month, "sortiesReelles", "_sortiesReellesDetail", aPayer, { label, montant: aPayer });
+        addToMonth(mmyy.month, "sortiesReelles", "_sortiesReellesDetail", aPayer, {
+          label,
+          montant: aPayer,
+          groupKey: `fournisseur:${fournNom}`,
+          groupLabel: fournNom,
+        });
       }
 
       // Prévue : reste à payer placé à la date de paiement prévue
       if (resteAPayer > 0 && row.date_paiement_prevue) {
         const dp = parseDateMonthYear(row.date_paiement_prevue);
         if (dp && dp.year === year) {
-          addToMonth(dp.month, "sortiesPrevu", "_sortiesPrevuDetail", resteAPayer, { label, montant: resteAPayer });
+          addToMonth(dp.month, "sortiesPrevu", "_sortiesPrevuDetail", resteAPayer, {
+            label,
+            montant: resteAPayer,
+            groupKey: `fournisseur:${fournNom}`,
+            groupLabel: fournNom,
+          });
         }
       }
     });
@@ -236,21 +275,32 @@ export function useTresorerieData(selectedYear, periodStart, periodEnd) {
     // Prévues  → date_paiement_prevue (= décaissement attendu)
     (sousTraitants || []).forEach((row) => {
       const mmyy = parseMMYY(row.mois);
-      const label = `${row.sous_traitant || "Sous-traitant"} — ${row.chantier_name || ""}`;
+      const stNom = String(row.sous_traitant || "Sous-traitant").trim();
+      const label = `${stNom} — ${row.chantier_name || ""}`;
       const aPayer = parseFloat(row.a_payer) || 0;
       const paye = parseFloat(row.paye) || 0;
       const resteAPayer = Math.max(0, aPayer - paye);
 
       // Réelle : montant à payer placé au mois de la prestation
       if (mmyy && mmyy.year === year && aPayer > 0) {
-        addToMonth(mmyy.month, "sortiesReelles", "_sortiesReellesDetail", aPayer, { label, montant: aPayer });
+        addToMonth(mmyy.month, "sortiesReelles", "_sortiesReellesDetail", aPayer, {
+          label,
+          montant: aPayer,
+          groupKey: `sous_traitant:${stNom}`,
+          groupLabel: stNom,
+        });
       }
 
       // Prévue : reste à payer placé à la date de paiement prévue
       if (resteAPayer > 0 && row.date_paiement_prevue) {
         const dp = parseDateMonthYear(row.date_paiement_prevue);
         if (dp && dp.year === year) {
-          addToMonth(dp.month, "sortiesPrevu", "_sortiesPrevuDetail", resteAPayer, { label, montant: resteAPayer });
+          addToMonth(dp.month, "sortiesPrevu", "_sortiesPrevuDetail", resteAPayer, {
+            label,
+            montant: resteAPayer,
+            groupKey: `sous_traitant:${stNom}`,
+            groupLabel: stNom,
+          });
         }
       }
     });

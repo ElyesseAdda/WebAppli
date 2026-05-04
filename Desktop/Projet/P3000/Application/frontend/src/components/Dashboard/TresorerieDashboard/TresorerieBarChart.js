@@ -1,4 +1,15 @@
-import { Box, Button, Dialog, DialogContent, DialogTitle, Typography } from "@mui/material";
+import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
+import {
+  Accordion,
+  AccordionDetails,
+  AccordionSummary,
+  Box,
+  Button,
+  Dialog,
+  DialogContent,
+  DialogTitle,
+  Typography,
+} from "@mui/material";
 import React, { useState } from "react";
 import {
   Bar,
@@ -34,6 +45,34 @@ const getEntryDetails = (entry) => {
   if (entry.dataKey === "sortiesReelles") detailKey = "_sortiesReellesDetail";
   if (entry.dataKey === "sortiesPrevu") detailKey = "_sortiesPrevuDetail";
   return detailKey ? (raw[detailKey] || []) : [];
+};
+
+/** Regroupe les lignes de détail (même chantier pour entrées, même fournisseur / sous-traitant pour sorties, etc.) */
+const groupTreasurerDetailLines = (details) => {
+  if (!Array.isArray(details) || !details.length) return [];
+  const map = new Map();
+  details.forEach((d, i) => {
+    const key =
+      d.groupKey != null && String(d.groupKey).trim() !== ""
+        ? String(d.groupKey)
+        : `__line:${i}:${d.label ?? ""}`;
+    if (!map.has(key)) {
+      map.set(key, {
+        key,
+        groupLabel: d.groupLabel || d.label || "Détail",
+        lines: [],
+      });
+    }
+    const g = map.get(key);
+    if (d.groupLabel) g.groupLabel = d.groupLabel;
+    g.lines.push(d);
+  });
+  return Array.from(map.values())
+    .map((g) => ({
+      ...g,
+      total: g.lines.reduce((s, l) => s + Number(l.montant || 0), 0),
+    }))
+    .sort((a, b) => b.total - a.total);
 };
 
 /** Tooltip personnalisé avec détail des lignes */
@@ -81,19 +120,34 @@ const CustomTooltip = ({ active, payload, label }) => {
                 {entry.name} : {fmt(entry.value)}
               </Typography>
             </Box>
-            {details.slice(0, 6).map((d, i) => (
-              <Typography
-                key={i}
-                sx={{ pl: 2, color: "#6b7280", fontSize: "0.72rem", lineHeight: 1.5 }}
-              >
-                • {d.label} — {fmt(d.montant)}
-              </Typography>
+            {groupTreasurerDetailLines(details).map((g) => (
+              <Box key={g.key} sx={{ pl: 0.5, mb: 0.35 }}>
+                {g.lines.length > 1 ? (
+                  <>
+                    <Typography sx={{ fontWeight: 700, color: "#4b5563", fontSize: "0.72rem" }}>
+                      {g.groupLabel} : {fmt(g.total)}
+                    </Typography>
+                    {g.lines.slice(0, 5).map((d, i) => (
+                      <Typography
+                        key={i}
+                        sx={{ pl: 1.5, color: "#6b7280", fontSize: "0.70rem", lineHeight: 1.45 }}
+                      >
+                        • {d.label} — {fmt(d.montant)}
+                      </Typography>
+                    ))}
+                    {g.lines.length > 5 && (
+                      <Typography sx={{ pl: 1.5, color: "#9ca3af", fontSize: "0.68rem" }}>
+                        + {g.lines.length - 5} ligne(s)…
+                      </Typography>
+                    )}
+                  </>
+                ) : (
+                  <Typography sx={{ color: "#6b7280", fontSize: "0.72rem", lineHeight: 1.5 }}>
+                    • {g.lines[0].label} — {fmt(g.lines[0].montant)}
+                  </Typography>
+                )}
+              </Box>
             ))}
-            {details.length > 6 && (
-              <Typography sx={{ pl: 2, color: "#9ca3af", fontSize: "0.70rem" }}>
-                + {details.length - 6} autre(s)…
-              </Typography>
-            )}
           </Box>
         );
       })}
@@ -110,6 +164,79 @@ const legendItems = [
 ];
 
 const legendByKey = Object.fromEntries(legendItems.map((item) => [item.key, item]));
+
+const accordionSx = {
+  border: "1px solid #e8ecf1",
+  borderRadius: "10px",
+  mb: 0.75,
+  "&:before": { display: "none" },
+  boxShadow: "none",
+};
+
+const DetailModalGroups = ({ details }) => {
+  const groups = groupTreasurerDetailLines(details || []);
+  if (!groups.length) {
+    return (
+      <Typography sx={{ pl: 0.5, color: "#9ca3af", fontSize: "0.85rem" }}>Aucun détail</Typography>
+    );
+  }
+  return groups.map((g) => {
+    if (g.lines.length <= 1) {
+      const d = g.lines[0];
+      return (
+        <Typography
+          key={g.key}
+          sx={{ pl: 0.5, color: "#374151", fontSize: "0.84rem", lineHeight: 1.65, mb: 0.5 }}
+        >
+          • {d.label} — {fmt(d.montant)}
+        </Typography>
+      );
+    }
+    return (
+      <Accordion key={g.key} disableGutters elevation={0} sx={accordionSx}>
+        <AccordionSummary
+          expandIcon={<ExpandMoreIcon sx={{ color: "#64748b" }} />}
+          sx={{ minHeight: 48, "& .MuiAccordionSummary-content": { my: 0.75, alignItems: "center" } }}
+        >
+          <Box
+            sx={{
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "center",
+              width: "100%",
+              pr: 0.5,
+              gap: 1,
+            }}
+          >
+            <Typography sx={{ fontWeight: 700, fontSize: "0.88rem", color: "#111827" }}>
+              {g.groupLabel}
+            </Typography>
+            <Typography sx={{ fontWeight: 700, fontSize: "0.88rem", color: "#475569", flexShrink: 0 }}>
+              {fmt(g.total)}
+            </Typography>
+          </Box>
+        </AccordionSummary>
+        <AccordionDetails sx={{ pt: 0, pb: 1.25, px: 1.5, bgcolor: "#fafbfc" }}>
+          {g.lines.map((d, i) => (
+            <Typography
+              key={`${g.key}-${i}`}
+              sx={{
+                pl: 0.5,
+                color: "#4b5563",
+                fontSize: "0.8rem",
+                lineHeight: 1.65,
+                borderBottom: i < g.lines.length - 1 ? "1px solid #eef2f6" : "none",
+                py: 0.45,
+              }}
+            >
+              {d.label} — <strong>{fmt(d.montant)}</strong>
+            </Typography>
+          ))}
+        </AccordionDetails>
+      </Accordion>
+    );
+  });
+};
 
 const CustomLegend = () => (
   <Box
@@ -328,14 +455,10 @@ const TresorerieBarChart = ({ data = [], height = 340 }) => {
                 </Typography>
               </Box>
               {(entry.details || []).length ? (
-                entry.details.map((d, i) => (
-                  <Typography key={`${entry.dataKey}-${i}`} sx={{ pl: 1, color: "#4b5563", fontSize: "0.82rem", lineHeight: 1.6 }}>
-                    • {d.label} — {fmt(d.montant)}
-                  </Typography>
-                ))
+                <DetailModalGroups details={entry.details} />
               ) : (
                 <Typography sx={{ pl: 1, color: "#9ca3af", fontSize: "0.8rem" }}>
-                  Aucun detail
+                  Aucun détail
                 </Typography>
               )}
             </Box>
