@@ -17,18 +17,13 @@ import {
   TextField,
 } from "@mui/material";
 import FilterAltOutlinedIcon from "@mui/icons-material/FilterAltOutlined";
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import axios from "axios";
 import {
   DashboardFiltersProvider,
   useDashboardFilters,
 } from "./DashboardFiltersContext";
 import DashboardCardsGrid from "./DashboardCardsGrid";
-import {
-  defaultIncludedIdsFromBreakdown,
-  getEffectiveIncludedAgenceIds,
-  sumBreakdownFieldForIds,
-} from "./dashboardAgencySelection";
 
 // Composant interne qui utilise les filtres
 const DashboardContent = () => {
@@ -167,6 +162,14 @@ const DashboardContent = () => {
     dashboardData?.global_stats?.depenses_agence_pointage_ht || 0
   );
 
+  /**
+   * Somme des `total_ht` du breakdown tel qu’affiché dans le popover (même logique agence + pointage
+   * découpé côté API). Équivalent à « toutes les agences cochées » — pas le total brut API isolé.
+   */
+  const sumBreakdownTotalHt = (bd) =>
+    Array.isArray(bd) ? bd.reduce((s, r) => s + Number(r.total_ht || 0), 0) : 0;
+  const depensesAgencePourMargeHt = sumBreakdownTotalHt(depensesAgenceBreakdown);
+
   const comparisonCoutMateriel = Number(
     comparisonDashboardData?.global_stats?.total_cout_materiel || 0
   );
@@ -180,28 +183,13 @@ const DashboardContent = () => {
     comparisonCoutMateriel + comparisonCoutMainOeuvre + comparisonCoutSousTraitance;
   const comparisonDepensesAgenceBreakdown =
     comparisonDashboardData?.global_stats?.depenses_agence_breakdown || [];
+  const comparisonDepensesAgencePourMargeHt =
+    sumBreakdownTotalHt(comparisonDepensesAgenceBreakdown);
 
-  const defaultAgenceIds = useMemo(
-    () => defaultIncludedIdsFromBreakdown(depensesAgenceBreakdown),
-    [depensesAgenceBreakdown]
-  );
-  const effectiveAgenceIds = useMemo(
-    () => getEffectiveIncludedAgenceIds(depensesAgenceIncludedAgenceIds, defaultAgenceIds),
-    [depensesAgenceIncludedAgenceIds, defaultAgenceIds]
-  );
-  const depensesAgenceSelectionMontant = useMemo(
-    () => sumBreakdownFieldForIds(depensesAgenceBreakdown, effectiveAgenceIds, "total_ht"),
-    [depensesAgenceBreakdown, effectiveAgenceIds]
-  );
-  const depensesAgenceSelectionMontantComparaison = useMemo(
-    () => sumBreakdownFieldForIds(comparisonDepensesAgenceBreakdown, effectiveAgenceIds, "total_ht"),
-    [comparisonDepensesAgenceBreakdown, effectiveAgenceIds]
-  );
-
-  const margeBrute = totalCA - coutChantierGlobal - depensesAgenceSelectionMontant;
+  const margeBrute = totalCA - coutChantierGlobal - depensesAgencePourMargeHt;
   const margeBruteRate = totalCA > 0 ? (margeBrute / totalCA) * 100 : 0;
   const margeBruteComparaison =
-    comparisonTotalCA - comparisonCoutChantierGlobal - depensesAgenceSelectionMontantComparaison;
+    comparisonTotalCA - comparisonCoutChantierGlobal - comparisonDepensesAgencePourMargeHt;
   const margeBruteProgress =
     margeBruteComparaison !== 0 && Number.isFinite(margeBruteComparaison)
       ? ((margeBrute - margeBruteComparaison) / Math.abs(margeBruteComparaison)) * 100
