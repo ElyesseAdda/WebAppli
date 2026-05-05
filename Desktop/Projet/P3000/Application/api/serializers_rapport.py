@@ -361,6 +361,7 @@ class RapportInterventionListSerializer(serializers.ModelSerializer):
         model = RapportIntervention
         fields = [
             'id', 'date', 'dates_intervention', 'titre', 'titre_nom', 'technicien',
+            'numero_rapport', 'annee_numero_rapport',
             'temps_trajet', 'temps_taches',
             'client_societe', 'client_societe_nom', 'chantier', 'chantier_nom',
             'residence', 'residence_nom', 'residence_adresse',

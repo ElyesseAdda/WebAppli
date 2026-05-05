@@ -77,6 +77,7 @@ const RapportsPage = () => {
   const [brouillonsServeur, setBrouillonsServeur] = useState([]);
   const [filters, setFilters] = useState({
     technicien: "",
+    numero_rapport: "",
     client_societe: "",
     residence: "",
     date_creation: "",
@@ -151,6 +152,11 @@ const RapportsPage = () => {
       if (filters.technicien) {
         const t = String(b.technicien || "").toLowerCase();
         if (!t.includes(String(filters.technicien).toLowerCase())) return false;
+      }
+      if (filters.numero_rapport) {
+        // Un brouillon n'a pas de numero_rapport attribue.
+        if (b.numero_rapport == null) return false;
+        if (String(b.numero_rapport) !== String(filters.numero_rapport)) return false;
       }
       if (filters.client_societe && Number(b.client_societe) !== Number(filters.client_societe)) return false;
       if (showOnlyDevisAFaireV && (!b.devis_a_faire || b.devis_fait)) return false;
@@ -488,6 +494,15 @@ const RapportsPage = () => {
             InputLabelProps={{ shrink: true }}
           />
 
+          <TextField
+            label="N° rapport"
+            size="small"
+            value={filters.numero_rapport}
+            onChange={(e) => handleFilterChange("numero_rapport", e.target.value.replace(/\D/g, ""))}
+            placeholder="Ex: 42"
+            sx={{ width: 140 }}
+          />
+
           <Tooltip
             title={
               dateSortOrder === "desc"
@@ -685,7 +700,7 @@ const RapportsPage = () => {
                   <TableCell sx={tableHeadCellSx}>Type</TableCell>
                   <TableCell sx={tableHeadCellSx}>Lieu d&apos;intervention / Adresse</TableCell>
                   <TableCell sx={tableHeadCellSx}>Titre</TableCell>
-                  <TableCell sx={tableHeadCellSx}>Technicien</TableCell>
+                  <TableCell sx={tableHeadCellSx}>N° rapport</TableCell>
                   <TableCell sx={tableHeadCellSx}>Client</TableCell>
                   <TableCell sx={{ ...tableHeadCellSx, textAlign: "center" }}>Devis à faire</TableCell>
                   <TableCell sx={tableHeadCellSx}>Statut</TableCell>
@@ -720,7 +735,11 @@ const RapportsPage = () => {
                         : (rapport.logement || "-")}
                     </TableCell>
                     <TableCell>{rapport.titre_nom || "-"}</TableCell>
-                    <TableCell>{rapport.technicien || "-"}</TableCell>
+                    <TableCell>
+                      {rapport.numero_rapport && rapport.annee_numero_rapport
+                        ? `N°${rapport.numero_rapport} - ${rapport.annee_numero_rapport}`
+                        : "-"}
+                    </TableCell>
                     <TableCell>{rapport.client_societe_nom || "-"}</TableCell>
                     <TableCell sx={{ textAlign: "center" }}>
                       {rapport.is_brouillon_serveur ? (

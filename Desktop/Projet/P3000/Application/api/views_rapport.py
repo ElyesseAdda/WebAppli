@@ -204,6 +204,13 @@ class RapportInterventionViewSet(viewsets.ModelViewSet):
         if type_rapport:
             qs = qs.filter(type_rapport=type_rapport)
 
+        numero_rapport = self.request.query_params.get('numero_rapport')
+        if numero_rapport not in (None, ''):
+            try:
+                qs = qs.filter(numero_rapport=int(numero_rapport))
+            except (TypeError, ValueError):
+                pass
+
         titre_id = self.request.query_params.get('titre')
         if titre_id not in (None, ''):
             try:
