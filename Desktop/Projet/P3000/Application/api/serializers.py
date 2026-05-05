@@ -101,12 +101,14 @@ class DevisListSerializer(serializers.ModelSerializer):
     """Serializer allégé pour la liste des devis (pagination rapide)"""
     chantier_name = serializers.SerializerMethodField()
     client_name = serializers.SerializerMethodField()
+    societe_name = serializers.SerializerMethodField()
 
     class Meta:
         model = Devis
         fields = [
             'id', 'numero', 'date_creation', 'price_ht', 'price_ttc',
-            'status', 'chantier_name', 'client_name', 'devis_chantier', 'appel_offres', 'chantier'
+            'status', 'chantier_name', 'client_name', 'societe_name',
+            'devis_chantier', 'appel_offres', 'chantier'
         ]
 
     def get_chantier_name(self, obj):
@@ -138,6 +140,14 @@ class DevisListSerializer(serializers.ModelSerializer):
             return f"{contact.name} {contact.surname}".strip()
         return None
 
+    def get_societe_name(self, obj):
+        societe = None
+        if obj.devis_chantier and obj.appel_offres and obj.appel_offres.societe:
+            societe = obj.appel_offres.societe
+        elif obj.chantier and obj.chantier.societe:
+            societe = obj.chantier.societe
+        return getattr(societe, 'nom_societe', None) if societe else None
+
 
 class DevisSerializer(serializers.ModelSerializer):
     lignes = DevisLigneSerializer(many=True, required=False)
@@ -152,13 +162,14 @@ class DevisSerializer(serializers.ModelSerializer):
     )
     chantier_name = serializers.SerializerMethodField()
     client_name = serializers.SerializerMethodField()
+    societe_name = serializers.SerializerMethodField()
 
     class Meta:
         model = Devis
         fields = [
             'id', 'numero', 'date_creation', 'price_ht', 'price_ttc',
             'tva_rate', 'nature_travaux', 'description', 'status',
-            'chantier', 'appel_offres', 'chantier_name', 'client_name',
+            'chantier', 'appel_offres', 'chantier_name', 'client_name', 'societe_name',
             'client', 'lignes', 'lignes_speciales', 'lignes_display', 'parties_metadata', 'devis_chantier',
             'cout_estime_main_oeuvre', 'cout_estime_materiel', 'lignes_speciales_v2', 'version_systeme_lignes',
             'contact_societe', 'societe_devis'
@@ -203,6 +214,14 @@ class DevisSerializer(serializers.ModelSerializer):
         if contact:
             return f"{contact.name} {contact.surname}".strip()
         return None
+
+    def get_societe_name(self, obj):
+        societe = None
+        if obj.devis_chantier and obj.appel_offres and obj.appel_offres.societe:
+            societe = obj.appel_offres.societe
+        elif obj.chantier and obj.chantier.societe:
+            societe = obj.chantier.societe
+        return getattr(societe, 'nom_societe', None) if societe else None
 
     def to_representation(self, instance):
         """
