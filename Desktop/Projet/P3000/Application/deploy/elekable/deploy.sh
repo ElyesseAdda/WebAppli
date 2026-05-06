@@ -31,7 +31,8 @@ log_warn()    { echo -e "${YELLOW}[$(date '+%H:%M:%S')] ⚠️  $1${NC}"; }
 log_error()   { echo -e "${RED}[$(date '+%H:%M:%S')] ❌ $1${NC}"; exit 1; }
 
 activate_venv() {
-    [ -z "$VIRTUAL_ENV" ] && source "${VENV_PATH}/bin/activate"
+    # Toujours activer le venv du client (même si un autre est déjà actif)
+    source "${VENV_PATH}/bin/activate"
 }
 
 # --- 1. Vérifications ---
