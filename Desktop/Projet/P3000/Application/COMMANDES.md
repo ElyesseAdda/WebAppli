@@ -1,17 +1,25 @@
 # Commandes de déploiement et de mise à jour
 
-## Mise à jour des clients depuis main (machine de dev)
+## Mise à jour des clients depuis main
 
+> Ce script merge `main` → branche client, protège les fichiers identité (couleurs, logo, templates, migrations), commit et push vers origin.
+
+### Depuis le serveur P3000 (`/var/www/p3000/Desktop/Projet/P3000/Application`)
 ```bash
 # Mettre à jour tous les clients + push automatique
-bash Desktop/Projet/P3000/Application/deploy/update-clients.sh
+bash deploy/update-clients.sh
 
 # Ou individuellement
+bash deploy/update-clients.sh elekable
+bash deploy/update-clients.sh mjrservice
+```
+
+### Depuis la machine de dev Windows (racine du dépôt git)
+```bash
+bash Desktop/Projet/P3000/Application/deploy/update-clients.sh
 bash Desktop/Projet/P3000/Application/deploy/update-clients.sh elekable
 bash Desktop/Projet/P3000/Application/deploy/update-clients.sh mjrservice
 ```
-
-> Ce script merge `main` → branche client, protège les fichiers identité (couleurs, logo, templates, migrations), commit et push vers origin.
 
 ---
 
@@ -81,22 +89,23 @@ mjrservice-manage <cmd> # python manage.py <cmd>
 ## Workflow complet : nouvelle fonctionnalité → tous les clients
 
 ```bash
-# 1. Développer et committer sur main (machine de dev)
+# 1. Développer et committer sur main (machine de dev ou serveur P3000)
 git add . && git commit -m "ma nouvelle fonctionnalité"
 git push origin main
 
 # 2. Mettre à jour les branches clients + push
-bash Desktop/Projet/P3000/Application/deploy/update-clients.sh
+#    (depuis le serveur P3000 : déjà dans /var/www/p3000/Desktop/Projet/P3000/Application)
+bash deploy/update-clients.sh
 
-# 3. Déployer sur chaque serveur client
+# 3. Déployer sur P3000 (récupère main)
+p3000-deploy
+
+# 4. Déployer sur chaque serveur client
 #    → Sur le serveur elekable.fr :
 elekable-deploy
 
 #    → Sur le serveur mjrserviceapp.com :
 mjrservice-deploy
-
-#    → Sur le serveur P3000 (déjà déployé via main) :
-p3000-deploy
 ```
 
 ---

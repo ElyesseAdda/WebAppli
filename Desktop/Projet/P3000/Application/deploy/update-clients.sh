@@ -218,7 +218,10 @@ echo -e "║  Mise à jour clients depuis main  —  $(date '+%d/%m/%Y %H:%M')  
 echo -e "╚══════════════════════════════════════════════════════════╝${NC}"
 echo ""
 
-[ ! -d ".git" ] && log_error "Ce script doit être exécuté depuis la racine du dépôt git."
+# Se placer automatiquement à la racine du dépôt git (fonctionne depuis n'importe quel sous-dossier)
+GIT_ROOT=$(git rev-parse --show-toplevel 2>/dev/null) || log_error "Ce répertoire ne fait pas partie d'un dépôt git."
+cd "$GIT_ROOT"
+log_info "Racine git : $GIT_ROOT"
 
 # S'assurer que main est à jour
 log_info "Fetch des dernières modifications..."
