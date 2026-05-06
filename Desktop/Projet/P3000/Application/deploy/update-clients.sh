@@ -77,9 +77,6 @@ PROTECTED_COMMON=(
     "$APP_PATH/Application/settings_base.py"
     "$APP_PATH/deploy/nginx-template.conf"
 
-    # --- OnlyOffice (logique domaine multi-tenant propre à chaque client) ---
-    "$APP_PATH/api/views_drive/onlyoffice.py"
-
     # --- Génération PDF (chemin chromium spécifique à chaque serveur) ---
     "$APP_PATH/frontend/src/components/generate_pdf.js"
 
