@@ -82,6 +82,10 @@ PROTECTED_COMMON=(
 
     # --- Génération PDF (chemin chromium spécifique à chaque serveur) ---
     "$APP_PATH/frontend/src/components/generate_pdf.js"
+
+    # --- Fichiers PDF générés (binaires, propres à chaque client) ---
+    "$APP_PATH/frontend/src/components/devis.pdf"
+    "$APP_PATH/frontend/src/components/situation.pdf"
 )
 
 PROTECTED_ELEKABLE=(
@@ -117,7 +121,15 @@ check_git_clean() {
 restore_stash() {
     if [ "$STASH_DONE" -eq 1 ]; then
         log_info "Restauration du stash..."
-        git stash pop && log_ok "Stash restauré" || log_warn "Impossible de restaurer le stash — faites : git stash pop"
+        # Nettoyer les fichiers en conflit résiduels avant le stash pop
+        local needs_merge
+        needs_merge=$(git ls-files -u --error-unmatch 2>/dev/null | awk '{print $4}' | sort -u || true)
+        if [ -n "$needs_merge" ]; then
+            log_warn "Nettoyage des fichiers en conflit avant stash pop..."
+            git checkout -f HEAD -- . 2>/dev/null || true
+        fi
+        git stash pop && log_ok "Stash restauré" \
+            || log_warn "Impossible de restaurer le stash automatiquement — faites manuellement : cd /var/www/p3000 && git stash pop"
     fi
 }
 
@@ -127,7 +139,10 @@ restore_files() {
     local ok=0; local skip=0
     for f in "${files[@]}"; do
         if git cat-file -e "${branch}:${f}" 2>/dev/null; then
-            if git checkout "${branch}" -- "$f" 2>/dev/null; then
+            # -f pour forcer même si le fichier est marqué "needs merge"
+            if git checkout -f "${branch}" -- "$f" 2>/dev/null; then
+                # Marquer le fichier comme résolu dans l'index
+                git add "$f" 2>/dev/null || true
                 ((ok++))
             else
                 log_warn "  Impossible de restaurer : $f"; ((skip++))
@@ -135,6 +150,15 @@ restore_files() {
         fi
     done
     log_ok "  ${ok} fichier(s) restauré(s), ${skip} ignoré(s)"
+}
+
+abort_merge_and_return() {
+    local original_branch="$1"
+    # Annuler proprement le merge en cours avant de changer de branche
+    git merge --abort 2>/dev/null || true
+    # Nettoyer les fichiers en conflit restants
+    git checkout -f HEAD -- . 2>/dev/null || true
+    git checkout "$original_branch" 2>/dev/null || true
 }
 
 do_merge() {
@@ -145,26 +169,20 @@ do_merge() {
     log_info "Branche : $(git log --oneline -1)"
 
     # Merge sans commit pour pouvoir restaurer les fichiers protégés
-    local merge_ok=0
-    git merge main --no-commit --no-ff 2>&1 && merge_ok=1 || true
+    git merge main --no-commit --no-ff 2>&1 || true
 
-    # Vérifier s'il y a des vrais conflits (pas juste auto-resolve)
-    local conflicts
-    conflicts=$(git diff --name-only --diff-filter=U 2>/dev/null || true)
-
-    # Restaurer les fichiers identité client
+    # Restaurer les fichiers identité client (force même sur fichiers en conflit)
     log_info "Restauration des fichiers d'identité..."
     restore_files "$branch" "${PROTECTED_COMMON[@]}"
 
     if [ "$branch" = "client/elekable" ]; then
         restore_files "$branch" "${PROTECTED_ELEKABLE[@]}"
-        # Elekable : migrations divergées → restaurer intégralement
         log_info "Restauration des migrations elekable (chaîne divergée)..."
-        git checkout "$branch" -- "${APP_PATH}/api/migrations/" 2>/dev/null || true
+        git checkout -f "$branch" -- "${APP_PATH}/api/migrations/" 2>/dev/null || true
+        git add "${APP_PATH}/api/migrations/" 2>/dev/null || true
         log_ok "  Migrations elekable préservées"
     elif [ "$branch" = "client/mjrservice" ]; then
         restore_files "$branch" "${PROTECTED_MJRSERVICE[@]}"
-        # MJRService : migrations 0106+ de main sont compatibles → on les garde
         log_ok "  Migrations mjrservice : nouvelles migrations de main conservées"
     fi
 
@@ -173,9 +191,11 @@ do_merge() {
     remaining_conflicts=$(git diff --name-only --diff-filter=U 2>/dev/null || true)
 
     if [ -n "$remaining_conflicts" ]; then
-        log_warn "Conflits restants à résoudre manuellement :"
+        log_warn "Conflits restants non couverts par la liste de protection :"
         echo "$remaining_conflicts" | sed 's/^/    /'
-        log_warn "Résolvez les conflits, puis relancez avec --push-only ${branch}"
+        log_warn "Ajoutez ces fichiers à PROTECTED_COMMON ou résolvez-les manuellement."
+        log_warn "Abandon du merge — retour sur la branche d'origine..."
+        abort_merge_and_return "$ORIGINAL_BRANCH"
         return 1
     fi
 
