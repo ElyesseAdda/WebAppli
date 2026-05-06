@@ -94,12 +94,24 @@ PROTECTED_MJRSERVICE=(
 # Fonctions
 # =============================================================================
 
+STASH_DONE=0
 check_git_clean() {
-    if ! git diff --quiet HEAD 2>/dev/null; then
-        log_error "Des modifications non committées existent. Commitez ou stashez d'abord."
+    local has_changes=0
+    git diff --quiet HEAD 2>/dev/null || has_changes=1
+    git diff --cached --quiet 2>/dev/null || has_changes=1
+
+    if [ "$has_changes" -eq 1 ]; then
+        log_warn "Modifications locales détectées — stash automatique..."
+        git stash push -m "update-clients-auto-stash-$(date +%Y%m%d_%H%M%S)"
+        STASH_DONE=1
+        log_ok "Modifications mises de côté (git stash)"
     fi
-    if ! git diff --cached --quiet 2>/dev/null; then
-        log_error "Des fichiers sont en attente de commit (staged). Commitez d'abord."
+}
+
+restore_stash() {
+    if [ "$STASH_DONE" -eq 1 ]; then
+        log_info "Restauration du stash..."
+        git stash pop && log_ok "Stash restauré" || log_warn "Impossible de restaurer le stash — faites : git stash pop"
     fi
 }
 
@@ -255,4 +267,7 @@ esac
 # Revenir à la branche d'origine
 git checkout "$ORIGINAL_BRANCH" 2>/dev/null || true
 log_ok "Retour sur la branche : $ORIGINAL_BRANCH"
+
+# Restaurer les modifications locales si elles avaient été stashées
+restore_stash
 echo ""
