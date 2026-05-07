@@ -183,15 +183,26 @@ do_merge() {
         log_ok "  Migrations mjrservice : nouvelles migrations de main conservées"
     fi
 
-    # Vérifier les conflits restants après restauration
+    # Pour tout conflit restant non couvert par la liste de protection :
+    # prendre automatiquement la version de main (comportement voulu pour les fichiers génériques)
     local remaining_conflicts
     remaining_conflicts=$(git diff --name-only --diff-filter=U 2>/dev/null || true)
 
     if [ -n "$remaining_conflicts" ]; then
-        log_warn "Conflits restants non couverts par la liste de protection :"
+        log_info "Résolution automatique des conflits non protégés (version main)..."
+        while IFS= read -r f; do
+            [ -z "$f" ] && continue
+            git checkout -f main -- "$f" 2>/dev/null && git add "$f" 2>/dev/null && \
+                log_ok "  Résolu (main) : $f" || \
+                log_warn "  Impossible de résoudre : $f"
+        done <<< "$remaining_conflicts"
+    fi
+
+    # Vérifier qu'il ne reste plus aucun conflit
+    remaining_conflicts=$(git diff --name-only --diff-filter=U 2>/dev/null || true)
+    if [ -n "$remaining_conflicts" ]; then
+        log_warn "Conflits non résolus — abandon :"
         echo "$remaining_conflicts" | sed 's/^/    /'
-        log_warn "Ajoutez ces fichiers à PROTECTED_COMMON ou résolvez-les manuellement."
-        log_warn "Abandon du merge — retour sur la branche d'origine..."
         abort_merge_and_return "$ORIGINAL_BRANCH"
         return 1
     fi
