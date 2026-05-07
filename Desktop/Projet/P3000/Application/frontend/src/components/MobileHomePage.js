@@ -8,7 +8,7 @@ import {
 } from "@mui/icons-material";
 import { useNavigate } from "react-router-dom";
 import { useAuth, getUserMobileAccess } from "../hooks/useAuth";
-import logo from "../img/apple-touch-icon.png";
+import logo from "../img/logo.png";
 
 const SECTIONS = [
   {
@@ -99,7 +99,7 @@ const MobileHomePage = () => {
           component="img"
           src={logo}
           alt="Logo"
-          sx={{ width: 64, height: 64, borderRadius: 2, boxShadow: 3 }}
+          sx={{ width: 140, height: 101, objectFit: "contain" }}
         />
         <Typography
           variant="h5"
