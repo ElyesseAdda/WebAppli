@@ -58,6 +58,8 @@ PROTECTED_COMMON=(
     "$APP_PATH/staticfiles/manifest_rapports.json"
     "$APP_PATH/frontend/src/components/Login.js"
     "$APP_PATH/frontend/src/components/LoginMobile.js"
+    "$APP_PATH/frontend/src/components/PageTitleManager.js"
+    "$APP_PATH/frontend/src/components/Distributeurs/DesktopAppLayout.js"
     "$APP_PATH/frontend/templates/facture.html"
     "$APP_PATH/frontend/templates/facture_v2.html"
     "$APP_PATH/frontend/templates/preview_devis.html"
@@ -90,6 +92,14 @@ PROTECTED_ELEKABLE=(
     "$APP_PATH/create_users_elekable.py"
     "$APP_PATH/frontend/templates/frontend/index.html"
     "$APP_PATH/frontend/templates/frontend/index_production.html"
+)
+
+# Fichiers volontairement supprimés sur Elekable.
+# Important: sans suppression explicite après merge, ils peuvent revenir depuis main.
+REMOVED_ELEKABLE=(
+    "$APP_PATH/api/context_processors.py"
+    "$APP_PATH/api/management/commands/setup_entreprise_config.py"
+    "$APP_PATH/frontend/src/services/entrepriseConfigService.js"
 )
 
 PROTECTED_MJRSERVICE=(
@@ -149,6 +159,21 @@ restore_files() {
     log_ok "  ${ok} fichier(s) restauré(s), ${skip} ignoré(s)"
 }
 
+remove_files() {
+    local files=("$@")
+    local removed=0; local skip=0
+    for f in "${files[@]}"; do
+        if git ls-files --error-unmatch "$f" >/dev/null 2>&1 || [ -f "$f" ]; then
+            if git rm -f -- "$f" >/dev/null 2>&1; then
+                ((removed++))
+            else
+                log_warn "  Impossible de supprimer : $f"; ((skip++))
+            fi
+        fi
+    done
+    log_ok "  ${removed} fichier(s) supprimé(s), ${skip} ignoré(s)"
+}
+
 abort_merge_and_return() {
     local original_branch="$1"
     # Annuler proprement le merge en cours avant de changer de branche
@@ -174,6 +199,8 @@ do_merge() {
 
     if [ "$branch" = "client/elekable" ]; then
         restore_files "$branch" "${PROTECTED_ELEKABLE[@]}"
+        log_info "Suppression des fichiers retirés sur Elekable..."
+        remove_files "${REMOVED_ELEKABLE[@]}"
         log_info "Restauration des migrations elekable (chaîne divergée)..."
         git checkout -f "$branch" -- "${APP_PATH}/api/migrations/" 2>/dev/null || true
         git add "${APP_PATH}/api/migrations/" 2>/dev/null || true
