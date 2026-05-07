@@ -28,6 +28,12 @@ const TYPE_RAPPORT_LABELS = {
   vigik_plus: "Vigik+",
 };
 
+const tableHeadCellSx = {
+  fontWeight: 700,
+  color: COLORS.textOnDark,
+  backgroundColor: COLORS.infoDark || "#1976d2",
+};
+
 const getStatusStyles = (statut) => ({
   display: "inline-block",
   px: 1.5,
@@ -375,16 +381,16 @@ const ChantierRapportsList = ({ chantierData }) => {
       <TableContainer>
         <Table size="small">
           <TableHead>
-            <TableRow sx={{ backgroundColor: "#f5f5f5" }}>
-              <TableCell sx={{ fontWeight: 700 }}>Date</TableCell>
-              <TableCell sx={{ fontWeight: 700 }}>Type</TableCell>
-              <TableCell sx={{ fontWeight: 700 }}>Titre</TableCell>
-              <TableCell sx={{ fontWeight: 700 }}>Technicien</TableCell>
-              <TableCell sx={{ fontWeight: 700 }}>Residence</TableCell>
-              <TableCell sx={{ fontWeight: 700 }}>Logement/Adresse</TableCell>
-              <TableCell sx={{ fontWeight: 700, textAlign: "center" }}>Devis à faire</TableCell>
-              <TableCell sx={{ fontWeight: 700 }}>Statut</TableCell>
-              <TableCell sx={{ fontWeight: 700, textAlign: "center" }}>Actions</TableCell>
+            <TableRow>
+              <TableCell sx={tableHeadCellSx}>Date</TableCell>
+              <TableCell sx={tableHeadCellSx}>Type</TableCell>
+              <TableCell sx={tableHeadCellSx}>Titre</TableCell>
+              <TableCell sx={tableHeadCellSx}>Technicien</TableCell>
+              <TableCell sx={tableHeadCellSx}>Résidence</TableCell>
+              <TableCell sx={tableHeadCellSx}>Logement/Adresse</TableCell>
+              <TableCell sx={{ ...tableHeadCellSx, textAlign: "center" }}>Devis à faire</TableCell>
+              <TableCell sx={tableHeadCellSx}>Statut</TableCell>
+              <TableCell sx={{ ...tableHeadCellSx, textAlign: "center" }}>Actions</TableCell>
             </TableRow>
           </TableHead>
           <TableBody>

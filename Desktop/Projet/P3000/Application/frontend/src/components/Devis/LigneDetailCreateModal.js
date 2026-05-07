@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import axios from 'axios';
-import { COLORS, withOpacity } from '../../constants/colors';
 
 const LigneDetailCreateModal = ({ isOpen, onClose, description, sousPartieId, partieId, onSuccess }) => {
   const [formData, setFormData] = useState({
@@ -146,7 +145,7 @@ const LigneDetailCreateModal = ({ isOpen, onClose, description, sousPartieId, pa
       left: 0,
       right: 0,
       bottom: 0,
-      backgroundColor: withOpacity(COLORS.black, 0.5),
+      backgroundColor: 'rgba(0, 0, 0, 0.5)',
       display: 'flex',
       alignItems: 'center',
       justifyContent: 'center',
@@ -156,7 +155,7 @@ const LigneDetailCreateModal = ({ isOpen, onClose, description, sousPartieId, pa
     onMouseDown={() => setIsMouseDown(true)}
     onMouseUp={() => setIsMouseDown(false)}>
       <div style={{
-        backgroundColor: COLORS.white,
+        backgroundColor: 'white',
         borderRadius: '8px',
         padding: '30px',
         maxWidth: '900px',
@@ -172,7 +171,7 @@ const LigneDetailCreateModal = ({ isOpen, onClose, description, sousPartieId, pa
           marginBottom: '20px',
           fontSize: '20px',
           fontWeight: 'bold',
-          color: COLORS.infoDark
+          color: '#1976d2'
         }}>
           ✨ Créer une nouvelle ligne de détail
         </h2>
@@ -185,9 +184,9 @@ const LigneDetailCreateModal = ({ isOpen, onClose, description, sousPartieId, pa
               marginBottom: '8px',
               fontWeight: '600',
               fontSize: '14px',
-              color: COLORS.text
+              color: '#333'
             }}>
-              Description <span style={{ color: COLORS.error }}>*</span>
+              Description <span style={{ color: 'red' }}>*</span>
             </label>
             <textarea
               name="description"
@@ -197,7 +196,7 @@ const LigneDetailCreateModal = ({ isOpen, onClose, description, sousPartieId, pa
               style={{
                 width: '100%',
                 padding: '10px',
-                border: `1px solid ${COLORS.border}`,
+                border: '1px solid #dee2e6',
                 borderRadius: '6px',
                 fontSize: '14px',
                 minHeight: '80px',
@@ -216,9 +215,9 @@ const LigneDetailCreateModal = ({ isOpen, onClose, description, sousPartieId, pa
                 marginBottom: '8px',
                 fontWeight: '600',
                 fontSize: '14px',
-                color: COLORS.text
+                color: '#333'
               }}>
-                Unité <span style={{ color: COLORS.error }}>*</span>
+                Unité <span style={{ color: 'red' }}>*</span>
               </label>
               <input
                 type="text"
@@ -229,7 +228,7 @@ const LigneDetailCreateModal = ({ isOpen, onClose, description, sousPartieId, pa
                 style={{
                   width: '100%',
                   padding: '10px',
-                  border: `1px solid ${COLORS.border}`,
+                  border: '1px solid #dee2e6',
                   borderRadius: '6px',
                   fontSize: '14px'
                 }}
@@ -243,9 +242,9 @@ const LigneDetailCreateModal = ({ isOpen, onClose, description, sousPartieId, pa
                 marginBottom: '8px',
                 fontWeight: '600',
                 fontSize: '14px',
-                color: COLORS.text
+                color: '#333'
               }}>
-                Prix unitaire (€) <span style={{ color: COLORS.error }}>*</span>
+                Prix unitaire (€) <span style={{ color: 'red' }}>*</span>
               </label>
               <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
                 {useModeCalcul ? (
@@ -253,12 +252,12 @@ const LigneDetailCreateModal = ({ isOpen, onClose, description, sousPartieId, pa
                   <div style={{
                     flex: '1',
                     padding: '10px',
-                    border: `2px solid ${COLORS.infoDark}`,
+                    border: '2px solid #1976d2',
                     borderRadius: '6px',
                     fontSize: '14px',
                     fontWeight: 'bold',
-                    backgroundColor: COLORS.infoLight,
-                    color: COLORS.infoDark,
+                    backgroundColor: '#e3f2fd',
+                    color: '#1976d2',
                     display: 'flex',
                     alignItems: 'center'
                   }}>
@@ -276,7 +275,7 @@ const LigneDetailCreateModal = ({ isOpen, onClose, description, sousPartieId, pa
                     style={{
                       flex: '1',
                       padding: '10px',
-                      border: `1px solid ${COLORS.border}`,
+                      border: '1px solid #dee2e6',
                       borderRadius: '6px',
                       fontSize: '14px'
                     }}
@@ -288,9 +287,9 @@ const LigneDetailCreateModal = ({ isOpen, onClose, description, sousPartieId, pa
                   onClick={() => setShowAdvanced(!showAdvanced)}
                   style={{
                     padding: '10px',
-                    border: `1px solid ${COLORS.border}`,
+                    border: '1px solid #dee2e6',
                     borderRadius: '6px',
-                    backgroundColor: COLORS.white,
+                    backgroundColor: 'white',
                     cursor: 'pointer',
                     fontSize: '16px',
                     display: 'flex',
@@ -305,12 +304,12 @@ const LigneDetailCreateModal = ({ isOpen, onClose, description, sousPartieId, pa
                 </button>
               </div>
               {useModeCalcul && (
-                <div style={{ fontSize: '12px', color: COLORS.success, marginTop: '4px', fontWeight: '600' }}>
+                <div style={{ fontSize: '12px', color: '#28a745', marginTop: '4px', fontWeight: '600' }}>
                   ✓ Prix calculé automatiquement en fonction des coûts
                 </div>
               )}
               {!useModeCalcul && showAdvanced && (
-                <div style={{ fontSize: '12px', color: COLORS.textMuted, marginTop: '4px' }}>
+                <div style={{ fontSize: '12px', color: '#6c757d', marginTop: '4px' }}>
                   Remplissez les champs ci-dessous pour calculer le prix automatiquement
                 </div>
               )}
@@ -320,7 +319,7 @@ const LigneDetailCreateModal = ({ isOpen, onClose, description, sousPartieId, pa
           {/* Champs avancés */}
           {showAdvanced && (
             <div style={{
-              backgroundColor: COLORS.backgroundAlt,
+              backgroundColor: '#f8f9fa',
               padding: '20px',
               borderRadius: '6px',
               marginBottom: '20px',
@@ -334,7 +333,7 @@ const LigneDetailCreateModal = ({ isOpen, onClose, description, sousPartieId, pa
                 marginBottom: '8px',
                 fontWeight: '600',
                 fontSize: '14px',
-                color: COLORS.text
+                color: '#333'
               }}>
                 Coût main d'œuvre (€)
               </label>
@@ -348,7 +347,7 @@ const LigneDetailCreateModal = ({ isOpen, onClose, description, sousPartieId, pa
                 style={{
                   width: '100%',
                   padding: '10px',
-                  border: `1px solid ${COLORS.border}`,
+                  border: '1px solid #dee2e6',
                   borderRadius: '6px',
                   fontSize: '14px'
                 }}
@@ -361,7 +360,7 @@ const LigneDetailCreateModal = ({ isOpen, onClose, description, sousPartieId, pa
                 marginBottom: '8px',
                 fontWeight: '600',
                 fontSize: '14px',
-                color: COLORS.text
+                color: '#333'
               }}>
                 Coût matériel (€)
               </label>
@@ -375,7 +374,7 @@ const LigneDetailCreateModal = ({ isOpen, onClose, description, sousPartieId, pa
                 style={{
                   width: '100%',
                   padding: '10px',
-                  border: `1px solid ${COLORS.border}`,
+                  border: '1px solid #dee2e6',
                   borderRadius: '6px',
                   fontSize: '14px'
                 }}
@@ -388,7 +387,7 @@ const LigneDetailCreateModal = ({ isOpen, onClose, description, sousPartieId, pa
                 marginBottom: '8px',
                 fontWeight: '600',
                 fontSize: '14px',
-                color: COLORS.text
+                color: '#333'
               }}>
                 Taux fixe (%)
               </label>
@@ -402,7 +401,7 @@ const LigneDetailCreateModal = ({ isOpen, onClose, description, sousPartieId, pa
                 style={{
                   width: '100%',
                   padding: '10px',
-                  border: `1px solid ${COLORS.border}`,
+                  border: '1px solid #dee2e6',
                   borderRadius: '6px',
                   fontSize: '14px'
                 }}
@@ -415,40 +414,22 @@ const LigneDetailCreateModal = ({ isOpen, onClose, description, sousPartieId, pa
                 marginBottom: '8px',
                 fontWeight: '600',
                 fontSize: '14px',
-                color: COLORS.text
+                color: '#333'
               }}>
                 Marge (%) : {formData.marge}%
               </label>
               <div style={{ display: 'flex', gap: '15px', alignItems: 'center' }}>
                 <input
-                  type="range"
-                  name="marge"
-                  min="0"
-                  max="100"
+                  type="number"
                   step="0.01"
+                  min="0"
+                  name="marge"
                   value={formData.marge}
                   onChange={handleChange}
                   style={{
                     flex: '1',
-                    height: '8px',
-                    borderRadius: '5px',
-                    background: COLORS.border,
-                    outline: 'none',
-                    cursor: 'pointer'
-                  }}
-                />
-                <input
-                  type="number"
-                  step="0.01"
-                  min="0"
-                  max="100"
-                  name="marge"
-                  value={formData.marge}
-                  onChange={handleChange}
-                  style={{
-                    width: '80px',
                     padding: '8px',
-                    border: `1px solid ${COLORS.border}`,
+                    border: '1px solid #dee2e6',
                     borderRadius: '6px',
                     fontSize: '14px',
                     textAlign: 'center'
@@ -461,8 +442,8 @@ const LigneDetailCreateModal = ({ isOpen, onClose, description, sousPartieId, pa
 
           {error && (
             <div style={{
-              backgroundColor: COLORS.errorLight,
-              color: COLORS.errorDark,
+              backgroundColor: '#ffebee',
+              color: '#c62828',
               padding: '10px',
               borderRadius: '6px',
               marginBottom: '20px'
@@ -481,10 +462,10 @@ const LigneDetailCreateModal = ({ isOpen, onClose, description, sousPartieId, pa
               onClick={onClose}
               style={{
                 padding: '10px 20px',
-                border: `1px solid ${COLORS.border}`,
+                border: '1px solid #dee2e6',
                 borderRadius: '6px',
-                backgroundColor: COLORS.white,
-                color: COLORS.text,
+                backgroundColor: 'white',
+                color: '#333',
                 cursor: 'pointer',
                 fontSize: '14px',
                 fontWeight: '600'
@@ -499,8 +480,8 @@ const LigneDetailCreateModal = ({ isOpen, onClose, description, sousPartieId, pa
                 padding: '10px 20px',
                 border: 'none',
                 borderRadius: '6px',
-                backgroundColor: isLoading ? COLORS.borderDark : COLORS.infoDark,
-                color: COLORS.white,
+                backgroundColor: isLoading ? '#ccc' : '#1976d2',
+                color: 'white',
                 cursor: isLoading ? 'not-allowed' : 'pointer',
                 fontSize: '14px',
                 fontWeight: '600'

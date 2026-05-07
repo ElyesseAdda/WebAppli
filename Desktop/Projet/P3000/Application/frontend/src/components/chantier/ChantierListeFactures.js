@@ -46,6 +46,35 @@ const formatNumber = (number) => {
   return formatted.replace(/\B(?=(\d{3})+(?!\d))/g, " ");
 };
 
+const pad2 = (value) => String(value).padStart(2, "0");
+
+const toInputDate = (value) => {
+  if (!value) return "";
+  if (/^\d{4}-\d{2}-\d{2}$/.test(value)) return value;
+
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "";
+  return `${date.getFullYear()}-${pad2(date.getMonth() + 1)}-${pad2(
+    date.getDate()
+  )}`;
+};
+
+const formatDateFr = (value) => {
+  if (!value) return "-";
+  if (/^\d{4}-\d{2}-\d{2}$/.test(value)) {
+    const [year, month, day] = value.split("-");
+    return `${day}/${month}/${year}`;
+  }
+
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "-";
+  return date.toLocaleDateString("fr-FR", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+  });
+};
+
 const ChantierListeFactures = ({
   chantierData,
   factures,
@@ -69,6 +98,9 @@ const ChantierListeFactures = ({
   const [showDateEnvoiModal, setShowDateEnvoiModal] = useState(false);
   const [factureForDateEnvoi, setFactureForDateEnvoi] = useState(null);
   const [snackbar, setSnackbar] = useState({ open: false, message: "", severity: "info" });
+  const [editNumeroDialogOpen, setEditNumeroDialogOpen] = useState(false);
+  const [factureToEditNumero, setFactureToEditNumero] = useState(null);
+  const [newNumeroValue, setNewNumeroValue] = useState("");
 
   // Fonction pour obtenir les styles de statut (mêmes que le dashboard)
   const getStatusStyles = (stateFacture) => {
@@ -235,6 +267,52 @@ const ChantierListeFactures = ({
     setFactureToUpdate(selectedFacture);
     setShowStatusModal(true);
     handleClose();
+  };
+
+  const handleEditNumeroClick = () => {
+    if (selectedFacture) {
+      setFactureToEditNumero(selectedFacture);
+      setNewNumeroValue(String(selectedFacture.numero ?? ""));
+      setEditNumeroDialogOpen(true);
+    }
+    setAnchorEl(null);
+  };
+
+  const handleEditNumeroClose = () => {
+    setEditNumeroDialogOpen(false);
+    setFactureToEditNumero(null);
+    setNewNumeroValue("");
+  };
+
+  const handleEditNumeroSave = async () => {
+    if (!factureToEditNumero) return;
+    const value = String(newNumeroValue ?? "").trim();
+    if (!value) {
+      setSnackbar({
+        open: true,
+        message: "Veuillez entrer un numéro valide.",
+        severity: "error",
+      });
+      return;
+    }
+    try {
+      await axios.patch(`/api/facture/${factureToEditNumero.id}/`, {
+        numero: value,
+      });
+      await fetchFactures();
+      handleEditNumeroClose();
+      setSnackbar({
+        open: true,
+        message: `Numéro de facture mis à jour : ${value}`,
+        severity: "success",
+      });
+    } catch (error) {
+      const msg =
+        error.response?.data?.numero?.[0] ||
+        error.response?.data?.detail ||
+        "Erreur lors de la mise à jour du numéro de facture.";
+      setSnackbar({ open: true, message: msg, severity: "error" });
+    }
   };
 
   const handleStatusUpdate = async (newStatus, datePaiement = null) => {
@@ -490,13 +568,15 @@ const ChantierListeFactures = ({
                       },
                     }}
                   >
-                    {facture.date_envoi
-                      ? new Date(facture.date_envoi).toLocaleDateString()
-                      : "-"}
+                    {formatDateFr(facture.date_envoi)}
                   </CenteredTableCell>
                   <CenteredTableCell>
                     {(facture.date_paiement || facture.date_echeance || facture.date_creation)
-                      ? new Date(facture.date_paiement || facture.date_echeance || facture.date_creation).toLocaleDateString()
+                      ? formatDateFr(
+                          facture.date_paiement ||
+                            facture.date_echeance ||
+                            facture.date_creation
+                        )
                       : "-"}
                   </CenteredTableCell>
                   <CenteredTableCell
@@ -593,6 +673,7 @@ const ChantierListeFactures = ({
         >
           Télécharger le PDF
         </MenuItem>
+        <MenuItem onClick={handleEditNumeroClick}>Modifier le numéro</MenuItem>
         <MenuItem onClick={handleChangeStatus}>Modifier le statut</MenuItem>
         <MenuItem
           onClick={handleDeleteClick}
@@ -648,6 +729,44 @@ const ChantierListeFactures = ({
         </DialogActions>
       </Dialog>
 
+      <Dialog
+        open={editNumeroDialogOpen}
+        onClose={handleEditNumeroClose}
+        PaperProps={{
+          sx: { borderRadius: 2, padding: 1 },
+        }}
+      >
+        <DialogTitle>Modifier le numéro de facture</DialogTitle>
+        <DialogContent>
+          <StyledTextField
+            autoFocus
+            label="Numéro"
+            type="text"
+            value={newNumeroValue}
+            onChange={(e) => setNewNumeroValue(e.target.value)}
+            variant="outlined"
+            fullWidth
+            inputProps={{ maxLength: 100 }}
+            sx={{
+              mt: 1,
+              "& .MuiInputBase-input": { color: "black" },
+              "& .MuiInputLabel-root": { color: "rgba(0,0,0,0.6)" },
+              "& .MuiOutlinedInput-notchedOutline": {
+                borderColor: "rgba(0,0,0,0.23)",
+              },
+            }}
+          />
+        </DialogContent>
+        <DialogActions sx={{ padding: 2 }}>
+          <Button onClick={handleEditNumeroClose} variant="outlined">
+            Annuler
+          </Button>
+          <Button onClick={handleEditNumeroSave} variant="contained">
+            Enregistrer
+          </Button>
+        </DialogActions>
+      </Dialog>
+
       <StatusChangeModal
         open={showStatusModal}
         onClose={() => {
@@ -660,7 +779,7 @@ const ChantierListeFactures = ({
         title="Modifier l'état de la facture"
         currentDatePaiement={
           factureToUpdate?.date_paiement
-            ? new Date(factureToUpdate.date_paiement).toISOString().split("T")[0]
+            ? toInputDate(factureToUpdate.date_paiement)
             : ""
         }
       />
@@ -722,10 +841,10 @@ const DateEnvoiFactureModalContent = ({ facture, onSave, onCancel }) => {
     if (facture) {
       // Précharger la date d'envoi si elle existe, sinon la date du jour
       if (facture.date_envoi) {
-        setDateEnvoi(new Date(facture.date_envoi).toISOString().split("T")[0]);
+        setDateEnvoi(toInputDate(facture.date_envoi));
       } else {
         // Date du jour par défaut
-        setDateEnvoi(new Date().toISOString().split("T")[0]);
+        setDateEnvoi(toInputDate(new Date()));
       }
     }
   }, [facture]);

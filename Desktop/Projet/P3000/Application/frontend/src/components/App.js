@@ -9,11 +9,9 @@ import {
   BrowserRouter as Router,
   Routes,
 } from "react-router-dom";
-import { useAuth } from "../hooks/useAuth";
+import { useAuth, userHasAppAdminAccess } from "../hooks/useAuth";
 import { useIsMobile } from "../hooks/useIsMobile";
-import { COLORS } from "../constants/colors";
 import "./../../static/css/app.css";
-import "../styles/tableStyles.css";
 import AgencyExpenses from "./AgencyExpenses";
 import AgentCardContainer from "./AgentCardContainer";
 import BonCommandeModif from "./BonCommandeModif";
@@ -34,6 +32,7 @@ import MobileAppLayout from "./Distributeurs/MobileAppLayout";
 import DesktopAppLayout from "./Distributeurs/DesktopAppLayout";
 import Drive from "./Drive";
 import DriveV2 from "./DriveV2/DriveV2";
+import DriveRecovery from "./DriveV2/DriveRecovery";
 import FilePreviewPage from "./DriveV2/FilePreviewPage";
 import OnlyOfficeEditor from "./DriveV2/OnlyOfficeEditor";
 import GestionAppelsOffres from "./GestionAppelsOffres";
@@ -41,12 +40,13 @@ import GlobalConflictModal from "./GlobalConflictModal";
 import Layout from "./Layout";
 import ListeBonCommande from "./ListeBonCommande";
 import ListeChantier from "./ListeChantier";
+import ListeClient from "./ListeClient";
 import ListeDevis from "./ListeDevis";
 import ListeFactures from "./ListeFactures";
 import ListeSituation from "./ListeSituation";
-import ListeClient from "./ListeClient";
 import ListeFournisseurs from "./ListeFournisseurs";
 import ListeSousTraitants from "./ListeSousTraitants";
+import ComparateurFournisseur from "./ComparateurFournisseur/ComparateurFournisseur";
 import Login from "./Login";
 import LoginMobile from "./LoginMobile";
 import ModificationDevis from "./ModificationDevis";
@@ -55,48 +55,29 @@ import PaiementsSousTraitantPage from "./PaiementsSousTraitantPage";
 import PlanningContainer from "./PlanningContainer";
 import StockForm from "./StockForm";
 import TableauSuivi from "./TableauSuivi";
+import TableauPointagePage from "./Pointage/TableauPointagePage";
 import Test from "./Test";
 import TestDragDrop from "./TestDragDrop";
 import TestDragSimple from "./TestDragSimple";
 import ChantiersDrivePaths from "./ChantiersDrivePaths";
 import PageTitleManager from "./PageTitleManager";
+import UsersManagement from "./UsersManagement";
+import AdminAgences from "./AdminAgences";
 import RapportsPage from "./RapportIntervention/RapportsPage";
 import RapportForm from "./RapportIntervention/RapportForm";
 import RapportPreviewPage from "./RapportIntervention/RapportPreviewPage";
 import RapportMobileLayout from "./RapportIntervention/RapportMobileLayout";
+import MobileHomePage from "./MobileHomePage";
+import DriveMobileLayout from "./DriveV2/DriveMobileLayout";
 
-// Créer un thème par défaut avec les couleurs centralisées
+// Créer un thème par défaut
 const theme = createTheme({
   palette: {
     primary: {
-      main: COLORS.primary,
-      dark: COLORS.primaryDark,
-      light: COLORS.primaryLight,
+      main: "#1976d2",
     },
     secondary: {
-      main: COLORS.secondary,
-      dark: COLORS.secondaryDark,
-      light: COLORS.secondaryLight,
-    },
-    error: {
-      main: COLORS.error,
-      dark: COLORS.errorDark,
-      light: COLORS.errorLight,
-    },
-    warning: {
-      main: COLORS.warning,
-      dark: COLORS.warningDark,
-      light: COLORS.warningLight,
-    },
-    success: {
-      main: COLORS.success,
-      dark: COLORS.successDark,
-      light: COLORS.successLight,
-    },
-    info: {
-      main: COLORS.info,
-      dark: COLORS.infoDark,
-      light: COLORS.infoLight,
+      main: "#dc004e",
     },
   },
   typography: {
@@ -108,6 +89,17 @@ const theme = createTheme({
 const ProtectedRoute = ({ children, isAuthenticated, isMobile }) => {
   if (!isAuthenticated) {
     return <Navigate to="/login" replace />;
+  }
+  return children;
+};
+
+/** Accès aux écrans réservés (ex. gestion utilisateurs) : superuser ou staff (admin minimum requis). */
+const AdminAppRoute = ({ children, isAuthenticated, user }) => {
+  if (!isAuthenticated) {
+    return <Navigate to="/login" replace />;
+  }
+  if (!userHasAppAdminAccess(user)) {
+    return <Navigate to="/" replace />;
   }
   return children;
 };
@@ -168,7 +160,7 @@ function App() {
             path="/login"
             element={
               isAuthenticated ? (
-                <Navigate to={isMobile ? "/rapports-mobile" : "/"} replace />
+                <Navigate to={isMobile ? "/mobile-home" : "/"} replace />
               ) : isMobile ? (
                 // Version mobile : LoginMobile (PWA)
                 <LoginMobile onLoginSuccess={handleLoginSuccess} />
@@ -187,6 +179,24 @@ function App() {
                 <Layout user={user} onLogout={handleLogout}>
                   <Dashboard />
                 </Layout>
+              </ProtectedRoute>
+            }
+          />
+
+          <Route
+            path="/mobile-home"
+            element={
+              <ProtectedRoute isAuthenticated={isAuthenticated}>
+                <MobileHomePage />
+              </ProtectedRoute>
+            }
+          />
+
+          <Route
+            path="/drive-mobile"
+            element={
+              <ProtectedRoute isAuthenticated={isAuthenticated}>
+                <DriveMobileLayout />
               </ProtectedRoute>
             }
           />
@@ -372,6 +382,17 @@ function App() {
           />
 
           <Route
+            path="/TableauPointage"
+            element={
+              <ProtectedRoute isAuthenticated={isAuthenticated}>
+                <Layout user={user} onLogout={handleLogout}>
+                  <TableauPointagePage />
+                </Layout>
+              </ProtectedRoute>
+            }
+          />
+
+          <Route
             path="/StockForm"
             element={
               <ProtectedRoute isAuthenticated={isAuthenticated}>
@@ -384,6 +405,16 @@ function App() {
 
           <Route
             path="/AgencyExpenses"
+            element={
+              <ProtectedRoute isAuthenticated={isAuthenticated}>
+                <Layout user={user} onLogout={handleLogout}>
+                  <AgencyExpenses />
+                </Layout>
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/agence/:agenceId/expenses"
             element={
               <ProtectedRoute isAuthenticated={isAuthenticated}>
                 <Layout user={user} onLogout={handleLogout}>
@@ -471,6 +502,17 @@ function App() {
           />
 
           <Route
+            path="/ComparateurFournisseurs"
+            element={
+              <ProtectedRoute isAuthenticated={isAuthenticated}>
+                <Layout user={user} onLogout={handleLogout}>
+                  <ComparateurFournisseur />
+                </Layout>
+              </ProtectedRoute>
+            }
+          />
+
+          <Route
             path="/TableauSuivi"
             element={
               <ProtectedRoute isAuthenticated={isAuthenticated}>
@@ -522,6 +564,30 @@ function App() {
                   <ChantiersDrivePaths />
                 </Layout>
               </ProtectedRoute>
+            }
+          />
+
+          <Route path="/Usermanagement" element={<Navigate to="/UsersManagement" replace />} />
+
+          <Route
+            path="/UsersManagement"
+            element={
+              <AdminAppRoute isAuthenticated={isAuthenticated} user={user}>
+                <Layout user={user} onLogout={handleLogout}>
+                  <UsersManagement />
+                </Layout>
+              </AdminAppRoute>
+            }
+          />
+
+          <Route
+            path="/admin/agences"
+            element={
+              <AdminAppRoute isAuthenticated={isAuthenticated} user={user}>
+                <Layout user={user} onLogout={handleLogout}>
+                  <AdminAgences />
+                </Layout>
+              </AdminAppRoute>
             }
           />
 
@@ -585,8 +651,19 @@ function App() {
                 <OnlyOfficeEditor
                   filePath={new URLSearchParams(window.location.search).get('file_path')}
                   fileName={new URLSearchParams(window.location.search).get('file_name')}
-                  mode="edit"
+                  mode={new URLSearchParams(window.location.search).get('mode') || 'edit'}
                 />
+              </ProtectedRoute>
+            }
+          />
+
+          <Route
+            path="/drive-recovery"
+            element={
+              <ProtectedRoute isAuthenticated={isAuthenticated}>
+                <Layout user={user} onLogout={handleLogout}>
+                  <DriveRecovery />
+                </Layout>
               </ProtectedRoute>
             }
           />
@@ -624,7 +701,6 @@ function App() {
             }
           />
 
-          {/* Rapports d'intervention */}
           <Route
             path="/RapportsIntervention"
             element={
@@ -635,6 +711,7 @@ function App() {
               </ProtectedRoute>
             }
           />
+
           <Route
             path="/RapportIntervention/nouveau"
             element={
@@ -645,6 +722,7 @@ function App() {
               </ProtectedRoute>
             }
           />
+
           <Route
             path="/RapportIntervention/:id/preview"
             element={
@@ -655,6 +733,7 @@ function App() {
               </ProtectedRoute>
             }
           />
+
           <Route
             path="/RapportIntervention/:id"
             element={
@@ -665,6 +744,7 @@ function App() {
               </ProtectedRoute>
             }
           />
+
           <Route
             path="/rapports-mobile"
             element={

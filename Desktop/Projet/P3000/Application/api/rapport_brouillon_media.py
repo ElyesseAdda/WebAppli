@@ -1,12 +1,21 @@
+"""Médias brouillon (S3).
+
+Chemins dédiés, enrichissement des URLs présignées, et transfert des fichiers
+S3 du brouillon vers le rapport final au moment de la promotion.
 """
-Médias brouillon (S3) : chemins dédiés, enrichissement URLs, transfert vers RapportIntervention à la promotion.
-"""
+
 import base64
 import uuid
 from datetime import date
 
 from .models_rapport import PhotoRapport
-from .utils import copy_s3_file, generate_presigned_url_for_display, get_s3_bucket_name, get_s3_client, is_s3_available
+from .utils import (
+    copy_s3_file,
+    generate_presigned_url_for_display,
+    get_s3_bucket_name,
+    get_s3_client,
+    is_s3_available,
+)
 
 
 def _safe_presign(s3_key):
@@ -33,10 +42,16 @@ def enrich_draft_media_with_presigned_urls(draft_media):
         out["photo_platine_presigned_url"] = out["photo_platine_presigned_urls"][0]
     port_keys = out.get("photos_platine_portail_s3_keys")
     if isinstance(port_keys, list) and port_keys:
-        out["photo_platine_portail_presigned_urls"] = [_safe_presign(k) for k in port_keys if k]
+        out["photo_platine_portail_presigned_urls"] = [
+            _safe_presign(k) for k in port_keys if k
+        ]
     elif out.get("photo_platine_portail_s3_key"):
-        out["photo_platine_portail_presigned_urls"] = [_safe_presign(out["photo_platine_portail_s3_key"])]
-        out["photo_platine_portail_presigned_url"] = out["photo_platine_portail_presigned_urls"][0]
+        out["photo_platine_portail_presigned_urls"] = [
+            _safe_presign(out["photo_platine_portail_s3_key"])
+        ]
+        out["photo_platine_portail_presigned_url"] = out[
+            "photo_platine_portail_presigned_urls"
+        ][0]
     # Contrat canonique (nouveau) + compat legacy.
     vigik_platine = []
     for k in out.get("photos_platine_s3_keys") or []:
@@ -78,7 +93,7 @@ def enrich_draft_media_with_presigned_urls(draft_media):
 
 
 def collect_s3_keys_from_draft_media(draft_media):
-    """Liste toutes les clés S3 d'un _draft_media (pour suppression)."""
+    """Liste toutes les clés S3 présentes dans un ``_draft_media`` (pour suppression)."""
     keys = []
     if not isinstance(draft_media, dict):
         return keys
@@ -91,9 +106,13 @@ def collect_s3_keys_from_draft_media(draft_media):
             for v in lst:
                 if v:
                     keys.append(v)
-        elif list_key == "photos_platine_s3_keys" and draft_media.get("photo_platine_s3_key"):
+        elif list_key == "photos_platine_s3_keys" and draft_media.get(
+            "photo_platine_s3_key"
+        ):
             keys.append(draft_media["photo_platine_s3_key"])
-        elif list_key == "photos_platine_portail_s3_keys" and draft_media.get("photo_platine_portail_s3_key"):
+        elif list_key == "photos_platine_portail_s3_keys" and draft_media.get(
+            "photo_platine_portail_s3_key"
+        ):
             keys.append(draft_media["photo_platine_portail_s3_key"])
     pp = draft_media.get("prestation_photos") or {}
     if isinstance(pp, dict):
@@ -134,17 +153,18 @@ def _parse_date_photo(val):
 
 
 def _transfer_signature_base64(rapport, data_url):
-    """Legacy : signature encore en data URL dans le payload."""
+    """Legacy : signature encore au format data URL dans le payload."""
     if not data_url or not isinstance(data_url, str):
         return
     try:
-        from .utils import get_s3_client, get_s3_bucket_name, is_s3_available
-
         if not is_s3_available():
             return
         payload = data_url.split(",", 1)[1] if "," in data_url else data_url
         image_bytes = base64.b64decode(payload)
-        s3_key = f"rapports_intervention/signatures/signature_{rapport.id}_{uuid.uuid4().hex[:8]}.png"
+        s3_key = (
+            f"rapports_intervention/signatures/"
+            f"signature_{rapport.id}_{uuid.uuid4().hex[:8]}.png"
+        )
         s3 = get_s3_client()
         bucket = get_s3_bucket_name()
         s3.put_object(Bucket=bucket, Key=s3_key, Body=image_bytes, ContentType="image/png")
@@ -155,9 +175,9 @@ def _transfer_signature_base64(rapport, data_url):
 
 
 def transfer_brouillon_media_to_rapport(brouillon_id, rapport, draft_media):
-    """
-    Copie les fichiers S3 du brouillon vers les chemins définitifs du rapport
-    et crée les PhotoRapport. Gère aussi l'ancien format base64 (_draft_media v1).
+    """Copie les fichiers S3 du brouillon vers les chemins définitifs du rapport et crée les ``PhotoRapport``.
+
+    Gère également l'ancien format base64 (``_draft_media`` v1).
     """
     if not draft_media or not isinstance(draft_media, dict):
         return
@@ -165,7 +185,10 @@ def transfer_brouillon_media_to_rapport(brouillon_id, rapport, draft_media):
     rapport.refresh_from_db()
     if draft_media.get("signature_s3_key"):
         src = draft_media["signature_s3_key"]
-        dest = f"rapports_intervention/signatures/signature_{rapport.id}_{uuid.uuid4().hex[:8]}.png"
+        dest = (
+            f"rapports_intervention/signatures/"
+            f"signature_{rapport.id}_{uuid.uuid4().hex[:8]}.png"
+        )
         if copy_s3_file(src, dest):
             rapport.signature_s3_key = dest
             rapport.save(update_fields=["signature_s3_key"])
@@ -182,7 +205,10 @@ def transfer_brouillon_media_to_rapport(brouillon_id, rapport, draft_media):
             if not pk_src:
                 continue
             ext = pk_src.split(".")[-1] if "." in pk_src else "jpg"
-            dest = f"rapports_intervention/vigik_platine/rapport_{rapport.id}_{uuid.uuid4().hex[:8]}.{ext}"
+            dest = (
+                f"rapports_intervention/vigik_platine/"
+                f"rapport_{rapport.id}_{uuid.uuid4().hex[:8]}.{ext}"
+            )
             if copy_s3_file(pk_src, dest):
                 new_plat.append(dest)
         if new_plat:
@@ -198,7 +224,10 @@ def transfer_brouillon_media_to_rapport(brouillon_id, rapport, draft_media):
             if not pk_src:
                 continue
             ext = pk_src.split(".")[-1] if "." in pk_src else "jpg"
-            dest = f"rapports_intervention/vigik_platine_portail/rapport_{rapport.id}_{uuid.uuid4().hex[:8]}.{ext}"
+            dest = (
+                f"rapports_intervention/vigik_platine_portail/"
+                f"rapport_{rapport.id}_{uuid.uuid4().hex[:8]}.{ext}"
+            )
             if copy_s3_file(pk_src, dest):
                 new_port.append(dest)
         if new_port:
@@ -227,12 +256,15 @@ def transfer_brouillon_media_to_rapport(brouillon_id, rapport, draft_media):
                 type_photo = meta.get("type_photo") or "avant"
                 ext = src.split(".")[-1] if "." in src else "jpg"
                 dest = (
-                    f"rapports_intervention/photos/rapport_{rapport.id}/prestation_{prestation.id}/"
+                    f"rapports_intervention/photos/rapport_{rapport.id}/"
+                    f"prestation_{prestation.id}/"
                     f"{type_photo}_{uuid.uuid4().hex[:8]}.{ext}"
                 )
                 if not copy_s3_file(src, dest):
                     continue
-                nb = PhotoRapport.objects.filter(prestation=prestation, type_photo=type_photo).count()
+                nb = PhotoRapport.objects.filter(
+                    prestation=prestation, type_photo=type_photo
+                ).count()
                 PhotoRapport.objects.create(
                     prestation=prestation,
                     s3_key=dest,
@@ -244,5 +276,3 @@ def transfer_brouillon_media_to_rapport(brouillon_id, rapport, draft_media):
 
     keys_to_delete = collect_s3_keys_from_draft_media(draft_media)
     delete_s3_keys(keys_to_delete)
-
-

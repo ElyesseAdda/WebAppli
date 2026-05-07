@@ -27,7 +27,6 @@ import {
   MdStore,
 } from "react-icons/md";
 import axios from "axios";
-import { COLORS } from "../constants/colors";
 
 const ListeFournisseurs = () => {
   const [fournisseurs, setFournisseurs] = useState([]);
@@ -204,7 +203,7 @@ const ListeFournisseurs = () => {
       {/* En-tête */}
       <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mb: 3 }}>
         <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
-          <MdBusiness size={32} color={COLORS.infoDark} />
+          <MdBusiness size={32} color="#1976d2" />
           <Typography variant="h4" component="h1">
             Gestion des Fournisseurs
           </Typography>
@@ -214,7 +213,7 @@ const ListeFournisseurs = () => {
           startIcon={<MdAdd />}
           onClick={() => handleOpenModal()}
           sx={{
-            backgroundColor: COLORS.infoDark,
+            backgroundColor: "#1976d2",
             "&:hover": {
               backgroundColor: "#1565c0",
             },
@@ -228,13 +227,13 @@ const ListeFournisseurs = () => {
       <TableContainer component={Paper} sx={{ mt: 2 }}>
         <Table>
           <TableHead>
-            <TableRow sx={{ backgroundColor: COLORS.backgroundHover }}>
-              <TableCell sx={{ fontWeight: "bold" }}>Nom</TableCell>
-              <TableCell sx={{ fontWeight: "bold" }}>Email</TableCell>
-              <TableCell sx={{ fontWeight: "bold" }}>Téléphone</TableCell>
-              <TableCell sx={{ fontWeight: "bold" }}>Magasins</TableCell>
-              <TableCell sx={{ fontWeight: "bold" }}>Description</TableCell>
-              <TableCell sx={{ fontWeight: "bold", textAlign: "center" }}>
+            <TableRow sx={{ backgroundColor: "#1976d2" }}>
+              <TableCell sx={{ fontWeight: "bold", color: "#fff" }}>Nom</TableCell>
+              <TableCell sx={{ fontWeight: "bold", color: "#fff" }}>Email</TableCell>
+              <TableCell sx={{ fontWeight: "bold", color: "#fff" }}>Téléphone</TableCell>
+              <TableCell sx={{ fontWeight: "bold", color: "#fff" }}>Magasins</TableCell>
+              <TableCell sx={{ fontWeight: "bold", color: "#fff" }}>Description</TableCell>
+              <TableCell sx={{ fontWeight: "bold", textAlign: "center", color: "#fff" }}>
                 Actions
               </TableCell>
             </TableRow>
@@ -370,7 +369,7 @@ const ListeFournisseurs = () => {
                           p: 2,
                           border: "1px solid #e0e0e0",
                           borderRadius: 1,
-                          backgroundColor: COLORS.backgroundHover,
+                          backgroundColor: "#fafafa",
                         }}
                       >
                         <Box sx={{ display: "flex", gap: 2, alignItems: "flex-start" }}>
@@ -426,7 +425,7 @@ const ListeFournisseurs = () => {
               type="submit"
               variant="contained"
               sx={{
-                backgroundColor: COLORS.infoDark,
+                backgroundColor: "#1976d2",
                 "&:hover": {
                   backgroundColor: "#1565c0",
                 },

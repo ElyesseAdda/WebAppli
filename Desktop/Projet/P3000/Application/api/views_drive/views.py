@@ -13,7 +13,7 @@ from django.utils.decorators import method_decorator
 from rest_framework.permissions import AllowAny
 from django.http import StreamingHttpResponse, JsonResponse, HttpResponse
 import requests
-from .manager import DriveManager
+from .manager import DriveManager, normalize_filename
 from .onlyoffice import OnlyOfficeManager
 from ..utils import encode_filename_for_content_disposition
 import io
@@ -28,6 +28,19 @@ class DriveV2ViewSet(viewsets.ViewSet):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         self.drive_manager = DriveManager()
+
+    def _get_modified_by(self, request):
+        """Retourne les initiales (Prénom Nom -> PN) de l'utilisateur."""
+        user = request.user
+        first = (user.first_name or '').strip()
+        last = (user.last_name or '').strip()
+        if first and last:
+            return f"{first[0].upper()}{last[0].upper()}"
+        if first:
+            return first[0].upper()
+        if last:
+            return last[0].upper()
+        return user.username
     
     @action(detail=False, methods=['get'], url_path='list-content')
     def list_content(self, request):
@@ -68,7 +81,8 @@ class DriveV2ViewSet(viewsets.ViewSet):
                     status=status.HTTP_400_BAD_REQUEST
                 )
             
-            result = self.drive_manager.create_folder(parent_path, folder_name)
+            modified_by = self._get_modified_by(request)
+            result = self.drive_manager.create_folder(parent_path, folder_name, modified_by=modified_by)
             return Response(result, status=status.HTTP_201_CREATED)
             
         except ValueError as e:
@@ -92,8 +106,19 @@ class DriveV2ViewSet(viewsets.ViewSet):
             - is_folder: True si c'est un dossier (optionnel)
         """
         try:
-            item_path = request.data.get('item_path')
-            is_folder = request.data.get('is_folder', False)
+            # Accepter les paramètres dans le body (JSON) ET en query params
+            # pour supporter les appels axios.delete(..., { params: ... }).
+            item_path = request.data.get('item_path') or request.query_params.get('item_path')
+
+            raw_is_folder = request.data.get('is_folder', None)
+            if raw_is_folder is None:
+                raw_is_folder = request.query_params.get('is_folder', None)
+
+            if raw_is_folder is None:
+                item_type = request.data.get('item_type') or request.query_params.get('item_type')
+                is_folder = str(item_type).lower() == 'folder'
+            else:
+                is_folder = str(raw_is_folder).lower() in ('true', '1', 'yes', 'on')
             
             if not item_path:
                 return Response(
@@ -101,7 +126,8 @@ class DriveV2ViewSet(viewsets.ViewSet):
                     status=status.HTTP_400_BAD_REQUEST
                 )
             
-            result = self.drive_manager.delete_item(item_path, is_folder)
+            modified_by = self._get_modified_by(request)
+            result = self.drive_manager.delete_item(item_path, is_folder, modified_by=modified_by)
             return Response(result, status=status.HTTP_200_OK)
             
         except Exception as e:
@@ -228,10 +254,12 @@ class DriveV2ViewSet(viewsets.ViewSet):
                     status=status.HTTP_400_BAD_REQUEST
                 )
             
+            modified_by = self._get_modified_by(request)
             result = self.drive_manager.get_upload_url(
                 file_path,
                 file_name,
-                content_type
+                content_type,
+                modified_by=modified_by
             )
             
             return Response(result, status=status.HTTP_200_OK)
@@ -296,7 +324,8 @@ class DriveV2ViewSet(viewsets.ViewSet):
                     status=status.HTTP_400_BAD_REQUEST
                 )
             
-            result = self.drive_manager.move_item(source_path, dest_path)
+            modified_by = self._get_modified_by(request)
+            result = self.drive_manager.move_item(source_path, dest_path, modified_by=modified_by)
             return Response(result, status=status.HTTP_200_OK)
             
         except Exception as e:
@@ -324,7 +353,8 @@ class DriveV2ViewSet(viewsets.ViewSet):
                     status=status.HTTP_400_BAD_REQUEST
                 )
             
-            result = self.drive_manager.rename_item(old_path, new_name)
+            modified_by = self._get_modified_by(request)
+            result = self.drive_manager.rename_item(old_path, new_name, modified_by=modified_by)
             return Response(result, status=status.HTTP_200_OK)
             
         except ValueError as e:
@@ -525,7 +555,7 @@ class DriveV2ViewSet(viewsets.ViewSet):
             # 7. Gestion propre du nom de fichier pour le téléchargement (gère les accents)
             # IMPORTANT : Utiliser 'attachment' au lieu de 'inline' pour OnlyOffice
             # OnlyOffice a besoin de 'attachment' pour traiter le fichier comme un téléchargement physique
-            filename = final_key.split('/')[-1]
+            filename = normalize_filename(final_key.split('/')[-1])
             response['Content-Disposition'] = encode_filename_for_content_disposition(filename, 'attachment')
             response['Content-Length'] = s3_meta['ContentLength']
             response['Accept-Ranges'] = 'bytes'
@@ -586,6 +616,15 @@ class DriveV2ViewSet(viewsets.ViewSet):
             file_name = request.data.get('file_name')
             mode = request.data.get('mode', 'edit')
             use_proxy = request.data.get('use_proxy', False)
+
+            # Détection mobile : User-Agent (serveur) + flag explicite du client
+            _MOBILE_UA_KEYWORDS = ('Android', 'iPhone', 'iPad', 'iPod', 'Mobile', 'webOS',
+                                   'BlackBerry', 'IEMobile', 'Opera Mini')
+            user_agent = request.META.get('HTTP_USER_AGENT', '')
+            is_mobile_ua = any(kw in user_agent for kw in _MOBILE_UA_KEYWORDS)
+            # Le frontend peut aussi forcer explicitement le mode mobile
+            is_mobile_flag = bool(request.data.get('is_mobile', False))
+            is_mobile = is_mobile_ua or is_mobile_flag
             
             if not file_path or not file_name:
                 return Response(
@@ -618,7 +657,7 @@ class DriveV2ViewSet(viewsets.ViewSet):
             # Le fichier dans S3 est stocké avec le nom original (peut être NFD ou NFC)
             # On normalisera seulement lors de la recherche dans S3 (dans proxy_file)
             file_path_for_token = file_path  # Garder le chemin original pour le token
-            file_name_normalized = unicodedata.normalize('NFC', file_name)  # Normaliser seulement le nom pour l'affichage
+            file_name_normalized = normalize_filename(unicodedata.normalize('NFC', file_name))
             
             # Générer un token temporaire pour OnlyOffice (valide 24h)
             # IMPORTANT : Utiliser le file_path ORIGINAL (non normalisé) dans le token
@@ -670,7 +709,8 @@ class DriveV2ViewSet(viewsets.ViewSet):
                     user_id=str(request.user.id),
                     user_name=request.user.get_full_name() or request.user.username,
                     mode=mode,
-                    storage_manager=storage_manager
+                    storage_manager=storage_manager,
+                    is_mobile=is_mobile,
                 )
                 return Response(result, status=status.HTTP_200_OK)
             except Exception as config_error:
@@ -877,7 +917,7 @@ def proxy_file_view(request):
         
         # Ajouter les headers
         response['Content-Length'] = s3_response['ContentLength']
-        filename = file_path.split("/")[-1]
+        filename = normalize_filename(file_path.split("/")[-1])
         # IMPORTANT : Utiliser 'attachment' au lieu de 'inline' pour OnlyOffice
         # OnlyOffice a besoin de 'attachment' pour traiter le fichier comme un téléchargement physique
         response['Content-Disposition'] = encode_filename_for_content_disposition(filename, 'attachment')

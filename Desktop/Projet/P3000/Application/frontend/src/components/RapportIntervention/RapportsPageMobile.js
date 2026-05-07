@@ -105,10 +105,12 @@ const RapportsPageMobile = ({ onSelectRapport, onEditRapport }) => {
   const { rapports, rapportsCount, fetchRapports, loading } = useRapports();
   const [brouillonsServeur, setBrouillonsServeur] = useState([]);
   const [residences, setResidences] = useState([]);
+  const [titresRapport, setTitresRapport] = useState([]);
   const [filters, setFilters] = useState({
     residence: "",
     logement: "",
     type_rapport: "",
+    titre: "",
   });
   const [logementInput, setLogementInput] = useState("");
   const logementDebounceRef = useRef(null);
@@ -130,11 +132,19 @@ const RapportsPageMobile = ({ onSelectRapport, onEditRapport }) => {
     }).catch(() => {});
   }, []);
 
+  useEffect(() => {
+    axios.get("/api/titres-rapport/").then((res) => {
+      const d = res.data?.results || res.data || [];
+      setTitresRapport(Array.isArray(d) ? d : []);
+    }).catch(() => setTitresRapport([]));
+  }, []);
+
   const loadRapports = useCallback(() => {
     const cleanFilters = {};
     if (filters.residence) cleanFilters.residence = filters.residence;
     if (filters.logement) cleanFilters.logement = filters.logement;
     if (filters.type_rapport) cleanFilters.type_rapport = filters.type_rapport;
+    if (filters.titre) cleanFilters.titre = filters.titre;
     if (showOnlyDevisAFaireV) {
       cleanFilters.devis_a_faire = "true";
       cleanFilters.devis_fait = "false";
@@ -151,8 +161,9 @@ const RapportsPageMobile = ({ onSelectRapport, onEditRapport }) => {
       pageSize: RAPPORTS_LIST_PAGE_SIZE,
       ordering: dateSortOrder === "desc" ? "-date" : "date",
       excludeStatutTermine: !showTermines,
+      onlyStatutTermine: showTermines,
     });
-  }, [fetchRapports, filters.residence, filters.logement, filters.type_rapport, listPage, dateSortOrder, showTermines, showOnlyDevisAFaireV]);
+  }, [fetchRapports, filters.residence, filters.logement, filters.type_rapport, filters.titre, listPage, dateSortOrder, showTermines, showOnlyDevisAFaireV]);
 
   const brouillonsFiltres = useMemo(() => {
     const log = (filters.logement || "").trim().toLowerCase();
@@ -161,9 +172,10 @@ const RapportsPageMobile = ({ onSelectRapport, onEditRapport }) => {
       if (filters.type_rapport && b.type_rapport !== filters.type_rapport) return false;
       if (log && !String(b.logement || "").toLowerCase().includes(log)) return false;
       if (showOnlyDevisAFaireV && (!b.devis_a_faire || b.devis_fait)) return false;
+      if (filters.titre && Number(b.titre) !== Number(filters.titre)) return false;
       return true;
     });
-  }, [brouillonsServeur, filters.residence, filters.logement, filters.type_rapport, showOnlyDevisAFaireV]);
+  }, [brouillonsServeur, filters.residence, filters.logement, filters.type_rapport, filters.titre, showOnlyDevisAFaireV]);
 
   const brouillonsSorted = useMemo(() => {
     return [...brouillonsFiltres].sort((a, b) => {
@@ -173,10 +185,13 @@ const RapportsPageMobile = ({ onSelectRapport, onEditRapport }) => {
     });
   }, [brouillonsFiltres, dateSortOrder]);
 
-  const displayRapports = listPage === 1 ? [...brouillonsSorted, ...rapports] : rapports;
+  const displayRapports =
+    listPage === 1 && !showTermines ? [...brouillonsSorted, ...rapports] : rapports;
 
   const showInitialLoading =
-    loading && rapports.length === 0 && (listPage > 1 || brouillonsSorted.length === 0);
+    loading &&
+    rapports.length === 0 &&
+    (listPage > 1 || showTermines || brouillonsSorted.length === 0);
 
   useEffect(() => {
     loadRapports();
@@ -426,11 +441,11 @@ const RapportsPageMobile = ({ onSelectRapport, onEditRapport }) => {
                 )}
               </IconButton>
             </Tooltip>
-            {(filters.residence || filters.logement || filters.type_rapport) && (
+            {(filters.residence || filters.logement || filters.type_rapport || filters.titre) && (
               <Button
                 size="small"
                 onClick={() => {
-                  setFilters({ residence: "", logement: "", type_rapport: "" });
+                  setFilters({ residence: "", logement: "", type_rapport: "", titre: "" });
                   setLogementInput("");
                   setShowOnlyDevisAFaireV(false);
                   setListPage(1);
@@ -527,6 +542,44 @@ const RapportsPageMobile = ({ onSelectRapport, onEditRapport }) => {
               <MenuItem value="vigik_plus">{TYPE_RAPPORT_LABELS.vigik_plus}</MenuItem>
             </Select>
           </FormControl>
+          <Autocomplete
+            options={titresRapport}
+            getOptionLabel={(opt) => opt?.nom || ""}
+            isOptionEqualToValue={(a, b) => a?.id === b?.id}
+            value={titresRapport.find((t) => String(t.id) === String(filters.titre)) || null}
+            onChange={(_, val) => {
+              setFilters((prev) => ({ ...prev, titre: val?.id != null ? String(val.id) : "" }));
+              setListPage(1);
+            }}
+            fullWidth
+            renderInput={(params) => (
+              <TextField
+                {...params}
+                label="Titre"
+                placeholder="Tapez pour filtrer…"
+                size="small"
+                sx={{
+                  "& .MuiOutlinedInput-root": {
+                    minHeight: 48,
+                    borderRadius: 1,
+                    fontSize: "1rem",
+                    backgroundColor: COLORS.backgroundAlt,
+                    "& fieldset": { borderColor: COLORS.border },
+                    "&:hover fieldset": { borderColor: COLORS.primary },
+                    "&.Mui-focused fieldset": { borderWidth: 2, borderColor: COLORS.accent },
+                  },
+                  "& .MuiInputLabel-outlined": { color: COLORS.textMuted },
+                }}
+              />
+            )}
+            autoHighlight
+            clearOnEscape
+            noOptionsText="Aucun titre correspondant"
+            slotProps={{
+              paper: { sx: { borderRadius: 2, mt: 1, boxShadow: 2 } },
+              listbox: { sx: { maxHeight: 280, py: 0 } },
+            }}
+          />
           <Box
             sx={{
               width: "100%",
@@ -680,7 +733,7 @@ const RapportsPageMobile = ({ onSelectRapport, onEditRapport }) => {
         <Typography variant="body2" color="text.secondary" sx={{ py: 4, textAlign: "center" }}>
           Chargement...
         </Typography>
-      ) : !loading && rapportsCount === 0 && brouillonsFiltres.length === 0 ? (
+      ) : !loading && rapportsCount === 0 && (showTermines || brouillonsFiltres.length === 0) ? (
         <Paper
           elevation={0}
           sx={{
@@ -693,9 +746,13 @@ const RapportsPageMobile = ({ onSelectRapport, onEditRapport }) => {
           <Typography variant="body2" color="text.secondary">
             Aucun rapport ne correspond à ces critères.
           </Typography>
-          {!showTermines && (
+          {!showTermines ? (
             <Typography variant="caption" color="text.secondary" sx={{ display: "block", mt: 1.5, px: 1 }}>
-              Les rapports terminés sont masqués — cochez « Afficher terminés » pour les inclure.
+              Les rapports terminés sont masqués — cochez « Afficher terminés » pour les afficher.
+            </Typography>
+          ) : (
+            <Typography variant="caption" color="text.secondary" sx={{ display: "block", mt: 1.5, px: 1 }}>
+              Aucun rapport terminé ne correspond à ces critères.
             </Typography>
           )}
         </Paper>
@@ -835,7 +892,7 @@ const RapportsPageMobile = ({ onSelectRapport, onEditRapport }) => {
                     {rapport.titre_nom && (
                       <>
                         <Typography component="span" variant="body2" sx={{ color: COLORS.textMuted, fontSize: "inherit" }}>
-                          {" · "}
+                          {" Â· "}
                         </Typography>
                         <Typography component="span" variant="body2" sx={{ color: COLORS.textLight, fontSize: "inherit" }}>
                           {rapport.titre_nom}

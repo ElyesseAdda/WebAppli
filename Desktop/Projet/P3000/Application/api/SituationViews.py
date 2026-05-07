@@ -533,7 +533,7 @@ def preview_situation_v2(request, situation_id):
         # Utiliser directement les valeurs stockées en DB (elles sont déjà calculées et correctes)
         montant_ht_mois = situation.montant_ht_mois or Decimal('0')
         retenue_garantie = situation.retenue_garantie or Decimal('0')
-        taux_retenue_garantie = situation.taux_retenue_garantie or Decimal('5.00')
+        taux_retenue_garantie = situation.taux_retenue_garantie if situation.taux_retenue_garantie is not None else Decimal('5.00')
         montant_prorata = situation.montant_prorata or Decimal('0')
         retenue_cie = situation.retenue_cie or Decimal('0')
         type_retenue_cie = situation.type_retenue_cie or 'deduction'

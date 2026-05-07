@@ -17,91 +17,74 @@ class OnlyOfficeManager:
     """
     Gestionnaire OnlyOffice pour l'édition de documents
     """
-    
+
     @staticmethod
-    def _get_public_domain():
+    def _get_public_domain() -> str:
         """
         Retourne le domaine public du client depuis les settings.
-        Utilise CLIENT_PUBLIC_DOMAIN, ou le premier domaine non-localhost de ALLOWED_HOSTS.
+        Lit CLIENT_PUBLIC_DOMAIN (défini dans settings_base.py via la variable d'env).
+        Fallback sur le premier hôte non-local de ALLOWED_HOSTS.
         """
         domain = getattr(settings, 'CLIENT_PUBLIC_DOMAIN', '')
         if domain:
             return domain
-        
-        # Fallback : premier hôte public dans ALLOWED_HOSTS
         for host in getattr(settings, 'ALLOWED_HOSTS', []):
             if host not in ('localhost', '127.0.0.1', 'host.docker.internal', '*', ''):
                 return host
-        
         return ''
-    
+
     @staticmethod
-    def _get_known_hostnames():
+    def _get_known_hostnames() -> set:
         """
-        Retourne la liste des hostnames connus (domaine public, IP du serveur, etc.)
-        pour identifier les URLs du même serveur.
+        Retourne l'ensemble des hostnames connus pour ce serveur
+        (domaine public, www., IP, ALLOWED_HOSTS, serveur OnlyOffice).
         """
         domain = OnlyOfficeManager._get_public_domain()
         hostnames = {'127.0.0.1', 'localhost'}
-        
         if domain:
             hostnames.add(domain)
-            # Ajouter aussi la version www si applicable
             if not domain.startswith('www.'):
                 hostnames.add(f'www.{domain}')
-        
-        # Ajouter tous les ALLOWED_HOSTS
         for host in getattr(settings, 'ALLOWED_HOSTS', []):
             if host and host != '*':
                 hostnames.add(host)
-        
-        # Ajouter le hostname du serveur OnlyOffice
         onlyoffice_url = getattr(settings, 'ONLYOFFICE_SERVER_URL', '')
         if onlyoffice_url:
-            parsed = urlparse(onlyoffice_url)
-            if parsed.hostname:
-                hostnames.add(parsed.hostname)
-        
+            parsed_oo = urlparse(onlyoffice_url)
+            if parsed_oo.hostname:
+                hostnames.add(parsed_oo.hostname)
         return hostnames
-    
-    @staticmethod
-    def _is_ip_address(hostname):
-        """Vérifie si le hostname est une adresse IP."""
-        import re
-        return bool(re.match(r'^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$', hostname or ''))
-    
+
     @staticmethod
     def normalize_file_url(url: str) -> str:
         """
         Normalise l'URL du fichier pour qu'elle soit accessible depuis OnlyOffice (Docker).
-        
-        IMPORTANT : OnlyOffice (dans Docker) doit accéder au proxy Django via Internet (domaine public).
-        En production, on utilise toujours le domaine public HTTPS pour que
-        OnlyOffice puisse télécharger les fichiers via le reverse proxy Nginx.
-        
-        En développement local : utilise host.docker.internal pour Docker Desktop
-        
+
+        En production, utilise toujours le domaine public HTTPS du client
+        (CLIENT_PUBLIC_DOMAIN) pour qu'OnlyOffice puisse télécharger les fichiers.
+        En développement : host.docker.internal.
+
         Args:
             url: URL du fichier (proxy Django) originale
-            
+
         Returns:
-            URL normalisée pour OnlyOffice (toujours domaine public HTTPS en production)
+            URL normalisée pour OnlyOffice
         """
         import logging
         logger = logging.getLogger(__name__)
-        
+
         parsed = urlparse(url)
         is_production = not settings.DEBUG
         public_domain = OnlyOfficeManager._get_public_domain()
         known_hostnames = OnlyOfficeManager._get_known_hostnames()
-        
+
         if is_production and public_domain:
             # En production : utiliser TOUJOURS le domaine public HTTPS
             # OnlyOffice (Docker) accède via Internet, donc il doit utiliser le domaine public
             if parsed.hostname in ('127.0.0.1', 'localhost'):
                 query_string = f"?{parsed.query}" if parsed.query else ""
                 return f"https://{public_domain}{parsed.path}{query_string}"
-            
+
             # Si l'URL utilise un hostname connu, s'assurer qu'elle est en HTTPS
             if parsed.hostname in known_hostnames:
                 if parsed.scheme != 'https':
@@ -110,11 +93,10 @@ class OnlyOfficeManager:
                 return url
         else:
             # En développement : utiliser host.docker.internal pour Docker Desktop
-            # Cela permet à OnlyOffice (dans Docker) d'accéder à Django sur la machine hôte
             if parsed.hostname in ('127.0.0.1', 'localhost'):
                 query_string = f"?{parsed.query}" if parsed.query else ""
                 return f"http://host.docker.internal:8000{parsed.path}{query_string}"
-        
+
         return url
     
     @staticmethod
@@ -122,8 +104,8 @@ class OnlyOfficeManager:
         """
         Normalise l'URL de callback pour qu'elle soit accessible depuis le conteneur Docker.
         
-        IMPORTANT : En production, OnlyOffice (Docker) doit accéder au callback Django via
-        le domaine public HTTPS car Docker (réseau bridge) ne peut pas accéder à localhost.
+        IMPORTANT : En production, OnlyOffice (Docker) doit accéder au callback Django via localhost
+        car ils sont sur le même serveur. Le callback est interne au serveur.
         
         En développement local (Docker Desktop Windows/Mac) : utilise host.docker.internal
         
@@ -141,11 +123,11 @@ class OnlyOfficeManager:
         original_url = url
         public_domain = OnlyOfficeManager._get_public_domain()
         known_hostnames = OnlyOfficeManager._get_known_hostnames()
-        
+
         # Si l'URL contient 127.0.0.1 ou localhost
         if parsed.hostname in ('127.0.0.1', 'localhost'):
             if is_production and public_domain:
-                # En production : utiliser le domaine public HTTPS
+                # En production : utiliser le domaine public HTTPS du client
                 # Docker (réseau bridge) ne peut pas accéder à localhost de l'hôte
                 query_string = f"?{parsed.query}" if parsed.query else ""
                 normalized = f"https://{public_domain}{parsed.path}{query_string}"
@@ -157,12 +139,11 @@ class OnlyOfficeManager:
                 normalized = f"http://host.docker.internal:8000{parsed.path}{query_string}"
                 logger.info(f"[OnlyOffice] Normalisation callback (DEV): {original_url[:100]}... -> {normalized[:100]}...")
                 return normalized
-        
-        # Si l'URL utilise un domaine/IP connu en production
-        # OnlyOffice et Django sont sur le même serveur
+
+        # Si l'URL utilise un hostname connu du même serveur en production
         if is_production and parsed.hostname and public_domain:
-            if (parsed.hostname in known_hostnames or 
-                parsed.hostname in getattr(settings, 'ALLOWED_HOSTS', [])):
+            if (parsed.hostname in known_hostnames or
+                    parsed.hostname in getattr(settings, 'ALLOWED_HOSTS', [])):
                 # Utiliser le domaine public HTTPS car Docker ne peut pas accéder à localhost
                 query_string = f"?{parsed.query}" if parsed.query else ""
                 normalized = f"https://{public_domain}{parsed.path}{query_string}"
@@ -219,7 +200,8 @@ class OnlyOfficeManager:
             'xls', 'xlsx', 'xlsm', 'xlt', 'xltx', 'xltm',
             'ppt', 'pptx', 'pptm', 'pot', 'potx', 'potm',
             'odt', 'ods', 'odp', 'rtf', 'txt', 'csv',
-            'pdf'  # Support PDF depuis OnlyOffice 8.1+
+            'fodt', 'fods', 'fodp', 'ott', 'ots', 'otp',
+            'pdf',
         ]
         return extension in editable_extensions
     
@@ -277,9 +259,11 @@ class OnlyOfficeManager:
         """
         try:
             healthcheck_url = f"{settings.ONLYOFFICE_SERVER_URL}/healthcheck"
-            # Désactiver la vérification SSL pour les certificats auto-signés (IP ou localhost)
-            onlyoffice_parsed = urlparse(settings.ONLYOFFICE_SERVER_URL)
-            verify_ssl = not OnlyOfficeManager._is_ip_address(onlyoffice_parsed.hostname) and onlyoffice_parsed.hostname not in ('localhost', '127.0.0.1')
+            oo_parsed = urlparse(settings.ONLYOFFICE_SERVER_URL)
+            verify_ssl = not (
+                oo_parsed.hostname in ('127.0.0.1', 'localhost') or
+                bool(re.match(r'^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$', oo_parsed.hostname or ''))
+            )
             response = requests.get(healthcheck_url, timeout=5, verify=verify_ssl)
             
             is_available = response.status_code == 200 and response.text.strip().lower() == 'true'
@@ -314,7 +298,8 @@ class OnlyOfficeManager:
     @staticmethod
     def create_config(file_path: str, file_name: str, file_url: str, 
                      callback_url: str, user_id: str, user_name: str, 
-                     mode: str = 'edit', storage_manager=None) -> dict:
+                     mode: str = 'edit', storage_manager=None,
+                     is_mobile: bool = False) -> dict:
         """
         Crée la configuration OnlyOffice
         
@@ -327,6 +312,7 @@ class OnlyOfficeManager:
             user_name: Nom utilisateur
             mode: Mode d'édition ('edit' ou 'view')
             storage_manager: Instance du StorageManager pour récupérer la date de modification
+            is_mobile: True si la requête vient d'un navigateur mobile (active le mode mobile OnlyOffice)
             
         Returns:
             Dict avec config et token
@@ -349,6 +335,34 @@ class OnlyOfficeManager:
         # Stocker la correspondance key -> file_path original dans le cache (7 jours)
         cache.set(f"onlyoffice_key_{document_key}", file_path, timeout=604800)
         
+        # Customization adaptée au device
+        if is_mobile:
+            customization = {
+                "autosave": True,
+                "comments": False,
+                "compactToolbar": True,   # Barre compacte sur mobile
+                "forcesave": True,
+                "help": False,
+                "hideRightMenu": True,
+                "hidePrintButton": False,
+                "logo": {"image": "", "url": ""},
+                "zoom": -1,               # Ajustement auto de zoom sur mobile
+                "plugins": False,
+                "uiTheme": "theme-light",
+            }
+        else:
+            customization = {
+                "autosave": True,
+                "comments": False,
+                "compactToolbar": False,
+                "forcesave": True,
+                "help": False,
+                "hideRightMenu": True,
+                "logo": {"image": "", "url": ""},
+                "zoom": 100,
+                "plugins": False,
+            }
+
         # Configuration OnlyOffice
         config = {
             "document": {
@@ -366,7 +380,7 @@ class OnlyOfficeManager:
                     "modifyFilter": mode == 'edit',
                     "print": True,
                     "review": mode == 'edit',
-                    "chat": False,  # Désactiver chat (déplacé depuis customization)
+                    "chat": False,
                 }
             },
             "documentType": OnlyOfficeManager.get_document_type(file_name),
@@ -375,27 +389,14 @@ class OnlyOfficeManager:
                     "id": user_id,
                     "name": user_name,
                 },
-                "customization": {
-                    "autosave": True,
-                    "comments": False,  # OPTIMISATION : Désactiver commentaires
-                    "compactToolbar": False,  # Laisser la barre d'outils complète et ouverte
-                    "forcesave": True,
-                    "help": False,  # OPTIMISATION : Désactiver aide
-                    "hideRightMenu": True,  # OPTIMISATION : Cacher menu droit
-                    "logo": {
-                        "image": "",
-                        "url": ""
-                    },
-                    "zoom": 100,
-                    "plugins": False,  # OPTIMISATION : Désactiver plugins
-                },
+                "customization": customization,
                 "callbackUrl": OnlyOfficeManager.normalize_callback_url(callback_url),
                 "lang": "fr",
                 "mode": mode,
             },
             "height": "100%",
             "width": "100%",
-            "type": "desktop"
+            "type": "mobile" if is_mobile else "desktop",
         }
         
         # Signer avec JWT si activé
@@ -533,6 +534,31 @@ class OnlyOfficeManager:
                     )
                     
                     if success:
+                        try:
+                            from django.contrib.auth.models import User as AuthUser
+                            users = request_data.get('users', [])
+                            user_label = 'OnlyOffice'
+                            if users:
+                                try:
+                                    u = AuthUser.objects.get(pk=int(users[0]))
+                                    first = (u.first_name or '').strip()
+                                    last = (u.last_name or '').strip()
+                                    if first and last:
+                                        user_label = f"{first[0].upper()}{last[0].upper()}"
+                                    elif first:
+                                        user_label = first[0].upper()
+                                    elif last:
+                                        user_label = last[0].upper()
+                                    else:
+                                        user_label = u.username
+                                except (AuthUser.DoesNotExist, ValueError):
+                                    user_label = str(users[0])
+                            parts = file_path.rstrip('/').rsplit('/', 1)
+                            folder = (parts[0] + '/') if len(parts) == 2 else ''
+                            fname = parts[-1]
+                            storage_manager.update_folder_metadata(folder, fname, user_label)
+                        except Exception:
+                            pass
                         return (True, {'error': 0}, status.HTTP_200_OK)
                     else:
                         return (False, {'error': 1}, status.HTTP_500_INTERNAL_SERVER_ERROR)

@@ -33,7 +33,7 @@ function vigikSnapshotEntries(arr) {
     }));
 }
 
-/** Construit l’objet à stocker à partir de l’état React. */
+/** Construit l'objet à stocker à partir de l'état React. */
 export function buildPhotoSnapshot(pendingPhotos, pendingPhotosPlatine, pendingPhotosPlatinePortail) {
   const pendingPhotosOut = {};
   for (const [idxStr, arr] of Object.entries(pendingPhotos || {})) {
@@ -134,7 +134,7 @@ export function restoreVigikPhotoFromSnapshot(entry) {
   return { file, name: entry.name || file.name, previewUrl };
 }
 
-/** Applique un snapshot IDB à l’état utilisable par RapportForm. */
+/** Applique un snapshot IDB à l'état utilisable par RapportForm. */
 export function applyPhotoSnapshotToState(snapshot) {
   if (!snapshot || photoSnapshotIsEmpty(snapshot)) {
     return {

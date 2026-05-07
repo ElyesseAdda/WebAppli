@@ -1,16 +1,62 @@
+from collections import defaultdict
+
 from rest_framework import viewsets, status
-from rest_framework.decorators import api_view, action
+from rest_framework.decorators import api_view, action, permission_classes
+from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from django.db.models import Sum, Q
 from django.utils import timezone
 from datetime import datetime, timedelta, date
 from ..models import (
     Chantier,
+    Devis,
     Facture,
+    FactureTS,
     BonCommande,
+    PaiementFournisseurMateriel,
+    FactureSousTraitant,
     Event,
     Situation,
+    Agence,
+    AgencyExpenseMonth,
+    DashboardSettings,
+    PointageMensuel,
 )
+
+
+def _parse_pointage_montant_charge_repartition(pointage):
+    """
+    Liste [(agence_id ou None, montant), ...] si repartition_montant_charge est cohérente
+    avec montant_charge ; None pour le fallback booléen agence.
+    None comme agence_id = part imputée à la main d'œuvre chantier (hors dépenses agence).
+    """
+    montant = float(pointage.montant_charge or 0)
+    raw = getattr(pointage, "repartition_montant_charge", None) or []
+    if montant <= 0 or not isinstance(raw, list) or len(raw) == 0:
+        return None
+    parts = []
+    for item in raw:
+        if not isinstance(item, dict):
+            continue
+        try:
+            amt = float(item.get("montant") or 0)
+        except (TypeError, ValueError):
+            continue
+        aid = item.get("agence_id", "__missing__")
+        if aid is None or aid == "":
+            parts.append((None, amt))
+        else:
+            try:
+                parts.append((int(aid), amt))
+            except (TypeError, ValueError):
+                continue
+    if not parts:
+        return None
+    total_split = round(sum(a for _, a in parts), 2)
+    montant_r = round(montant, 2)
+    if abs(total_split - montant_r) > 0.05:
+        return None
+    return parts
 
 
 class DashboardViewSet(viewsets.ViewSet):
@@ -32,6 +78,19 @@ class DashboardViewSet(viewsets.ViewSet):
         year = int(year_param) if year_param else datetime.now().year
         month = request.query_params.get('month')
         chantier_id = request.query_params.get('chantier_id')
+        period_start_raw = request.query_params.get('period_start')
+        period_end_raw = request.query_params.get('period_end')
+
+        period_start = None
+        period_end = None
+        try:
+            if period_start_raw:
+                period_start = datetime.strptime(period_start_raw, "%Y-%m-%d").date()
+            if period_end_raw:
+                period_end = datetime.strptime(period_end_raw, "%Y-%m-%d").date()
+        except ValueError:
+            period_start = None
+            period_end = None
 
         # Filtrer les chantiers
         chantiers_query = Chantier.objects.all()
@@ -42,7 +101,12 @@ class DashboardViewSet(viewsets.ViewSet):
         chantiers_stats = self.get_chantiers_stats(chantiers_query, year, month)
 
         # Récupérer les statistiques globales
-        global_stats = self.get_global_stats(chantiers_query)
+        global_stats = self.get_global_stats(
+            chantiers_query,
+            year=year,
+            period_start=period_start,
+            period_end=period_end,
+        )
 
         # Récupérer les statistiques temporelles
         stats_temporelles = self.get_stats_temporelles(chantiers_query, year, month, request)
@@ -347,20 +411,515 @@ class DashboardViewSet(viewsets.ViewSet):
         
         return chantiers_stats
 
-    def get_global_stats(self, chantiers_query):
+    def get_global_stats(self, chantiers_query, year=None, period_start=None, period_end=None):
         """Calcule les statistiques globales pour tous les chantiers"""
         try:
-            # Calculer les totaux pour tous les chantiers
-            total_montant_ttc = sum(float(c.montant_ttc or 0) for c in chantiers_query)
-            total_montant_ht = sum(float(c.montant_ht or 0) for c in chantiers_query)
-            total_cout_materiel = sum(float(c.cout_materiel or 0) for c in chantiers_query)
-            total_cout_main_oeuvre = sum(float(c.cout_main_oeuvre or 0) for c in chantiers_query)
-            total_cout_sous_traitance = sum(float(c.cout_sous_traitance or 0) for c in chantiers_query)
+            # Définir la fenêtre temporelle de référence
+            # - période explicite si fournie
+            # - sinon année complète
+            date_start = None
+            date_end = None
+            if period_start and period_end:
+                date_start = period_start
+                date_end = period_end
+            elif year is not None:
+                date_start = date(int(year), 1, 1)
+                date_end = date(int(year), 12, 31)
+
+            # Agrégats devis marché + factures + avenants (FactureTS) — utilisés pour le TTC global.
+            # Le CA HT affiché sur le dashboard (total_montant_ht) est aligné plus bas sur la même
+            # logique que le tableau Facturation : situations + factures uniquement.
+            devis_marche_query = Devis.objects.filter(
+                chantier__in=chantiers_query,
+                devis_chantier=True,
+            )
+            factures_query = Facture.objects.filter(chantier__in=chantiers_query)
+            avenants_query = FactureTS.objects.filter(chantier__in=chantiers_query)
+
+            # Filtrage temporel : si une période est fournie, elle prime.
+            if period_start and period_end:
+                devis_marche_query = devis_marche_query.filter(
+                    date_creation__date__gte=period_start,
+                    date_creation__date__lte=period_end,
+                )
+                factures_query = factures_query.filter(
+                    date_creation__date__gte=period_start,
+                    date_creation__date__lte=period_end,
+                )
+                avenants_query = avenants_query.filter(
+                    date_creation__date__gte=period_start,
+                    date_creation__date__lte=period_end,
+                )
+            elif year is not None:
+                devis_marche_query = devis_marche_query.filter(date_creation__year=year)
+                factures_query = factures_query.filter(date_creation__year=year)
+                avenants_query = avenants_query.filter(date_creation__year=year)
+
+            total_devis_marche_ht = float(
+                devis_marche_query.aggregate(total=Sum('price_ht'))['total'] or 0
+            )
+            total_factures_ht = float(
+                factures_query.aggregate(total=Sum('price_ht'))['total'] or 0
+            )
+            total_avenants_ht = float(
+                avenants_query.aggregate(total=Sum('montant_ht'))['total'] or 0
+            )
+            total_devis_marche_ttc = float(
+                devis_marche_query.aggregate(total=Sum('price_ttc'))['total'] or 0
+            )
+            total_factures_ttc = float(
+                factures_query.aggregate(total=Sum('price_ttc'))['total'] or 0
+            )
+            total_factures_payees_ht = float(
+                factures_query.filter(state_facture='Payée').aggregate(total=Sum('price_ht'))['total'] or 0
+            )
+            total_factures_attente_ht = float(
+                factures_query.filter(
+                    Q(state_facture='En attente') | Q(state_facture='Attente paiement')
+                ).aggregate(total=Sum('price_ht'))['total'] or 0
+            )
+            total_avenants_ttc = float(
+                avenants_query.aggregate(total=Sum('montant_ttc'))['total'] or 0
+            )
+
+            # Totaux TTC / HT « construction » (devis marché + factures + avenants)
+            total_montant_ttc = total_devis_marche_ttc + total_factures_ttc + total_avenants_ttc
+            total_ca_construction_ht = total_devis_marche_ht + total_factures_ht + total_avenants_ht
+
+            # Coûts time-aware alignés avec les tableaux métier
+            # - Fournisseur : PaiementFournisseurMateriel (mois/année du tableau fournisseur)
+            # - Sous-traitance : FactureSousTraitant (mois/année métier du tableau sous-traitant)
+            # Utilitaires de filtrage période sur base mois/année.
+            def month_year_to_date(y, m):
+                try:
+                    return date(int(y), int(m), 1)
+                except (TypeError, ValueError):
+                    return None
+
+            def in_period(month_date):
+                if month_date is None:
+                    return False
+                if date_start and date_end:
+                    return date_start <= month_date <= date_end
+                return True
+
+            # Chantiers rattachés à une agence (pseudo-chantiers agence) : exclus des totaux
+            # MO / matériel / sous-traitance ; ces coûts sont suivis dans le module Agences.
+            agency_chantier_ids = set(
+                Agence.objects.exclude(chantier_id__isnull=True).values_list(
+                    "chantier_id", flat=True
+                )
+            )
+
+            # Encaissement (logique Tableau Facturation / récap) :
+            # - Montant facturé HT = situations (montant_apres_retenues) + factures (price_ht)
+            # - Montant payé HT = situations (montant_reel_ht) + factures Payée (price_ht)
+            # - Montant en attente HT = facturé - payé
+            total_encaissement_facture_ht = 0.0
+            total_encaissement_paye_ht = 0.0
+
+            situations_query = Situation.objects.filter(chantier__in=chantiers_query)
+            if year is not None and not (period_start and period_end):
+                situations_query = situations_query.filter(annee=year)
+            for sit in situations_query:
+                sit_month_date = month_year_to_date(sit.annee, sit.mois)
+                if not in_period(sit_month_date):
+                    continue
+                total_encaissement_facture_ht += float(sit.montant_apres_retenues or 0)
+                total_encaissement_paye_ht += float(sit.montant_reel_ht or 0)
+
+            for fac in factures_query:
+                fac_date = fac.date_envoi or (fac.date_creation.date() if fac.date_creation else None)
+                if date_start and date_end and (fac_date is None or not (date_start <= fac_date <= date_end)):
+                    continue
+                total_encaissement_facture_ht += float(fac.price_ht or 0)
+                if fac.state_facture == 'Payée':
+                    total_encaissement_paye_ht += float(fac.price_ht or 0)
+
+            total_encaissement_attente_ht = (
+                total_encaissement_facture_ht - total_encaissement_paye_ht
+            )
+
+            # CA total HT = tableau Facturation (calculateTotaux côté front) : facturé HT uniquement.
+            total_montant_ht = total_encaissement_facture_ht
+
+            # Série mensuelle (barres dashboard) alignée sur la période sélectionnée.
+            # Colonnes : facturé HT / encaissé HT / en attente HT.
+            if date_start and date_end:
+                chart_start = date_start
+                chart_end = date_end
+            elif year is not None:
+                chart_start = date(int(year), 1, 1)
+                chart_end = date(int(year), 12, 31)
+            else:
+                chart_start = date.today().replace(month=1, day=1)
+                chart_end = date.today()
+            month_labels_fr = ["Jan", "Fev", "Mar", "Avr", "Mai", "Jun", "Jul", "Aou", "Sep", "Oct", "Nov", "Dec"]
+            monthly_cashflow_map = {}
+            cursor_month = chart_start.replace(day=1)
+            while cursor_month <= chart_end:
+                k = f"{cursor_month.year:04d}-{cursor_month.month:02d}"
+                monthly_cashflow_map[k] = {
+                    "key": k,
+                    "label": f"{month_labels_fr[cursor_month.month - 1]} {str(cursor_month.year)[-2:]}",
+                    "facture_ht": 0.0,
+                    "paye_ht": 0.0,
+                    "attente_ht": 0.0,
+                    "couts_ht": 0.0,
+                }
+                if cursor_month.month == 12:
+                    cursor_month = cursor_month.replace(year=cursor_month.year + 1, month=1)
+                else:
+                    cursor_month = cursor_month.replace(month=cursor_month.month + 1)
+
+            for sit in situations_query:
+                sit_month_date = month_year_to_date(sit.annee, sit.mois)
+                if sit_month_date is None or not (chart_start <= sit_month_date <= chart_end):
+                    continue
+                k = f"{sit_month_date.year:04d}-{sit_month_date.month:02d}"
+                if k not in monthly_cashflow_map:
+                    continue
+                fact = float(sit.montant_apres_retenues or 0)
+                paye = float(sit.montant_reel_ht or 0)
+                monthly_cashflow_map[k]["facture_ht"] += fact
+                monthly_cashflow_map[k]["paye_ht"] += paye
+
+            for fac in factures_query:
+                fac_date = fac.date_envoi or (fac.date_creation.date() if fac.date_creation else None)
+                if fac_date is None or not (chart_start <= fac_date <= chart_end):
+                    continue
+                k = f"{fac_date.year:04d}-{fac_date.month:02d}"
+                if k not in monthly_cashflow_map:
+                    continue
+                fact = float(fac.price_ht or 0)
+                paye = fact if fac.state_facture == 'Payée' else 0.0
+                monthly_cashflow_map[k]["facture_ht"] += fact
+                monthly_cashflow_map[k]["paye_ht"] += paye
+            for row in monthly_cashflow_map.values():
+                row["attente_ht"] = max(0.0, row["facture_ht"] - row["paye_ht"])
+
+            # Burn mensuel (échéances à 15 jours) :
+            # montants HT dont la date de paiement attendue est > today et <= today+15j.
+            total_burn_15j_ht = 0.0
+            total_late_payments_ht = 0.0
+            today = date.today()
+            upcoming_limit_date = today + timedelta(days=15)
+
+            pending_situations = Situation.objects.filter(
+                chantier__in=chantiers_query,
+                date_paiement_reel__isnull=True,
+            )
+            pending_factures = Facture.objects.filter(
+                chantier__in=chantiers_query,
+                date_paiement__isnull=True,
+                type_facture='classique',
+            )
+
+            for situation in pending_situations:
+                if not (situation.date_envoi and situation.delai_paiement):
+                    continue
+                due_date = situation.date_envoi + timedelta(days=situation.delai_paiement)
+                if due_date <= today or due_date > upcoming_limit_date:
+                    continue
+                total_burn_15j_ht += float(situation.montant_apres_retenues or situation.montant_total or 0)
+
+            for situation in pending_situations:
+                if not (situation.date_envoi and situation.delai_paiement):
+                    continue
+                due_date = situation.date_envoi + timedelta(days=situation.delai_paiement)
+                if due_date >= today:
+                    continue
+                total_late_payments_ht += float(situation.montant_apres_retenues or situation.montant_total or 0)
+
+            for facture in pending_factures:
+                due_date = facture.date_echeance
+                if due_date is None and facture.date_envoi and facture.delai_paiement:
+                    due_date = facture.date_envoi + timedelta(days=facture.delai_paiement)
+                if due_date is None or due_date <= today or due_date > upcoming_limit_date:
+                    continue
+                total_burn_15j_ht += float(facture.price_ht or 0)
+
+            for facture in pending_factures:
+                due_date = facture.date_echeance
+                if due_date is None and facture.date_envoi and facture.delai_paiement:
+                    due_date = facture.date_envoi + timedelta(days=facture.delai_paiement)
+                if due_date is None or due_date >= today:
+                    continue
+                total_late_payments_ht += float(facture.price_ht or 0)
+
+            # Fournisseur (tableau fournisseur)
+            fournisseurs_query = PaiementFournisseurMateriel.objects.filter(
+                chantier__in=chantiers_query
+            )
+            if year is not None and not (period_start and period_end):
+                fournisseurs_query = fournisseurs_query.filter(annee=year)
+
+            total_cout_materiel = 0.0
+            for pfm in fournisseurs_query:
+                if pfm.chantier_id in agency_chantier_ids:
+                    continue
+                month_date = month_year_to_date(pfm.annee, pfm.mois)
+                if not in_period(month_date):
+                    continue
+                montant = (
+                    float(pfm.montant_a_payer)
+                    if pfm.montant_a_payer is not None
+                    else float(pfm.montant or 0)
+                )
+                total_cout_materiel += montant
+
+            # Sous-traitance (tableau sous-traitant)
+            st_factures_query = FactureSousTraitant.objects.filter(chantier__in=chantiers_query)
+            if year is not None and not (period_start and period_end):
+                st_factures_query = st_factures_query.filter(annee=year)
+
+            total_cout_sous_traitance = 0.0
+            for facture_st in st_factures_query:
+                if facture_st.chantier_id in agency_chantier_ids:
+                    continue
+                month_date = month_year_to_date(facture_st.annee, facture_st.mois)
+                if month_date is None and facture_st.date_reception:
+                    month_date = date(facture_st.date_reception.year, facture_st.date_reception.month, 1)
+                if not in_period(month_date):
+                    continue
+                total_cout_sous_traitance += float(facture_st.montant_facture_ht or 0)
+
+            # Main d'oeuvre (règle métier): somme des montants chargés des agents hors agence.
+            pointages_query = PointageMensuel.objects.all()
+            if date_start and date_end:
+                pointages_query = pointages_query.filter(
+                    month__gte=date_start.replace(day=1),
+                    month__lte=date_end.replace(day=1),
+                )
+            elif year is not None:
+                pointages_query = pointages_query.filter(month__year=year)
+
+            totals_depenses_par_agence = defaultdict(float)
+            totals_depenses_prevu_par_agence = defaultdict(float)
+            pointage_ht_par_agence = defaultdict(float)
+            pointage_prevu_ht_par_agence = defaultdict(float)
+            main_oeuvre_month_map = defaultdict(float)
+            total_cout_main_oeuvre = 0.0
+            legacy_pointage_agence_ht = 0.0
+            legacy_pointage_agence_ht_prevu = 0.0
+            repartition_pointage_agence_ht = 0.0
+            repartition_pointage_agence_ht_prevu = 0.0
+            # Dépenses agence dashboard : réalisé = mois ≤ mois calendaire courant ; au-delà = prévisionnel
+            today_d = timezone.now().date()
+            dashboard_agence_depenses_cap_ym = (today_d.year, today_d.month)
+
+            def month_ym_gt_dashboard_cap(mdate):
+                if mdate is None:
+                    return False
+                return (mdate.year, mdate.month) > dashboard_agence_depenses_cap_ym
+            # Index (agent, month) : uniquement pointage « tout en agence » (legacy), pour ne pas
+            # doubler une ligne AEM miroir du même montant. Avec répartition découpée, on ne
+            # masque pas les AEM : la ventilation pointage ≠ doublon systématique des factures agence.
+            pointage_agence_agent_month = set()
+            for pointage in pointages_query:
+                line_montant = float(pointage.montant_charge or 0)
+                month_date = pointage.month
+                mk = f"{month_date.year:04d}-{month_date.month:02d}"
+                is_future_agence_cap = month_ym_gt_dashboard_cap(month_date)
+                parts = _parse_pointage_montant_charge_repartition(pointage)
+                if parts is not None:
+                    for ag_id, amt in parts:
+                        if ag_id is None:
+                            total_cout_main_oeuvre += amt
+                            main_oeuvre_month_map[mk] += amt
+                        else:
+                            if is_future_agence_cap:
+                                repartition_pointage_agence_ht_prevu += amt
+                                totals_depenses_prevu_par_agence[ag_id] += amt
+                                pointage_prevu_ht_par_agence[ag_id] += amt
+                            else:
+                                repartition_pointage_agence_ht += amt
+                                totals_depenses_par_agence[ag_id] += amt
+                                pointage_ht_par_agence[ag_id] += amt
+                elif pointage.agence:
+                    if is_future_agence_cap:
+                        legacy_pointage_agence_ht_prevu += line_montant
+                    else:
+                        legacy_pointage_agence_ht += line_montant
+                    pointage_agence_agent_month.add(
+                        (pointage.agent_id, month_date.year, month_date.month)
+                    )
+                else:
+                    total_cout_main_oeuvre += line_montant
+                    main_oeuvre_month_map[mk] += line_montant
+
+            # Coûts chantier mensuels pour la courbe (hors chantiers agence)
+            for pfm in fournisseurs_query:
+                month_date = month_year_to_date(pfm.annee, pfm.mois)
+                if month_date is None or not (chart_start <= month_date <= chart_end):
+                    continue
+                if pfm.chantier_id in agency_chantier_ids:
+                    continue
+                k = f"{month_date.year:04d}-{month_date.month:02d}"
+                if k not in monthly_cashflow_map:
+                    continue
+                montant = (
+                    float(pfm.montant_a_payer)
+                    if pfm.montant_a_payer is not None
+                    else float(pfm.montant or 0)
+                )
+                monthly_cashflow_map[k]["couts_ht"] += montant
+
+            for facture_st in st_factures_query:
+                month_date = month_year_to_date(facture_st.annee, facture_st.mois)
+                if month_date is None and facture_st.date_reception:
+                    month_date = date(facture_st.date_reception.year, facture_st.date_reception.month, 1)
+                if month_date is None or not (chart_start <= month_date <= chart_end):
+                    continue
+                if facture_st.chantier_id in agency_chantier_ids:
+                    continue
+                k = f"{month_date.year:04d}-{month_date.month:02d}"
+                if k not in monthly_cashflow_map:
+                    continue
+                monthly_cashflow_map[k]["couts_ht"] += float(facture_st.montant_facture_ht or 0)
+
+            for pointage in pointages_query:
+                month_date = pointage.month
+                if month_date is None or not (chart_start <= month_date <= chart_end):
+                    continue
+                k = f"{month_date.year:04d}-{month_date.month:02d}"
+                if k not in monthly_cashflow_map:
+                    continue
+                parts = _parse_pointage_montant_charge_repartition(pointage)
+                if parts is not None:
+                    for ag_id, amt in parts:
+                        if ag_id is None:
+                            monthly_cashflow_map[k]["couts_ht"] += amt
+                elif not pointage.agence:
+                    monthly_cashflow_map[k]["couts_ht"] += float(pointage.montant_charge or 0)
+            main_oeuvre_monthly_breakdown = [
+                {
+                    "key": row["key"],
+                    "label": row["label"],
+                    "montant_ht": round(float(main_oeuvre_month_map.get(row["key"], 0.0)), 2),
+                }
+                for row in monthly_cashflow_map.values()
+            ]
+            monthly_cashflow = list(monthly_cashflow_map.values())
+
             total_cout_estime_materiel = sum(float(c.cout_estime_materiel or 0) for c in chantiers_query)
             total_cout_estime_main_oeuvre = sum(float(c.cout_estime_main_oeuvre or 0) for c in chantiers_query)
             
+            # Dépenses module Agences (AgencyExpenseMonth), aligné période — hors templates récurrence
+            def _agency_expense_month_line_amount(aem):
+                """Montant suivi : montant_paye si renseigné et non nul, sinon amount (comme le tableau)."""
+                paye = aem.montant_paye
+                if paye is not None and float(paye) != 0:
+                    return float(paye)
+                return float(aem.amount or 0)
+
+            def _agency_expense_month_prevu_amount(aem):
+                """Reste budgétaire non payé (prévisionnel), pour mois > mois courant dans la période."""
+                return max(
+                    0.0,
+                    float(aem.amount or 0) - float(aem.montant_paye or 0),
+                )
+
+            aem_qs = AgencyExpenseMonth.objects.filter(
+                Q(chantier__isnull=True) | Q(chantier__in=chantiers_query)
+            ).exclude(is_recurring_template=True)
+            for aem in aem_qs:
+                month_date_aem = month_year_to_date(aem.year, aem.month)
+                if not in_period(month_date_aem):
+                    continue
+                # Si agent agence déjà compté par pointage mensuel sur ce mois, on ignore AEM.
+                if aem.agent_id and (
+                    aem.agent_id,
+                    int(aem.year),
+                    int(aem.month),
+                ) in pointage_agence_agent_month:
+                    continue
+                line_amt = _agency_expense_month_line_amount(aem)
+                aid = aem.agence_id
+                if month_ym_gt_dashboard_cap(month_date_aem):
+                    totals_depenses_prevu_par_agence[aid] += _agency_expense_month_prevu_amount(aem)
+                else:
+                    totals_depenses_par_agence[aid] += line_amt
+
+            agences = list(Agence.objects.all().order_by("id"))
+            # Pointages « agence » sans répartition détaillée : tout sur l'agence principale (comportement historique).
+            if legacy_pointage_agence_ht > 0:
+                if agences:
+                    totals_depenses_par_agence[agences[0].id] += legacy_pointage_agence_ht
+                    pointage_ht_par_agence[agences[0].id] += legacy_pointage_agence_ht
+                else:
+                    totals_depenses_par_agence[None] += legacy_pointage_agence_ht
+                    pointage_ht_par_agence[None] += legacy_pointage_agence_ht
+            if legacy_pointage_agence_ht_prevu > 0:
+                if agences:
+                    totals_depenses_prevu_par_agence[agences[0].id] += legacy_pointage_agence_ht_prevu
+                    pointage_prevu_ht_par_agence[agences[0].id] += legacy_pointage_agence_ht_prevu
+                else:
+                    totals_depenses_prevu_par_agence[None] += legacy_pointage_agence_ht_prevu
+                    pointage_prevu_ht_par_agence[None] += legacy_pointage_agence_ht_prevu
+            total_pointage_agence_ht = legacy_pointage_agence_ht + repartition_pointage_agence_ht
+            total_pointage_agence_prevu_ht = (
+                legacy_pointage_agence_ht_prevu + repartition_pointage_agence_ht_prevu
+            )
+            main_agence = agences[0] if agences else None
+            main_agence_id = main_agence.id if main_agence else None
+            depenses_agence_principale_ht = float(
+                totals_depenses_par_agence.get(main_agence_id, 0.0)
+            )
+            depenses_agence_autres = []
+            for ag in agences[1:]:
+                tot = float(totals_depenses_par_agence.get(ag.id, 0.0))
+                if tot > 0:
+                    depenses_agence_autres.append(
+                        {"agence_id": ag.id, "nom": ag.nom, "total_ht": tot}
+                    )
+            none_total = float(totals_depenses_par_agence.get(None, 0.0))
+            if none_total > 0:
+                depenses_agence_autres.append(
+                    {
+                        "agence_id": None,
+                        "nom": "Non rattaché",
+                        "total_ht": none_total,
+                    }
+                )
+            total_depenses_agence_ht = float(sum(totals_depenses_par_agence.values()))
+            total_depenses_agence_prevu_ht = float(sum(totals_depenses_prevu_par_agence.values()))
+
+            # Détail complet pour sélection multi-agences côté dashboard
+            depenses_agence_breakdown = [
+                {
+                    "agence_id": ag.id,
+                    "nom": ag.nom,
+                    "total_ht": float(totals_depenses_par_agence.get(ag.id, 0.0)),
+                    "prevu_ht": round(float(totals_depenses_prevu_par_agence.get(ag.id, 0.0)), 2),
+                    "pointage_ht": round(float(pointage_ht_par_agence.get(ag.id, 0.0)), 2),
+                    "pointage_prevu_ht": round(
+                        float(pointage_prevu_ht_par_agence.get(ag.id, 0.0)), 2
+                    ),
+                }
+                for ag in agences
+            ]
+            depenses_agence_breakdown.append(
+                {
+                    "agence_id": None,
+                    "nom": "Non rattaché",
+                    "total_ht": none_total,
+                    "prevu_ht": round(float(totals_depenses_prevu_par_agence.get(None, 0.0)), 2),
+                    "pointage_ht": round(float(pointage_ht_par_agence.get(None, 0.0)), 2),
+                    "pointage_prevu_ht": round(
+                        float(pointage_prevu_ht_par_agence.get(None, 0.0)), 2
+                    ),
+                }
+            )
+
             # Calculer les marges
-            marge_brute = total_montant_ht - (total_cout_materiel + total_cout_main_oeuvre + total_cout_sous_traitance)
+            # Marge brute dashboard = CA total - coûts chantier réels - dépenses agence.
+            marge_brute = total_montant_ht - (
+                total_cout_materiel
+                + total_cout_main_oeuvre
+                + total_cout_sous_traitance
+                + total_depenses_agence_ht
+            )
             marge_estimee = total_montant_ht - (total_cout_estime_materiel + total_cout_estime_main_oeuvre)
             
             # Calculer les pourcentages
@@ -373,9 +932,22 @@ class DashboardViewSet(viewsets.ViewSet):
             return {
                 'total_montant_ttc': total_montant_ttc,
                 'total_montant_ht': total_montant_ht,
+                'total_ca_construction_ht': total_ca_construction_ht,
+                'total_devis_marche_ht': total_devis_marche_ht,
+                'total_factures_ht': total_factures_ht,
+                'total_avenants_ht': total_avenants_ht,
+                'total_factures_payees_ht': total_factures_payees_ht,
+                'total_factures_attente_ht': total_factures_attente_ht,
+                'encaissement_facture_ht': total_encaissement_facture_ht,
+                'encaissement_paye_ht': total_encaissement_paye_ht,
+                'encaissement_attente_ht': total_encaissement_attente_ht,
+                'burn_15j_ht': total_burn_15j_ht,
+                'late_payments_ht': total_late_payments_ht,
+                'monthly_cashflow': monthly_cashflow,
                 'total_montant_estime_ht': total_montant_ht,
                 'total_cout_materiel': total_cout_materiel,
                 'total_cout_main_oeuvre': total_cout_main_oeuvre,
+                'main_oeuvre_monthly_breakdown': main_oeuvre_monthly_breakdown,
                 'total_cout_sous_traitance': total_cout_sous_traitance,
                 'total_cout_estime_materiel': total_cout_estime_materiel,
                 'total_cout_estime_main_oeuvre': total_cout_estime_main_oeuvre,
@@ -384,16 +956,37 @@ class DashboardViewSet(viewsets.ViewSet):
                 'taux_marge_brute': taux_marge_brute,
                 'taux_marge_estimee': taux_marge_estimee,
                 'nombre_chantiers': chantiers_query.count(),
-                'nombre_chantiers_en_cours': nombre_chantiers_en_cours
+                'nombre_chantiers_en_cours': nombre_chantiers_en_cours,
+                'depenses_agence_principale_ht': depenses_agence_principale_ht,
+                'depenses_agence_main_agence_nom': main_agence.nom if main_agence else "",
+                'depenses_agence_autres': depenses_agence_autres,
+                'total_depenses_agence_ht': total_depenses_agence_ht,
+                'total_depenses_agence_prevu_ht': total_depenses_agence_prevu_ht,
+                'depenses_agence_breakdown': depenses_agence_breakdown,
+                'depenses_agence_pointage_ht': total_pointage_agence_ht,
+                'depenses_agence_pointage_prevu_ht': total_pointage_agence_prevu_ht,
             }
         except Exception as e:
             print(f"Erreur dans get_global_stats: {str(e)}")
             return {
                 'total_montant_ttc': 0,
                 'total_montant_ht': 0,
+                'total_ca_construction_ht': 0,
+                'total_devis_marche_ht': 0,
+                'total_factures_ht': 0,
+                'total_avenants_ht': 0,
+                'total_factures_payees_ht': 0,
+                'total_factures_attente_ht': 0,
+                'encaissement_facture_ht': 0,
+                'encaissement_paye_ht': 0,
+                'encaissement_attente_ht': 0,
+                'burn_15j_ht': 0,
+                'late_payments_ht': 0,
+                'monthly_cashflow': [],
                 'total_montant_estime_ht': 0,
                 'total_cout_materiel': 0,
                 'total_cout_main_oeuvre': 0,
+                'main_oeuvre_monthly_breakdown': [],
                 'total_cout_sous_traitance': 0,
                 'total_cout_estime_materiel': 0,
                 'total_cout_estime_main_oeuvre': 0,
@@ -402,7 +995,15 @@ class DashboardViewSet(viewsets.ViewSet):
                 'taux_marge_brute': 0,
                 'taux_marge_estimee': 0,
                 'nombre_chantiers': 0,
-                'nombre_chantiers_en_cours': 0
+                'nombre_chantiers_en_cours': 0,
+                'depenses_agence_principale_ht': 0,
+                'depenses_agence_main_agence_nom': "",
+                'depenses_agence_autres': [],
+                'total_depenses_agence_ht': 0,
+                'total_depenses_agence_prevu_ht': 0,
+                'depenses_agence_breakdown': [],
+                'depenses_agence_pointage_ht': 0,
+                'depenses_agence_pointage_prevu_ht': 0,
             }
 
     def get_stats_temporelles(self, chantiers_query, year, month, request=None):
@@ -506,6 +1107,67 @@ class DashboardViewSet(viewsets.ViewSet):
         return stats
 
 
+def _sanitize_depenses_agence_id_list(raw):
+    if not isinstance(raw, list):
+        raise ValueError("depenses_agence_included_agence_ids doit être une liste")
+    out = []
+    for x in raw:
+        if x is None:
+            out.append(None)
+        elif isinstance(x, bool):
+            raise ValueError("Valeur booléenne non autorisée dans la liste d'identifiants")
+        elif isinstance(x, int):
+            out.append(int(x))
+        elif isinstance(x, str) and x.strip().lstrip("-").isdigit():
+            out.append(int(x))
+        else:
+            raise ValueError(f"Élément invalide dans la liste : {x!r}")
+    return out
+
+
+@api_view(["GET", "PUT"])
+@permission_classes([IsAuthenticated])
+def dashboard_settings(request):
+    """
+    Préférences du tableau de bord (singleton applicatif).
+    GET : lecture ; PUT : mise à jour partielle possible.
+    """
+    row = DashboardSettings.get_singleton()
+    if request.method == "GET":
+        return Response(
+            {
+                "depenses_agence_use_default": row.depenses_agence_use_default,
+                "depenses_agence_included_agence_ids": row.depenses_agence_included_agence_ids,
+                "extra": row.extra,
+                "updated_at": row.updated_at.isoformat() if row.updated_at else None,
+            }
+        )
+    try:
+        if "depenses_agence_use_default" in request.data:
+            v = request.data["depenses_agence_use_default"]
+            if isinstance(v, str):
+                row.depenses_agence_use_default = v.strip().lower() in ("true", "1", "yes", "on")
+            else:
+                row.depenses_agence_use_default = bool(v)
+        if "depenses_agence_included_agence_ids" in request.data:
+            row.depenses_agence_included_agence_ids = _sanitize_depenses_agence_id_list(
+                request.data["depenses_agence_included_agence_ids"]
+            )
+        if "extra" in request.data and isinstance(request.data["extra"], dict):
+            row.extra = request.data["extra"]
+        row.save()
+    except ValueError as exc:
+        return Response({"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+    return Response(
+        {
+            "depenses_agence_use_default": row.depenses_agence_use_default,
+            "depenses_agence_included_agence_ids": row.depenses_agence_included_agence_ids,
+            "extra": row.extra,
+            "updated_at": row.updated_at.isoformat() if row.updated_at else None,
+        }
+    )
+
+
 @api_view(['GET'])
 def get_pending_payments(request):
     """
@@ -519,6 +1181,7 @@ def get_pending_payments(request):
         
         result = []
         today = date.today()
+        upcoming_limit_date = today + timedelta(days=15)
         
         # 1. Récupérer les situations en attente de paiement (toutes les situations, peu importe le statut)
         situations_query = Situation.objects.filter(
@@ -531,8 +1194,12 @@ def get_pending_payments(request):
             if situation.date_envoi and situation.delai_paiement:
                 date_paiement_attendue = situation.date_envoi + timedelta(days=situation.delai_paiement)
             
-            # Filtrer : uniquement les situations avec date de paiement attendue dans le futur
-            if date_paiement_attendue is None or date_paiement_attendue <= today:
+            # Filtrer : uniquement les situations dont l'échéance est dans les 15 prochains jours
+            if (
+                date_paiement_attendue is None
+                or date_paiement_attendue <= today
+                or date_paiement_attendue > upcoming_limit_date
+            ):
                 continue
             
             # Filtrer par année de la date de paiement attendue si spécifié
@@ -571,8 +1238,12 @@ def get_pending_payments(request):
                 # Sinon, calculer à partir de date_envoi + delai_paiement
                 date_paiement_attendue = facture.date_envoi + timedelta(days=facture.delai_paiement)
             
-            # Filtrer : uniquement les factures avec date de paiement attendue dans le futur
-            if date_paiement_attendue is None or date_paiement_attendue <= today:
+            # Filtrer : uniquement les factures dont l'échéance est dans les 15 prochains jours
+            if (
+                date_paiement_attendue is None
+                or date_paiement_attendue <= today
+                or date_paiement_attendue > upcoming_limit_date
+            ):
                 continue
             
             # Filtrer par année de la date de paiement attendue si spécifié

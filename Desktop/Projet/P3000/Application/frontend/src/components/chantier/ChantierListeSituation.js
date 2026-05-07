@@ -1,5 +1,10 @@
 import {
   Alert,
+  Button,
+  Dialog,
+  DialogActions,
+  DialogContent,
+  DialogTitle,
   IconButton,
   Menu,
   MenuItem,
@@ -117,6 +122,9 @@ const ChantierListeSituation = ({
   const [showStatusModal, setShowStatusModal] = useState(false);
   const [situationToUpdate, setSituationToUpdate] = useState(null);
   const [snackbar, setSnackbar] = useState({ open: false, message: "", severity: "info" });
+  const [editNumeroDialogOpen, setEditNumeroDialogOpen] = useState(false);
+  const [situationToEditNumero, setSituationToEditNumero] = useState(null);
+  const [newNumeroValue, setNewNumeroValue] = useState("");
 
   useEffect(() => {
     if (!isLoaded && chantierData?.id) {
@@ -325,6 +333,52 @@ const ChantierListeSituation = ({
     setSituationToUpdate(selectedSituation);
     setShowStatusModal(true);
     handleClose();
+  };
+
+  const handleEditNumeroClick = () => {
+    if (selectedSituation) {
+      setSituationToEditNumero(selectedSituation);
+      setNewNumeroValue(String(selectedSituation.numero_situation ?? ""));
+      setEditNumeroDialogOpen(true);
+    }
+    setAnchorEl(null);
+  };
+
+  const handleEditNumeroClose = () => {
+    setEditNumeroDialogOpen(false);
+    setSituationToEditNumero(null);
+    setNewNumeroValue("");
+  };
+
+  const handleEditNumeroSave = async () => {
+    if (!situationToEditNumero) return;
+    const value = String(newNumeroValue ?? "").trim();
+    if (!value) {
+      setSnackbar({
+        open: true,
+        message: "Veuillez entrer un numéro valide.",
+        severity: "error",
+      });
+      return;
+    }
+    try {
+      await axios.patch(`/api/situations/${situationToEditNumero.id}/`, {
+        numero_situation: value,
+      });
+      await fetchSituations();
+      handleEditNumeroClose();
+      setSnackbar({
+        open: true,
+        message: `Numéro de situation mis à jour : ${value}`,
+        severity: "success",
+      });
+    } catch (error) {
+      const msg =
+        error.response?.data?.numero_situation?.[0] ||
+        error.response?.data?.detail ||
+        "Erreur lors de la mise à jour du numéro de situation.";
+      setSnackbar({ open: true, message: msg, severity: "error" });
+    }
   };
 
   const handleStatusUpdate = async (newStatus) => {
@@ -548,8 +602,47 @@ const ChantierListeSituation = ({
           },
         }}
       >
+        <MenuItem onClick={handleEditNumeroClick}>Modifier le numéro</MenuItem>
         <MenuItem onClick={handleChangeStatus}>Modifier le statut</MenuItem>
       </Menu>
+
+      <Dialog
+        open={editNumeroDialogOpen}
+        onClose={handleEditNumeroClose}
+        PaperProps={{
+          sx: { borderRadius: 2, padding: 1 },
+        }}
+      >
+        <DialogTitle>Modifier le numéro de situation</DialogTitle>
+        <DialogContent>
+          <StyledTextField
+            autoFocus
+            label="Numéro de situation"
+            type="text"
+            value={newNumeroValue}
+            onChange={(e) => setNewNumeroValue(e.target.value)}
+            variant="outlined"
+            fullWidth
+            inputProps={{ maxLength: 100 }}
+            sx={{
+              mt: 1,
+              "& .MuiInputBase-input": { color: "black" },
+              "& .MuiInputLabel-root": { color: "rgba(0,0,0,0.6)" },
+              "& .MuiOutlinedInput-notchedOutline": {
+                borderColor: "rgba(0,0,0,0.23)",
+              },
+            }}
+          />
+        </DialogContent>
+        <DialogActions sx={{ padding: 2 }}>
+          <Button onClick={handleEditNumeroClose} variant="outlined">
+            Annuler
+          </Button>
+          <Button onClick={handleEditNumeroSave} variant="contained">
+            Enregistrer
+          </Button>
+        </DialogActions>
+      </Dialog>
 
       {/* Modal de modification du statut */}
       <StatusChangeModal

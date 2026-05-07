@@ -1,12 +1,12 @@
-"""
-Réattribue les numéros annuels des rapports d'intervention selon l'ordre des id.
+"""Réattribue les numéros annuels des rapports d'intervention selon l'ordre des id.
 
-Pour chaque année calendaire (champ date du rapport), les rapports sont triés par id
-croissant et reçoivent les numéros 1, 2, 3, … Les compteurs par année sont alignés.
+Pour chaque année calendaire (champ ``date`` du rapport), les rapports sont triés
+par id croissant et reçoivent les numéros 1, 2, 3, … Les compteurs par année sont
+alignés.
 
 Usage:
-  python manage.py assign_rapport_intervention_numeros --dry-run
-  python manage.py assign_rapport_intervention_numeros
+    python manage.py assign_rapport_intervention_numeros --dry-run
+    python manage.py assign_rapport_intervention_numeros
 """
 
 from collections import defaultdict
@@ -19,8 +19,8 @@ from api.models_rapport import RapportIntervention, RapportInterventionNumeroCom
 
 class Command(BaseCommand):
     help = (
-        "Réattribue numero_rapport / annee_numero_rapport pour tous les rapports existants, "
-        "par année de date, triés par id croissant."
+        "Réattribue numero_rapport / annee_numero_rapport pour tous les rapports "
+        "existants, par année de date, triés par id croissant."
     )
 
     def add_arguments(self, parser):

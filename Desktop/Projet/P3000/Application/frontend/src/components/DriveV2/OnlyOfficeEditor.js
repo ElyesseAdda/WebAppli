@@ -14,6 +14,7 @@ import {
   Refresh as RefreshIcon,
 } from '@mui/icons-material';
 import { styled } from '@mui/material/styles';
+import { useIsMobile } from '../../hooks/useIsMobile';
 
 const EditorContainer = styled(Box)(({ theme }) => ({
   width: '100vw',
@@ -24,13 +25,14 @@ const EditorContainer = styled(Box)(({ theme }) => ({
   overflow: 'hidden',
 }));
 
-const EditorContent = styled(Box)(({ theme }) => ({
+const EditorContent = styled(Box)(({ theme, ismobile }) => ({
   width: '100%',
   height: '100%',
-  minWidth: '800px',  // Taille minimale garantie
-  minHeight: '600px',  // Taille minimale garantie
+  minWidth: ismobile ? '0' : '800px',
+  minHeight: ismobile ? '0' : '600px',
   position: 'relative',
   backgroundColor: '#fff',
+  overflowX: ismobile ? 'hidden' : 'visible',
 }));
 
 const OnlyOfficeEditor = ({ filePath, fileName, mode = 'edit', onClose }) => {
@@ -42,6 +44,7 @@ const OnlyOfficeEditor = ({ filePath, fileName, mode = 'edit', onClose }) => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [config, setConfig] = useState(null);
+  const isMobile = useIsMobile();
   
   // ID unique et stable pour le conteneur OnlyOffice (créé manuellement)
   const editorContainerId = useMemo(() => `onlyoffice-inner-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`, []);
@@ -156,8 +159,11 @@ const OnlyOfficeEditor = ({ filePath, fileName, mode = 'edit', onClose }) => {
         innerDiv.id = editorContainerId;
         innerDiv.style.width = "100%";
         innerDiv.style.height = "100%";
-        innerDiv.style.minWidth = "800px";
-        innerDiv.style.minHeight = "600px";
+        // Sur mobile : pas de contrainte de taille minimale
+        if (!isMobile) {
+          innerDiv.style.minWidth = "800px";
+          innerDiv.style.minHeight = "600px";
+        }
         innerDiv.style.position = "relative";
         
         // Stocker la référence pour le nettoyage
@@ -177,10 +183,8 @@ const OnlyOfficeEditor = ({ filePath, fileName, mode = 'edit', onClose }) => {
             file_path: filePath,
             file_name: fileName,
             mode: mode,
-            // Solution 2 : Utiliser le proxy Django avec authentification par token
-            // OnlyOffice ne peut pas accéder directement à S3 depuis Docker (problème réseau)
-            // Le proxy Django utilise un token temporaire au lieu de cookies/session
-            use_proxy: true,  // true = proxy Django avec token, false = URL S3 directe (ne fonctionne pas avec Docker)
+            use_proxy: true,
+            is_mobile: isMobile,  // Forcer le mode mobile OnlyOffice sur les petits écrans
           }),
         });
 
@@ -233,7 +237,9 @@ const OnlyOfficeEditor = ({ filePath, fileName, mode = 'edit', onClose }) => {
           ...data.config,
           height: '100%',
           width: '100%',
-          type: 'desktop',
+          // Le backend envoie déjà le bon type (mobile/desktop) dans data.config.type
+          // On le surcharge ici uniquement en cas de désaccord (sécurité côté client)
+          type: isMobile ? 'mobile' : 'desktop',
           events: {
             // Solution "Bunker" : setTimeout(0) sort l'exécution du cycle de rendu React
             // Cela brise la boucle "Event -> setState -> Re-render -> Crash"
@@ -329,7 +335,7 @@ const OnlyOfficeEditor = ({ filePath, fileName, mode = 'edit', onClose }) => {
 
   return (
     <EditorContainer>
-      <EditorContent>
+      <EditorContent ismobile={isMobile ? 1 : 0}>
         {/* Message de chargement */}
         {loading && !error && (
           <Box
@@ -396,9 +402,10 @@ const OnlyOfficeEditor = ({ filePath, fileName, mode = 'edit', onClose }) => {
           style={{
             width: '100%',
             height: '100%',
-            minWidth: '800px',
-            minHeight: '600px',
+            minWidth: isMobile ? '0' : '800px',
+            minHeight: isMobile ? '0' : '600px',
             position: 'relative',
+            overflowX: isMobile ? 'hidden' : 'visible',
           }}
         />
       </EditorContent>

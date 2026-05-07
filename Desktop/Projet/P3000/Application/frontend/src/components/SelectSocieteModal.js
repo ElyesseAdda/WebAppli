@@ -23,8 +23,7 @@ const SelectSocieteModal = ({ open, onClose, onSocieteSelect, filteredSocietes, 
   useEffect(() => {
     const fetchSocietes = async () => {
       try {
-        // Si des sociétés filtrées sont fournies, les utiliser, sinon charger toutes les sociétés
-        if (filteredSocietes && filteredSocietes.length > 0) {
+        if (Array.isArray(filteredSocietes)) {
           setSocietes(filteredSocietes);
         } else {
           const response = await axios.get("/api/societe/");
@@ -36,11 +35,9 @@ const SelectSocieteModal = ({ open, onClose, onSocieteSelect, filteredSocietes, 
     };
 
     if (open) {
-      // ✅ Réinitialiser la sélection quand le modal s'ouvre
       setSelectedSociete("");
       fetchSocietes();
     } else {
-      // ✅ Réinitialiser aussi quand le modal se ferme
       setSelectedSociete("");
     }
   }, [open, filteredSocietes]);

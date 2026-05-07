@@ -106,9 +106,11 @@ const LaborCostsSummary = ({ isOpen, onClose, agentId, chantierId }) => {
     const agentMap = {};
     summary.forEach((chantier) => {
       chantier.details.forEach((detail) => {
-        if (!agentMap[detail.agent_id]) {
-          agentMap[detail.agent_id] = {
+        const aggKey = String(detail.agent_id);
+        if (!agentMap[aggKey]) {
+          agentMap[aggKey] = {
             agent_nom: detail.agent_nom,
+            comments: new Set(),
             agent_type_paiement: detail.type_paiement,
             heures_normal: 0,
             heures_samedi: 0,
@@ -122,29 +124,74 @@ const LaborCostsSummary = ({ isOpen, onClose, agentId, chantierId }) => {
             montant_overtime: 0,
             jours_majoration: [],
             chantiers: new Set(),
+            details_by_chantier: {},
           };
         }
-        agentMap[detail.agent_id].heures_normal += detail.heures_normal;
-        agentMap[detail.agent_id].heures_samedi += detail.heures_samedi;
-        agentMap[detail.agent_id].heures_dimanche += detail.heures_dimanche;
-        agentMap[detail.agent_id].heures_ferie += detail.heures_ferie;
-        agentMap[detail.agent_id].heures_overtime += detail.heures_overtime || 0;
-        agentMap[detail.agent_id].montant_normal += detail.montant_normal;
-        agentMap[detail.agent_id].montant_samedi += detail.montant_samedi;
-        agentMap[detail.agent_id].montant_dimanche += detail.montant_dimanche;
-        agentMap[detail.agent_id].montant_ferie += detail.montant_ferie;
-        agentMap[detail.agent_id].montant_overtime += detail.montant_overtime || 0;
+        if (detail.comment && detail.comment.trim()) {
+          agentMap[aggKey].comments.add(detail.comment.trim());
+        }
+        agentMap[aggKey].heures_normal += detail.heures_normal;
+        agentMap[aggKey].heures_samedi += detail.heures_samedi;
+        agentMap[aggKey].heures_dimanche += detail.heures_dimanche;
+        agentMap[aggKey].heures_ferie += detail.heures_ferie;
+        agentMap[aggKey].heures_overtime += detail.heures_overtime || 0;
+        agentMap[aggKey].montant_normal += detail.montant_normal;
+        agentMap[aggKey].montant_samedi += detail.montant_samedi;
+        agentMap[aggKey].montant_dimanche += detail.montant_dimanche;
+        agentMap[aggKey].montant_ferie += detail.montant_ferie;
+        agentMap[aggKey].montant_overtime += detail.montant_overtime || 0;
         // Ajouter les jours majoration en préservant les overtime_hours
         (detail.jours_majoration || []).forEach(jour => {
-          agentMap[detail.agent_id].jours_majoration.push({ ...jour });
+          agentMap[aggKey].jours_majoration.push({ ...jour });
         });
-        agentMap[detail.agent_id].chantiers.add(chantier.chantier_nom);
+        agentMap[aggKey].chantiers.add(chantier.chantier_nom);
+
+        const chantierDetailKey = detail.chantier_id != null
+          ? String(detail.chantier_id)
+          : chantier.chantier_nom;
+        if (!agentMap[aggKey].details_by_chantier[chantierDetailKey]) {
+          agentMap[aggKey].details_by_chantier[chantierDetailKey] = {
+            chantier_nom: detail.chantier_nom || chantier.chantier_nom || "Sans chantier",
+            comments: new Set(),
+            heures_normal: 0,
+            heures_samedi: 0,
+            heures_dimanche: 0,
+            heures_ferie: 0,
+            heures_overtime: 0,
+            montant_normal: 0,
+            montant_samedi: 0,
+            montant_dimanche: 0,
+            montant_ferie: 0,
+            montant_overtime: 0,
+          };
+        }
+        const chantierEntry = agentMap[aggKey].details_by_chantier[chantierDetailKey];
+        chantierEntry.heures_normal += detail.heures_normal;
+        chantierEntry.heures_samedi += detail.heures_samedi;
+        chantierEntry.heures_dimanche += detail.heures_dimanche;
+        chantierEntry.heures_ferie += detail.heures_ferie;
+        chantierEntry.heures_overtime += detail.heures_overtime || 0;
+        chantierEntry.montant_normal += detail.montant_normal;
+        chantierEntry.montant_samedi += detail.montant_samedi;
+        chantierEntry.montant_dimanche += detail.montant_dimanche;
+        chantierEntry.montant_ferie += detail.montant_ferie;
+        chantierEntry.montant_overtime += detail.montant_overtime || 0;
+        if (detail.comment && detail.comment.trim()) {
+          chantierEntry.comments.add(detail.comment.trim());
+        }
       });
     });
-    // Convertit les sets en array
-    Object.values(agentMap).forEach(
-      (a) => (a.chantiers = Array.from(a.chantiers))
-    );
+    // Convertit les sets en arrays
+    Object.values(agentMap).forEach((a) => {
+      a.chantiers = Array.from(a.chantiers);
+      a.comments = Array.from(a.comments);
+      a.details_by_chantier = Object.values(a.details_by_chantier).map(
+        (chantierDetail) => ({
+          ...chantierDetail,
+          comments: Array.from(chantierDetail.comments),
+        })
+      );
+    });
     return agentMap;
   };
 
@@ -168,6 +215,8 @@ const LaborCostsSummary = ({ isOpen, onClose, agentId, chantierId }) => {
       dayjs(a.date).diff(dayjs(b.date))
     );
   };
+
+  const aggregatedByAgent = aggregateByAgent();
 
   return (
     <Dialog open={isOpen} onClose={handleClose} maxWidth="md" fullWidth>
@@ -348,6 +397,7 @@ const LaborCostsSummary = ({ isOpen, onClose, agentId, chantierId }) => {
                       <TableHead>
                         <TableRow>
                           <TableCell>Agent</TableCell>
+                          <TableCell sx={{ maxWidth: 200 }}>Commentaire</TableCell>
                           <TableCell>Normal</TableCell>
                           <TableCell>Samedi</TableCell>
                           <TableCell>Dimanche</TableCell>
@@ -358,37 +408,50 @@ const LaborCostsSummary = ({ isOpen, onClose, agentId, chantierId }) => {
                         </TableRow>
                       </TableHead>
                       <TableBody>
-                        {chantier.details.map((agent, idx) => (
-                          <TableRow key={idx}>
+                        {chantier.details.map((agent, idx) => {
+                          const paymentType =
+                            agent.type_paiement ?? agent.agent_type_paiement;
+                          return (
+                          <TableRow key={`${agent.agent_id}-${idx}-${agent.comment ?? ""}`}>
                             <TableCell>{agent.agent_nom}</TableCell>
+                            <TableCell
+                              sx={{
+                                maxWidth: 200,
+                                whiteSpace: "pre-wrap",
+                                wordBreak: "break-word",
+                                fontSize: "0.85rem",
+                              }}
+                            >
+                              {agent.comment ? agent.comment : "—"}
+                            </TableCell>
                             <TableCell>
                               {formatHeures(
                                 agent.heures_normal,
-                                agent.agent_type_paiement
+                                paymentType
                               )}
                             </TableCell>
                             <TableCell>
                               {formatHeures(
                                 agent.heures_samedi,
-                                agent.agent_type_paiement
+                                paymentType
                               )}
                             </TableCell>
                             <TableCell>
                               {formatHeures(
                                 agent.heures_dimanche,
-                                agent.agent_type_paiement
+                                paymentType
                               )}
                             </TableCell>
                             <TableCell>
                               {formatHeures(
                                 agent.heures_ferie,
-                                agent.agent_type_paiement
+                                paymentType
                               )}
                             </TableCell>
                             <TableCell>
                               {formatHeures(
                                 agent.heures_overtime || 0,
-                                agent.agent_type_paiement
+                                paymentType
                               )}
                             </TableCell>
                             <TableCell>
@@ -398,7 +461,7 @@ const LaborCostsSummary = ({ isOpen, onClose, agentId, chantierId }) => {
                                   agent.heures_dimanche +
                                   agent.heures_ferie +
                                   (agent.heures_overtime || 0),
-                                agent.agent_type_paiement
+                                paymentType
                               )}
                             </TableCell>
                             <TableCell>
@@ -412,7 +475,7 @@ const LaborCostsSummary = ({ isOpen, onClose, agentId, chantierId }) => {
                               €
                             </TableCell>
                           </TableRow>
-                        ))}
+                        );})}
                       </TableBody>
                     </Table>
                     <Divider sx={{ my: 2 }} />
@@ -450,10 +513,10 @@ const LaborCostsSummary = ({ isOpen, onClose, agentId, chantierId }) => {
               ))
             )
           ) : // Mode agent
-          Object.keys(aggregateByAgent()).length === 0 ? (
+          Object.keys(aggregatedByAgent).length === 0 ? (
             <div>Aucune donnée pour ce mois.</div>
           ) : (
-            Object.entries(aggregateByAgent()).map(([agentId, agent]) => (
+            Object.entries(aggregatedByAgent).map(([agentId, agent]) => (
               <Accordion key={agentId}>
                 <AccordionSummary expandIcon={<ExpandMoreIcon />}>
                   <Box width="100%">
@@ -466,6 +529,15 @@ const LaborCostsSummary = ({ isOpen, onClose, agentId, chantierId }) => {
                     >
                       {agent.agent_nom}
                     </Typography>
+                    {agent.comments.length > 0 ? (
+                      <Typography
+                        variant="body2"
+                        color="text.secondary"
+                        sx={{ fontStyle: "italic", mt: 0.25 }}
+                      >
+                        Commentaires : {agent.comments.join(" | ")}
+                      </Typography>
+                    ) : null}
                     <Typography variant="body2" color="textSecondary">
                       Chantiers : {agent.chantiers.join(", ")}
                     </Typography>
@@ -581,6 +653,94 @@ const LaborCostsSummary = ({ isOpen, onClose, agentId, chantierId }) => {
                   </Box>
                 </AccordionSummary>
                 <AccordionDetails>
+                  <Divider sx={{ mb: 2 }} />
+                  <Typography fontWeight="bold" mb={1}>
+                    Détail par chantier
+                  </Typography>
+                  <Table size="small" sx={{ mb: 2 }}>
+                    <TableHead>
+                      <TableRow>
+                        <TableCell>Chantier</TableCell>
+                        <TableCell sx={{ maxWidth: 240 }}>Commentaires</TableCell>
+                        <TableCell>Normal</TableCell>
+                        <TableCell>Samedi</TableCell>
+                        <TableCell>Dimanche</TableCell>
+                        <TableCell>Férié</TableCell>
+                        <TableCell>Heures Sup</TableCell>
+                        <TableCell>Total</TableCell>
+                        <TableCell>Montant</TableCell>
+                      </TableRow>
+                    </TableHead>
+                    <TableBody>
+                      {agent.details_by_chantier.map((chantierDetail, idx) => (
+                        <TableRow key={`${agentId}-${chantierDetail.chantier_nom}-${idx}`}>
+                          <TableCell>{chantierDetail.chantier_nom}</TableCell>
+                          <TableCell
+                            sx={{
+                              maxWidth: 240,
+                              whiteSpace: "pre-wrap",
+                              wordBreak: "break-word",
+                              fontSize: "0.85rem",
+                            }}
+                          >
+                            {chantierDetail.comments.length > 0
+                              ? chantierDetail.comments.join(" | ")
+                              : "—"}
+                          </TableCell>
+                          <TableCell>
+                            {formatHeures(
+                              chantierDetail.heures_normal,
+                              agent.agent_type_paiement
+                            )}
+                          </TableCell>
+                          <TableCell>
+                            {formatHeures(
+                              chantierDetail.heures_samedi,
+                              agent.agent_type_paiement
+                            )}
+                          </TableCell>
+                          <TableCell>
+                            {formatHeures(
+                              chantierDetail.heures_dimanche,
+                              agent.agent_type_paiement
+                            )}
+                          </TableCell>
+                          <TableCell>
+                            {formatHeures(
+                              chantierDetail.heures_ferie,
+                              agent.agent_type_paiement
+                            )}
+                          </TableCell>
+                          <TableCell>
+                            {formatHeures(
+                              chantierDetail.heures_overtime,
+                              agent.agent_type_paiement
+                            )}
+                          </TableCell>
+                          <TableCell>
+                            {formatHeures(
+                              chantierDetail.heures_normal +
+                                chantierDetail.heures_samedi +
+                                chantierDetail.heures_dimanche +
+                                chantierDetail.heures_ferie +
+                                chantierDetail.heures_overtime,
+                              agent.agent_type_paiement
+                            )}
+                          </TableCell>
+                          <TableCell>
+                            {(
+                              chantierDetail.montant_normal +
+                              chantierDetail.montant_samedi +
+                              chantierDetail.montant_dimanche +
+                              chantierDetail.montant_ferie +
+                              chantierDetail.montant_overtime
+                            ).toFixed(2)}{" "}
+                            €
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
                   <Divider sx={{ mb: 2 }} />
                   <Typography fontWeight="bold" mb={1}>
                     Jours majorés

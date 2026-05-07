@@ -39,6 +39,7 @@ const Layout = ({ children, user, onLogout }) => {
       <SlideBar
         toggleSidebar={toggleSidebar}
         isSidebarVisible={isSidebarVisible}
+        user={user}
       />
       <div className="main-content">
         <BreadcrumbHeader user={user} onLogout={onLogout} />

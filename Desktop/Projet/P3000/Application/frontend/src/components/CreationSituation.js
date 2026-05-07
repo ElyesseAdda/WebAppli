@@ -297,7 +297,7 @@ const AvenantSousPartieTable = ({ avenant, handlePourcentageChange }) => {
                 {open ? <FaChevronUp /> : <FaChevronDown />}
               </IconButton>
             </TableCell>
-            <TableCell>Avenant n°{avenant.numero}</TableCell>
+            <TableCell>{avenant.numero}</TableCell>
             <TableCell align="center"></TableCell>
             <TableCell align="center"></TableCell>
             <TableCell align="right">{avenant.montant_total} €</TableCell>
@@ -490,10 +490,12 @@ const CreationSituation = ({ open, onClose, devis, chantier, onSuccess }) => {
   const [montantHTMois, setMontantHTMois] = useState(0);
   const [lastSituation, setLastSituation] = useState(null);
   const [lignesSupplementaires, setLignesSupplementaires] = useState([]);
+  const [tauxRetenueGarantie, setTauxRetenueGarantie] = useState(5.0);
   const [retenueCIE, setRetenueCIE] = useState(0);
   const [facturesCIE, setFacturesCIE] = useState([]);
   const [calculatedValues, setCalculatedValues] = useState(null);
   const [existingSituation, setExistingSituation] = useState(null);
+  const [pendingAvenantLignes, setPendingAvenantLignes] = useState(null);
 
   useEffect(() => {
     if (devis?.id) {
@@ -579,6 +581,40 @@ const CreationSituation = ({ open, onClose, devis, chantier, onSuccess }) => {
     }
   }, [avenants]);
 
+  const applyAvenantPercentages = (avenantsBase, lignesAvenantSource = []) => {
+    return (avenantsBase || []).map((avenant) => ({
+      ...avenant,
+      factures_ts: (avenant.factures_ts || []).map((ts) => {
+        const situationTs = (lignesAvenantSource || []).find(
+          (l) => l.facture_ts === ts.id
+        );
+        const pourcentage = situationTs
+          ? parseFloat(situationTs.pourcentage_actuel)
+          : 0;
+        return {
+          ...ts,
+          pourcentage_precedent: pourcentage,
+          pourcentage_actuel: pourcentage,
+          montant_ht: parseFloat(ts.montant_ht || 0),
+        };
+      }),
+    }));
+  };
+
+  // Hydrate les % des avenants dès que les avenants sont disponibles
+  useEffect(() => {
+    if (
+      !pendingAvenantLignes ||
+      !Array.isArray(avenants) ||
+      avenants.length === 0
+    ) {
+      return;
+    }
+
+    setAvenants(applyAvenantPercentages(avenants, pendingAvenantLignes));
+    setPendingAvenantLignes(null);
+  }, [avenants, pendingAvenantLignes]);
+
   useEffect(() => {
     if (open && chantier?.id && mois && annee) {
       const fetchSituationData = async () => {
@@ -597,6 +633,7 @@ const CreationSituation = ({ open, onClose, devis, chantier, onSuccess }) => {
 
             // Pré-remplir les champs avec les données existantes
             setTauxProrata(currentSituation.taux_prorata);
+            setTauxRetenueGarantie(currentSituation.taux_retenue_garantie !== null && currentSituation.taux_retenue_garantie !== undefined ? currentSituation.taux_retenue_garantie : 5.0);
             setRetenueCIE(currentSituation.retenue_cie);
 
             // Mettre à jour la structure avec les pourcentages existants
@@ -622,29 +659,7 @@ const CreationSituation = ({ open, onClose, devis, chantier, onSuccess }) => {
             }));
             setStructure(newStructure);
 
-            // Mettre à jour les avenants
-            if (avenants.length > 0) {
-              const newAvenants = avenants.map((avenant) => ({
-                ...avenant,
-                factures_ts: (avenant.factures_ts || []).map((ts) => {
-                  const situationTs = currentSituation?.lignes_avenant?.find(
-                    (l) => l.facture_ts === ts.id
-                  );
-                  return {
-                    ...ts,
-                    pourcentage_precedent: situationTs
-                      ? parseFloat(situationTs.pourcentage_actuel)
-                      : 0,
-                    pourcentage_actuel: situationTs
-                      ? parseFloat(situationTs.pourcentage_actuel)
-                      : 0,
-                    montant_ht: parseFloat(ts.montant_ht || 0),
-                  };
-                }),
-              }));
-
-              setAvenants(newAvenants);
-            }
+            setPendingAvenantLignes(currentSituation?.lignes_avenant || []);
 
             // Mettre à jour les lignes supplémentaires
             if (currentSituation.lignes_supplementaires?.length > 0) {
@@ -671,6 +686,11 @@ const CreationSituation = ({ open, onClose, devis, chantier, onSuccess }) => {
               // Définir la situation précédente comme lastSituation
               setLastSituation(situationPrecedente);
 
+              // Propager les taux depuis la situation précédente
+              setTauxProrata(situationPrecedente.taux_prorata ?? 2.5);
+              setTauxRetenueGarantie(situationPrecedente.taux_retenue_garantie ?? 5.0);
+              setRetenueCIE(situationPrecedente.retenue_cie ?? 0);
+
               // Réinitialiser la structure avec les pourcentages précédents
               const newStructure = structure.map((partie) => ({
                 ...partie,
@@ -688,7 +708,6 @@ const CreationSituation = ({ open, onClose, devis, chantier, onSuccess }) => {
                       pourcentage_actuel: lignePrecedente
                         ? parseFloat(lignePrecedente.pourcentage_actuel)
                         : 0,
-                      // Ne pas copier le montant_ht_mois
                     };
                   }),
                 })),
@@ -696,29 +715,7 @@ const CreationSituation = ({ open, onClose, devis, chantier, onSuccess }) => {
               setStructure(newStructure);
 
               // Réinitialiser les avenants avec les pourcentages précédents
-              if (avenants.length > 0) {
-                const newAvenants = avenants.map((avenant) => ({
-                  ...avenant,
-                  factures_ts: (avenant.factures_ts || []).map((ts) => {
-                    const avenantPrecedent =
-                      situationPrecedente.lignes_avenant?.find(
-                        (l) => l.facture_ts === ts.id
-                      );
-                    return {
-                      ...ts,
-                      pourcentage_precedent: avenantPrecedent
-                        ? parseFloat(avenantPrecedent.pourcentage_actuel)
-                        : 0,
-                      pourcentage_actuel: avenantPrecedent
-                        ? parseFloat(avenantPrecedent.pourcentage_actuel)
-                        : 0,
-                      montant_ht: parseFloat(ts.montant_ht || 0),
-                      // Ne pas copier le montant du mois
-                    };
-                  }),
-                }));
-                setAvenants(newAvenants);
-              }
+              setPendingAvenantLignes(situationPrecedente.lignes_avenant || []);
 
               // Réinitialiser les lignes supplémentaires avec montants à 0
               if (situationPrecedente.lignes_supplementaires?.length > 0) {
@@ -735,6 +732,7 @@ const CreationSituation = ({ open, onClose, devis, chantier, onSuccess }) => {
               setExistingSituation(null);
             } else {
               setLastSituation(null);
+              setPendingAvenantLignes([]);
               resetSituationData();
             }
           }
@@ -778,7 +776,8 @@ const CreationSituation = ({ open, onClose, devis, chantier, onSuccess }) => {
     isNewSituation = false,
     mergedLignes = null
   ) => {
-    setTauxProrata(situation.taux_prorata);
+    setTauxProrata(situation.taux_prorata ?? 2.5);
+    setTauxRetenueGarantie(situation.taux_retenue_garantie ?? 5.0);
     setLastSituation(situation);
 
     // Mettre à jour les pourcentages de la structure
@@ -854,7 +853,8 @@ const CreationSituation = ({ open, onClose, devis, chantier, onSuccess }) => {
 
   // Fonction pour réinitialiser les données
   const resetSituationData = () => {
-    setTauxProrata(2.5); // Valeur par défaut
+    setTauxProrata(2.5);
+    setTauxRetenueGarantie(5.0);
     setLastSituation(null);
     setLignesSupplementaires([]);
     setRetenueCIE(0);
@@ -1015,7 +1015,7 @@ const CreationSituation = ({ open, onClose, devis, chantier, onSuccess }) => {
     });
 
     const cumulPrecedent = calculerCumulPrecedent();
-    const retenueGarantie = montantHtMois * 0.05;
+    const retenueGarantie = montantHtMois * (parseFloat(tauxRetenueGarantie) / 100);
     const montantProrata = montantHtMois * (parseFloat(tauxProrata) / 100);
     const montantApresRetenues =
       montantHtMois -
@@ -1044,7 +1044,7 @@ const CreationSituation = ({ open, onClose, devis, chantier, onSuccess }) => {
   // Utiliser useEffect pour recalculer quand les données changent
   useEffect(() => {
     calculateMontants();
-  }, [structure, avenants, tauxProrata, retenueCIE, lignesSupplementaires]);
+  }, [structure, avenants, tauxProrata, tauxRetenueGarantie, retenueCIE, lignesSupplementaires]);
 
   // Fonction pour calculer le cumul des mois précédents
   const calculerCumulPrecedent = () => {
@@ -1150,7 +1150,8 @@ const CreationSituation = ({ open, onClose, devis, chantier, onSuccess }) => {
         montant_ht_mois: formatNumber(calculerMontantHTMois()),
         cumul_precedent: formatNumber(calculerCumulPrecedent()),
         montant_total_cumul_ht: formatNumber(calculerMontantTotalCumul()),
-        retenue_garantie: formatNumber(calculerMontantHTMois() * 0.05),
+        retenue_garantie: formatNumber(calculerMontantHTMois() * (tauxRetenueGarantie / 100)),
+        taux_retenue_garantie: formatNumber(tauxRetenueGarantie),
         montant_prorata: formatNumber(
           calculerMontantHTMois() * (tauxProrata / 100)
         ),
@@ -1233,8 +1234,7 @@ const CreationSituation = ({ open, onClose, devis, chantier, onSuccess }) => {
   const calculerTotalNet = () => {
     const montantHtMois = calculerMontantHTMois();
 
-    // Retenue de garantie (5%)
-    const retenueGarantie = montantHtMois * 0.05;
+    const retenueGarantie = montantHtMois * (parseFloat(tauxRetenueGarantie) / 100);
 
     // Compte prorata (calculé sur le montant HT du mois)
     const compteProrata = montantHtMois * (tauxProrata / 100);
@@ -1266,7 +1266,7 @@ const CreationSituation = ({ open, onClose, devis, chantier, onSuccess }) => {
     const montantHtMois = calculerMontantHTMois();
     const montantTotalTravaux = totalHT + montantTotalAvenants;
 
-    const retenueGarantie = montantHtMois * 0.05;
+    const retenueGarantie = montantHtMois * (parseFloat(tauxRetenueGarantie) / 100);
     const montantProrata = montantHtMois * (parseFloat(tauxProrata) / 100);
     let montantApresRetenues =
       montantHtMois -
@@ -1304,7 +1304,7 @@ const CreationSituation = ({ open, onClose, devis, chantier, onSuccess }) => {
   // Utiliser useEffect pour recalculer quand les données changent
   useEffect(() => {
     updateCalculs();
-  }, [structure, avenants, tauxProrata, retenueCIE, lignesSupplementaires]);
+  }, [structure, avenants, tauxProrata, tauxRetenueGarantie, retenueCIE, lignesSupplementaires]);
 
   const renderCalculs = () => {
     if (!calculatedValues) return null;
@@ -1517,10 +1517,21 @@ const CreationSituation = ({ open, onClose, devis, chantier, onSuccess }) => {
 
               {/* Retenue de garantie */}
               <TableRow>
-                <TableCell>Retenue de garantie (5% HT du mois)</TableCell>
+                <TableCell>
+                  Retenue de garantie (
+                  <TextField
+                    type="number"
+                    value={tauxRetenueGarantie}
+                    onChange={(e) => setTauxRetenueGarantie(parseFloat(e.target.value) || 0)}
+                    inputProps={{ step: "0.1", min: "0", max: "100" }}
+                    size="small"
+                    sx={{ width: 70, mx: 0.5 }}
+                  />
+                  % HT du mois)
+                </TableCell>
                 <TableCell align="right" sx={{ color: "error.main" }}>
                   -
-                  {(calculerMontantHTMois() * 0.05)
+                  {(calculerMontantHTMois() * (tauxRetenueGarantie / 100))
                     .toFixed(2)
                     .replace(/\B(?=(\d{3})+(?!\d))/g, " ")}{" "}
                   €

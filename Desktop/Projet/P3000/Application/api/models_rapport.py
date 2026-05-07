@@ -1,6 +1,13 @@
+"""Modèles liés à la fonctionnalité "Rapport d'intervention / Vigik+".
+
+Les modèles sont réexportés depuis ``api/models.py`` afin de rester accessibles
+via ``from api.models import RapportIntervention`` partout dans le projet.
+"""
+
 import datetime
-from django.db import models
+
 from django.contrib.auth.models import User
+from django.db import models
 from django.utils import timezone
 
 
@@ -23,14 +30,23 @@ def default_dates_intervention_list():
 
 class Residence(models.Model):
     nom = models.CharField(max_length=255, verbose_name="Nom de la résidence")
-    adresse = models.CharField(max_length=500, blank=True, default='', verbose_name="Adresse")
+    adresse = models.CharField(
+        max_length=500, blank=True, default='', verbose_name="Adresse"
+    )
     client_societe = models.ForeignKey(
-        'Societe', on_delete=models.SET_NULL, null=True, blank=True,
-        related_name='residences', verbose_name="Client / Bailleur"
+        'api.Societe',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='residences',
+        verbose_name="Client / Bailleur",
     )
     chantier = models.ForeignKey(
-        'Chantier', on_delete=models.SET_NULL, null=True, blank=True,
-        related_name='residences'
+        'api.Chantier',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='residences',
     )
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -77,19 +93,32 @@ class RapportIntervention(models.Model):
     temps_taches = models.FloatField(default=0, verbose_name="Temps de taches (heures)")
 
     client_societe = models.ForeignKey(
-        'Societe', on_delete=models.SET_NULL, null=True, blank=True,
-        related_name='rapports_intervention', verbose_name="Client / Bailleur"
+        'api.Societe',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='rapports_intervention',
+        verbose_name="Client / Bailleur",
     )
     chantier = models.ForeignKey(
-        'Chantier', on_delete=models.SET_NULL, null=True, blank=True,
-        related_name='rapports_intervention'
+        'api.Chantier',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='rapports_intervention',
     )
 
     residence = models.ForeignKey(
-        Residence, on_delete=models.SET_NULL, null=True, blank=True,
-        related_name='rapports', verbose_name="Résidence"
+        Residence,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='rapports',
+        verbose_name="Résidence",
     )
-    logement = models.CharField(max_length=255, blank=True, default='', verbose_name="Logement")
+    logement = models.CharField(
+        max_length=255, blank=True, default='', verbose_name="Logement"
+    )
 
     locataire_nom = models.CharField(max_length=100, blank=True, default='')
     locataire_prenom = models.CharField(max_length=100, blank=True, default='')
@@ -98,17 +127,22 @@ class RapportIntervention(models.Model):
 
     signature_s3_key = models.CharField(max_length=500, blank=True, default='')
 
-    type_rapport = models.CharField(max_length=20, choices=TYPE_CHOICES, default='intervention')
+    type_rapport = models.CharField(
+        max_length=20, choices=TYPE_CHOICES, default='intervention'
+    )
     statut = models.CharField(max_length=20, choices=STATUT_CHOICES, default='a_faire')
     devis_a_faire = models.BooleanField(default=False, verbose_name="Devis à faire")
     devis_fait = models.BooleanField(default=False, verbose_name="Devis fait")
     devis_lie = models.ForeignKey(
-        'Devis', on_delete=models.SET_NULL, null=True, blank=True,
-        related_name='rapports_intervention_lies', verbose_name="Devis lié"
+        'api.Devis',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='rapports_intervention_lies',
+        verbose_name="Devis lié",
     )
     pdf_s3_key = models.CharField(max_length=500, blank=True, default='')
 
-    # Numéro d'affichage annuel (PDF / prévisualisation uniquement ; non exposé à l'API liste/détail)
     numero_rapport = models.PositiveIntegerField(
         null=True,
         blank=True,
@@ -120,11 +154,18 @@ class RapportIntervention(models.Model):
         verbose_name="Année du numéro de rapport",
     )
 
-    # Champs spécifiques Vigik+
-    adresse_vigik = models.CharField(max_length=500, blank=True, default='', verbose_name="Adresse (rapport Vigik+)")
-    numero_batiment = models.CharField(max_length=100, blank=True, default='', verbose_name="Numéro du bâtiment")
-    type_installation = models.CharField(max_length=255, blank=True, default='', verbose_name="Type d'installation")
-    presence_platine = models.BooleanField(null=True, blank=True, verbose_name="Présence de platine")
+    adresse_vigik = models.CharField(
+        max_length=500, blank=True, default='', verbose_name="Adresse (rapport Vigik+)"
+    )
+    numero_batiment = models.CharField(
+        max_length=100, blank=True, default='', verbose_name="Numéro du bâtiment"
+    )
+    type_installation = models.CharField(
+        max_length=255, blank=True, default='', verbose_name="Type d'installation"
+    )
+    presence_platine = models.BooleanField(
+        null=True, blank=True, verbose_name="Présence de platine"
+    )
     photos_platine_s3_keys = models.JSONField(
         default=list,
         blank=True,
@@ -134,7 +175,11 @@ class RapportIntervention(models.Model):
     presence_portail = models.BooleanField(
         null=True, blank=True, verbose_name="Présence d'un portail (Vigik+)"
     )
-    presence_platine_portail = models.BooleanField(null=True, blank=True, verbose_name="Présence de platine au niveau du portail")
+    presence_platine_portail = models.BooleanField(
+        null=True,
+        blank=True,
+        verbose_name="Présence de platine au niveau du portail",
+    )
     photos_platine_portail_s3_keys = models.JSONField(
         default=list,
         blank=True,
@@ -142,7 +187,9 @@ class RapportIntervention(models.Model):
         help_text="Liste ordonnée de clés S3.",
     )
 
-    created_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, related_name='rapports_crees')
+    created_by = models.ForeignKey(
+        User, on_delete=models.SET_NULL, null=True, related_name='rapports_crees'
+    )
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -170,12 +217,17 @@ class RapportInterventionNumeroCompteur(models.Model):
 
 
 class RapportInterventionBrouillon(models.Model):
-    """
-    Brouillon serveur : payload JSON libre (pas de contraintes DB du rapport réel).
-    Supprimé uniquement après création réussie d'un RapportIntervention (promouvoir).
+    """Brouillon serveur : payload JSON libre (pas de contraintes DB du rapport réel).
+
+    Supprimé uniquement après création réussie d'un RapportIntervention (action
+    ``promouvoir`` du ViewSet).
     """
 
-    created_by = models.ForeignKey(User, on_delete=models.CASCADE, related_name="rapports_intervention_brouillons")
+    created_by = models.ForeignKey(
+        User,
+        on_delete=models.CASCADE,
+        related_name="rapports_intervention_brouillons",
+    )
     payload = models.JSONField(default=dict, blank=True)
     champs_manquants = models.JSONField(default=list, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
@@ -191,9 +243,10 @@ class RapportInterventionBrouillon(models.Model):
 
 
 def assign_numero_rapport_si_absent(rapport):
-    """
-    Attribue un numéro séquentiel pour l'année de rapport.date.
+    """Attribue un numéro séquentiel pour l'année de ``rapport.date``.
+
     Sans effet si déjà renseigné. À appeler après création en base (pk défini).
+    Utilise ``select_for_update`` pour garantir l'atomicité en cas de concurrence.
     """
     if rapport.numero_rapport is not None:
         return
@@ -219,14 +272,20 @@ def assign_numero_rapport_si_absent(rapport):
 
 class PrestationRapport(models.Model):
     rapport = models.ForeignKey(
-        RapportIntervention, on_delete=models.CASCADE, related_name='prestations'
+        RapportIntervention,
+        on_delete=models.CASCADE,
+        related_name='prestations',
     )
     localisation = models.CharField(max_length=500, verbose_name="Localisation")
     probleme = models.TextField(verbose_name="Problème constaté")
     solution = models.TextField(verbose_name="Solution")
     commentaire = models.TextField(blank=True, default='')
-    prestation_possible = models.BooleanField(default=True, verbose_name="Prestation possible")
-    prestation_realisee = models.TextField(blank=True, default='', verbose_name="Prestations réalisées")
+    prestation_possible = models.BooleanField(
+        default=True, verbose_name="Prestation possible"
+    )
+    prestation_realisee = models.TextField(
+        blank=True, default='', verbose_name="Prestations réalisées"
+    )
     ordre = models.IntegerField(default=0)
 
     class Meta:
@@ -250,8 +309,12 @@ class PhotoRapport(models.Model):
     )
     s3_key = models.CharField(max_length=500)
     filename = models.CharField(max_length=255)
-    type_photo = models.CharField(max_length=20, choices=TYPE_PHOTO_CHOICES, default='avant')
-    date_photo = models.DateField(default=datetime.date.today, verbose_name="Date de la photo")
+    type_photo = models.CharField(
+        max_length=20, choices=TYPE_PHOTO_CHOICES, default='avant'
+    )
+    date_photo = models.DateField(
+        default=datetime.date.today, verbose_name="Date de la photo"
+    )
     ordre = models.IntegerField(default=0)
     created_at = models.DateTimeField(auto_now_add=True)
 

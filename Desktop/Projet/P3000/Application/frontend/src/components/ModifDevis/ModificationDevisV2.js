@@ -2,7 +2,7 @@
  * ModificationDevisV2 - Composant principal pour la modification de devis
  * Basé sur le même système que DevisAvance mais pour l'édition de devis existants
  */
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import { Box, Typography, CircularProgress, Alert, Button } from '@mui/material';
@@ -17,6 +17,9 @@ import DevisRecap from '../Devis/DevisRecap';
 import TableauOption from '../Devis/TableauOption';
 import DevisCostPieChart from '../Devis/DevisCostPieChart';
 import ContactSocieteModal from '../ContactSocieteModal';
+import SelectSocieteModal from '../SelectSocieteModal';
+import SocieteInfoModal from '../SocieteInfoModal';
+import ClientInfoModal from '../ClientInfoModal';
 
 // Hooks personnalisés
 import { useDevisLoader } from './hooks/useDevisLoader';
@@ -28,7 +31,6 @@ import { useDevisHandlers } from './hooks/useDevisHandlers';
 import { DevisIndexManager } from '../../utils/DevisIndexManager';
 import { validateBeforeTransform, transformToLegacyFormat } from '../../utils/DevisLegacyTransformer';
 import { generatePDFDrive } from '../../utils/universalDriveGenerator';
-import { COLORS } from '../../constants/colors';
 
 const { sortByIndexGlobal, reindexAll, getNextIndex } = DevisIndexManager;
 
@@ -49,8 +51,8 @@ const RECURRING_SPECIAL_LINE_TEMPLATE = {
     value: 0
   },
   styles: {
-    backgroundColor: COLORS.warningLight,
-    color: COLORS.error,
+    backgroundColor: '#fbff24',
+    color: '#ff3838',
     fontWeight: 'bold',
     textAlign: 'left'
   },
@@ -121,11 +123,26 @@ const ModificationDevisV2 = () => {
   const [hoveredLigneDetail, setHoveredLigneDetail] = useState(null);
   const [isPieChartVisible, setIsPieChartVisible] = useState(true);
 
-  // ✅ États pour la gestion des contacts de société
+  // États pour la gestion des contacts de société
   const [contactsSociete, setContactsSociete] = useState([]);
   const [selectedContactId, setSelectedContactId] = useState(null);
   const [showContactModal, setShowContactModal] = useState(false);
   const [currentSocieteId, setCurrentSocieteId] = useState(null);
+
+  // État pour l'édition du client
+  const [showEditClientModal, setShowEditClientModal] = useState(false);
+
+  // États pour la sélection de société alternative (affichage devis uniquement)
+  const [societeDevisId, setSocieteDevisId] = useState(null);
+  const [availableSocietes, setAvailableSocietes] = useState([]);
+  const [showSelectSocieteDevisModal, setShowSelectSocieteDevisModal] = useState(false);
+  const [showCreateSocieteDevisModal, setShowCreateSocieteDevisModal] = useState(false);
+
+  // États pour la sélection de chantier (barre de recherche + liste)
+  const [chantiers, setChantiers] = useState([]);
+  const [chantierSearchQuery, setChantierSearchQuery] = useState('');
+  const [chantierDropdownOpen, setChantierDropdownOpen] = useState(false);
+  const chantierDropdownRef = useRef(null);
 
   // Hook de chargement
   const {
@@ -329,8 +346,40 @@ const ModificationDevisV2 = () => {
   const loadParties = useCallback(async () => {
     try {
       setIsLoadingParties(true);
-      const response = await axios.get('/api/parties/');
-      setAvailableParties(response.data);
+      // DRF peut paginer: {count, next, previous, results: [...]}
+      const firstResponse = await axios.get('/api/parties/');
+      const firstRaw = firstResponse.data;
+
+      let allParties = [];
+      if (Array.isArray(firstRaw)) {
+        allParties = firstRaw;
+      } else if (firstRaw && Array.isArray(firstRaw.results)) {
+        allParties = [...firstRaw.results];
+
+        // Récupérer toutes les pages pour avoir TOUTES les parties
+        let nextUrl = firstRaw.next;
+        let guard = 0;
+        while (nextUrl && guard < 50) {
+          guard += 1;
+          const nextResp = await axios.get(nextUrl);
+          const nextRaw = nextResp.data;
+
+          if (Array.isArray(nextRaw)) {
+            // Format non paginé (cas atypique)
+            allParties = nextRaw;
+            break;
+          }
+
+          if (nextRaw && Array.isArray(nextRaw.results)) {
+            allParties = allParties.concat(nextRaw.results);
+            nextUrl = nextRaw.next;
+          } else {
+            break;
+          }
+        }
+      }
+
+      setAvailableParties(allParties);
     } catch (err) {
       console.error('Erreur lors du chargement des parties:', err);
     } finally {
@@ -441,7 +490,6 @@ const ModificationDevisV2 = () => {
       }));
   }, [enrichedDevisItems]);
 
-  // ✅ Fonction pour charger les contacts de la société
   const fetchContactsSociete = useCallback(async (societeId) => {
     if (!societeId) {
       setContactsSociete([]);
@@ -460,6 +508,145 @@ const ModificationDevisV2 = () => {
     }
   }, []);
 
+  const fetchAvailableSocietes = useCallback(async (forClientId) => {
+    const cid = forClientId || clientId;
+    if (!cid) {
+      setAvailableSocietes([]);
+      return;
+    }
+    try {
+      const response = await axios.get(`/api/societe/?client=${cid}`);
+      setAvailableSocietes(response.data);
+    } catch (error) {
+      console.error('Erreur lors du chargement des sociétés:', error);
+      setAvailableSocietes([]);
+    }
+  }, [clientId]);
+
+  const handleCreateSocieteDevis = useCallback(async (societeData) => {
+    try {
+      if (!clientId) {
+        alert('Impossible de créer la société : aucun client associé.');
+        return;
+      }
+      const response = await axios.post('/api/societe/', {
+        ...societeData,
+        client_name: clientId
+      });
+      if (response.data?.id) {
+        setSocieteDevisId(response.data.id);
+        fetchContactsSociete(response.data.id);
+        setSelectedContactId(null);
+        await fetchAvailableSocietes();
+      }
+      setShowCreateSocieteDevisModal(false);
+    } catch (error) {
+      console.error('Erreur lors de la création de la société:', error);
+      alert('Erreur lors de la création de la société.');
+    }
+  }, [clientId, fetchContactsSociete, fetchAvailableSocietes]);
+
+  const handleSaveClient = useCallback(async (formData) => {
+    if (!clientId) return;
+    try {
+      await axios.put(`/api/client/${clientId}/`, {
+        ...formData,
+        phone_Number: formData.phone_Number ? parseInt(formData.phone_Number) : null,
+      });
+      setClient({
+        name: formData.name || '',
+        surname: formData.surname || '',
+        civilite: formData.civilite || '',
+        poste: formData.poste || '',
+        client_mail: formData.client_mail || '',
+        phone_Number: formData.phone_Number || '',
+      });
+      setShowEditClientModal(false);
+    } catch (error) {
+      console.error('Erreur lors de la mise à jour du client:', error);
+      alert('Erreur lors de la mise à jour du contact.');
+    }
+  }, [clientId]);
+
+  // Changer le chantier (fetch détails et mettre à jour client/societe/chantier)
+  const handleChantierChange = useCallback(async (chantierId) => {
+    if (!chantierId) return;
+    try {
+      const chantierResponse = await axios.get(`/api/chantier/${chantierId}/`);
+      const chantierData = chantierResponse.data;
+      setSelectedChantierId(chantierId);
+      setChantier({
+        chantier_name: chantierData.chantier_name || '',
+        rue: chantierData.rue || '',
+        code_postal: chantierData.code_postal || '',
+        ville: chantierData.ville || ''
+      });
+      if (chantierData.societe) {
+        if (typeof chantierData.societe === 'object' && chantierData.societe.id) {
+          setSociete({
+            nom_societe: chantierData.societe.nom_societe || '',
+            rue_societe: chantierData.societe.rue_societe || '',
+            codepostal_societe: chantierData.societe.codepostal_societe || '',
+            ville_societe: chantierData.societe.ville_societe || ''
+          });
+          await fetchContactsSociete(chantierData.societe.id);
+          if (chantierData.societe.client_name) {
+            const clientId = typeof chantierData.societe.client_name === 'object'
+              ? chantierData.societe.client_name.id
+              : chantierData.societe.client_name;
+            if (clientId) {
+              const clientResponse = await axios.get(`/api/client/${clientId}/`);
+              const clientData = clientResponse.data;
+              setClient({
+                name: clientData.name || '',
+                surname: clientData.surname || '',
+                civilite: clientData.civilite || 'M.',
+                poste: clientData.poste || '',
+                client_mail: clientData.client_mail || '',
+                phone_Number: String(clientData.phone_Number || '')
+              });
+              setClientId(clientId);
+              fetchAvailableSocietes(clientId);
+            }
+          }
+        } else if (typeof chantierData.societe === 'number') {
+          const societeResponse = await axios.get(`/api/societe/${chantierData.societe}/`);
+          const societeData = societeResponse.data;
+          setSociete({
+            nom_societe: societeData.nom_societe || '',
+            rue_societe: societeData.rue_societe || '',
+            codepostal_societe: societeData.codepostal_societe || '',
+            ville_societe: societeData.ville_societe || ''
+          });
+          await fetchContactsSociete(chantierData.societe);
+          if (societeData.client_name) {
+            const clientId = typeof societeData.client_name === 'object'
+              ? societeData.client_name.id
+              : societeData.client_name;
+            if (clientId) {
+              const clientResponse = await axios.get(`/api/client/${clientId}/`);
+              const clientData = clientResponse.data;
+              setClient({
+                name: clientData.name || '',
+                surname: clientData.surname || '',
+                civilite: clientData.civilite || 'M.',
+                poste: clientData.poste || '',
+                client_mail: clientData.client_mail || '',
+                phone_Number: String(clientData.phone_Number || '')
+              });
+              setClientId(clientId);
+              fetchAvailableSocietes(clientId);
+            }
+          }
+        }
+      }
+      setChantierDropdownOpen(false);
+      setChantierSearchQuery('');
+    } catch (error) {
+      console.error('Erreur lors du chargement du chantier:', error);
+    }
+  }, [fetchContactsSociete, fetchAvailableSocietes]);
+
   // Initialiser les données quand le devis est chargé
   useEffect(() => {
     if (loadedDevisData) {
@@ -468,23 +655,30 @@ const ModificationDevisV2 = () => {
         numero: loadedDevisData.numero || '',
         date_creation: loadedDevisData.date_creation?.split('T')[0] || new Date().toISOString().split('T')[0],
         nature_travaux: loadedDevisData.nature_travaux || '',
-        // ✅ Utiliser ?? au lieu de || pour permettre tva_rate = 0
         tva_rate: loadedDevisData.tva_rate ?? 20,
         price_ht: loadedDevisData.price_ht ?? 0,
         price_ttc: loadedDevisData.price_ttc ?? 0,
-        contact_societe: loadedDevisData.contact_societe || null
+        contact_societe: loadedDevisData.contact_societe || null,
+        societe_devis: loadedDevisData.societe_devis || null
       });
       setSelectedChantierId(loadedDevisData.chantier);
       setDevisType(loadedDevisData.devis_chantier ? 'chantier' : 'normal');
       
-      // ✅ Initialiser le contact sélectionné si présent
       if (loadedDevisData.contact_societe) {
-        // Gérer le cas où contact_societe peut être un ID (nombre) ou un objet avec un id
         const contactId = typeof loadedDevisData.contact_societe === 'object' 
           ? loadedDevisData.contact_societe.id 
           : loadedDevisData.contact_societe;
         if (contactId) {
           setSelectedContactId(contactId);
+        }
+      }
+      
+      if (loadedDevisData.societe_devis) {
+        const sdId = typeof loadedDevisData.societe_devis === 'object'
+          ? loadedDevisData.societe_devis.id
+          : loadedDevisData.societe_devis;
+        if (sdId) {
+          setSocieteDevisId(sdId);
         }
       }
     }
@@ -508,19 +702,20 @@ const ModificationDevisV2 = () => {
   useEffect(() => {
     if (societeData) {
       setSociete({
+        id: societeData.id || null,
         nom_societe: societeData.nom_societe || '',
         rue_societe: societeData.rue_societe || '',
         codepostal_societe: societeData.codepostal_societe || '',
         ville_societe: societeData.ville_societe || ''
       });
       
-      // ✅ Charger les contacts de la société
       const societeIdValue = societeData.id || null;
       if (societeIdValue) {
         fetchContactsSociete(societeIdValue);
       }
+      fetchAvailableSocietes();
     }
-  }, [societeData, fetchContactsSociete]);
+  }, [societeData, fetchContactsSociete, fetchAvailableSocietes]);
 
   useEffect(() => {
     if (chantierData) {
@@ -538,12 +733,43 @@ const ModificationDevisV2 = () => {
     loadParties();
   }, [loadParties]);
 
+  // Charger les chantiers (en cours uniquement)
+  useEffect(() => {
+    const fetchChantiers = async () => {
+      try {
+        const response = await axios.get('/api/chantier/');
+        const filtered = response.data.filter(
+          (c) =>
+            c.state_chantier !== 'Terminé' &&
+            c.state_chantier !== 'En attente'
+        );
+        setChantiers(filtered);
+      } catch (err) {
+        console.error('Erreur chargement chantiers:', err);
+      }
+    };
+    fetchChantiers();
+  }, []);
+
+  // Fermer la liste chantier au clic à l'extérieur
+  useEffect(() => {
+    if (!chantierDropdownOpen) return;
+    const handleClickOutside = (e) => {
+      if (chantierDropdownRef.current && !chantierDropdownRef.current.contains(e.target)) {
+        setChantierDropdownOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [chantierDropdownOpen]);
+
   // Rechercher les parties
   const searchParties = useCallback(async (inputValue) => {
     try {
+      const partiesArray = Array.isArray(availableParties) ? availableParties : [];
       // ✅ Utiliser availableParties comme source principale (contient TOUTES les parties)
       // car l'endpoint /api/parties/search/ limite à 50 résultats
-      const localResults = availableParties
+      const localResults = partiesArray
         .filter(partie => {
           if (!inputValue) return true;
           const searchLower = inputValue.toLowerCase();
@@ -560,7 +786,7 @@ const ModificationDevisV2 = () => {
         }));
       
       // Si availableParties est vide ou si on veut compléter avec l'API (optionnel)
-      if (localResults.length === 0 || availableParties.length === 0) {
+      if (localResults.length === 0 || partiesArray.length === 0) {
         try {
           const params = inputValue ? { q: inputValue } : {};
           const response = await axios.get('/api/parties/search/', { params });
@@ -580,7 +806,8 @@ const ModificationDevisV2 = () => {
       return localResults;
     } catch (error) {
       // En cas d'erreur, retourner au moins les parties locales filtrées
-      return availableParties
+      const partiesArray = Array.isArray(availableParties) ? availableParties : [];
+      return partiesArray
         .filter(partie => {
           if (!inputValue) return true;
           const searchLower = inputValue.toLowerCase();
@@ -715,7 +942,8 @@ const ModificationDevisV2 = () => {
         ...devisData,
         price_ht: totalHt,
         price_ttc: totalTtc,
-        contact_societe: selectedContactId || null // ✅ Ajouter le contact sélectionné
+        contact_societe: selectedContactId || null,
+        societe_devis: societeDevisId || null
       },
       selectedChantierId,
       clientId,
@@ -843,7 +1071,8 @@ const ModificationDevisV2 = () => {
           ...devisData,
           price_ht: totalHt,
           price_ttc: totalTtc,
-          contact_societe: selectedContactId || null
+          contact_societe: selectedContactId || null,
+          societe_devis: societeDevisId || null
         },
         selectedChantierId,
         clientIds: clientId ? [clientId] : []
@@ -972,7 +1201,7 @@ const ModificationDevisV2 = () => {
       padding: '20px 10px',
       marginRight: '150px',
       minHeight: 'auto',
-      backgroundColor: COLORS.backgroundHover,
+      backgroundColor: '#f5f5f5',
       borderRadius: '10px',
     }}>
       <div style={{
@@ -991,7 +1220,7 @@ const ModificationDevisV2 = () => {
         
         {/* En-tête de la page */}
         <div style={{
-          backgroundColor: COLORS.warning,
+          backgroundColor: '#ff9800',
           color: 'white',
           padding: '20px 30px',
           textAlign: 'center'
@@ -1009,22 +1238,32 @@ const ModificationDevisV2 = () => {
           
           {/* Section Client et contact */}
           <div style={{
-            backgroundColor: COLORS.backgroundAlt,
+            backgroundColor: '#f8f9fa',
             border: '1px solid #e9ecef',
             borderRadius: '8px',
             padding: '25px',
             marginBottom: '30px'
           }}>
-            <h2 style={{
-              color: COLORS.infoDark,
-              fontSize: '20px',
-              fontWeight: 'bold',
-              margin: '0 0 20px 0',
-              paddingBottom: '10px',
-              borderBottom: '2px solid #1976d2'
-            }}>
-              👤 Client et contact
-            </h2>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', paddingBottom: '10px', borderBottom: '2px solid #1976d2' }}>
+              <h2 style={{
+                color: '#1976d2',
+                fontSize: '20px',
+                fontWeight: 'bold',
+                margin: 0,
+              }}>
+                👤 Client et contact
+              </h2>
+              {clientId && (
+                <Button
+                  variant="outlined"
+                  size="small"
+                  onClick={() => setShowEditClientModal(true)}
+                  sx={{ fontSize: '12px', padding: '4px 10px' }}
+                >
+                  Modifier le contact
+                </Button>
+              )}
+            </div>
             
             <ClientInfo 
               client={client} 
@@ -1036,19 +1275,35 @@ const ModificationDevisV2 = () => {
               onContactSelect={setSelectedContactId}
               onOpenContactModal={() => setShowContactModal(true)}
               societeId={currentSocieteId}
+              availableSocietes={availableSocietes}
+              selectedSocieteDevisId={societeDevisId}
+              onSocieteDevisSelect={(id) => {
+                setSocieteDevisId(id);
+                if (id) {
+                  fetchContactsSociete(id);
+                  setSelectedContactId(null);
+                } else {
+                  const fallbackSocieteId = currentSocieteId || societe?.id;
+                  if (fallbackSocieteId) {
+                    fetchContactsSociete(fallbackSocieteId);
+                  }
+                  setSelectedContactId(null);
+                }
+              }}
+              onOpenSelectSocieteModal={() => setShowSelectSocieteDevisModal(true)}
             />
           </div>
 
           {/* Section Chantier */}
           <div style={{
-            backgroundColor: COLORS.backgroundAlt,
+            backgroundColor: '#f8f9fa',
             border: '1px solid #e9ecef',
             borderRadius: '8px',
             padding: '25px',
             marginBottom: '30px'
           }}>
             <h2 style={{
-              color: COLORS.infoDark,
+              color: '#1976d2',
               fontSize: '20px',
               fontWeight: 'bold',
               margin: '0 0 20px 0',
@@ -1057,6 +1312,102 @@ const ModificationDevisV2 = () => {
             }}>
               🏗️ Adresse du chantier
             </h2>
+
+            <Box ref={chantierDropdownRef} sx={{ position: 'relative', marginBottom: '20px' }}>
+              <label style={{ display: 'block', fontSize: '12px', color: '#6c757d', marginBottom: '6px' }}>
+                Chantier
+              </label>
+              <input
+                type="text"
+                placeholder="Rechercher un chantier..."
+                value={
+                  selectedChantierId
+                    ? (chantiers.find((c) => c.id === selectedChantierId)?.chantier_name ?? chantier.chantier_name ?? '')
+                    : chantierSearchQuery
+                }
+                onChange={(e) => {
+                  setChantierSearchQuery(e.target.value);
+                  setChantierDropdownOpen(true);
+                }}
+                onFocus={() => setChantierDropdownOpen(true)}
+                style={{
+                  width: '100%',
+                  padding: '10px 12px',
+                  border: '2px solid #e0e0e0',
+                  borderRadius: '8px',
+                  fontSize: '14px',
+                  boxSizing: 'border-box',
+                }}
+              />
+              {chantierDropdownOpen && (
+                <ul
+                  style={{
+                    position: 'absolute',
+                    top: '100%',
+                    left: 0,
+                    right: 0,
+                    margin: 0,
+                    marginTop: '4px',
+                    padding: 0,
+                    listStyle: 'none',
+                    maxHeight: '240px',
+                    overflowY: 'auto',
+                    backgroundColor: '#fff',
+                    border: '2px solid #2196f3',
+                    borderRadius: '8px',
+                    boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
+                    zIndex: 10,
+                  }}
+                >
+                  {(() => {
+                    const chantiersEnCours = chantiers.filter(
+                      (c) =>
+                        c.state_chantier !== 'Terminé' &&
+                        c.state_chantier !== 'En attente'
+                    );
+                    const sorted = [...chantiersEnCours].sort((a, b) =>
+                      (a.chantier_name || '').localeCompare(b.chantier_name || '', 'fr')
+                    );
+                    const filtered = chantierSearchQuery.trim()
+                      ? sorted.filter((c) =>
+                          (c.chantier_name || '')
+                            .toLowerCase()
+                            .includes(chantierSearchQuery.trim().toLowerCase())
+                        )
+                      : sorted;
+                    if (filtered.length === 0) {
+                      return (
+                        <li style={{ padding: '12px 14px', color: '#666', fontSize: '14px' }}>
+                          Aucun chantier trouvé
+                        </li>
+                      );
+                    }
+                    return filtered.map((ch) => (
+                      <li
+                        key={ch.id}
+                        onClick={() => handleChantierChange(ch.id)}
+                        style={{
+                          padding: '10px 14px',
+                          cursor: 'pointer',
+                          fontSize: '14px',
+                          borderBottom: '1px solid #eee',
+                          backgroundColor: selectedChantierId === ch.id ? '#e3f2fd' : 'transparent',
+                        }}
+                        onMouseEnter={(e) => {
+                          e.currentTarget.style.backgroundColor = '#e3f2fd';
+                        }}
+                        onMouseLeave={(e) => {
+                          e.currentTarget.style.backgroundColor =
+                            selectedChantierId === ch.id ? '#e3f2fd' : 'transparent';
+                        }}
+                      >
+                        {ch.chantier_name}
+                      </li>
+                    ));
+                  })()}
+                </ul>
+              )}
+            </Box>
             
             <ChantierInfo 
               chantier={chantier} 
@@ -1067,14 +1418,14 @@ const ModificationDevisV2 = () => {
 
           {/* Section Informations générales */}
           <div style={{
-            backgroundColor: COLORS.backgroundAlt,
+            backgroundColor: '#f8f9fa',
             border: '1px solid #e9ecef',
             borderRadius: '8px',
             padding: '25px',
             marginBottom: '30px'
           }}>
             <h2 style={{
-              color: COLORS.infoDark,
+              color: '#1976d2',
               fontSize: '20px',
               fontWeight: 'bold',
               margin: '0 0 20px 0',
@@ -1104,14 +1455,14 @@ const ModificationDevisV2 = () => {
 
           {/* Section Détail du devis */}
           <div style={{
-            backgroundColor: COLORS.backgroundAlt,
+            backgroundColor: '#f8f9fa',
             border: '1px solid #e9ecef',
             borderRadius: '8px',
             padding: '25px',
             marginBottom: '30px'
           }}>
             <h2 style={{
-              color: COLORS.infoDark,
+              color: '#1976d2',
               fontSize: '20px',
               fontWeight: 'bold',
               margin: '0 0 20px 0',
@@ -1190,14 +1541,14 @@ const ModificationDevisV2 = () => {
 
           {/* Section Récapitulatif */}
           <div style={{
-            backgroundColor: COLORS.backgroundAlt,
+            backgroundColor: '#f8f9fa',
             border: '1px solid #e9ecef',
             borderRadius: '8px',
             padding: '25px',
             marginBottom: '30px'
           }}>
             <h2 style={{
-              color: COLORS.infoDark,
+              color: '#1976d2',
               fontSize: '20px',
               fontWeight: 'bold',
               margin: '0 0 20px 0',
@@ -1248,7 +1599,7 @@ const ModificationDevisV2 = () => {
                 onClick={handleSaveDevis}
                 disabled={isSaving}
                 style={{
-                  backgroundColor: isSaving ? '#6c757d' : COLORS.warning,
+                  backgroundColor: isSaving ? '#6c757d' : '#ff9800',
                   color: 'white',
                   border: 'none',
                   padding: '12px 24px',
@@ -1324,6 +1675,37 @@ const ModificationDevisV2 = () => {
           onContactChange={() => fetchContactsSociete(currentSocieteId)}
         />
       )}
+
+      <SelectSocieteModal
+        open={showSelectSocieteDevisModal}
+        onClose={() => setShowSelectSocieteDevisModal(false)}
+        filteredSocietes={availableSocietes}
+        onSocieteSelect={(societeId) => {
+          setSocieteDevisId(societeId);
+          setShowSelectSocieteDevisModal(false);
+          if (societeId) {
+            fetchContactsSociete(societeId);
+            setSelectedContactId(null);
+          }
+        }}
+        onCreateNew={() => {
+          setShowSelectSocieteDevisModal(false);
+          setShowCreateSocieteDevisModal(true);
+        }}
+      />
+
+      <SocieteInfoModal
+        open={showCreateSocieteDevisModal}
+        onClose={() => setShowCreateSocieteDevisModal(false)}
+        onSubmit={handleCreateSocieteDevis}
+      />
+
+      <ClientInfoModal
+        open={showEditClientModal}
+        onClose={() => setShowEditClientModal(false)}
+        onSubmit={handleSaveClient}
+        initialData={client}
+      />
     </div>
   );
 };

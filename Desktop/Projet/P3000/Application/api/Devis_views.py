@@ -90,17 +90,19 @@ def is_new_system_devis(devis):
 @permission_classes([AllowAny])
 def preview_saved_devis(request, devis_id):
     """
-    Vue de prévisualisation qui redirige automatiquement vers la bonne version
-    selon le système utilisé par le devis (ancien ou nouveau)
+    Vue de prévisualisation qui redirige toujours vers la V2.
+    La V2 gère à la fois l'ancien et le nouveau système (fallback sur les lignes si parties_metadata vide),
+    ce qui évite les cas où les devis de l'ancien système ne s'affichaient pas.
     """
+    get_object_or_404(Devis, id=devis_id)
+    from django.shortcuts import redirect
+    return redirect(f'/api/preview-saved-devis-v2/{devis_id}/')
+
+
+def _preview_saved_devis_legacy(request, devis_id):
+    """Ancienne logique conservée uniquement en secours (non utilisée par l'URL)."""
     try:
         devis = get_object_or_404(Devis, id=devis_id)
-        
-        # Détecter si le devis utilise le nouveau système
-        if is_new_system_devis(devis):
-            # Rediriger vers preview_saved_devis_v2 pour le nouveau système
-            from django.shortcuts import redirect
-            return redirect(f'/api/preview-saved-devis-v2/{devis_id}/')
         
         # Sinon, continuer avec l'ancien système (code existant)
         # Gérer les deux cas : devis normal (avec chantier) et devis de chantier (avec appel_offres)
@@ -114,6 +116,9 @@ def preview_saved_devis(request, devis_id):
             chantier = devis.chantier
             societe = chantier.societe if chantier else None
             client = societe.client_name if societe else None
+
+        if devis.societe_devis:
+            societe = devis.societe_devis
 
         total_ht = Decimal('0')
         parties_data = []
@@ -332,15 +337,13 @@ def preview_saved_devis_v2(request, devis_id):
     """
     try:
         # ✅ Charger contact_societe avec select_related pour optimiser la requête
-        devis = get_object_or_404(Devis.objects.select_related('contact_societe'), id=devis_id)
+        devis = get_object_or_404(Devis.objects.select_related('contact_societe', 'societe_devis'), id=devis_id)
         
         # Gérer les deux cas : devis normal (avec chantier) et devis de chantier (avec appel_offres)
         if devis.devis_chantier and devis.appel_offres:
             # Cas d'un devis de chantier (appel d'offres)
             chantier = devis.appel_offres
-            # ✅ Toujours récupérer la société depuis le chantier/appel d'offres
             societe = devis.appel_offres.societe if devis.appel_offres else None
-            # Priorité au client directement associé au devis, sinon utiliser celui de la société
             clients_devis = list(devis.client.all())
             if clients_devis:
                 client = clients_devis[0]
@@ -349,14 +352,15 @@ def preview_saved_devis_v2(request, devis_id):
         else:
             # Cas d'un devis normal
             chantier = devis.chantier
-            # ✅ Toujours récupérer la société depuis le chantier
             societe = chantier.societe if chantier else None
-            # Priorité au client directement associé au devis, sinon utiliser celui de la société
             clients_devis = list(devis.client.all())
             if clients_devis:
                 client = clients_devis[0]
             else:
                 client = societe.client_name if societe else None
+
+        if devis.societe_devis:
+            societe = devis.societe_devis
 
         # ✅ Récupérer le contact_societe si défini dans le devis
         contact_societe = devis.contact_societe if hasattr(devis, 'contact_societe') and devis.contact_societe else None
@@ -746,6 +750,14 @@ def preview_devis_v2(request):
                 chantier = get_object_or_404(Chantier, id=chantier_id)
                 societe = chantier.societe
                 client = societe.client_name if societe else None
+
+            societe_devis_id = devis_data.get('societe_devis')
+            if societe_devis_id:
+                try:
+                    from .models import Societe as SocieteModel
+                    societe = SocieteModel.objects.get(id=societe_devis_id)
+                except SocieteModel.DoesNotExist:
+                    pass
 
             # Utiliser les données du frontend (parties_metadata, lignes, etc.)
             total_ht = Decimal('0')

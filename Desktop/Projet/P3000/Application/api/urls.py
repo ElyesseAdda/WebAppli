@@ -3,14 +3,20 @@ from rest_framework.routers import DefaultRouter
 from .Devis_views import preview_saved_devis_v2, preview_devis_v2
 from .SituationViews import preview_situation_v2
 # Import des vues du dashboard depuis le module dédié
-from .dashboard.views import DashboardViewSet, get_pending_payments, get_late_payments, get_situations_monthly_evolution
+from .dashboard.views import (
+    DashboardViewSet,
+    dashboard_settings,
+    get_pending_payments,
+    get_late_payments,
+    get_situations_monthly_evolution,
+)
 from .views import (
     dashboard_data, SocieteViewSet, ChantierViewSet, DevisViewSet, PartieViewSet, 
     SousPartieViewSet, LigneDetailViewSet, preview_devis, ClientViewSet, 
-    generate_pdf_from_preview, StockViewSet, AgentViewSet, PresenceViewSet, 
+    generate_pdf_from_preview, StockViewSet, AgentViewSet, PresenceViewSet, PointageMensuelViewSet,
     historique_stock, get_latest_code_produit, EventViewSet, delete_events_by_agent_and_period, 
     get_agents_with_work_days, update_days_present, recalculate_monthly_hours, assign_chantier, get_schedule,copy_schedule, 
-    delete_schedule, save_labor_costs, get_labor_costs, create_chantier_from_devis, create_devis, get_next_devis_number, 
+    delete_schedule, update_schedule_comment, save_labor_costs, get_labor_costs, create_chantier_from_devis, create_devis, get_next_devis_number, 
     list_devis,get_chantier_relations, preview_saved_devis, update_devis_status, create_facture, FactureViewSet, preview_facture, preview_facture_v2,
     create_facture_from_devis, get_next_facture_number, check_facture_numero, generate_facture_pdf_from_preview, get_chantier_details, check_chantier_name, check_client, check_societe, get_chantiers_drive_paths,
     calculate_special_lines, get_devis_special_lines, get_devis_factures, update_facture_status, get_fournisseurs,
@@ -28,6 +34,7 @@ from .views import (
     update_taux_fixe,
     get_taux_fixe,
     get_chantier_avenants,
+    update_avenant_numero,
     get_next_ts_number,
     create_facture_ts,
     create_facture_cie,
@@ -56,6 +63,7 @@ from .views import (
     preview_situation,
     generate_situation_pdf,
     AgencyExpenseViewSet,
+    AgenceViewSet,
     get_chantier_bons_commande,
     get_chantier_stats,
     SousTraitantViewSet,
@@ -65,6 +73,7 @@ from .views import (
     AvenantSousTraitanceViewSet,
     preview_contrat,
     preview_avenant,
+    preview_certificat_paiement,
     get_taux_facturation_data,
     labor_costs_monthly_summary,
     planning_hebdo_pdf,
@@ -72,7 +81,9 @@ from .views import (
     recalculate_labor_costs,
     PaiementSousTraitantViewSet,
     RecapFinancierChantierAPIView,
+    RecapSyntheseMensuelleAPIView,
     PaiementFournisseurMaterielAPIView,
+    RecapFournisseursAffichageAPIView,
     fournisseurs,
     tableau_fournisseur,
     tableau_fournisseur_global,
@@ -87,6 +98,7 @@ from .views import (
     BanqueViewSet,
     recalculate_labor_costs_month,
     schedule_monthly_summary,
+    schedule_yearly_summary,
     preview_monthly_agents_report,
     generate_monthly_agents_pdf,
     AppelOffresViewSet,
@@ -125,8 +137,6 @@ from .views import (
     preview_distributeur_monthly_report,
     generate_distributeur_monthly_pdf,
     distributeur_available_months,
-    # Configuration entreprise (multi-client)
-    get_entreprise_config,
 )
 
 # Import des nouvelles vues PDF avec stockage AWS S3
@@ -138,6 +148,7 @@ from .pdf_views import (
     generate_devis_marche_auto,
     generate_contrat_sous_traitance_pdf_drive,
     generate_avenant_sous_traitance_pdf_drive,
+    generate_certificat_paiement_pdf_drive,
     generate_situation_pdf_drive,
     generate_bon_commande_pdf_drive,
     generate_facture_pdf_drive,
@@ -170,7 +181,19 @@ from .bon_commande_modification_views import (
 from .search_views import search_in_drive
 
 # Import des vues d'authentification
-from .auth_views import login_view, logout_view, check_auth_view, create_user_view
+from .auth_views import (
+    login_view,
+    logout_view,
+    check_auth_view,
+    create_user_view,
+    list_users_view,
+    toggle_user_active_view,
+    reset_user_password_view,
+    toggle_user_staff_view,
+    manage_emetteurs_view,
+    toggle_emetteur_active_view,
+    update_user_mobile_access_view,
+)
 
 # Import de la vue de version
 from .views import app_version_view
@@ -199,6 +222,7 @@ router.register(r'stock-purchases', StockPurchaseViewSet, basename='stock-purcha
 router.register(r'stock-lots', StockLotViewSet, basename='stock-lots')
 router.register(r'agent', AgentViewSet, basename='agent')
 router.register(r'presence', PresenceViewSet, basename='presence')
+router.register(r'pointages-mensuels', PointageMensuelViewSet, basename='pointages-mensuels')
 router.register(r'events', EventViewSet, basename='event')
 router.register(r'facture', FactureViewSet, basename='facture')
 router.register(r'bons-commande', BonCommandeViewSet)
@@ -207,6 +231,7 @@ router.register(r'situation-lignes', SituationLigneViewSet, basename='situation-
 router.register(r'situation-lignes-supplementaires', SituationLigneSupplementaireViewSet)
 router.register(r'factures-ts', FactureTSViewSet)
 router.register(r'situation-lignes-avenants', SituationLigneAvenantViewSet)
+router.register(r'agences', AgenceViewSet, basename='agences')
 router.register(r'agency-expenses', AgencyExpenseViewSet)
 router.register(r'agency-expenses-month', AgencyExpenseMonthViewSet, basename='agency-expenses-month')
 router.register(r'sous-traitants', SousTraitantViewSet)
@@ -233,6 +258,13 @@ auth_urlpatterns = [
     path('auth/logout/', logout_view, name='logout'),
     path('auth/check/', check_auth_view, name='check_auth'),
     path('auth/create-user/', create_user_view, name='create_user'),
+    path('auth/users/', list_users_view, name='list_users'),
+    path('auth/users/<int:user_id>/toggle-active/', toggle_user_active_view, name='toggle_user_active'),
+    path('auth/users/<int:user_id>/reset-password/', reset_user_password_view, name='reset_user_password'),
+    path('auth/users/<int:user_id>/toggle-staff/', toggle_user_staff_view, name='toggle_user_staff'),
+    path('auth/emetteurs/', manage_emetteurs_view, name='manage_emetteurs'),
+    path('auth/emetteurs/<int:emetteur_id>/toggle-active/', toggle_emetteur_active_view, name='toggle_emetteur_active'),
+    path('auth/users/<int:user_id>/mobile-access/', update_user_mobile_access_view, name='update_user_mobile_access'),
 ]
 
 urlpatterns = [
@@ -249,6 +281,7 @@ urlpatterns = [
     path('situations-monthly-evolution/', get_situations_monthly_evolution, name='get-situations-monthly-evolution'),
     path('', include(router.urls)),  # Routes générées par le routeur (y compris add_stock et remove_stock)
     path('dashboard/', DashboardViewSet.as_view({'get': 'list'})),
+    path('dashboard/settings/', dashboard_settings, name='dashboard-settings'),
     path('dashboard/resume/', DashboardViewSet.as_view({'get': 'resume'})),
     path('generate-pdf-from-preview/', generate_pdf_from_preview, name='generate_pdf_from_preview'),
     path('preview-devis/', preview_devis, name='preview_devis'),
@@ -262,6 +295,7 @@ urlpatterns = [
     path('get_schedule/', get_schedule, name='get_schedule'),
     path('copy_schedule/', copy_schedule, name='copy_schedule'),
     path('delete_schedule/', delete_schedule, name='delete_schedule'),
+    path('update_schedule_comment/', update_schedule_comment, name='update_schedule_comment'),
     path('save_labor_costs/', save_labor_costs, name='save_labor_costs'),
     path('get_labor_costs/', get_labor_costs, name='get_labor_costs'),
     path('create_chantier_from_devis/', create_chantier_from_devis, name='create_chantier_from_devis'),
@@ -311,6 +345,7 @@ urlpatterns = [
     path('parametres/taux-fixe/', get_taux_fixe, name='get_taux_fixe'),
     path('update-taux-fixe/', update_taux_fixe, name='update_taux_fixe'),
     path('avenant_chantier/<int:chantier_id>/avenants/', get_chantier_avenants, name='chantier-avenants'),
+    path('avenants/<int:avenant_id>/update-numero/', update_avenant_numero, name='update-avenant-numero'),
     path('next_ts_number_chantier/<int:chantier_id>/next-ts-number/', get_next_ts_number, name='next-ts-number'),
     path('create-facture-ts/', create_facture_ts, name='create-facture-ts'),
     path('create-facture-cie/', create_facture_cie, name='create-facture-cie'),
@@ -345,13 +380,16 @@ urlpatterns = [
     
     path('preview-contrat/<int:contrat_id>/', preview_contrat, name='preview_contrat'),
     path('preview-avenant/<int:avenant_id>/', preview_avenant, name='preview_avenant'),
+    path('preview-certificat-paiement/<int:contrat_id>/', preview_certificat_paiement, name='preview_certificat_paiement'),
     path('chantier/<int:chantier_id>/taux-facturation/', get_taux_facturation_data, name='taux-facturation-data'),
     path('labor_costs/monthly_summary/', labor_costs_monthly_summary, name='labor_costs_monthly_summary'),
     path('planning_hebdo_pdf/', planning_hebdo_pdf, name='planning_hebdo_pdf'),
     path('preview-planning-hebdo/', preview_planning_hebdo, name='preview_planning_hebdo'),
     path('recalculate_labor_costs/', recalculate_labor_costs, name='recalculate_labor_costs'),
     path('chantier/<int:chantier_id>/recap-financier/', RecapFinancierChantierAPIView.as_view(), name='chantier-recap-financier'),
+    path('chantier/<int:chantier_id>/recap-synthese-mensuelle/', RecapSyntheseMensuelleAPIView.as_view(), name='chantier-recap-synthese-mensuelle'),
     path('chantier/<int:chantier_id>/paiements-materiel/', PaiementFournisseurMaterielAPIView.as_view(), name='paiements-materiel'),
+    path('chantier/<int:chantier_id>/recap-fournisseurs-affichage/', RecapFournisseursAffichageAPIView.as_view(), name='recap-fournisseurs-affichage'),
     path('chantier/<int:chantier_id>/tableau-fournisseur/', tableau_fournisseur, name='tableau-fournisseur'),
     path('tableau-fournisseur-global/', tableau_fournisseur_global, name='tableau-fournisseur-global'),
     path('tableau-sous-traitant-global/', tableau_sous_traitant_global, name='tableau-sous-traitant-global'),
@@ -383,6 +421,7 @@ urlpatterns = [
 urlpatterns += [
     path('recalculate_labor_costs_month/', recalculate_labor_costs_month, name='recalculate_labor_costs_month'),
     path('schedule/monthly_summary/', schedule_monthly_summary, name='schedule_monthly_summary'),
+    path('schedule/yearly_summary/', schedule_yearly_summary, name='schedule_yearly_summary'),
     path('preview-monthly-agents-report/', preview_monthly_agents_report, name='preview_monthly_agents_report'),
     path('generate-monthly-agents-pdf/', generate_monthly_agents_pdf, name='generate_monthly_agents_pdf'),
     path('app-version/', app_version_view, name='app-version'),
@@ -481,6 +520,7 @@ urlpatterns += [
 
 # --- URLs POUR LE DRIVE V2 (NOUVEAU SYSTÈME) ---
 from .views_drive.views import DriveV2ViewSet, proxy_file_view, onlyoffice_callback_view, check_onlyoffice_view
+from .views_drive.admin_views import DriveAdminViewSet
 
 urlpatterns += [
     # Navigation et contenu
@@ -533,6 +573,40 @@ urlpatterns += [
     path('drive-v2/onlyoffice-callback/', onlyoffice_callback_view, name='drive-v2-onlyoffice-callback'),  # Vue fonction simple
 ]
 
+# --- URLs ADMIN POUR LE VERSIONING S3 (récupération de fichiers supprimés) ---
+urlpatterns += [
+    path('drive-admin/versioning-status/', DriveAdminViewSet.as_view({
+        'get': 'versioning_status'
+    }), name='drive-admin-versioning-status'),
+    path('drive-admin/deleted-files/', DriveAdminViewSet.as_view({
+        'get': 'list_deleted_files'
+    }), name='drive-admin-deleted-files'),
+    path('drive-admin/restore-file/', DriveAdminViewSet.as_view({
+        'post': 'restore_file'
+    }), name='drive-admin-restore-file'),
+    path('drive-admin/restore-batch/', DriveAdminViewSet.as_view({
+        'post': 'restore_batch'
+    }), name='drive-admin-restore-batch'),
+    path('drive-admin/restore-folder/', DriveAdminViewSet.as_view({
+        'post': 'restore_folder'
+    }), name='drive-admin-restore-folder'),
+    path('drive-admin/file-versions/', DriveAdminViewSet.as_view({
+        'get': 'file_versions'
+    }), name='drive-admin-file-versions'),
+    path('drive-admin/restore-version/', DriveAdminViewSet.as_view({
+        'post': 'restore_version'
+    }), name='drive-admin-restore-version'),
+    path('drive-admin/download-deleted-file/', DriveAdminViewSet.as_view({
+        'get': 'download_deleted_file'
+    }), name='drive-admin-download-deleted-file'),
+    path('drive-admin/restore-to-drive/', DriveAdminViewSet.as_view({
+        'post': 'restore_to_drive'
+    }), name='drive-admin-restore-to-drive'),
+    path('drive-admin/restore-to-drive-batch/', DriveAdminViewSet.as_view({
+        'post': 'restore_to_drive_batch'
+    }), name='drive-admin-restore-to-drive-batch'),
+]
+
 # --- URLs POUR LES NOUVELLES VUES PDF AVEC STOCKAGE AWS S3 ---
 urlpatterns += [
     # Vues PDF avec stockage automatique dans AWS S3
@@ -549,6 +623,7 @@ urlpatterns += [
     path('bon-commande/<int:bon_commande_id>/modification-info/', get_bon_commande_modification_info, name='get_bon_commande_modification_info'),
     path('generate-contrat-sous-traitance-pdf-drive/', generate_contrat_sous_traitance_pdf_drive, name='generate_contrat_sous_traitance_pdf_drive'),
     path('generate-avenant-sous-traitance-pdf-drive/', generate_avenant_sous_traitance_pdf_drive, name='generate_avenant_sous_traitance_pdf_drive'),
+    path('generate-certificat-paiement-pdf-drive/', generate_certificat_paiement_pdf_drive, name='generate_certificat_paiement_pdf_drive'),
     path('generate-situation-pdf-drive/', generate_situation_pdf_drive, name='generate_situation_pdf_drive'),
     path('generate-bon-commande-pdf-drive/', generate_bon_commande_pdf_drive, name='generate_bon_commande_pdf_drive'),
     path('generate-facture-pdf-drive/', generate_facture_pdf_drive, name='generate_facture_pdf_drive'),
@@ -563,13 +638,9 @@ urlpatterns += [
     path('download-pdf-from-s3/', download_pdf_from_s3, name='download_pdf_from_s3'),
     path('download-file-from-drive/', download_file_from_drive, name='download_file_from_drive'),
     path('list-pdfs-in-drive/', list_pdfs_in_drive, name='list_pdfs_in_drive'),
-    
-    # Configuration entreprise (multi-client)
-    path('entreprise-config/', get_entreprise_config, name='get_entreprise_config'),
 ]
 
-# --- URLs POUR LES RAPPORTS D'INTERVENTION ---
-from django.urls import include as include_urls
+# --- URLs POUR LES RAPPORTS D'INTERVENTION / VIGIK+ ---
 urlpatterns += [
-    path('', include_urls('api.urls_rapport')),
+    path('', include('api.urls_rapport')),
 ]

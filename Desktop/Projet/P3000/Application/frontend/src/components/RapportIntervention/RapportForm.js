@@ -1209,22 +1209,6 @@ const RapportForm = ({
   };
 
   const isVigikPlus = formData.type_rapport === "vigik_plus";
-
-  useEffect(() => {
-    if (!isVigikPlus) return;
-    if (formData.presence_platine === false) {
-      setFormData((prev) => {
-        if (prev.devis_a_faire) return prev;
-        return { ...prev, devis_a_faire: true };
-      });
-    } else if (formData.presence_platine === true) {
-      setFormData((prev) => {
-        if (!prev.devis_a_faire && !prev.devis_fait && !prev.devis_lie) return prev;
-        return { ...prev, devis_a_faire: false, devis_fait: false, devis_lie: null };
-      });
-    }
-  }, [isVigikPlus, formData.presence_platine]);
-
   const vigikPortailPhotosEnabled =
     formData.presence_portail === false ||
     (formData.presence_portail === true &&
@@ -1418,15 +1402,9 @@ const RapportForm = ({
       presence_platine: formData.presence_platine,
       presence_portail: formData.presence_portail,
       presence_platine_portail: formData.presence_platine_portail,
-      devis_a_faire: isVigikPlus
-        ? (formData.presence_platine === false
-          ? true
-          : formData.presence_platine === true
-            ? false
-            : !!formData.devis_a_faire)
-        : !!formData.devis_a_faire,
-      devis_fait: isVigikPlus && formData.presence_platine === true ? false : !!formData.devis_fait,
-      devis_lie: isVigikPlus && formData.presence_platine === true ? null : (formData.devis_lie || null),
+      devis_a_faire: !!formData.devis_a_faire,
+      devis_fait: !!formData.devis_fait,
+      devis_lie: formData.devis_lie || null,
       prestations: isVigikPlus
         ? []
         : formData.prestations.map((p, i) => ({
@@ -2635,9 +2613,9 @@ const RapportForm = ({
                   multiple
                   style={{ display: "none" }}
                   onChange={(e) => {
-                    const files = Array.from(e.target.files || []);
+                    const fl = e.target.files;
                     e.target.value = "";
-                    void appendVigikPlatineFiles(files);
+                    void appendVigikPlatineFiles(fl);
                   }}
                 />
                 <input
@@ -2647,9 +2625,9 @@ const RapportForm = ({
                   capture="environment"
                   style={{ display: "none" }}
                   onChange={(e) => {
-                    const files = Array.from(e.target.files || []);
+                    const fl = e.target.files;
                     e.target.value = "";
-                    void appendVigikPlatineFiles(files);
+                    void appendVigikPlatineFiles(fl);
                   }}
                 />
                 <Box sx={{ display: "flex", alignItems: "flex-start", gap: 1.5, flexWrap: "wrap" }}>
@@ -2783,7 +2761,7 @@ const RapportForm = ({
                   </Box>
                 </>
               )}
-              {/* Photos « portail » : sans portail (facultatif) ou portail + platine oui/non (facultatif) */}
+              {/* Photos « portail » : sans portail (facultatif) ou portail + platine oui (facultatif) */}
               {vigikPortailPhotosEnabled && (
               <Box sx={{ gridColumn: { md: "1 / -1" } }}>
                 <Typography variant="subtitle2" color="text.secondary" sx={{ mb: 1 }}>
@@ -2798,9 +2776,9 @@ const RapportForm = ({
                   multiple
                   style={{ display: "none" }}
                   onChange={(e) => {
-                    const files = Array.from(e.target.files || []);
+                    const fl = e.target.files;
                     e.target.value = "";
-                    void appendVigikPortailFiles(files);
+                    void appendVigikPortailFiles(fl);
                   }}
                 />
                 <input
@@ -2810,9 +2788,9 @@ const RapportForm = ({
                   capture="environment"
                   style={{ display: "none" }}
                   onChange={(e) => {
-                    const files = Array.from(e.target.files || []);
+                    const fl = e.target.files;
                     e.target.value = "";
-                    void appendVigikPortailFiles(files);
+                    void appendVigikPortailFiles(fl);
                   }}
                 />
                 <Box sx={{ display: "flex", alignItems: "flex-start", gap: 1.5, flexWrap: "wrap" }}>

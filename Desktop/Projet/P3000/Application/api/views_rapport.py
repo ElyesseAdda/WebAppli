@@ -1,26 +1,29 @@
+"""Vues DRF pour la fonctionnalité « Rapport d'intervention / Vigik+ »."""
+
+import base64
 import json
 import os
 import subprocess
 import tempfile
-import uuid
-import base64
 import traceback
+import uuid
+
 from django.db import transaction
 from django.db.models import Count
-from django.http import JsonResponse, HttpResponse
-from rest_framework import viewsets, status
-from rest_framework.pagination import PageNumberPagination
+from django.http import HttpResponse, JsonResponse
+from rest_framework import status, viewsets
 from rest_framework.decorators import action, api_view, permission_classes
-from rest_framework.permissions import IsAuthenticated, AllowAny
+from rest_framework.pagination import PageNumberPagination
+from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 
 from .models_rapport import (
-    TitreRapport,
-    Residence,
-    RapportIntervention,
-    PrestationRapport,
     PhotoRapport,
+    PrestationRapport,
+    RapportIntervention,
     RapportInterventionBrouillon,
+    Residence,
+    TitreRapport,
     assign_numero_rapport_si_absent,
 )
 from .rapport_brouillon_media import (
@@ -29,16 +32,14 @@ from .rapport_brouillon_media import (
     transfer_brouillon_media_to_rapport,
 )
 from .serializers_rapport import (
-    TitreRapportSerializer,
-    ResidenceSerializer,
-    RapportInterventionSerializer,
-    RapportInterventionListSerializer,
-    RapportInterventionCreateSerializer,
-    RapportInterventionBrouillonSerializer,
-    RapportInterventionBrouillonListSerializer,
-    PrestationRapportSerializer,
-    PrestationRapportWriteSerializer,
     PhotoRapportSerializer,
+    RapportInterventionBrouillonListSerializer,
+    RapportInterventionBrouillonSerializer,
+    RapportInterventionCreateSerializer,
+    RapportInterventionListSerializer,
+    RapportInterventionSerializer,
+    ResidenceSerializer,
+    TitreRapportSerializer,
 )
 
 
@@ -52,7 +53,7 @@ def _societe_pour_rapport(rapport):
 
 
 def _intervention_date_rows_for_template(rapport):
-    """Lignes Date / Passage 2 / Passage 3 pour les templates PDF (dates formatées jj/mm/aaaa)."""
+    """Lignes Date / Passage 2 / Passage 3 pour les templates PDF (jj/mm/aaaa)."""
     from datetime import datetime
 
     rows = []
@@ -81,7 +82,7 @@ def _intervention_date_rows_for_template(rapport):
 
 
 def _format_societe_adresse(societe):
-    """Adresse postale depuis le modèle Societe : rue_societe, codepostal_societe, ville_societe."""
+    """Adresse postale depuis ``Societe`` : rue, code postal, ville."""
     if not societe:
         return ""
     rue = (getattr(societe, "rue_societe", None) or "").strip()
@@ -98,7 +99,7 @@ def _format_societe_adresse(societe):
 
 
 def _format_heures_hhmm(value):
-    """Convertit un nombre d'heures (float) en format h:mm."""
+    """Convertit un nombre d'heures (float) en format ``h:mm``."""
     try:
         total_minutes = int(round(float(value or 0) * 60))
     except (TypeError, ValueError):
@@ -134,7 +135,7 @@ def _build_temps_intervention_for_template(rapport):
 
 
 class RapportInterventionPagination(PageNumberPagination):
-    """Liste paginée : moins de données par requête, chargement plus rapide."""
+    """Pagination de la liste : moins de données par requête, chargement plus rapide."""
 
     page_size = 30
     page_size_query_param = "page_size"
@@ -171,11 +172,10 @@ class RapportInterventionViewSet(viewsets.ModelViewSet):
 
     def get_queryset(self):
         qs = RapportIntervention.objects.select_related(
-            'titre', 'client_societe', 'chantier', 'residence', 'created_by'
+            'titre', 'client_societe', 'chantier', 'residence', 'created_by',
         )
-        action = getattr(self, 'action', None)
-        # Liste : pas de prefetch photos (tres lourd) ; comptage en une requête
-        if action == 'list':
+        action_ = getattr(self, 'action', None)
+        if action_ == 'list':
             qs = qs.annotate(prestations_count=Count('prestations', distinct=True))
         else:
             qs = qs.prefetch_related('prestations__photos')
@@ -204,6 +204,20 @@ class RapportInterventionViewSet(viewsets.ModelViewSet):
         if type_rapport:
             qs = qs.filter(type_rapport=type_rapport)
 
+        numero_rapport = self.request.query_params.get('numero_rapport')
+        if numero_rapport not in (None, ''):
+            try:
+                qs = qs.filter(numero_rapport=int(numero_rapport))
+            except (TypeError, ValueError):
+                pass
+
+        titre_id = self.request.query_params.get('titre')
+        if titre_id not in (None, ''):
+            try:
+                qs = qs.filter(titre_id=int(titre_id))
+            except (TypeError, ValueError):
+                pass
+
         devis_a_faire = self.request.query_params.get('devis_a_faire')
         if devis_a_faire is not None and str(devis_a_faire).strip() != '':
             val = str(devis_a_faire).strip().lower()
@@ -226,7 +240,11 @@ class RapportInterventionViewSet(viewsets.ModelViewSet):
         if exclude_term in ('1', 'true', 'yes'):
             qs = qs.exclude(statut='termine')
 
-        if action == 'list':
+        only_term = self.request.query_params.get('only_statut_termine', '').lower()
+        if only_term in ('1', 'true', 'yes'):
+            qs = qs.filter(statut='termine')
+
+        if action_ == 'list':
             ordering = (self.request.query_params.get('ordering') or '-date').strip()
             if ordering == 'date':
                 qs = qs.order_by('date', 'id')
@@ -256,6 +274,7 @@ class RapportInterventionViewSet(viewsets.ModelViewSet):
             return Response({'error': 'chantier_id requis'}, status=status.HTTP_400_BAD_REQUEST)
 
         from .models import Chantier
+
         try:
             chantier = Chantier.objects.get(id=chantier_id)
         except Chantier.DoesNotExist:
@@ -271,18 +290,33 @@ class RapportInterventionViewSet(viewsets.ModelViewSet):
         rapport = self.get_object()
         signature_data = request.data.get('signature')
         if not signature_data:
-            return Response({'error': 'signature requise (base64)'}, status=status.HTTP_400_BAD_REQUEST)
+            return Response(
+                {'error': 'signature requise (base64)'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
 
         try:
-            from .utils import get_s3_client, get_s3_bucket_name, is_s3_available, generate_presigned_url_for_display
+            from .utils import (
+                generate_presigned_url_for_display,
+                get_s3_bucket_name,
+                get_s3_client,
+                is_s3_available,
+            )
+
             if not is_s3_available():
-                return Response({'error': 'S3 non disponible'}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
+                return Response(
+                    {'error': 'S3 non disponible'},
+                    status=status.HTTP_503_SERVICE_UNAVAILABLE,
+                )
 
             if ',' in signature_data:
                 signature_data = signature_data.split(',')[1]
 
             image_bytes = base64.b64decode(signature_data)
-            s3_key = f"rapports_intervention/signatures/signature_{rapport.id}_{uuid.uuid4().hex[:8]}.png"
+            s3_key = (
+                f"rapports_intervention/signatures/"
+                f"signature_{rapport.id}_{uuid.uuid4().hex[:8]}.png"
+            )
 
             s3_client = get_s3_client()
             bucket_name = get_s3_bucket_name()
@@ -290,7 +324,7 @@ class RapportInterventionViewSet(viewsets.ModelViewSet):
                 Bucket=bucket_name,
                 Key=s3_key,
                 Body=image_bytes,
-                ContentType='image/png'
+                ContentType='image/png',
             )
 
             rapport.signature_s3_key = s3_key
@@ -314,7 +348,7 @@ class RapportInterventionViewSet(viewsets.ModelViewSet):
         if not prestation_id or not file:
             return Response(
                 {'error': 'prestation_id et photo requis'},
-                status=status.HTTP_400_BAD_REQUEST
+                status=status.HTTP_400_BAD_REQUEST,
             )
 
         try:
@@ -323,12 +357,24 @@ class RapportInterventionViewSet(viewsets.ModelViewSet):
             return Response({'error': 'Prestation introuvable'}, status=status.HTTP_404_NOT_FOUND)
 
         try:
-            from .utils import get_s3_client, get_s3_bucket_name, is_s3_available, generate_presigned_url_for_display
+            from .utils import (
+                get_s3_bucket_name,
+                get_s3_client,
+                is_s3_available,
+            )
+
             if not is_s3_available():
-                return Response({'error': 'S3 non disponible'}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
+                return Response(
+                    {'error': 'S3 non disponible'},
+                    status=status.HTTP_503_SERVICE_UNAVAILABLE,
+                )
 
             ext = file.name.split('.')[-1] if '.' in file.name else 'jpg'
-            s3_key = f"rapports_intervention/photos/rapport_{prestation.rapport_id}/prestation_{prestation_id}/{type_photo}_{uuid.uuid4().hex[:8]}.{ext}"
+            s3_key = (
+                f"rapports_intervention/photos/"
+                f"rapport_{prestation.rapport_id}/prestation_{prestation_id}/"
+                f"{type_photo}_{uuid.uuid4().hex[:8]}.{ext}"
+            )
 
             s3_client = get_s3_client()
             bucket_name = get_s3_bucket_name()
@@ -336,10 +382,12 @@ class RapportInterventionViewSet(viewsets.ModelViewSet):
                 Bucket=bucket_name,
                 Key=s3_key,
                 Body=file.read(),
-                ContentType=file.content_type or 'image/jpeg'
+                ContentType=file.content_type or 'image/jpeg',
             )
 
-            nb_photos = PhotoRapport.objects.filter(prestation=prestation, type_photo=type_photo).count()
+            nb_photos = PhotoRapport.objects.filter(
+                prestation=prestation, type_photo=type_photo
+            ).count()
             create_kwargs = dict(
                 prestation=prestation,
                 s3_key=s3_key,
@@ -351,10 +399,10 @@ class RapportInterventionViewSet(viewsets.ModelViewSet):
                 create_kwargs['date_photo'] = date_photo
             photo = PhotoRapport.objects.create(**create_kwargs)
 
-            return Response({
-                'success': True,
-                'photo': PhotoRapportSerializer(photo).data,
-            }, status=status.HTTP_201_CREATED)
+            return Response(
+                {'success': True, 'photo': PhotoRapportSerializer(photo).data},
+                status=status.HTTP_201_CREATED,
+            )
         except Exception as e:
             traceback.print_exc()
             return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
@@ -385,7 +433,8 @@ class RapportInterventionViewSet(viewsets.ModelViewSet):
             return Response({'error': 'Photo introuvable'}, status=status.HTTP_404_NOT_FOUND)
 
         try:
-            from .utils import get_s3_client, get_s3_bucket_name, is_s3_available
+            from .utils import get_s3_bucket_name, get_s3_client, is_s3_available
+
             if is_s3_available() and photo.s3_key:
                 s3_client = get_s3_client()
                 bucket_name = get_s3_bucket_name()
@@ -404,21 +453,33 @@ class RapportInterventionViewSet(viewsets.ModelViewSet):
         if not rapport_id or not file:
             return Response(
                 {'error': 'rapport_id et photo requis'},
-                status=status.HTTP_400_BAD_REQUEST
+                status=status.HTTP_400_BAD_REQUEST,
             )
         try:
-            from .utils import get_s3_client, get_s3_bucket_name, is_s3_available, generate_presigned_url_for_display
+            from .utils import (
+                generate_presigned_url_for_display,
+                get_s3_bucket_name,
+                get_s3_client,
+                is_s3_available,
+            )
+
             if not is_s3_available():
-                return Response({'error': 'S3 non disponible'}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
+                return Response(
+                    {'error': 'S3 non disponible'},
+                    status=status.HTTP_503_SERVICE_UNAVAILABLE,
+                )
             ext = file.name.split('.')[-1] if '.' in file.name else 'jpg'
-            s3_key = f"rapports_intervention/vigik_platine/rapport_{rapport_id}_{uuid.uuid4().hex[:8]}.{ext}"
+            s3_key = (
+                f"rapports_intervention/vigik_platine/"
+                f"rapport_{rapport_id}_{uuid.uuid4().hex[:8]}.{ext}"
+            )
             s3_client = get_s3_client()
             bucket_name = get_s3_bucket_name()
             s3_client.put_object(
                 Bucket=bucket_name,
                 Key=s3_key,
                 Body=file.read(),
-                ContentType=file.content_type or 'image/jpeg'
+                ContentType=file.content_type or 'image/jpeg',
             )
             with transaction.atomic():
                 try:
@@ -430,16 +491,19 @@ class RapportInterventionViewSet(viewsets.ModelViewSet):
                 rapport.photos_platine_s3_keys = keys
                 rapport.save(update_fields=['photos_platine_s3_keys', 'updated_at'])
             url = generate_presigned_url_for_display(s3_key)
-            return Response({
-                'success': True,
-                's3_key': s3_key,
-                'url': url,
-                'presigned_url': url,
-                'photo_platine_url': url,
-                'item': {'s3_key': s3_key, 'url': url, 'question': 'platine'},
-                'photos_platine_s3_keys': keys,
-                'media_version': str(getattr(rapport, 'updated_at', '') or ''),
-            }, status=status.HTTP_201_CREATED)
+            return Response(
+                {
+                    'success': True,
+                    's3_key': s3_key,
+                    'url': url,
+                    'presigned_url': url,
+                    'photo_platine_url': url,
+                    'item': {'s3_key': s3_key, 'url': url, 'question': 'platine'},
+                    'photos_platine_s3_keys': keys,
+                    'media_version': str(getattr(rapport, 'updated_at', '') or ''),
+                },
+                status=status.HTTP_201_CREATED,
+            )
         except Exception as e:
             return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
@@ -451,21 +515,33 @@ class RapportInterventionViewSet(viewsets.ModelViewSet):
         if not rapport_id or not file:
             return Response(
                 {'error': 'rapport_id et photo requis'},
-                status=status.HTTP_400_BAD_REQUEST
+                status=status.HTTP_400_BAD_REQUEST,
             )
         try:
-            from .utils import get_s3_client, get_s3_bucket_name, is_s3_available, generate_presigned_url_for_display
+            from .utils import (
+                generate_presigned_url_for_display,
+                get_s3_bucket_name,
+                get_s3_client,
+                is_s3_available,
+            )
+
             if not is_s3_available():
-                return Response({'error': 'S3 non disponible'}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
+                return Response(
+                    {'error': 'S3 non disponible'},
+                    status=status.HTTP_503_SERVICE_UNAVAILABLE,
+                )
             ext = file.name.split('.')[-1] if '.' in file.name else 'jpg'
-            s3_key = f"rapports_intervention/vigik_platine_portail/rapport_{rapport_id}_{uuid.uuid4().hex[:8]}.{ext}"
+            s3_key = (
+                f"rapports_intervention/vigik_platine_portail/"
+                f"rapport_{rapport_id}_{uuid.uuid4().hex[:8]}.{ext}"
+            )
             s3_client = get_s3_client()
             bucket_name = get_s3_bucket_name()
             s3_client.put_object(
                 Bucket=bucket_name,
                 Key=s3_key,
                 Body=file.read(),
-                ContentType=file.content_type or 'image/jpeg'
+                ContentType=file.content_type or 'image/jpeg',
             )
             with transaction.atomic():
                 try:
@@ -477,16 +553,19 @@ class RapportInterventionViewSet(viewsets.ModelViewSet):
                 rapport.photos_platine_portail_s3_keys = keys
                 rapport.save(update_fields=['photos_platine_portail_s3_keys', 'updated_at'])
             url = generate_presigned_url_for_display(s3_key)
-            return Response({
-                'success': True,
-                's3_key': s3_key,
-                'url': url,
-                'presigned_url': url,
-                'photo_platine_portail_url': url,
-                'item': {'s3_key': s3_key, 'url': url, 'question': 'portail'},
-                'photos_platine_portail_s3_keys': keys,
-                'media_version': str(getattr(rapport, 'updated_at', '') or ''),
-            }, status=status.HTTP_201_CREATED)
+            return Response(
+                {
+                    'success': True,
+                    's3_key': s3_key,
+                    'url': url,
+                    'presigned_url': url,
+                    'photo_platine_portail_url': url,
+                    'item': {'s3_key': s3_key, 'url': url, 'question': 'portail'},
+                    'photos_platine_portail_s3_keys': keys,
+                    'media_version': str(getattr(rapport, 'updated_at', '') or ''),
+                },
+                status=status.HTTP_201_CREATED,
+            )
         except Exception as e:
             return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
@@ -506,8 +585,13 @@ class RapportInterventionViewSet(viewsets.ModelViewSet):
         except RapportIntervention.DoesNotExist:
             return Response({'error': 'Rapport introuvable'}, status=status.HTTP_404_NOT_FOUND)
         try:
-            from .utils import get_s3_client, get_s3_bucket_name, is_s3_available
-            attr = 'photos_platine_s3_keys' if question == 'platine' else 'photos_platine_portail_s3_keys'
+            from .utils import get_s3_bucket_name, get_s3_client, is_s3_available
+
+            attr = (
+                'photos_platine_s3_keys'
+                if question == 'platine'
+                else 'photos_platine_portail_s3_keys'
+            )
             with transaction.atomic():
                 rapport = RapportIntervention.objects.select_for_update().get(id=rapport.id)
                 keys = list(getattr(rapport, attr) or [])
@@ -543,10 +627,7 @@ class RapportInterventionViewSet(viewsets.ModelViewSet):
             rapport.save()
 
         serializer = RapportInterventionSerializer(rapport)
-        return Response({
-            'rapport': serializer.data,
-            'pdf': pdf_result,
-        })
+        return Response({'rapport': serializer.data, 'pdf': pdf_result})
 
     @action(detail=True, methods=['post'])
     def generer_pdf(self, request, pk=None):
@@ -559,35 +640,53 @@ class RapportInterventionViewSet(viewsets.ModelViewSet):
 
 
 def _generate_rapport_pdf(rapport, request):
-    """Genere le PDF du rapport via Puppeteer et le stocke dans S3.
-    - Si le rapport est lie a un chantier : Chemin du chantier / dossier RAPPORT
-    - Sinon : Racine du drive / dossier RAPPORT D'INTERVENTIONS
-    - A la regeneration : remplace le document existant (force_replace)
+    """Génère le PDF du rapport via Puppeteer et le stocke dans S3.
+
+    - Si le rapport est lié à un chantier : ``Chantiers/<drive>/RAPPORT``.
+    - Sinon : ``RAPPORT D'INTERVENTIONS`` (racine du drive).
+    - Vigik+ : ``RAPPORT D'INTERVENTION/VIGIK+/<residence>``.
+    - À la régénération : remplace le document existant (``force_replace=True``).
     """
     try:
         from .pdf_manager import PDFManager
-        from .utils import create_s3_folder_recursive
-        from .utils import get_s3_client, get_s3_bucket_name, is_s3_available
+        from .utils import (
+            create_s3_folder_recursive,
+            get_s3_bucket_name,
+            get_s3_client,
+            is_s3_available,
+        )
 
         pdf_manager = PDFManager()
         preview_url = request.build_absolute_uri(
             f"/api/preview-rapport-intervention/{rapport.id}/"
         )
 
-        societe_name = rapport.client_societe.nom_societe if rapport.client_societe else "Sans_Societe"
-        safe = lambda s: "".join(c for c in (s or "") if c.isalnum() or c in " -_(),.'").strip() or "N-A"
+        societe_name = (
+            rapport.client_societe.nom_societe if rapport.client_societe else "Sans_Societe"
+        )
+
+        def safe(s):
+            return (
+                "".join(c for c in (s or "") if c.isalnum() or c in " -_(),.'")
+                .strip()
+                or "N-A"
+            )
 
         if rapport.type_rapport == 'vigik_plus':
-            # Vigik+ : adresse propre au rapport (adresse_vigik), pas celle de la résidence
-            residence_nom = (rapport.residence.nom if rapport.residence and rapport.residence.nom else "Sans residence").strip()
+            residence_nom = (
+                rapport.residence.nom
+                if rapport.residence and rapport.residence.nom
+                else "Sans residence"
+            ).strip()
             adresse = (getattr(rapport, 'adresse_vigik', None) or "").strip()
             if not adresse and rapport.residence and rapport.residence.adresse:
                 adresse = rapport.residence.adresse.strip()
             numero_batiment = (getattr(rapport, 'numero_batiment', None) or "").strip()
             custom_path = f"RAPPORT D'INTERVENTION/VIGIK+/{safe(residence_nom)}"
-            custom_filename = f"Vigik+ {safe(adresse)} {safe(numero_batiment)}.pdf"
+            custom_filename = (
+                f"Vigik+ {safe(adresse)} {safe(numero_batiment)}.pdf"
+            )
         else:
-            # Chemin : chantier lie -> Chantiers/{path}/RAPPORT ; sinon -> RAPPORT D'INTERVENTIONS (racine)
             custom_path = ""
             if rapport.chantier:
                 base_path = rapport.chantier.get_drive_path()
@@ -597,22 +696,24 @@ def _generate_rapport_pdf(rapport, request):
             if not custom_path:
                 custom_path = "RAPPORT D'INTERVENTIONS"
 
-            residence_nom = (rapport.residence.nom if rapport.residence and rapport.residence.nom else "Sans residence").strip()
+            residence_nom = (
+                rapport.residence.nom
+                if rapport.residence and rapport.residence.nom
+                else "Sans residence"
+            ).strip()
             logement = (rapport.logement or "").strip() or "Sans logement"
             residence_nom = safe(residence_nom)
             logement = safe(logement)
             custom_filename = f"Rapport ({residence_nom}) {logement}.pdf"
 
         create_s3_folder_recursive(custom_path)
-        filename = custom_filename
 
         pdf_kwargs = {
             'custom_path': custom_path,
-            'custom_filename': filename,
+            'custom_filename': custom_filename,
+            'custom_path_is_full': True,
         }
-        if rapport.type_rapport == 'vigik_plus':
-            pdf_kwargs['custom_path_is_full'] = True  # pas de sous-dossier RAPPORT_INTERVENTION
-        success, message, s3_path, conflict = pdf_manager.generate_andStore_pdf(
+        success, message, s3_path, _conflict = pdf_manager.generate_andStore_pdf(
             document_type='rapport_intervention',
             preview_url=preview_url,
             societe_name=societe_name,
@@ -621,7 +722,6 @@ def _generate_rapport_pdf(rapport, request):
         )
 
         if success:
-            # Supprimer l'ancien fichier si le chemin a change (ex: chantier ajoute/modifie)
             old_key = getattr(rapport, 'pdf_s3_key', None) or ""
             if old_key and old_key != s3_path and is_s3_available():
                 try:
@@ -633,12 +733,11 @@ def _generate_rapport_pdf(rapport, request):
 
             return {
                 'success': True,
-                'message': 'PDF genere avec succes',
+                'message': 'PDF généré avec succès',
                 's3_file_path': s3_path,
                 'drive_url': f"/drive-v2?path={s3_path}&focus=file",
             }
-        else:
-            return {'success': False, 'error': message}
+        return {'success': False, 'error': message}
     except Exception as e:
         return {'success': False, 'error': str(e)}
 
@@ -646,10 +745,10 @@ def _generate_rapport_pdf(rapport, request):
 @api_view(['GET'])
 @permission_classes([AllowAny])
 def preview_rapport_intervention(request, rapport_id):
-    """Vue de previsualisation HTML pour la generation PDF via Puppeteer."""
+    """Vue de prévisualisation HTML pour la génération PDF via Puppeteer."""
     try:
         rapport = RapportIntervention.objects.select_related(
-            'titre', 'client_societe', 'chantier', 'chantier__societe', 'residence'
+            'titre', 'client_societe', 'chantier', 'chantier__societe', 'residence',
         ).prefetch_related('prestations__photos').get(id=rapport_id)
     except RapportIntervention.DoesNotExist:
         return JsonResponse({'error': 'Rapport introuvable'}, status=404)
@@ -663,7 +762,11 @@ def preview_rapport_intervention(request, rapport_id):
     logo_s3_key = None
     if rapport.client_societe and rapport.client_societe.logo_s3_key:
         logo_s3_key = rapport.client_societe.logo_s3_key
-    elif rapport.chantier and rapport.chantier.societe and rapport.chantier.societe.logo_s3_key:
+    elif (
+        rapport.chantier
+        and rapport.chantier.societe
+        and rapport.chantier.societe.logo_s3_key
+    ):
         logo_s3_key = rapport.chantier.societe.logo_s3_key
     if logo_s3_key:
         try:
@@ -721,6 +824,7 @@ def preview_rapport_intervention(request, rapport_id):
                 pass
 
     from django.shortcuts import render
+
     if rapport.type_rapport == 'vigik_plus':
         return render(request, 'rapport_vigik_plus.html', {
             'rapport': rapport,
@@ -747,7 +851,7 @@ def preview_rapport_intervention(request, rapport_id):
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
 def generate_rapport_intervention_pdf(request):
-    """Génère le PDF du rapport d'intervention et le renvoie en téléchargement (navigateur)."""
+    """Génère le PDF du rapport d'intervention et le renvoie en téléchargement."""
     temp_pdf_path = None
     try:
         data = json.loads(request.body)
@@ -755,12 +859,18 @@ def generate_rapport_intervention_pdf(request):
         if not rapport_id:
             return JsonResponse({'error': 'ID du rapport manquant'}, status=400)
 
-        preview_url = request.build_absolute_uri(f"/api/preview-rapport-intervention/{rapport_id}/")
+        preview_url = request.build_absolute_uri(
+            f"/api/preview-rapport-intervention/{rapport_id}/"
+        )
         base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-        node_script_path = os.path.join(base_dir, 'frontend', 'src', 'components', 'generate_pdf.js')
+        node_script_path = os.path.join(
+            base_dir, 'frontend', 'src', 'components', 'generate_pdf.js'
+        )
 
         if not os.path.exists(node_script_path):
-            return JsonResponse({'error': f'Script Node.js introuvable: {node_script_path}'}, status=500)
+            return JsonResponse(
+                {'error': f'Script Node.js introuvable: {node_script_path}'}, status=500
+            )
 
         node_paths = ['node', '/usr/bin/node', '/usr/local/bin/node', '/opt/nodejs/bin/node']
         node_path = 'node'
@@ -780,13 +890,25 @@ def generate_rapport_intervention_pdf(request):
         subprocess.run(command, check=True, capture_output=True, text=True, timeout=60)
 
         if not os.path.exists(temp_pdf_path):
-            return JsonResponse({'error': 'Le fichier PDF n\'a pas été généré.'}, status=500)
+            return JsonResponse(
+                {'error': "Le fichier PDF n'a pas été généré."}, status=500
+            )
 
-        # Même format que le Drive : Rapport (résidence) logement.pdf
         rapport = RapportIntervention.objects.select_related('residence').get(pk=rapport_id)
-        residence_nom = (rapport.residence.nom if rapport.residence and rapport.residence.nom else "Sans residence").strip()
+        residence_nom = (
+            rapport.residence.nom
+            if rapport.residence and rapport.residence.nom
+            else "Sans residence"
+        ).strip()
         logement = (rapport.logement or "").strip() or "Sans logement"
-        safe = lambda s: "".join(c for c in s if c.isalnum() or c in " -_(),.'").strip() or "N-A"
+
+        def safe(s):
+            return (
+                "".join(c for c in s if c.isalnum() or c in " -_(),.'")
+                .strip()
+                or "N-A"
+            )
+
         residence_nom = safe(residence_nom)
         logement = safe(logement)
         filename = f"Rapport ({residence_nom}) {logement}.pdf"
@@ -798,9 +920,13 @@ def generate_rapport_intervention_pdf(request):
     except json.JSONDecodeError:
         return JsonResponse({'error': 'Données JSON invalides'}, status=400)
     except subprocess.CalledProcessError as e:
-        return JsonResponse({'error': f'Erreur génération PDF: {e.stderr or str(e)}'}, status=500)
+        return JsonResponse(
+            {'error': f'Erreur génération PDF: {e.stderr or str(e)}'}, status=500
+        )
     except subprocess.TimeoutExpired:
-        return JsonResponse({'error': 'Timeout lors de la génération du PDF (60 s)'}, status=500)
+        return JsonResponse(
+            {'error': 'Timeout lors de la génération du PDF (60 s)'}, status=500
+        )
     except Exception as e:
         return JsonResponse({'error': str(e)}, status=500)
     finally:
@@ -819,7 +945,9 @@ def generate_rapport_intervention_pdf_drive(request):
     if not rapport_id:
         return JsonResponse({'error': 'rapport_id requis'}, status=400)
     try:
-        rapport = RapportIntervention.objects.select_related('chantier', 'residence', 'client_societe').get(pk=rapport_id)
+        rapport = RapportIntervention.objects.select_related(
+            'chantier', 'residence', 'client_societe',
+        ).get(pk=rapport_id)
     except RapportIntervention.DoesNotExist:
         return JsonResponse({'error': 'Rapport introuvable'}, status=404)
     pdf_result = _generate_rapport_pdf(rapport, request)
@@ -831,9 +959,10 @@ def generate_rapport_intervention_pdf_drive(request):
 
 
 class RapportInterventionBrouillonViewSet(viewsets.ModelViewSet):
-    """
-    Brouillons serveur (JSON). CRUD limité au propriétaire.
-    promouvoir : crée un RapportIntervention valide puis supprime le brouillon (transaction atomique).
+    """Brouillons serveur (JSON) — CRUD limité au propriétaire.
+
+    ``promouvoir`` : crée un ``RapportIntervention`` valide puis supprime le
+    brouillon (transaction atomique).
     """
 
     serializer_class = RapportInterventionBrouillonSerializer
@@ -859,12 +988,15 @@ class RapportInterventionBrouillonViewSet(viewsets.ModelViewSet):
 
     @action(detail=True, methods=["post"])
     def upload_photo(self, request, pk=None):
-        """Photo prestation (brouillon) → S3 sous rapports_intervention/brouillons/{id}/…"""
+        """Upload photo prestation (brouillon) vers ``rapports_intervention/brouillons/{id}/…``."""
         brouillon = self.get_object()
         try:
             prestation_index = int(request.data.get("prestation_index", 0))
         except (TypeError, ValueError):
-            return Response({"error": "prestation_index invalide"}, status=status.HTTP_400_BAD_REQUEST)
+            return Response(
+                {"error": "prestation_index invalide"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
         type_photo = request.data.get("type_photo", "avant")
         date_photo = request.data.get("date_photo")
         file = request.FILES.get("photo")
@@ -877,9 +1009,18 @@ class RapportInterventionBrouillonViewSet(viewsets.ModelViewSet):
             f"{type_photo}_{uuid.uuid4().hex[:8]}.{ext}"
         )
         try:
-            from .utils import get_s3_client, get_s3_bucket_name, is_s3_available, generate_presigned_url_for_display
+            from .utils import (
+                generate_presigned_url_for_display,
+                get_s3_bucket_name,
+                get_s3_client,
+                is_s3_available,
+            )
+
             if not is_s3_available():
-                return Response({"error": "S3 non disponible"}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
+                return Response(
+                    {"error": "S3 non disponible"},
+                    status=status.HTTP_503_SERVICE_UNAVAILABLE,
+                )
             s3_client = get_s3_client()
             bucket_name = get_s3_bucket_name()
             s3_client.put_object(
@@ -914,15 +1055,30 @@ class RapportInterventionBrouillonViewSet(viewsets.ModelViewSet):
         brouillon = self.get_object()
         signature_data = request.data.get("signature")
         if not signature_data:
-            return Response({"error": "signature requise (base64)"}, status=status.HTTP_400_BAD_REQUEST)
+            return Response(
+                {"error": "signature requise (base64)"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
         try:
-            from .utils import get_s3_client, get_s3_bucket_name, is_s3_available, generate_presigned_url_for_display
+            from .utils import (
+                generate_presigned_url_for_display,
+                get_s3_bucket_name,
+                get_s3_client,
+                is_s3_available,
+            )
+
             if not is_s3_available():
-                return Response({"error": "S3 non disponible"}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
+                return Response(
+                    {"error": "S3 non disponible"},
+                    status=status.HTTP_503_SERVICE_UNAVAILABLE,
+                )
             if "," in signature_data:
                 signature_data = signature_data.split(",", 1)[1]
             image_bytes = base64.b64decode(signature_data)
-            s3_key = f"rapports_intervention/brouillons/{brouillon.pk}/signature_{uuid.uuid4().hex[:8]}.png"
+            s3_key = (
+                f"rapports_intervention/brouillons/{brouillon.pk}/"
+                f"signature_{uuid.uuid4().hex[:8]}.png"
+            )
             s3_client = get_s3_client()
             bucket_name = get_s3_bucket_name()
             p = brouillon.payload or {}
@@ -944,7 +1100,16 @@ class RapportInterventionBrouillonViewSet(viewsets.ModelViewSet):
                 presigned_url = generate_presigned_url_for_display(s3_key)
             except Exception:
                 pass
-            return Response({"success": True, "s3_key": s3_key, "presigned_url": presigned_url})
+            return Response(
+                {
+                    "success": True,
+                    "s3_key": s3_key,
+                    "url": presigned_url,
+                    "presigned_url": presigned_url,
+                    "item": {"s3_key": s3_key, "url": presigned_url, "question": "platine"},
+                    "media_version": str(getattr(brouillon, "updated_at", "") or ""),
+                }
+            )
         except Exception as e:
             return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
@@ -955,11 +1120,23 @@ class RapportInterventionBrouillonViewSet(viewsets.ModelViewSet):
         if not file:
             return Response({"error": "photo requise"}, status=status.HTTP_400_BAD_REQUEST)
         try:
-            from .utils import get_s3_client, get_s3_bucket_name, is_s3_available, generate_presigned_url_for_display
+            from .utils import (
+                generate_presigned_url_for_display,
+                get_s3_bucket_name,
+                get_s3_client,
+                is_s3_available,
+            )
+
             if not is_s3_available():
-                return Response({"error": "S3 non disponible"}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
+                return Response(
+                    {"error": "S3 non disponible"},
+                    status=status.HTTP_503_SERVICE_UNAVAILABLE,
+                )
             ext = file.name.split(".")[-1] if "." in file.name else "jpg"
-            s3_key = f"rapports_intervention/brouillons/{brouillon.pk}/platine_{uuid.uuid4().hex[:8]}.{ext}"
+            s3_key = (
+                f"rapports_intervention/brouillons/{brouillon.pk}/"
+                f"platine_{uuid.uuid4().hex[:8]}.{ext}"
+            )
             s3_client = get_s3_client()
             bucket_name = get_s3_bucket_name()
             s3_client.put_object(
@@ -973,14 +1150,16 @@ class RapportInterventionBrouillonViewSet(viewsets.ModelViewSet):
                 presigned_url = generate_presigned_url_for_display(s3_key)
             except Exception:
                 pass
-            return Response({
-                "success": True,
-                "s3_key": s3_key,
-                "url": presigned_url,
-                "presigned_url": presigned_url,
-                "item": {"s3_key": s3_key, "url": presigned_url, "question": "platine"},
-                "media_version": str(getattr(brouillon, "updated_at", "") or ""),
-            })
+            return Response(
+                {
+                    "success": True,
+                    "s3_key": s3_key,
+                    "url": presigned_url,
+                    "presigned_url": presigned_url,
+                    "item": {"s3_key": s3_key, "url": presigned_url, "question": "portail"},
+                    "media_version": str(getattr(brouillon, "updated_at", "") or ""),
+                }
+            )
         except Exception as e:
             return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
@@ -991,11 +1170,23 @@ class RapportInterventionBrouillonViewSet(viewsets.ModelViewSet):
         if not file:
             return Response({"error": "photo requise"}, status=status.HTTP_400_BAD_REQUEST)
         try:
-            from .utils import get_s3_client, get_s3_bucket_name, is_s3_available, generate_presigned_url_for_display
+            from .utils import (
+                generate_presigned_url_for_display,
+                get_s3_bucket_name,
+                get_s3_client,
+                is_s3_available,
+            )
+
             if not is_s3_available():
-                return Response({"error": "S3 non disponible"}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
+                return Response(
+                    {"error": "S3 non disponible"},
+                    status=status.HTTP_503_SERVICE_UNAVAILABLE,
+                )
             ext = file.name.split(".")[-1] if "." in file.name else "jpg"
-            s3_key = f"rapports_intervention/brouillons/{brouillon.pk}/platine_portail_{uuid.uuid4().hex[:8]}.{ext}"
+            s3_key = (
+                f"rapports_intervention/brouillons/{brouillon.pk}/"
+                f"platine_portail_{uuid.uuid4().hex[:8]}.{ext}"
+            )
             s3_client = get_s3_client()
             bucket_name = get_s3_bucket_name()
             s3_client.put_object(
@@ -1009,20 +1200,15 @@ class RapportInterventionBrouillonViewSet(viewsets.ModelViewSet):
                 presigned_url = generate_presigned_url_for_display(s3_key)
             except Exception:
                 pass
-            return Response({
-                "success": True,
-                "s3_key": s3_key,
-                "url": presigned_url,
-                "presigned_url": presigned_url,
-                "item": {"s3_key": s3_key, "url": presigned_url, "question": "portail"},
-                "media_version": str(getattr(brouillon, "updated_at", "") or ""),
-            })
+            return Response(
+                {"success": True, "s3_key": s3_key, "presigned_url": presigned_url}
+            )
         except Exception as e:
             return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
     @action(detail=True, methods=["post"])
     def delete_photo_vigik(self, request, pk=None):
-        """Retire une clé S3 du manifeste _draft_media et supprime l'objet (brouillon Vigik+)."""
+        """Retire une clé S3 du manifeste ``_draft_media`` et supprime l'objet (brouillon Vigik+)."""
         brouillon = self.get_object()
         s3_key = (request.data.get("s3_key") or "").strip()
         question = (request.data.get("question") or "").strip().lower()
@@ -1032,20 +1218,31 @@ class RapportInterventionBrouillonViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_400_BAD_REQUEST,
             )
         try:
-            from .utils import get_s3_client, get_s3_bucket_name, is_s3_available
+            from .utils import get_s3_bucket_name, get_s3_client, is_s3_available
 
             with transaction.atomic():
                 brouillon = RapportInterventionBrouillon.objects.select_for_update().get(pk=brouillon.pk)
                 p = dict(brouillon.payload or {})
                 dm = dict(p.get("_draft_media") or {})
-                attr = "photos_platine_s3_keys" if question == "platine" else "photos_platine_portail_s3_keys"
+                attr = (
+                    "photos_platine_s3_keys"
+                    if question == "platine"
+                    else "photos_platine_portail_s3_keys"
+                )
                 keys = list(dm.get(attr) or [])
                 if question == "platine" and not keys and dm.get("photo_platine_s3_key"):
                     keys = [dm["photo_platine_s3_key"]]
-                if question == "portail" and not keys and dm.get("photo_platine_portail_s3_key"):
+                if (
+                    question == "portail"
+                    and not keys
+                    and dm.get("photo_platine_portail_s3_key")
+                ):
                     keys = [dm["photo_platine_portail_s3_key"]]
                 if s3_key not in keys:
-                    return Response({"error": "Clé absente du brouillon"}, status=status.HTTP_404_NOT_FOUND)
+                    return Response(
+                        {"error": "Clé absente du brouillon"},
+                        status=status.HTTP_404_NOT_FOUND,
+                    )
                 keys = [k for k in keys if k != s3_key]
                 dm[attr] = keys
                 dm.pop("photo_platine_s3_key", None)
@@ -1062,13 +1259,16 @@ class RapportInterventionBrouillonViewSet(viewsets.ModelViewSet):
                     get_s3_client().delete_object(Bucket=get_s3_bucket_name(), Key=s3_key)
                 except Exception:
                     pass
-            return Response({
-                "success": True,
-                attr: keys,
-                "question": question,
-                "s3_key": s3_key,
-                "media_version": str(getattr(brouillon, "updated_at", "") or ""),
-            }, status=status.HTTP_200_OK)
+            return Response(
+                {
+                    "success": True,
+                    attr: keys,
+                    "question": question,
+                    "s3_key": s3_key,
+                    "media_version": str(getattr(brouillon, "updated_at", "") or ""),
+                },
+                status=status.HTTP_200_OK,
+            )
         except Exception as e:
             return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
@@ -1083,7 +1283,9 @@ class RapportInterventionBrouillonViewSet(viewsets.ModelViewSet):
             data["statut"] = "en_cours"
         brouillon_id = brouillon.pk
         with transaction.atomic():
-            ser = RapportInterventionCreateSerializer(data=data, context={"request": request})
+            ser = RapportInterventionCreateSerializer(
+                data=data, context={"request": request}
+            )
             ser.is_valid(raise_exception=True)
             rapport = ser.save(created_by=request.user)
             assign_numero_rapport_si_absent(rapport)

@@ -1,15 +1,18 @@
+"""Serializers DRF pour la fonctionnalité « Rapport d'intervention / Vigik+ »."""
+
 from rest_framework import serializers
+
+from .models import Chantier, Devis, Societe
 from .models_rapport import (
-    TitreRapport,
-    Residence,
-    RapportIntervention,
-    PrestationRapport,
     PhotoRapport,
+    PrestationRapport,
+    RapportIntervention,
     RapportInterventionBrouillon,
+    Residence,
+    TitreRapport,
 )
 from .rapport_brouillon import compute_champs_manquants
 from .rapport_brouillon_media import enrich_draft_media_with_presigned_urls
-from .models import Societe, Chantier, Devis
 
 
 def _is_vigik_plus(attrs):
@@ -20,7 +23,8 @@ def _safe_delete_s3_key(key):
     if not key:
         return
     try:
-        from .utils import get_s3_client, get_s3_bucket_name, is_s3_available
+        from .utils import get_s3_bucket_name, get_s3_client, is_s3_available
+
         if not is_s3_available():
             return
         get_s3_client().delete_object(Bucket=get_s3_bucket_name(), Key=key)
@@ -29,11 +33,12 @@ def _safe_delete_s3_key(key):
 
 
 def _normalize_vigik_portail_answers(validated_data, instance=None):
-    """
-    Vigik+ : sans portail, pas de réponse « platine au portail », mais des photos
+    """Normalise les réponses Vigik+ sur la question du portail.
+
+    Sans portail : pas de réponse « platine au portail », mais des photos
     facultatives peuvent rester associées au rapport.
-    Les photos « portail » (facultatives) ne sont plus liées au booléen
-    « présence de platine au portail » : elles restent si l’utilisateur les a ajoutées.
+    Les photos « portail » (facultatives) ne sont pas liées au booléen
+    « présence de platine au portail ».
     """
     type_r = validated_data.get('type_rapport')
     if type_r is None and instance is not None:
@@ -43,15 +48,15 @@ def _normalize_vigik_portail_answers(validated_data, instance=None):
     pp = validated_data.get('presence_portail')
     if pp is None and instance is not None:
         pp = instance.presence_portail
-
     if pp is False:
         validated_data['presence_platine_portail'] = None
     return validated_data
 
 
 def _normalize_dates_intervention_attrs(attrs, instance=None):
-    """Synchronise dates_intervention (liste ordonnée) et date (dernière date = tri / affichage court)."""
+    """Synchronise ``dates_intervention`` (liste ordonnée) et ``date`` (dernière date)."""
     from datetime import datetime
+
     from django.utils import timezone
 
     has_di = 'dates_intervention' in attrs
@@ -82,7 +87,9 @@ def _normalize_dates_intervention_attrs(attrs, instance=None):
                 {'dates_intervention': "Au moins une date d'intervention est requise."}
             )
         attrs['dates_intervention'] = cleaned
-        attrs['date'] = max(datetime.strptime(x, '%Y-%m-%d').date() for x in cleaned)
+        attrs['date'] = max(
+            datetime.strptime(x, '%Y-%m-%d').date() for x in cleaned
+        )
         return attrs
 
     if has_single and attrs.get('date') is not None:
@@ -121,9 +128,11 @@ class ResidenceSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Residence
-        fields = ['id', 'nom', 'adresse', 'client_societe', 'chantier',
-                  'client_societe_nom', 'chantier_nom', 'dernier_rapport',
-                  'created_at', 'updated_at']
+        fields = [
+            'id', 'nom', 'adresse', 'client_societe', 'chantier',
+            'client_societe_nom', 'chantier_nom', 'dernier_rapport',
+            'created_at', 'updated_at',
+        ]
         read_only_fields = ['created_at', 'updated_at']
 
     def get_client_societe_nom(self, obj):
@@ -144,9 +153,13 @@ class ResidenceSerializer(serializers.ModelSerializer):
             return None
         return {
             'client_societe': dernier.client_societe_id,
-            'client_societe_nom': dernier.client_societe.nom_societe if dernier.client_societe else None,
+            'client_societe_nom': (
+                dernier.client_societe.nom_societe if dernier.client_societe else None
+            ),
             'chantier': dernier.chantier_id,
-            'chantier_nom': dernier.chantier.chantier_name if dernier.chantier else None,
+            'chantier_nom': (
+                dernier.chantier.chantier_name if dernier.chantier else None
+            ),
             'technicien': dernier.technicien,
         }
 
@@ -156,13 +169,17 @@ class PhotoRapportSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = PhotoRapport
-        fields = ['id', 'prestation', 's3_key', 'filename', 'type_photo', 'date_photo', 'ordre', 'created_at', 'image_url']
+        fields = [
+            'id', 'prestation', 's3_key', 'filename', 'type_photo',
+            'date_photo', 'ordre', 'created_at', 'image_url',
+        ]
         read_only_fields = ['created_at', 'image_url']
 
     def get_image_url(self, obj):
         if obj.s3_key:
             try:
                 from .utils import generate_presigned_url_for_display
+
                 return generate_presigned_url_for_display(obj.s3_key, expires_in=3600)
             except Exception:
                 return None
@@ -177,20 +194,21 @@ class PrestationRapportSerializer(serializers.ModelSerializer):
         fields = [
             'id', 'rapport', 'localisation', 'probleme', 'solution',
             'commentaire', 'prestation_possible', 'prestation_realisee',
-            'ordre', 'photos'
+            'ordre', 'photos',
         ]
         read_only_fields = ['rapport']
 
 
 class PrestationRapportWriteSerializer(serializers.ModelSerializer):
-    """Serializer pour la creation/mise a jour de prestations (sans nested photos)."""
+    """Serializer pour la création/mise à jour de prestations (sans nested photos)."""
+
     id = serializers.IntegerField(required=False, allow_null=True)
 
     class Meta:
         model = PrestationRapport
         fields = [
             'id', 'localisation', 'probleme', 'solution',
-            'commentaire', 'prestation_possible', 'prestation_realisee', 'ordre'
+            'commentaire', 'prestation_possible', 'prestation_realisee', 'ordre',
         ]
 
 
@@ -213,21 +231,27 @@ class RapportInterventionSerializer(serializers.ModelSerializer):
     class Meta:
         model = RapportIntervention
         fields = [
-            'id', 'titre', 'date', 'dates_intervention', 'technicien', 'objet_recherche', 'resultat',
-            'temps_trajet', 'temps_taches',
+            'id', 'titre', 'date', 'dates_intervention', 'technicien',
+            'objet_recherche', 'resultat', 'temps_trajet', 'temps_taches',
             'client_societe', 'chantier', 'residence', 'logement',
             'locataire_nom', 'locataire_prenom', 'locataire_telephone', 'locataire_email',
-            'signature_s3_key', 'type_rapport', 'statut', 'devis_a_faire', 'devis_fait', 'devis_lie', 'pdf_s3_key',
+            'signature_s3_key', 'type_rapport', 'statut',
+            'devis_a_faire', 'devis_fait', 'devis_lie', 'pdf_s3_key',
             'adresse_vigik', 'numero_batiment', 'type_installation',
             'presence_platine', 'photos_platine_s3_keys',
-            'presence_portail', 'presence_platine_portail', 'photos_platine_portail_s3_keys',
+            'presence_portail', 'presence_platine_portail',
+            'photos_platine_portail_s3_keys',
             'created_by', 'created_at', 'updated_at',
             'prestations', 'residence_data', 'residence_nom', 'residence_adresse',
             'client_societe_nom', 'client_societe_logo_url', 'chantier_nom',
-            'signature_url', 'pdf_url', 'pdf_drive_url', 'vigik_platine_photos', 'vigik_platine_portail_photos',
+            'signature_url', 'pdf_url', 'pdf_drive_url',
+            'vigik_platine_photos', 'vigik_platine_portail_photos',
             'devis_lie_numero', 'devis_lie_preview_url',
         ]
-        read_only_fields = ['created_by', 'created_at', 'updated_at', 'signature_s3_key', 'pdf_s3_key']
+        read_only_fields = [
+            'created_by', 'created_at', 'updated_at',
+            'signature_s3_key', 'pdf_s3_key',
+        ]
 
     def get_client_societe_nom(self, obj):
         if obj.client_societe:
@@ -238,7 +262,10 @@ class RapportInterventionSerializer(serializers.ModelSerializer):
         if obj.client_societe and obj.client_societe.logo_s3_key:
             try:
                 from .utils import generate_presigned_url_for_display
-                return generate_presigned_url_for_display(obj.client_societe.logo_s3_key, expires_in=3600)
+
+                return generate_presigned_url_for_display(
+                    obj.client_societe.logo_s3_key, expires_in=3600
+                )
             except Exception:
                 return None
         return None
@@ -262,7 +289,10 @@ class RapportInterventionSerializer(serializers.ModelSerializer):
         if obj.signature_s3_key:
             try:
                 from .utils import generate_presigned_url_for_display
-                return generate_presigned_url_for_display(obj.signature_s3_key, expires_in=3600)
+
+                return generate_presigned_url_for_display(
+                    obj.signature_s3_key, expires_in=3600
+                )
             except Exception:
                 return None
         return None
@@ -271,6 +301,7 @@ class RapportInterventionSerializer(serializers.ModelSerializer):
         if obj.pdf_s3_key:
             try:
                 from .utils import generate_presigned_url
+
                 return generate_presigned_url('get_object', obj.pdf_s3_key, expires_in=3600)
             except Exception:
                 return None
@@ -301,7 +332,9 @@ class RapportInterventionSerializer(serializers.ModelSerializer):
         return self._vigik_photo_rows(getattr(obj, 'photos_platine_s3_keys', None) or [])
 
     def get_vigik_platine_portail_photos(self, obj):
-        return self._vigik_photo_rows(getattr(obj, 'photos_platine_portail_s3_keys', None) or [])
+        return self._vigik_photo_rows(
+            getattr(obj, 'photos_platine_portail_s3_keys', None) or []
+        )
 
     def get_devis_lie_numero(self, obj):
         return obj.devis_lie.numero if obj.devis_lie else None
@@ -313,7 +346,8 @@ class RapportInterventionSerializer(serializers.ModelSerializer):
 
 
 class RapportInterventionListSerializer(serializers.ModelSerializer):
-    """Version legere pour les listes."""
+    """Version légère pour les listes."""
+
     client_societe_nom = serializers.SerializerMethodField()
     chantier_nom = serializers.SerializerMethodField()
     titre_nom = serializers.SerializerMethodField()
@@ -327,10 +361,14 @@ class RapportInterventionListSerializer(serializers.ModelSerializer):
         model = RapportIntervention
         fields = [
             'id', 'date', 'dates_intervention', 'titre', 'titre_nom', 'technicien',
+            'numero_rapport', 'annee_numero_rapport',
             'temps_trajet', 'temps_taches',
             'client_societe', 'client_societe_nom', 'chantier', 'chantier_nom',
-            'residence', 'residence_nom', 'residence_adresse', 'adresse_vigik', 'logement',
-            'type_rapport', 'statut', 'devis_a_faire', 'devis_fait', 'devis_lie', 'devis_lie_numero', 'devis_lie_preview_url',
+            'residence', 'residence_nom', 'residence_adresse',
+            'adresse_vigik', 'logement',
+            'type_rapport', 'statut',
+            'devis_a_faire', 'devis_fait', 'devis_lie',
+            'devis_lie_numero', 'devis_lie_preview_url',
             'numero_batiment', 'type_installation',
             'presence_platine', 'presence_portail', 'presence_platine_portail',
             'created_at', 'updated_at', 'nb_prestations',
@@ -377,95 +415,82 @@ class RapportInterventionListSerializer(serializers.ModelSerializer):
 
 
 class RapportInterventionCreateSerializer(serializers.ModelSerializer):
-    """Serializer pour la creation avec prestations nested."""
+    """Serializer pour la création / mise à jour avec prestations nested."""
+
     titre = serializers.PrimaryKeyRelatedField(
-        queryset=TitreRapport.objects.all(),
-        required=False,
-        allow_null=True,
+        queryset=TitreRapport.objects.all(), required=False, allow_null=True,
     )
     objet_recherche = serializers.CharField(required=False, allow_blank=True)
     technicien = serializers.CharField(required=False, allow_blank=True)
     client_societe = serializers.PrimaryKeyRelatedField(
-        queryset=Societe.objects.all(),
-        required=False,
-        allow_null=True,
+        queryset=Societe.objects.all(), required=False, allow_null=True,
     )
     chantier = serializers.PrimaryKeyRelatedField(
-        queryset=Chantier.objects.all(),
-        required=False,
-        allow_null=True,
+        queryset=Chantier.objects.all(), required=False, allow_null=True,
     )
     prestations = PrestationRapportWriteSerializer(many=True, required=False)
     residence_nom = serializers.CharField(write_only=True, required=False, allow_blank=True)
-    residence_adresse = serializers.CharField(write_only=True, required=False, allow_blank=True)
+    residence_adresse = serializers.CharField(
+        write_only=True, required=False, allow_blank=True
+    )
     adresse_vigik = serializers.CharField(required=False, allow_blank=True)
     devis_lie = serializers.PrimaryKeyRelatedField(
-        queryset=Devis.objects.all(),
-        required=False,
-        allow_null=True,
+        queryset=Devis.objects.all(), required=False, allow_null=True,
     )
 
     class Meta:
         model = RapportIntervention
         fields = [
-            'id', 'titre', 'date', 'dates_intervention', 'technicien', 'objet_recherche', 'resultat',
-            'temps_trajet', 'temps_taches',
+            'id', 'titre', 'date', 'dates_intervention', 'technicien',
+            'objet_recherche', 'resultat', 'temps_trajet', 'temps_taches',
             'client_societe', 'chantier', 'residence', 'logement',
             'residence_nom', 'residence_adresse', 'adresse_vigik',
             'locataire_nom', 'locataire_prenom', 'locataire_telephone', 'locataire_email',
-            'type_rapport', 'statut', 'devis_a_faire', 'devis_fait', 'devis_lie', 'prestations',
+            'type_rapport', 'statut',
+            'devis_a_faire', 'devis_fait', 'devis_lie', 'prestations',
             'numero_batiment', 'type_installation',
             'presence_platine', 'presence_portail', 'presence_platine_portail',
         ]
 
     def _resolve_vigik_defaults(self, validated_data):
-        """Pour Vigik+, champs absents du formulaire : appliquer des valeurs par défaut."""
+        """Pour Vigik+ : applique des valeurs par défaut aux champs non exposés au formulaire."""
         if validated_data.get('type_rapport') != 'vigik_plus':
             return validated_data
-        # Titre
         titre = validated_data.get('titre')
         if titre is None or titre == '':
             titre_obj, _ = TitreRapport.objects.get_or_create(
-                nom='Rapport Vigik+',
-                defaults={}
+                nom='Rapport Vigik+', defaults={}
             )
             validated_data['titre'] = titre_obj
-        # Objet de la recherche
         if not (validated_data.get('objet_recherche') or '').strip():
             validated_data['objet_recherche'] = 'Rapport système Vigik+'
-        # Technicien (affiché dans le formulaire mais au cas où vide)
         if not (validated_data.get('technicien') or '').strip():
             validated_data['technicien'] = '—'
-        # Client / Bailleur et Chantier (non affichés)
         if validated_data.get('client_societe') is None or validated_data.get('client_societe') == '':
             validated_data['client_societe'] = None
         if validated_data.get('chantier') is None or validated_data.get('chantier') == '':
             validated_data['chantier'] = None
-        # Résultat (non affiché)
-        if validated_data.get('resultat') is None:
-            validated_data['resultat'] = ''
-        # Logement & Locataire (section masquée)
-        if validated_data.get('logement') is None:
-            validated_data['logement'] = ''
-        if validated_data.get('locataire_nom') is None:
-            validated_data['locataire_nom'] = ''
-        if validated_data.get('locataire_prenom') is None:
-            validated_data['locataire_prenom'] = ''
-        if validated_data.get('locataire_telephone') is None:
-            validated_data['locataire_telephone'] = ''
-        if validated_data.get('locataire_email') is None:
-            validated_data['locataire_email'] = ''
-        # Adresse propre au rapport Vigik+ (ne modifie pas la résidence)
-        if validated_data.get('adresse_vigik') is None:
-            validated_data['adresse_vigik'] = ''
+        for key in (
+            'resultat', 'logement', 'locataire_nom', 'locataire_prenom',
+            'locataire_telephone', 'locataire_email', 'adresse_vigik',
+        ):
+            if validated_data.get(key) is None:
+                validated_data[key] = ''
         return validated_data
 
     def validate(self, attrs):
-        """Normalise dates d'intervention ; Vigik+ : adresse obligatoire ; sinon technicien et objet_recherche.
-        Statut brouillon : champs assouplis pour sauvegarde auto sans tout remplir."""
+        """Normalise les dates d'intervention et applique les règles métier.
+
+        Vigik+ : adresse obligatoire, réponse portail obligatoire ; sinon
+        ``technicien`` et ``objet_recherche`` obligatoires. En statut
+        ``brouillon`` les champs sont assouplis pour permettre une sauvegarde
+        automatique sans tout remplir.
+        """
         attrs.pop('photos_platine_s3_keys', None)
         attrs.pop('photos_platine_portail_s3_keys', None)
-        attrs = _normalize_dates_intervention_attrs(attrs, instance=getattr(self, 'instance', None))
+        attrs = _normalize_dates_intervention_attrs(
+            attrs, instance=getattr(self, 'instance', None)
+        )
         instance = getattr(self, 'instance', None)
 
         merged = dict(attrs)
@@ -478,16 +503,6 @@ class RapportInterventionCreateSerializer(serializers.ModelSerializer):
                 if key not in merged:
                     merged[key] = getattr(instance, key)
 
-        # Vigik+ : pas de platine sur site => devis à faire (même suivi que les rapports d'intervention)
-        if _is_vigik_plus(merged):
-            plat = merged.get('presence_platine')
-            if plat is False:
-                attrs['devis_a_faire'] = True
-                merged['devis_a_faire'] = True
-            elif plat is True:
-                attrs['devis_a_faire'] = False
-                merged['devis_a_faire'] = False
-
         devis_a_faire = merged.get('devis_a_faire', False)
         devis_fait = merged.get('devis_fait', False)
         devis_lie = merged.get('devis_lie')
@@ -498,9 +513,16 @@ class RapportInterventionCreateSerializer(serializers.ModelSerializer):
             attrs['devis_lie'] = None
         else:
             if devis_fait and not devis_lie:
-                raise serializers.ValidationError({'devis_lie': "Un devis lié est requis quand le devis est marqué fait."})
-            if devis_lie and chantier and devis_lie.chantier_id and devis_lie.chantier_id != chantier.id:
-                raise serializers.ValidationError({'devis_lie': "Le devis lié doit appartenir au même chantier que le rapport."})
+                raise serializers.ValidationError(
+                    {'devis_lie': "Un devis lié est requis quand le devis est marqué fait."}
+                )
+            if (
+                devis_lie and chantier and devis_lie.chantier_id
+                and devis_lie.chantier_id != chantier.id
+            ):
+                raise serializers.ValidationError(
+                    {'devis_lie': "Le devis lié doit appartenir au même chantier que le rapport."}
+                )
 
         statut_resolu = merged.get('statut')
         type_resolu = merged.get('type_rapport')
@@ -518,24 +540,34 @@ class RapportInterventionCreateSerializer(serializers.ModelSerializer):
 
         if _is_vigik_plus(merged):
             if not (merged.get('adresse_vigik') or '').strip():
-                raise serializers.ValidationError({'adresse_vigik': "L'adresse du rapport est obligatoire pour un rapport Vigik+."})
+                raise serializers.ValidationError(
+                    {'adresse_vigik': "L'adresse du rapport est obligatoire pour un rapport Vigik+."}
+                )
             if merged.get('presence_portail') is None:
-                raise serializers.ValidationError({
-                    'presence_portail': "Indiquez si un portail est présent sur le site.",
-                })
+                raise serializers.ValidationError(
+                    {'presence_portail': "Indiquez si un portail est présent sur le site."}
+                )
             if merged.get('presence_portail') is True and merged.get('presence_platine_portail') is None:
-                raise serializers.ValidationError({
-                    'presence_platine_portail': "Indiquez si une platine Vigik+ est présente au portail.",
-                })
+                raise serializers.ValidationError(
+                    {'presence_platine_portail': "Indiquez si une platine Vigik+ est présente au portail."}
+                )
             return attrs
         if 'technicien' in attrs and not (attrs.get('technicien') or '').strip():
-            raise serializers.ValidationError({'technicien': 'Ce champ est obligatoire.'})
+            raise serializers.ValidationError(
+                {'technicien': 'Ce champ est obligatoire.'}
+            )
         if 'objet_recherche' in attrs and not (attrs.get('objet_recherche') or '').strip():
-            raise serializers.ValidationError({'objet_recherche': 'Ce champ est obligatoire.'})
+            raise serializers.ValidationError(
+                {'objet_recherche': 'Ce champ est obligatoire.'}
+            )
         return attrs
 
     def _resolve_residence(self, validated_data):
-        """Get or create a Residence from nom/adresse if no FK provided. L'adresse Vigik+ reste sur le rapport (adresse_vigik), pas sur la résidence."""
+        """Récupère ou crée une ``Residence`` à partir de ``nom``/``adresse`` si aucune FK fournie.
+
+        L'adresse Vigik+ reste sur le rapport (``adresse_vigik``), pas sur la
+        résidence.
+        """
         residence_nom = validated_data.pop('residence_nom', '').strip()
         residence_adresse = validated_data.pop('residence_adresse', '').strip()
         residence = validated_data.get('residence')
@@ -587,14 +619,20 @@ class RapportInterventionCreateSerializer(serializers.ModelSerializer):
             incoming_ids = set()
 
             for i, prestation_data in enumerate(prestations_data):
-                prestation_id = prestation_data.pop('id', None) if isinstance(prestation_data, dict) else None
+                prestation_id = (
+                    prestation_data.pop('id', None)
+                    if isinstance(prestation_data, dict)
+                    else None
+                )
                 prestation_data['ordre'] = prestation_data.get('ordre', i)
 
                 if prestation_id and prestation_id in existing_ids:
                     PrestationRapport.objects.filter(id=prestation_id).update(**prestation_data)
                     incoming_ids.add(prestation_id)
                 else:
-                    new_prestation = PrestationRapport.objects.create(rapport=instance, **prestation_data)
+                    new_prestation = PrestationRapport.objects.create(
+                        rapport=instance, **prestation_data
+                    )
                     incoming_ids.add(new_prestation.id)
 
             ids_to_delete = existing_ids - incoming_ids
@@ -605,7 +643,7 @@ class RapportInterventionCreateSerializer(serializers.ModelSerializer):
 
 
 class RapportInterventionBrouillonListSerializer(serializers.ModelSerializer):
-    """Ligne liste : champs alignés sur RapportInterventionListSerializer (depuis payload JSON)."""
+    """Serializer de liste pour brouillons serveur : champs alignés sur ``RapportInterventionListSerializer``."""
 
     statut = serializers.SerializerMethodField()
     is_brouillon_serveur = serializers.SerializerMethodField()
@@ -637,7 +675,8 @@ class RapportInterventionBrouillonListSerializer(serializers.ModelSerializer):
             'id', 'date', 'dates_intervention', 'titre', 'titre_nom', 'technicien',
             'client_societe', 'client_societe_nom', 'chantier', 'chantier_nom',
             'residence', 'residence_nom', 'residence_adresse', 'adresse_vigik', 'logement',
-            'type_rapport', 'statut', 'is_brouillon_serveur', 'devis_a_faire', 'devis_fait',
+            'type_rapport', 'statut', 'is_brouillon_serveur',
+            'devis_a_faire', 'devis_fait',
             'devis_lie', 'devis_lie_numero', 'devis_lie_preview_url',
             'created_at', 'updated_at', 'nb_prestations',
         ]
@@ -765,12 +804,16 @@ class RapportInterventionBrouillonListSerializer(serializers.ModelSerializer):
 
 
 class RapportInterventionBrouillonSerializer(serializers.ModelSerializer):
-    """Brouillon serveur : payload JSON aligné sur le corps du POST/PUT rapport (sans contraintes obligatoires)."""
+    """Serializer de détail brouillon serveur.
+
+    Le payload JSON est aligné sur le corps des POST/PUT ``rapport``
+    (sans contraintes obligatoires).
+    """
 
     class Meta:
         model = RapportInterventionBrouillon
-        fields = ["id", "payload", "champs_manquants", "created_at", "updated_at"]
-        read_only_fields = ["champs_manquants", "created_at", "updated_at"]
+        fields = ['id', 'payload', 'champs_manquants', 'created_at', 'updated_at']
+        read_only_fields = ['champs_manquants', 'created_at', 'updated_at']
 
     def validate_payload(self, value):
         if value is None:
@@ -780,19 +823,23 @@ class RapportInterventionBrouillonSerializer(serializers.ModelSerializer):
         return value
 
     def create(self, validated_data):
-        validated_data["champs_manquants"] = compute_champs_manquants(validated_data.get("payload") or {})
+        validated_data['champs_manquants'] = compute_champs_manquants(
+            validated_data.get('payload') or {}
+        )
         return super().create(validated_data)
 
     def update(self, instance, validated_data):
-        if "payload" in validated_data:
-            validated_data["champs_manquants"] = compute_champs_manquants(validated_data.get("payload") or {})
+        if 'payload' in validated_data:
+            validated_data['champs_manquants'] = compute_champs_manquants(
+                validated_data.get('payload') or {}
+            )
         return super().update(instance, validated_data)
 
     def to_representation(self, instance):
         ret = super().to_representation(instance)
-        p = ret.get("payload")
-        if isinstance(p, dict) and p.get("_draft_media"):
+        p = ret.get('payload')
+        if isinstance(p, dict) and p.get('_draft_media'):
             p = dict(p)
-            p["_draft_media"] = enrich_draft_media_with_presigned_urls(p["_draft_media"])
-            ret["payload"] = p
+            p['_draft_media'] = enrich_draft_media_with_presigned_urls(p['_draft_media'])
+            ret['payload'] = p
         return ret

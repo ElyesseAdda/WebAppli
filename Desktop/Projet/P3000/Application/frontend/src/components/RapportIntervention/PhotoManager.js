@@ -345,12 +345,7 @@ const PhotoManager = ({
       onClose={closeGallery}
       maxWidth="lg"
       fullWidth
-      PaperProps={{
-        sx: {
-          backgroundColor: "#111",
-          color: "#fff",
-        },
-      }}
+      PaperProps={{ sx: { backgroundColor: "#111", color: "#fff" } }}
     >
       <Box sx={{ position: "relative", p: { xs: 1.5, md: 2 } }}>
         <IconButton
@@ -448,15 +443,9 @@ const PhotoManager = ({
               )}
             </Box>
             <Box sx={{ mt: 1.5, display: "flex", justifyContent: "center", gap: 1 }}>
-              <Button size="small" variant="outlined" onClick={() => setZoom((z) => Math.max(1, Number((z - 0.25).toFixed(2))))}>
-                Zoom -
-              </Button>
-              <Button size="small" variant="outlined" onClick={() => setZoom(1)}>
-                Reset
-              </Button>
-              <Button size="small" variant="outlined" onClick={() => setZoom((z) => Math.min(3, Number((z + 0.25).toFixed(2))))}>
-                Zoom +
-              </Button>
+              <Button size="small" variant="outlined" onClick={() => setZoom((z) => Math.max(1, Number((z - 0.25).toFixed(2))))}>Zoom -</Button>
+              <Button size="small" variant="outlined" onClick={() => setZoom(1)}>Reset</Button>
+              <Button size="small" variant="outlined" onClick={() => setZoom((z) => Math.min(3, Number((z + 0.25).toFixed(2))))}>Zoom +</Button>
             </Box>
           </>
         )}

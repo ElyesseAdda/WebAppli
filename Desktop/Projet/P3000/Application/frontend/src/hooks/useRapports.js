@@ -1,7 +1,6 @@
 import { useCallback, useState } from "react";
 import axios from "axios";
 
-/** Taille de page par défaut (alignée sur RapportInterventionPagination côté API). */
 export const RAPPORTS_LIST_PAGE_SIZE = 30;
 
 export const useRapports = () => {
@@ -11,20 +10,13 @@ export const useRapports = () => {
   const [error, setError] = useState(null);
   const [rapportsCount, setRapportsCount] = useState(0);
 
-  /**
-   * @param {Record<string, string|number>} filters - query habituelle (residence, type_rapport, …)
-   * @param {object} [opts]
-   * @param {number} [opts.page=1]
-   * @param {number} [opts.pageSize] - défaut : taille API si omis
-   * @param {string} [opts.ordering] - ex. "-date" | "date"
-   * @param {boolean} [opts.excludeStatutTermine] - masquer les rapports terminés (filtre serveur)
-   */
   const fetchRapports = useCallback(async (filters = {}, opts = {}) => {
     const {
       page = 1,
       pageSize,
       ordering,
       excludeStatutTermine,
+      onlyStatutTermine,
     } = opts;
     setLoading(true);
     setError(null);
@@ -44,6 +36,9 @@ export const useRapports = () => {
       }
       if (excludeStatutTermine) {
         params.append("exclude_statut_termine", "true");
+      }
+      if (onlyStatutTermine) {
+        params.append("only_statut_termine", "true");
       }
       const response = await axios.get(`/api/rapports-intervention/?${params.toString()}`);
       const data = response.data;
@@ -87,7 +82,7 @@ export const useRapports = () => {
       const response = await axios.post("/api/rapports-intervention/", data);
       return response.data;
     } catch (err) {
-      setError(err.response?.data?.detail || "Erreur lors de la creation du rapport");
+      setError(err.response?.data?.detail || "Erreur lors de la création du rapport");
       throw err;
     } finally {
       setLoading(false);
@@ -102,7 +97,7 @@ export const useRapports = () => {
       setRapport(response.data);
       return response.data;
     } catch (err) {
-      setError(err.response?.data?.detail || "Erreur lors de la mise a jour du rapport");
+      setError(err.response?.data?.detail || "Erreur lors de la mise à jour du rapport");
       throw err;
     } finally {
       setLoading(false);
@@ -117,7 +112,7 @@ export const useRapports = () => {
       setRapport(response.data);
       return response.data;
     } catch (err) {
-      setError(err.response?.data?.detail || "Erreur lors de la mise a jour du rapport");
+      setError(err.response?.data?.detail || "Erreur lors de la mise à jour du rapport");
       throw err;
     } finally {
       setLoading(false);
@@ -146,104 +141,61 @@ export const useRapports = () => {
     if (datePhoto) {
       formData.append("date_photo", datePhoto);
     }
-
-    try {
-      const response = await axios.post("/api/rapports-intervention/upload_photo/", formData, {
-        headers: { "Content-Type": "multipart/form-data" },
-      });
-      return response.data;
-    } catch (err) {
-      throw err;
-    }
+    const response = await axios.post("/api/rapports-intervention/upload_photo/", formData, {
+      headers: { "Content-Type": "multipart/form-data" },
+    });
+    return response.data;
   }, []);
 
   const updatePhoto = useCallback(async (photoId, data) => {
-    try {
-      const response = await axios.patch(`/api/rapports-intervention/update_photo/${photoId}/`, data);
-      return response.data;
-    } catch (err) {
-      throw err;
-    }
+    const response = await axios.patch(`/api/rapports-intervention/update_photo/${photoId}/`, data);
+    return response.data;
   }, []);
 
   const deletePhoto = useCallback(async (photoId) => {
-    try {
-      await axios.delete(`/api/rapports-intervention/delete_photo/${photoId}/`);
-    } catch (err) {
-      throw err;
-    }
+    await axios.delete(`/api/rapports-intervention/delete_photo/${photoId}/`);
   }, []);
 
   const uploadSignature = useCallback(async (rapportId, signatureBase64) => {
-    try {
-      const response = await axios.post(
-        `/api/rapports-intervention/${rapportId}/upload_signature/`,
-        { signature: signatureBase64 }
-      );
-      return response.data;
-    } catch (err) {
-      throw err;
-    }
+    const response = await axios.post(
+      `/api/rapports-intervention/${rapportId}/upload_signature/`,
+      { signature: signatureBase64 }
+    );
+    return response.data;
   }, []);
 
   const genererPdf = useCallback(async (rapportId) => {
-    try {
-      const response = await axios.post(`/api/rapports-intervention/${rapportId}/generer_pdf/`);
-      return response.data;
-    } catch (err) {
-      throw err;
-    }
+    const response = await axios.post(`/api/rapports-intervention/${rapportId}/generer_pdf/`);
+    return response.data;
   }, []);
 
   const validerRapport = useCallback(async (rapportId) => {
-    try {
-      const response = await axios.post(`/api/rapports-intervention/${rapportId}/valider/`);
-      return response.data;
-    } catch (err) {
-      throw err;
-    }
+    const response = await axios.post(`/api/rapports-intervention/${rapportId}/valider/`);
+    return response.data;
   }, []);
 
   const lierChantier = useCallback(async (rapportId, chantierId) => {
-    try {
-      const response = await axios.post(
-        `/api/rapports-intervention/${rapportId}/lier_chantier/`,
-        { chantier_id: chantierId }
-      );
-      return response.data;
-    } catch (err) {
-      throw err;
-    }
+    const response = await axios.post(
+      `/api/rapports-intervention/${rapportId}/lier_chantier/`,
+      { chantier_id: chantierId }
+    );
+    return response.data;
   }, []);
 
-  // Titres
   const fetchTitres = useCallback(async () => {
-    try {
-      const response = await axios.get("/api/titres-rapport/");
-      return response.data;
-    } catch (err) {
-      throw err;
-    }
+    const response = await axios.get("/api/titres-rapport/");
+    return response.data;
   }, []);
 
   const createTitre = useCallback(async (nom) => {
-    try {
-      const response = await axios.post("/api/titres-rapport/", { nom });
-      return response.data;
-    } catch (err) {
-      throw err;
-    }
+    const response = await axios.post("/api/titres-rapport/", { nom });
+    return response.data;
   }, []);
 
   const deleteTitre = useCallback(async (titreId) => {
-    try {
-      await axios.delete(`/api/titres-rapport/${titreId}/`);
-    } catch (err) {
-      throw err;
-    }
+    await axios.delete(`/api/titres-rapport/${titreId}/`);
   }, []);
 
-  /** Brouillons serveur (modèle RapportInterventionBrouillon) — sans `setLoading` global pour éviter de bloquer le formulaire. */
   const createRapportBrouillon = useCallback(async (data) => {
     const response = await axios.post("/api/rapports-intervention-brouillons/", data);
     return response.data;

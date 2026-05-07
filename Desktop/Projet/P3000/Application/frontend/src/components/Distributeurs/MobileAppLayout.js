@@ -1,11 +1,15 @@
 import React, { useState } from "react";
-import { Box, BottomNavigation, BottomNavigationAction, Paper } from "@mui/material";
+import { Box, BottomNavigation, BottomNavigationAction, Paper, AppBar, Toolbar, IconButton, Typography } from "@mui/material";
 import {
   MdBarChart,
   MdStore,
   MdDescription,
   MdInventory,
+  MdLogout,
 } from "react-icons/md";
+import { Home as HomeIcon } from "@mui/icons-material";
+import { useNavigate } from "react-router-dom";
+import { useAuth } from "../../hooks/useAuth";
 import DistributeursDashboard from "./DistributeursDashboard";
 import StatsTab from "./StatsTab";
 import DocumentsTab from "./DocumentsTab";
@@ -14,6 +18,8 @@ import StockTab from "./StockTab";
 const MobileAppLayout = () => {
   const [value, setValue] = useState(1); // 0: Stats, 1: Distributeur, 2: Stock, 3: Documents
   const [distributeurToOpen, setDistributeurToOpen] = useState(null);
+  const navigate = useNavigate();
+  const { logout, user } = useAuth();
 
   const handleOpenDistributeur = (distributeurId) => {
     setDistributeurToOpen(distributeurId);
@@ -51,6 +57,33 @@ const MobileAppLayout = () => {
         bgcolor: "background.default",
       }}
     >
+      {/* AppBar avec navigation vers accueil mobile */}
+      <AppBar position="static" sx={{ bgcolor: "#388e3c", flexShrink: 0 }}>
+        <Toolbar sx={{ minHeight: 48 }}>
+          <IconButton
+            color="inherit"
+            onClick={() => navigate("/mobile-home")}
+            size="small"
+            aria-label="Accueil mobile"
+            sx={{ mr: 0.5 }}
+          >
+            <HomeIcon />
+          </IconButton>
+          <MdStore size={20} style={{ marginRight: 8 }} />
+          <Typography variant="h6" sx={{ flexGrow: 1, fontSize: "0.95rem", fontWeight: 700 }}>
+            Distributeurs
+          </Typography>
+          {user && (
+            <Typography variant="caption" sx={{ mr: 1, opacity: 0.85 }}>
+              {user.first_name || user.username}
+            </Typography>
+          )}
+          <IconButton color="inherit" onClick={logout} size="small" aria-label="Déconnexion">
+            <MdLogout size={20} />
+          </IconButton>
+        </Toolbar>
+      </AppBar>
+
       {/* Contenu principal */}
       <Box
         sx={{

@@ -6,7 +6,7 @@ Déclenche automatiquement la création de dossiers S3
 from django.db.models.signals import post_save, post_delete, pre_save
 from django.dispatch import receiver
 from django.core.exceptions import ObjectDoesNotExist
-from .models import AppelOffres, Chantier, Societe
+from .models import AppelOffres, Chantier, Devis, Societe
 from .drive_automation import drive_automation
 from .drive_rename_manager import drive_rename_manager
 import logging
@@ -286,6 +286,29 @@ def cleanup_chantier_folders(sender, instance, **kwargs):
         
     except Exception:
         pass
+
+
+@receiver(post_save, sender=Devis)
+def sync_appel_offres_montants_on_devis_save(sender, instance, **kwargs):
+    """
+    Quand un devis de chantier (devis_chantier=True) est sauvegardé, met à jour :
+    - les montants de l'appel d'offres lié (chantier_transformé = ce chantier) ;
+    - les montants du chantier (montant_ht, montant_ttc) pour que le "marché" reste à jour.
+    """
+    if not getattr(instance, 'devis_chantier', False) or not getattr(instance, 'chantier_id', None):
+        return
+    from .appel_offres_sync import sync_single_appel_offres_from_devis, sync_chantier_montants_from_devis
+    try:
+        # Synchroniser le chantier (marché) avec le devis de marché
+        if sync_chantier_montants_from_devis(instance):
+            logger.debug(f"Montants du chantier {instance.chantier_id} synchronisés depuis le devis {instance.id}")
+        # Synchroniser l'appel d'offres si le chantier en provient
+        appel_offres = AppelOffres.objects.filter(chantier_transformé_id=instance.chantier_id).first()
+        if appel_offres:
+            sync_single_appel_offres_from_devis(appel_offres)
+            logger.debug(f"Montants de l'appel d'offres {appel_offres.id} synchronisés depuis le devis {instance.id}")
+    except Exception as e:
+        logger.warning(f"Sync montants après save devis: {e}")
 
 
 def connect_signals():

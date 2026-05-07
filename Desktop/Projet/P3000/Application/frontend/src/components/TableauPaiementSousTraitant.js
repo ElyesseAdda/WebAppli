@@ -1,16 +1,23 @@
 import AddIcon from "@mui/icons-material/Add";
 import DeleteIcon from "@mui/icons-material/Delete";
+import DownloadIcon from "@mui/icons-material/Download";
+import EditIcon from "@mui/icons-material/Edit";
+import OpenInNewIcon from "@mui/icons-material/OpenInNew";
 import PaymentIcon from "@mui/icons-material/Payment";
 import RemoveCircleOutlineIcon from "@mui/icons-material/RemoveCircleOutline";
 import {
   Box,
   Button,
+  Checkbox,
   Dialog,
   DialogActions,
   DialogContent,
   DialogTitle,
+  FormControlLabel,
+  Alert,
   IconButton,
   Paper,
+  Snackbar,
   Table,
   TableBody,
   TableCell,
@@ -23,6 +30,8 @@ import {
 } from "@mui/material";
 import axios from "axios";
 import React, { useEffect, useState } from "react";
+import { normalizeFilename } from "./DriveV2/services/pathNormalizationService";
+import { generatePDFDrive } from "../utils/universalDriveGenerator";
 
 const DateEnvoiModal = ({ open, onClose, paiement, onSubmit }) => {
   const [dateEnvoi, setDateEnvoi] = useState("");
@@ -235,6 +244,142 @@ const RetenueModal = ({ open, onClose, facture, onSubmit }) => {
   );
 };
 
+const ModifierFactureModal = ({ open, onClose, facture, onSubmit }) => {
+  const [mois, setMois] = useState(1);
+  const [annee, setAnnee] = useState(new Date().getFullYear());
+  const [numeroFacture, setNumeroFacture] = useState("");
+  const [montantFacture, setMontantFacture] = useState("");
+  const [montantRetenue, setMontantRetenue] = useState("");
+  const [dateReception, setDateReception] = useState("");
+  const [delaiPaiement, setDelaiPaiement] = useState(45);
+
+  useEffect(() => {
+    if (facture) {
+      setMois(facture.mois);
+      setAnnee(facture.annee);
+      setNumeroFacture(facture.numero_facture || "");
+      setMontantFacture(facture.montant_facture_ht ?? "");
+      setMontantRetenue(facture.montant_retenue ?? "");
+      setDateReception(facture.date_reception ? facture.date_reception.split("T")[0] : "");
+      setDelaiPaiement(facture.delai_paiement ?? 45);
+    }
+  }, [facture, open]);
+
+  const handleSubmit = () => {
+    onSubmit(facture.id, {
+      mois,
+      annee,
+      numero_facture: numeroFacture || "1",
+      montant_facture_ht: parseFloat(montantFacture) || 0,
+      montant_retenue: parseFloat(montantRetenue) || 0,
+      date_reception: dateReception,
+      delai_paiement: delaiPaiement,
+    });
+    onClose();
+  };
+
+  const moisOptions = [
+    "Janvier", "Février", "Mars", "Avril", "Mai", "Juin",
+    "Juillet", "Août", "Septembre", "Octobre", "Novembre", "Décembre",
+  ];
+
+  if (!facture) return null;
+
+  return (
+    <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth>
+      <DialogTitle>Modifier la facture</DialogTitle>
+      <DialogContent>
+        <Box sx={{ p: 2 }}>
+          <Box sx={{ display: "flex", gap: 2, mb: 2 }}>
+            <TextField
+              select
+              label="Mois"
+              value={mois}
+              onChange={(e) => setMois(parseInt(e.target.value))}
+              SelectProps={{ native: true }}
+              sx={{ flex: 1 }}
+            >
+              {moisOptions.map((nom, index) => (
+                <option key={index + 1} value={index + 1}>{nom}</option>
+              ))}
+            </TextField>
+            <TextField
+              type="number"
+              label="Année"
+              value={annee}
+              onChange={(e) => setAnnee(parseInt(e.target.value))}
+              sx={{ flex: 1 }}
+              inputProps={{ min: 2020, max: 2030 }}
+            />
+          </Box>
+
+          <TextField
+            label="Numéro de facture"
+            value={numeroFacture}
+            onChange={(e) => setNumeroFacture(e.target.value)}
+            fullWidth
+            sx={{ mb: 2 }}
+          />
+
+          <TextField
+            type="number"
+            label="Montant facturé HT"
+            value={montantFacture}
+            onChange={(e) => setMontantFacture(e.target.value)}
+            fullWidth
+            sx={{ mb: 2 }}
+            required
+            inputProps={{ step: "0.01", min: "0" }}
+          />
+
+          <TextField
+            type="number"
+            label="Montant retenue (€)"
+            value={montantRetenue}
+            onChange={(e) => setMontantRetenue(e.target.value)}
+            fullWidth
+            sx={{ mb: 2 }}
+            inputProps={{ step: "0.01", min: "0" }}
+          />
+
+          <TextField
+            type="date"
+            label="Date de réception"
+            value={dateReception}
+            onChange={(e) => setDateReception(e.target.value)}
+            fullWidth
+            sx={{ mb: 2 }}
+            required
+            InputLabelProps={{ shrink: true }}
+          />
+
+          <TextField
+            select
+            label="Délai de paiement"
+            value={delaiPaiement}
+            onChange={(e) => setDelaiPaiement(parseInt(e.target.value))}
+            fullWidth
+            SelectProps={{ native: true }}
+          >
+            <option value={45}>45 jours</option>
+            <option value={60}>60 jours</option>
+          </TextField>
+        </Box>
+      </DialogContent>
+      <DialogActions>
+        <Button onClick={onClose}>Annuler</Button>
+        <Button
+          onClick={handleSubmit}
+          variant="contained"
+          disabled={!montantFacture || !dateReception}
+        >
+          Enregistrer
+        </Button>
+      </DialogActions>
+    </Dialog>
+  );
+};
+
 const AjouterPaiementModal = ({
   open,
   onClose,
@@ -313,13 +458,16 @@ const AjouterPaiementModal = ({
   );
 };
 
+
 const FactureModal = ({
   open,
   onClose,
   onSubmit,
   chantierId,
   sousTraitantId,
-  factures = [], // Ajouter les factures existantes pour calculer le prochain numéro
+  factures = [],
+  contrat = null,
+  chantierNom = "",
 }) => {
   const [mois, setMois] = useState(new Date().getMonth() + 1);
   const [annee, setAnnee] = useState(new Date().getFullYear());
@@ -329,6 +477,9 @@ const FactureModal = ({
     new Date().toISOString().split("T")[0]
   );
   const [delaiPaiement, setDelaiPaiement] = useState(45);
+  const [creerCertificat, setCreerCertificat] = useState(false);
+  const [fichierFacture, setFichierFacture] = useState(null);
+  const [dragActive, setDragActive] = useState(false);
 
   // Calculer le prochain numéro de facture et réinitialiser la date
   useEffect(() => {
@@ -352,16 +503,20 @@ const FactureModal = ({
     onSubmit({
       mois,
       annee,
-      numeroFacture: numeroFacture || "1", // Auto-généré côté backend si vide
+      numeroFacture: numeroFacture || "1",
       montantFacture,
       dateReception,
       delaiPaiement,
+      creerCertificat,
+      fichierFacture,
     });
     onClose();
     // Reset form
     setNumeroFacture("");
     setMontantFacture("");
     setDateReception("");
+    setCreerCertificat(false);
+    setFichierFacture(null);
   };
 
   const moisOptions = [
@@ -451,6 +606,96 @@ const FactureModal = ({
             <option value={45}>45 jours</option>
             <option value={60}>60 jours</option>
           </TextField>
+
+          <FormControlLabel
+            control={
+              <Checkbox
+                checked={creerCertificat}
+                onChange={(e) => setCreerCertificat(e.target.checked)}
+                color="primary"
+              />
+            }
+            label="Créer certificat de paiement"
+            sx={{ mt: 2 }}
+          />
+
+          {/* Bouton preview certificat (ouvre dans un nouvel onglet) */}
+          {creerCertificat && contrat && (
+            <Button
+              variant="outlined"
+              size="small"
+              startIcon={<OpenInNewIcon />}
+              sx={{ mt: 1, ml: 0.5 }}
+              onClick={() => {
+                const params = new URLSearchParams();
+                params.set("montant_preview", montantFacture || "0");
+                params.set("mois_preview", String(mois));
+                params.set("annee_preview", String(annee));
+                params.set(
+                  "numero_certificat",
+                  String(factures.length + 1)
+                );
+                const url = `/api/preview-certificat-paiement/${contrat.id}/?${params.toString()}`;
+                window.open(url, "_blank");
+              }}
+              disabled={!montantFacture}
+            >
+              Aperçu du certificat
+            </Button>
+          )}
+
+          {/* Zone de drag & drop pour joindre la facture */}
+          <Box
+            sx={{
+              mt: 2,
+              p: 2,
+              border: "2px dashed",
+              borderColor: dragActive ? "primary.main" : fichierFacture ? "success.main" : "grey.400",
+              borderRadius: 2,
+              backgroundColor: dragActive ? "action.hover" : fichierFacture ? "success.50" : "grey.50",
+              textAlign: "center",
+              cursor: "pointer",
+              transition: "all 0.2s ease",
+              "&:hover": { borderColor: "primary.main", backgroundColor: "action.hover" },
+            }}
+            onDragOver={(e) => { e.preventDefault(); setDragActive(true); }}
+            onDragLeave={() => setDragActive(false)}
+            onDrop={(e) => {
+              e.preventDefault();
+              setDragActive(false);
+              const file = e.dataTransfer.files[0];
+              if (file) setFichierFacture(file);
+            }}
+            onClick={() => {
+              const input = document.createElement("input");
+              input.type = "file";
+              input.accept = ".pdf,.jpg,.jpeg,.png,.doc,.docx,.xls,.xlsx";
+              input.onchange = (e) => {
+                const file = e.target.files[0];
+                if (file) setFichierFacture(file);
+              };
+              input.click();
+            }}
+          >
+            {fichierFacture ? (
+              <Box sx={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 1 }}>
+                <Typography variant="body2" color="success.main" sx={{ fontWeight: 500 }}>
+                  {fichierFacture.name}
+                </Typography>
+                <IconButton
+                  size="small"
+                  onClick={(e) => { e.stopPropagation(); setFichierFacture(null); }}
+                  sx={{ color: "error.main" }}
+                >
+                  <DeleteIcon fontSize="small" />
+                </IconButton>
+              </Box>
+            ) : (
+              <Typography variant="body2" color="text.secondary">
+                Glissez-déposez la facture ici ou cliquez pour parcourir
+              </Typography>
+            )}
+          </Box>
         </Box>
       </DialogContent>
       <DialogActions>
@@ -460,7 +705,7 @@ const FactureModal = ({
           variant="contained"
           disabled={!montantFacture || !dateReception}
         >
-          Créer la facture
+          {creerCertificat ? "Créer la facture + Certificat" : "Créer la facture"}
         </Button>
       </DialogActions>
     </Dialog>
@@ -751,7 +996,10 @@ const TableauPaiementSousTraitant = ({ chantierId, sousTraitantId }) => {
     useState(false);
   const [openRetenueModal, setOpenRetenueModal] = useState(false);
   const [selectedFactureRetenue, setSelectedFactureRetenue] = useState(null);
+  const [openModifierFactureModal, setOpenModifierFactureModal] = useState(false);
+  const [factureToEdit, setFactureToEdit] = useState(null);
   const [montantRestant, setMontantRestant] = useState(0);
+  const [snackbar, setSnackbar] = useState({ open: false, message: "", severity: "info" });
 
   // Chargement contrats et factures (Promise.all)
   useEffect(() => {
@@ -802,6 +1050,80 @@ const TableauPaiementSousTraitant = ({ chantierId, sousTraitantId }) => {
 
       const res = await axios.post(`/api/factures-sous-traitant/`, payload);
       setFactures((prev) => [...prev, res.data]);
+
+      // Upload du fichier facture dans le drive si fourni
+      if (data.fichierFacture && contratsFiltres.length > 0) {
+        const contrat = contratsFiltres[0];
+        const sousTraitantName = contrat.sous_traitant_details?.entreprise || 'SousTraitant';
+        try {
+          // Récupérer le drive_path du chantier
+          const chantierRes = await axios.get(`/api/chantier/${chantierId}/`);
+          const chantierData = chantierRes.data;
+
+          let basePath = '';
+          if (chantierData.drive_path) {
+            basePath = chantierData.drive_path.replace(/^Chantiers\//, '').replace(/\/$/, '');
+            basePath = `Chantiers/${basePath}`;
+          } else {
+            const societeNom = chantierData.societe?.nom_societe || 'Societe';
+            const societeSlug = normalizeFilename(societeNom);
+            const chantierSlug = normalizeFilename(chantierData.chantier_name || chantierNom || 'Chantier');
+            basePath = `Chantiers/${societeSlug}/${chantierSlug}`;
+          }
+
+          const stSlug = normalizeFilename(sousTraitantName);
+          const uploadPath = `${basePath}/SOUS_TRAITANT/${stSlug}/Facture`;
+          const fileName = normalizeFilename(data.fichierFacture.name);
+
+          // Obtenir l'URL d'upload présignée
+          const uploadUrlRes = await axios.post('/api/drive-v2/upload-url/', {
+            file_path: uploadPath,
+            file_name: fileName,
+            content_type: data.fichierFacture.type || 'application/octet-stream',
+          }, {
+            withCredentials: true,
+            headers: { 'Content-Type': 'application/json' },
+          });
+
+          const { upload_url, fields } = uploadUrlRes.data;
+
+          // Upload vers S3
+          const formData = new FormData();
+          Object.keys(fields).forEach((key) => formData.append(key, fields[key]));
+          formData.append('file', data.fichierFacture);
+
+          await axios.post(upload_url, formData, { withCredentials: false });
+          setSnackbar({ open: true, message: `Facture "${data.fichierFacture.name}" uploadée dans le Drive`, severity: "success" });
+        } catch (uploadError) {
+          console.error("Erreur upload facture dans le Drive:", uploadError);
+          setSnackbar({ open: true, message: "Erreur lors de l'upload de la facture dans le Drive", severity: "error" });
+        }
+      }
+
+      // Si la checkbox "Créer certificat de paiement" est cochée
+      if (data.creerCertificat && contratsFiltres.length > 0) {
+        const contrat = contratsFiltres[0];
+        const sousTraitantName = contrat.sous_traitant_details?.entreprise || '';
+        const chantierName = contrat.chantier_details?.chantier_name || chantierNom || '';
+        const societeName = contrat.chantier_details?.societe_name || contrat.societe_name || 'PEINTURE 3000';
+        const numeroCertificat = String(factures.length + 1);
+
+        try {
+          await generatePDFDrive('certificat_paiement', {
+            contratId: contrat.id,
+            chantierId: chantierId,
+            chantierName: chantierName,
+            societeName: societeName,
+            sousTraitantName: sousTraitantName,
+            numeroCertificat: numeroCertificat,
+            factureId: res.data.id,
+            mois: data.mois,
+            annee: data.annee,
+          });
+        } catch (pdfError) {
+          console.error("Erreur lors de la génération du certificat:", pdfError);
+        }
+      }
     } catch (error) {
       alert("Erreur lors de la création de la facture.");
       if (error.response) {
@@ -838,6 +1160,35 @@ const TableauPaiementSousTraitant = ({ chantierId, sousTraitantId }) => {
       if (error.response) {
         console.error("Erreur backend:", error.response.data);
       }
+    }
+  };
+
+  // Handler modification facture (PATCH)
+  const handleModifierFacture = async (factureId, data) => {
+    try {
+      const payload = {
+        mois: data.mois,
+        annee: data.annee,
+        numero_facture: data.numero_facture,
+        montant_facture_ht: data.montant_facture_ht,
+        montant_retenue: data.montant_retenue ?? 0,
+        date_reception: data.date_reception,
+        delai_paiement: data.delai_paiement,
+      };
+      const res = await axios.patch(`/api/factures-sous-traitant/${factureId}/`, payload);
+      setFactures((prev) =>
+        prev.map((f) => (f.id === factureId ? { ...f, ...res.data } : f))
+      );
+      setOpenModifierFactureModal(false);
+      setFactureToEdit(null);
+      setSnackbar({ open: true, message: "Facture mise à jour", severity: "success" });
+    } catch (error) {
+      setSnackbar({
+        open: true,
+        message: error.response?.data?.detail || "Erreur lors de la modification de la facture",
+        severity: "error",
+      });
+      if (error.response) console.error("Erreur backend:", error.response.data);
     }
   };
 
@@ -1059,6 +1410,18 @@ const TableauPaiementSousTraitant = ({ chantierId, sousTraitantId }) => {
   // Le montant restant doit tenir compte des retenues
   // Montant restant = Montant du marché - Montant payé - Total des retenues
   const montantRestantCalcul = montantTotalMarche - montantTotalPaye - totalRetenues;
+
+  // Calculer le numéro de certificat chronologique pour chaque facture
+  // (tri ascendant : la plus ancienne = CP n°1)
+  const facturesChronologiques = [...factures].sort((a, b) => {
+    if (a.annee !== b.annee) return a.annee - b.annee;
+    if (a.mois !== b.mois) return a.mois - b.mois;
+    return parseInt(a.numero_facture) - parseInt(b.numero_facture);
+  });
+  const numeroCertificatMap = {};
+  facturesChronologiques.forEach((f, idx) => {
+    numeroCertificatMap[f.id] = idx + 1;
+  });
 
   // Créer les lignes à afficher dans le tableau (factures + paiements)
   const lignesTableau = [];
@@ -1361,6 +1724,75 @@ const TableauPaiementSousTraitant = ({ chantierId, sousTraitantId }) => {
                       sx={{ display: "flex", gap: 0.5, alignItems: "center" }}
                     >
                       {ligne.isFirstForFacture && (
+                        <Tooltip title="Modifier la facture">
+                          <IconButton
+                            size="small"
+                            color="primary"
+                            onClick={() => {
+                              setFactureToEdit(ligne.facture);
+                              setOpenModifierFactureModal(true);
+                            }}
+                          >
+                            <EditIcon fontSize="small" />
+                          </IconButton>
+                        </Tooltip>
+                      )}
+                      {ligne.isFirstForFacture && contratsFiltres.length > 0 && (
+                        <Tooltip title={`Télécharger certificat de paiement n°${numeroCertificatMap[ligne.facture.id] || ""}`}>
+                          <IconButton
+                            size="small"
+                            color="primary"
+                            onClick={async () => {
+                              const contrat = contratsFiltres[0];
+                              const numCP = String(numeroCertificatMap[ligne.facture.id] || 1).padStart(2, "0");
+                              const sousTraitantNom = normalizeFilename(contrat.sous_traitant_details?.entreprise || "Sous-traitant");
+                              const chantierName = normalizeFilename(contrat.chantier_details?.chantier_name || chantierNom || "Chantier");
+                              const moisStr = String(ligne.facture.mois).padStart(2, "0");
+                              const anneeStr = String(ligne.facture.annee).slice(-2);
+                              const fileName = `Certificat de paiement n°${numCP} - ${sousTraitantNom} - ${chantierName} ${moisStr}-${anneeStr}.pdf`;
+
+                              const params = new URLSearchParams();
+                              params.set("facture_id", String(ligne.facture.id));
+                              params.set("numero_certificat", numCP);
+                              const previewUrl = `/api/preview-certificat-paiement/${contrat.id}/?${params.toString()}`;
+
+                              setSnackbar({ open: true, message: "Téléchargement en cours...", severity: "info" });
+                              try {
+                                const response = await axios.post(
+                                  "/api/generate-pdf-from-preview/",
+                                  { preview_url: previewUrl, filename: fileName },
+                                  {
+                                    responseType: "blob",
+                                    headers: { "Content-Type": "application/json" },
+                                  }
+                                );
+
+                                if (response.headers["content-type"] === "application/pdf") {
+                                  const pdfBlob = new Blob([response.data], { type: "application/pdf" });
+                                  const pdfUrl = window.URL.createObjectURL(pdfBlob);
+                                  const link = document.createElement("a");
+                                  link.href = pdfUrl;
+                                  link.download = fileName;
+                                  document.body.appendChild(link);
+                                  link.click();
+                                  document.body.removeChild(link);
+                                  window.URL.revokeObjectURL(pdfUrl);
+                                  setSnackbar({ open: true, message: "Téléchargement terminé avec succès", severity: "success" });
+                                } else {
+                                  setSnackbar({ open: true, message: "Erreur : le fichier reçu n'est pas un PDF", severity: "error" });
+                                }
+                              } catch (err) {
+                                console.error("Erreur téléchargement CP:", err);
+                                setSnackbar({ open: true, message: "Erreur lors du téléchargement du certificat", severity: "error" });
+                              }
+                            }}
+                          >
+                            <DownloadIcon fontSize="small" />
+                          </IconButton>
+                        </Tooltip>
+                      )}
+
+                      {ligne.isFirstForFacture && (
                         <Tooltip title="Supprimer la facture">
                           <IconButton
                             size="small"
@@ -1562,7 +1994,7 @@ const TableauPaiementSousTraitant = ({ chantierId, sousTraitantId }) => {
           >
             Pourcentage d'avancement :{" "}
             {montantTotalMarche > 0
-              ? ((montantTotalPaye / montantTotalMarche) * 100).toFixed(2)
+              ? ((montantNetFacture / montantTotalMarche) * 100).toFixed(2)
               : 0}
             %
           </Typography>
@@ -1575,6 +2007,8 @@ const TableauPaiementSousTraitant = ({ chantierId, sousTraitantId }) => {
         chantierId={chantierId}
         sousTraitantId={sousTraitantId}
         factures={factures}
+        contrat={contratsFiltres.length > 0 ? contratsFiltres[0] : null}
+        chantierNom={chantierNom}
       />
       <PaiementFactureModal
         open={openPaiementModal}
@@ -1588,6 +2022,30 @@ const TableauPaiementSousTraitant = ({ chantierId, sousTraitantId }) => {
         facture={selectedFactureRetenue}
         onSubmit={handleMettreAJourRetenue}
       />
+      <ModifierFactureModal
+        open={openModifierFactureModal}
+        onClose={() => {
+          setOpenModifierFactureModal(false);
+          setFactureToEdit(null);
+        }}
+        facture={factureToEdit}
+        onSubmit={handleModifierFacture}
+      />
+      <Snackbar
+        open={snackbar.open}
+        autoHideDuration={snackbar.severity === "info" ? null : 3000}
+        onClose={() => setSnackbar({ ...snackbar, open: false })}
+        anchorOrigin={{ vertical: "bottom", horizontal: "right" }}
+      >
+        <Alert
+          onClose={() => setSnackbar({ ...snackbar, open: false })}
+          severity={snackbar.severity}
+          variant="filled"
+          sx={{ width: "100%" }}
+        >
+          {snackbar.message}
+        </Alert>
+      </Snackbar>
     </Box>
   );
 };

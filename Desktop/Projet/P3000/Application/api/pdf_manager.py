@@ -77,8 +77,31 @@ class PDFManager:
             'rapport_chantier': 'Documents_Execution',
             'contrat_sous_traitance': 'SOUS_TRAITANT',
             'avenant_sous_traitance': 'SOUS_TRAITANT',
-            'rapport_intervention': 'RAPPORT_INTERVENTION'
+            'certificat_paiement': 'SOUS_TRAITANT',
+            'rapport_intervention': 'RAPPORT_INTERVENTION',
         }
+
+    def _build_historique_destination_path(self, source_path: str) -> str:
+        """
+        Construit un chemin d'archive uniforme dans Historique.
+
+        Format unifié:
+        Historique/{base_name}__{source_hint}__YYYYMMDD_HHMMSS{extension}
+        """
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        clean_path = source_path.strip('/')
+
+        file_name = clean_path.split('/')[-1] if clean_path else 'document.pdf'
+        dot_index = file_name.rfind('.')
+        if dot_index > 0:
+            base_name = file_name[:dot_index]
+            extension = file_name[dot_index:]
+        else:
+            base_name = file_name
+            extension = ''
+
+        source_hint = clean_path.replace('/', '__') if clean_path else 'racine'
+        return f"Historique/{base_name}__{source_hint}__{timestamp}{extension}"
     
     def generate_pdf_filename(self, document_type: str, **kwargs) -> str:
         """
@@ -188,6 +211,16 @@ class PDFManager:
             # print(f"🔍 DEBUG generate_pdf_filename - Avenant ST: '{filename}'")
             return filename
         
+        elif document_type == 'certificat_paiement':
+            # Format: Certificat de paiement n°01 - SousTraitant - Chantier 01-26.pdf
+            numero_certificat = str(kwargs.get('numero_certificat', '1')).zfill(2)
+            sous_traitant_name = normalize_filename(kwargs.get('sous_traitant_name', 'SousTraitant'))
+            chantier_name = normalize_filename(kwargs.get('chantier_name', 'Chantier'))
+            mois = str(kwargs.get('mois', '01')).zfill(2)
+            annee = str(kwargs.get('annee', '2026'))[-2:]
+            filename = f"Certificat de paiement n°{numero_certificat} - {sous_traitant_name} - {chantier_name} {mois}-{annee}.pdf"
+            return filename
+        
         elif document_type == 'situation':
             # Utiliser le numero_situation depuis la DB (sans timestamp ni ID)
             numero_situation = kwargs.get('numero_situation', 'situation')
@@ -233,7 +266,9 @@ class PDFManager:
             custom_path = kwargs['custom_path'].strip()
             # Nettoyer le chemin (supprimer les slashes en début/fin)
             custom_path = custom_path.strip('/')
-            # Vigik+ : le chemin est déjà complet (RAPPORT D'INTERVENTION/VIGIK+/<residence>), ne pas ajouter de sous-dossier
+            # Mode "chemin complet" : on utilise custom_path tel quel sans ajouter
+            # de sous-dossier type. Utile pour les rapports d'intervention (Vigik+
+            # ou rapport classique) dont le dossier cible est déjà connu.
             if kwargs.get('custom_path_is_full'):
                 return custom_path
             # Déterminer le sous-dossier selon le type de document et le contexte
@@ -280,6 +315,10 @@ class PDFManager:
                     if document_type == 'bon_commande' and 'fournisseur_name' in kwargs:
                         fournisseur_slug = normalize_drive_segment(kwargs['fournisseur_name'])
                         return f"Chantiers/{base_path}/{subfolder}/{fournisseur_slug}"
+                    elif document_type == 'certificat_paiement' and ('sous_traitant_name' in kwargs or 'sousTraitantName' in kwargs):
+                        sous_traitant_name = kwargs.get('sous_traitant_name') or kwargs.get('sousTraitantName', 'SousTraitant')
+                        sous_traitant_slug = normalize_drive_segment(sous_traitant_name)
+                        return f"Chantiers/{base_path}/SOUS_TRAITANT/{sous_traitant_slug}/Certificat_de_paiement"
                     elif document_type in ['contrat_sous_traitance', 'avenant_sous_traitance'] and ('sous_traitant_name' in kwargs or 'sousTraitantName' in kwargs):
                         sous_traitant_name = kwargs.get('sous_traitant_name') or kwargs.get('sousTraitantName', 'SousTraitant')
                         sous_traitant_slug = normalize_drive_segment(sous_traitant_name)
@@ -323,15 +362,20 @@ class PDFManager:
                 
                 return f"Appels_Offres/{societe_slug}/{appel_offres_slug}/{subfolder}"
         
+        elif document_type == 'certificat_paiement':
+            chantier_name = kwargs.get('chantier_name', 'Chantier')
+            chantier_slug = normalize_drive_segment(chantier_name)
+            sous_traitant_name = kwargs.get('sous_traitant_name') or kwargs.get('sousTraitantName', 'SousTraitant')
+            sous_traitant_slug = normalize_drive_segment(sous_traitant_name)
+            return f"Chantiers/{societe_slug}/{chantier_slug}/SOUS_TRAITANT/{sous_traitant_slug}/Certificat_de_paiement"
+
         elif document_type in ['contrat_sous_traitance', 'avenant_sous_traitance', 'contrat', 'contrats']:
             # Pour les contrats et avenants de sous-traitance
             # Chemin: Chantiers/{Societe}/{Chantier}/SOUS_TRAITANT/{Entreprise}/
-            # Protection: gérer aussi les cas où document_type est 'contrat' ou 'contrats' (ancien code)
             chantier_name = kwargs.get('chantier_name', 'Chantier')
             chantier_slug = normalize_drive_segment(chantier_name)
             sous_traitant_name = kwargs.get('sous_traitant_name') or kwargs.get('sousTraitantName')
             if not sous_traitant_name:
-                # Si sous_traitant_name n'est pas fourni, utiliser un fallback sécurisé
                 print(f"⚠️ ATTENTION: sous_traitant_name manquant pour {document_type}, utilisation du fallback")
                 sous_traitant_name = 'SousTraitant'
             sous_traitant_slug = normalize_drive_segment(sous_traitant_name)
@@ -427,6 +471,7 @@ class PDFManager:
                              preview_url: str, 
                              societe_name: str,
                              force_replace: bool = False,
+                             modified_by: str = "Application",
                              **kwargs) -> Tuple[bool, str, str, bool]:
         """
         Génère un PDF et le stocke dans AWS S3 avec gestion des conflits
@@ -441,7 +486,6 @@ class PDFManager:
         Returns:
             Tuple[bool, str, str, bool]: (succès, message, chemin_s3, conflit_détecté)
         """
-        temp_pdf_path = None
         try:
             # 1. Vérifier les dépendances
             deps_ok, error_msg = self.check_dependencies()
@@ -451,21 +495,17 @@ class PDFManager:
             # 2. Déterminer le script Node.js à utiliser
             if document_type in ['planning_hebdo', 'planning_mensuel']:
                 script_name = 'generate_pdf.js'
+                output_filename = 'planning_temp.pdf'
             elif document_type == 'rapport_agents':
                 script_name = 'generate_monthly_agents_pdf.js'
+                output_filename = 'rapport_agents_temp.pdf'
             else:
                 # Utiliser le script par défaut
                 script_name = 'generate_pdf.js'
+                output_filename = f"{document_type}_temp.pdf"
             
             script_path = os.path.join(self.node_scripts_dir, script_name)
-            
-            # Utiliser un fichier temporaire unique (évite les conflits de permissions
-            # entre root et www-data sur un fichier partagé dans /tmp/)
-            temp_file = tempfile.NamedTemporaryFile(
-                suffix='.pdf', prefix=f'{document_type}_', delete=False
-            )
-            temp_pdf_path = temp_file.name
-            temp_file.close()
+            temp_pdf_path = os.path.join(self.temp_dir, output_filename)
             
             # 3. Générer le PDF avec Puppeteer
             # print(f"🎯 Génération du PDF {document_type} avec Puppeteer...")
@@ -516,10 +556,8 @@ class PDFManager:
                         historique_path = "Historique"
                         create_s3_folder_recursive(historique_path)
                         
-                        # Déplacer l'ancien fichier vers l'historique avec timestamp
-                        old_timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-                        old_filename = f"Ancien_{filename.replace('.pdf', '')}_{old_timestamp}.pdf"
-                        old_s3_path = f"{historique_path}/{old_filename}"
+                        # Déplacer l'ancien fichier vers l'historique (format unifié)
+                        old_s3_path = self._build_historique_destination_path(s3_file_path)
                         
                         # print(f"📦 Déplacement de l'ancien fichier vers l'historique: {old_s3_path}")
                         self.move_file_in_s3(s3_file_path, old_s3_path)
@@ -535,7 +573,7 @@ class PDFManager:
             
             # 7. Uploader le nouveau PDF dans S3 (seulement si pas de conflit)
             # print(f"🚀 Upload du nouveau PDF vers S3: {s3_file_path}")
-            success = upload_file_to_s3_robust(temp_pdf_path, s3_file_path)
+            success = upload_file_to_s3_robust(temp_pdf_path, s3_file_path, modified_by=modified_by)
             if not success:
                 return False, "Échec de l'upload du PDF vers AWS S3", "", False
             
@@ -552,17 +590,9 @@ class PDFManager:
         except subprocess.TimeoutExpired:
             return False, "Timeout lors de la génération du PDF (60 secondes)", "", False
         except subprocess.CalledProcessError as e:
-            error_detail = e.stderr if e.stderr else str(e)
-            return False, f"Erreur lors de la génération du PDF: {error_detail}", "", False
+            return False, f"Erreur lors de la génération du PDF: {str(e)}", "", False
         except Exception as e:
             return False, f"Erreur inattendue: {str(e)}", "", False
-        finally:
-            # Nettoyage du fichier temporaire en cas d'erreur
-            if temp_pdf_path and os.path.exists(temp_pdf_path):
-                try:
-                    os.unlink(temp_pdf_path)
-                except OSError:
-                    pass
 
     def download_pdf_from_s3(self, s3_path: str) -> Tuple[bool, str, bytes]:
         """
@@ -739,7 +769,7 @@ class PDFManager:
             # print(f"❌ Erreur lors du déplacement du fichier: {str(e)}")
             return False
 
-    def replace_file_with_confirmation(self, document_type: str, preview_url: str, societe_name: str, **kwargs) -> Tuple[bool, str, str]:
+    def replace_file_with_confirmation(self, document_type: str, preview_url: str, societe_name: str, modified_by: str = "Application", **kwargs) -> Tuple[bool, str, str]:
         """
         Remplace un fichier existant après confirmation de l'utilisateur
         
@@ -752,7 +782,6 @@ class PDFManager:
         Returns:
             Tuple[bool, str, str]: (succès, message, chemin_s3)
         """
-        temp_pdf_path = None
         try:
             # 1. Vérifier les dépendances
             deps_ok, error_msg = self.check_dependencies()
@@ -762,21 +791,17 @@ class PDFManager:
             # 2. Déterminer le script Node.js à utiliser
             if document_type in ['planning_hebdo', 'planning_mensuel']:
                 script_name = 'generate_pdf.js'
+                output_filename = 'planning_temp.pdf'
             elif document_type == 'rapport_agents':
                 script_name = 'generate_monthly_agents_pdf.js'
+                output_filename = 'rapport_agents_temp.pdf'
             else:
                 # Utiliser le script par défaut
                 script_name = 'generate_pdf.js'
+                output_filename = f"{document_type}_temp.pdf"
             
             script_path = os.path.join(self.node_scripts_dir, script_name)
-            
-            # Utiliser un fichier temporaire unique (évite les conflits de permissions
-            # entre root et www-data sur un fichier partagé dans /tmp/)
-            temp_file = tempfile.NamedTemporaryFile(
-                suffix='.pdf', prefix=f'{document_type}_', delete=False
-            )
-            temp_pdf_path = temp_file.name
-            temp_file.close()
+            temp_pdf_path = os.path.join(self.temp_dir, output_filename)
             
             # 3. Générer le PDF avec Puppeteer
             # print(f"🎯 Génération du PDF {document_type} avec Puppeteer...")
@@ -813,17 +838,15 @@ class PDFManager:
                 historique_path = "Historique"
                 create_s3_folder_recursive(historique_path)
                 
-                # Déplacer l'ancien fichier vers l'historique avec timestamp
-                old_timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-                old_filename = f"Ancien_{filename.replace('.pdf', '')}_{old_timestamp}.pdf"
-                old_s3_path = f"{historique_path}/{old_filename}"
+                # Déplacer l'ancien fichier vers l'historique (format unifié)
+                old_s3_path = self._build_historique_destination_path(s3_file_path)
                 
                 # print(f"📦 Déplacement de l'ancien fichier vers l'historique: {old_s3_path}")
                 self.move_file_in_s3(s3_file_path, old_s3_path)
             
             # 7. Uploader le nouveau PDF dans S3
             # print(f"🚀 Upload du nouveau PDF vers S3: {s3_file_path}")
-            success = upload_file_to_s3(temp_pdf_path, s3_file_path)
+            success = upload_file_to_s3(temp_pdf_path, s3_file_path, modified_by=modified_by)
             if not success:
                 return False, "Échec de l'upload du PDF vers AWS S3", ""
             
@@ -840,17 +863,9 @@ class PDFManager:
         except subprocess.TimeoutExpired:
             return False, "Timeout lors de la génération du PDF (60 secondes)", ""
         except subprocess.CalledProcessError as e:
-            error_detail = e.stderr if e.stderr else str(e)
-            return False, f"Erreur lors de la génération du PDF: {error_detail}", ""
+            return False, f"Erreur lors de la génération du PDF: {str(e)}", ""
         except Exception as e:
             return False, f"Erreur inattendue: {str(e)}", ""
-        finally:
-            # Nettoyage du fichier temporaire en cas d'erreur
-            if temp_pdf_path and os.path.exists(temp_pdf_path):
-                try:
-                    os.unlink(temp_pdf_path)
-                except OSError:
-                    pass
 
     def cleanup_old_historique_files(self, days_old: int = 30) -> bool:
         """
@@ -879,20 +894,36 @@ class PDFManager:
                         key = obj['Key']
                         
                         # Vérifier si c'est un fichier d'historique
-                        if '/Historique/' in key and key.endswith('.pdf'):
+                        if key.startswith('Historique/') and key.endswith('.pdf'):
                             # Extraire la date du nom de fichier
                             try:
-                                # Format: Ancien_nom_YYYYMMDD_HHMMSS.pdf
+                                # Formats supportés:
+                                # - Nouveau: nom__source__YYYYMMDD_HHMMSS.pdf
+                                # - Ancien:  Ancien_nom_YYYYMMDD_HHMMSS.pdf
                                 filename = key.split('/')[-1]
-                                if filename.startswith('Ancien_') and '_' in filename:
-                                    date_part = filename.split('_')[-2]  # YYYYMMDD
-                                    file_date = datetime.strptime(date_part, '%Y%m%d')
-                                    
-                                    if file_date < cutoff_date:
-                                        # Supprimer le fichier ancien
-                                        s3_client.delete_object(Bucket=bucket_name, Key=key)
-                                        deleted_count += 1
-                                        print(f"🗑️ Fichier historique supprimé: {key}")
+                                file_date = None
+
+                                # Nouveau format: capturer le timestamp final.
+                                match_new = re.search(r'__(\d{8})_(\d{6})(?:\.[^.]+)?$', filename)
+                                if match_new:
+                                    file_date = datetime.strptime(
+                                        f"{match_new.group(1)}_{match_new.group(2)}",
+                                        '%Y%m%d_%H%M%S'
+                                    )
+                                else:
+                                    # Ancien format (compat rétro): Ancien_*_YYYYMMDD_HHMMSS.pdf
+                                    match_old = re.search(r'_(\d{8})_(\d{6})(?:\.[^.]+)?$', filename)
+                                    if match_old:
+                                        file_date = datetime.strptime(
+                                            f"{match_old.group(1)}_{match_old.group(2)}",
+                                            '%Y%m%d_%H%M%S'
+                                        )
+
+                                if file_date and file_date < cutoff_date:
+                                    # Supprimer le fichier ancien
+                                    s3_client.delete_object(Bucket=bucket_name, Key=key)
+                                    deleted_count += 1
+                                    print(f"🗑️ Fichier historique supprimé: {key}")
                             except:
                                 # Si on ne peut pas parser la date, ignorer
                                 continue

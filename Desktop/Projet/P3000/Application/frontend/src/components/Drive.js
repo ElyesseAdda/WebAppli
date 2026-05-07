@@ -381,7 +381,13 @@ const Drive = () => {
       ["mp3", "wav", "flac"].includes(extension)
     )
       return <AudioIcon color="info" />;
-    if (["doc", "docx", "xls", "xlsx", "ppt", "pptx"].includes(extension))
+    if ([
+      "doc", "docx", "docm", "dot", "dotx", "dotm",
+      "xls", "xlsx", "xlsm", "xlt", "xltx", "xltm",
+      "ppt", "pptx", "pptm", "pot", "potx", "potm",
+      "odt", "ods", "odp", "rtf", "csv",
+      "fodt", "fods", "fodp", "ott", "ots", "otp",
+    ].includes(extension))
       return <DescriptionIcon color="success" />;
     if (["zip", "rar", "7z", "tar", "gz"].includes(extension))
       return <ArchiveIcon color="warning" />;
@@ -472,15 +478,11 @@ const Drive = () => {
     const extension = fileName.split(".").pop()?.toLowerCase();
 
     const officeExtensions = [
-      "doc",
-      "docx",
-      "xls",
-      "xlsx",
-      "ppt",
-      "pptx",
-      "odt",
-      "ods",
-      "odp", // OpenDocument formats
+      "doc", "docx", "docm", "dot", "dotx", "dotm",
+      "xls", "xlsx", "xlsm", "xlt", "xltx", "xltm",
+      "ppt", "pptx", "pptm", "pot", "potx", "potm",
+      "odt", "ods", "odp", "rtf", "csv",
+      "fodt", "fods", "fodp", "ott", "ots", "otp",
     ];
 
     return officeExtensions.includes(extension);

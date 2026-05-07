@@ -35,7 +35,7 @@ const RapportDetailMobile = ({ rapportId, onBack, onEdit }) => {
   const handleGeneratePDF = useCallback(async () => {
     if (!rapportId) return;
     try {
-      setSnackbar({ open: true, message: "Téléchargement en cours...", severity: "info" });
+      setSnackbar({ open: true, message: "Telechargement en cours...", severity: "info" });
       const response = await axios.post(
         "/api/generate-rapport-intervention-pdf/",
         { rapport_id: rapportId },
@@ -63,7 +63,7 @@ const RapportDetailMobile = ({ rapportId, onBack, onEdit }) => {
         link.click();
         document.body.removeChild(link);
         window.URL.revokeObjectURL(pdfUrl);
-        setSnackbar({ open: true, message: "Téléchargement terminé", severity: "success" });
+        setSnackbar({ open: true, message: "Telechargement termine", severity: "success" });
       } else {
         const reader = new FileReader();
         reader.onload = function () {
@@ -71,7 +71,7 @@ const RapportDetailMobile = ({ rapportId, onBack, onEdit }) => {
             const err = JSON.parse(reader.result);
             setSnackbar({ open: true, message: err.error || "Erreur", severity: "error" });
           } catch {
-            setSnackbar({ open: true, message: "Erreur téléchargement", severity: "error" });
+            setSnackbar({ open: true, message: "Erreur telechargement", severity: "error" });
           }
         };
         reader.readAsText(response.data);
@@ -79,7 +79,7 @@ const RapportDetailMobile = ({ rapportId, onBack, onEdit }) => {
     } catch (err) {
       setSnackbar({
         open: true,
-        message: err.response?.data?.error || "Erreur génération PDF",
+        message: err.response?.data?.error || "Erreur generation PDF",
         severity: "error",
       });
     }
@@ -115,11 +115,7 @@ const RapportDetailMobile = ({ rapportId, onBack, onEdit }) => {
           mb: 2,
         }}
       >
-        <Button
-          startIcon={<MdArrowBack />}
-          onClick={onBack}
-          sx={{ minHeight: 44 }}
-        >
+        <Button startIcon={<MdArrowBack />} onClick={onBack} sx={{ minHeight: 44 }}>
           Retour
         </Button>
         <Button
@@ -133,7 +129,7 @@ const RapportDetailMobile = ({ rapportId, onBack, onEdit }) => {
             "&:hover": { backgroundColor: "#bf360c" },
           }}
         >
-          Télécharger PDF
+          Telecharger PDF
         </Button>
         <Button
           variant="contained"

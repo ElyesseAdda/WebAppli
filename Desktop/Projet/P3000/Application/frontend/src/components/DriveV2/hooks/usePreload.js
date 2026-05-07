@@ -13,7 +13,13 @@ export const usePreload = () => {
   // Vérifier si c'est un fichier Office
   const isOfficeFile = (fileName) => {
     const extension = fileName.split('.').pop()?.toLowerCase();
-    return ['doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx'].includes(extension);
+    return [
+      'doc', 'docx', 'docm', 'dot', 'dotx', 'dotm',
+      'xls', 'xlsx', 'xlsm', 'xlt', 'xltx', 'xltm',
+      'ppt', 'pptx', 'pptm', 'pot', 'potx', 'potm',
+      'odt', 'ods', 'odp', 'rtf', 'csv',
+      'fodt', 'fods', 'fodp', 'ott', 'ots', 'otp',
+    ].includes(extension);
   };
 
   // Précharger l'URL OnlyOffice d'un fichier

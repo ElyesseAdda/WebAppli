@@ -4,7 +4,7 @@ import {
   TableContainer, TableHead, TableRow, IconButton, TextField,
   Snackbar, Alert, Autocomplete, FormControl, InputLabel, Select, MenuItem,
   Tooltip, FormControlLabel, Checkbox, Pagination, Stack,
-  Dialog, DialogTitle, DialogContent, DialogActions,
+  Dialog, DialogTitle, DialogContent, DialogActions, CircularProgress,
 } from "@mui/material";
 import {
   MdAdd, MdEdit, MdDelete, MdDescription, MdArrowDownward, MdArrowUpward,
@@ -31,6 +31,13 @@ const STATUT_LABELS = {
 const TYPE_RAPPORT_LABELS = {
   intervention: "Rapport d'intervention",
   vigik_plus: "Vigik+",
+};
+
+/** En-têtes : même bleu que le bouton « Nouveau rapport » (infoDark), texte blanc */
+const tableHeadCellSx = {
+  fontWeight: 700,
+  color: COLORS.textOnDark,
+  backgroundColor: COLORS.infoDark || "#1976d2",
 };
 
 const getStatusStyles = (statut) => ({
@@ -70,12 +77,15 @@ const RapportsPage = () => {
   const [brouillonsServeur, setBrouillonsServeur] = useState([]);
   const [filters, setFilters] = useState({
     technicien: "",
+    numero_rapport: "",
     client_societe: "",
     residence: "",
     date_creation: "",
     type_rapport: "",
+    titre: "",
   });
   const [residences, setResidences] = useState([]);
+  const [titresRapport, setTitresRapport] = useState([]);
   const [snackbar, setSnackbar] = useState({ open: false, message: "", severity: "success" });
   const [showStatusModal, setShowStatusModal] = useState(false);
   const [rapportToUpdate, setRapportToUpdate] = useState(null);
@@ -91,11 +101,19 @@ const RapportsPage = () => {
   const [devisOptions, setDevisOptions] = useState([]);
   const [selectedDevis, setSelectedDevis] = useState(null);
   const thumbClickTimeoutRef = useRef(null);
+  const [downloadingIds, setDownloadingIds] = useState(new Set());
 
   useEffect(() => {
     axios.get("/api/residences/").then((res) => {
       setResidences(res.data?.results || res.data || []);
     }).catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    axios.get("/api/titres-rapport/").then((res) => {
+      const d = res.data?.results || res.data || [];
+      setTitresRapport(Array.isArray(d) ? d : []);
+    }).catch(() => setTitresRapport([]));
   }, []);
 
   const loadRapports = useCallback(() => {
@@ -119,6 +137,7 @@ const RapportsPage = () => {
       pageSize: RAPPORTS_LIST_PAGE_SIZE,
       ordering: dateSortOrder === "desc" ? "-date" : "date",
       excludeStatutTermine: !showTermines,
+      onlyStatutTermine: showTermines,
     });
   }, [fetchRapports, filters, listPage, dateSortOrder, showTermines, showOnlyDevisAFaireV]);
 
@@ -134,8 +153,14 @@ const RapportsPage = () => {
         const t = String(b.technicien || "").toLowerCase();
         if (!t.includes(String(filters.technicien).toLowerCase())) return false;
       }
+      if (filters.numero_rapport) {
+        // Un brouillon n'a pas de numero_rapport attribue.
+        if (b.numero_rapport == null) return false;
+        if (String(b.numero_rapport) !== String(filters.numero_rapport)) return false;
+      }
       if (filters.client_societe && Number(b.client_societe) !== Number(filters.client_societe)) return false;
       if (showOnlyDevisAFaireV && (!b.devis_a_faire || b.devis_fait)) return false;
+      if (filters.titre && Number(b.titre) !== Number(filters.titre)) return false;
       return true;
     });
   }, [brouillonsServeur, filters, showOnlyDevisAFaireV]);
@@ -148,10 +173,13 @@ const RapportsPage = () => {
     });
   }, [brouillonsFiltres, dateSortOrder]);
 
-  const displayRapports = listPage === 1 ? [...brouillonsSorted, ...rapports] : rapports;
+  const displayRapports =
+    listPage === 1 && !showTermines ? [...brouillonsSorted, ...rapports] : rapports;
 
   const showInitialLoading =
-    loading && rapports.length === 0 && (listPage > 1 || brouillonsSorted.length === 0);
+    loading &&
+    rapports.length === 0 &&
+    (listPage > 1 || showTermines || brouillonsSorted.length === 0);
 
   useEffect(() => {
     loadRapports();
@@ -221,8 +249,10 @@ const RapportsPage = () => {
   };
 
   const handleGeneratePDF = async (rapport) => {
+    if (downloadingIds.has(rapport.id)) return;
+    setDownloadingIds((prev) => new Set(prev).add(rapport.id));
+    setSnackbar({ open: true, message: "Génération du PDF en cours…", severity: "info" });
     try {
-      setSnackbar({ open: true, message: "Téléchargement en cours...", severity: "info" });
       const response = await axios.post(
         "/api/generate-rapport-intervention-pdf/",
         { rapport_id: rapport.id },
@@ -250,7 +280,7 @@ const RapportsPage = () => {
         link.click();
         document.body.removeChild(link);
         window.URL.revokeObjectURL(pdfUrl);
-        setSnackbar({ open: true, message: "Téléchargement terminé avec succès", severity: "success" });
+        setSnackbar({ open: true, message: "PDF téléchargé avec succès", severity: "success" });
       } else {
         const reader = new FileReader();
         reader.onload = function () {
@@ -268,6 +298,12 @@ const RapportsPage = () => {
         open: true,
         message: error.response?.data?.error || "Erreur lors de la génération du PDF.",
         severity: "error",
+      });
+    } finally {
+      setDownloadingIds((prev) => {
+        const next = new Set(prev);
+        next.delete(rapport.id);
+        return next;
       });
     }
   };
@@ -415,7 +451,7 @@ const RapportsPage = () => {
             getOptionLabel={(opt) => opt?.nom || ""}
             value={residences.find((r) => r.id === filters.residence) || null}
             onChange={(_, val) => handleFilterChange("residence", val?.id || "")}
-            renderInput={(params) => <TextField {...params} label="Residence" size="small" />}
+            renderInput={(params) => <TextField {...params} label="Résidence" size="small" />}
             sx={{ minWidth: 200 }}
           />
 
@@ -433,6 +469,22 @@ const RapportsPage = () => {
             </Select>
           </FormControl>
 
+          <Autocomplete
+            options={titresRapport}
+            getOptionLabel={(opt) => opt?.nom || ""}
+            isOptionEqualToValue={(a, b) => a?.id === b?.id}
+            value={titresRapport.find((t) => String(t.id) === String(filters.titre)) || null}
+            onChange={(_, val) => handleFilterChange("titre", val?.id != null ? String(val.id) : "")}
+            renderInput={(params) => (
+              <TextField {...params} label="Titre" placeholder="Tapez pour filtrer…" size="small" />
+            )}
+            sx={{ minWidth: 220 }}
+            autoHighlight
+            clearOnEscape
+            noOptionsText="Aucun titre correspondant"
+            slotProps={{ listbox: { sx: { maxHeight: 280 } } }}
+          />
+
           <TextField
             label="Date de création du rapport"
             type="date"
@@ -440,6 +492,15 @@ const RapportsPage = () => {
             value={filters.date_creation}
             onChange={(e) => handleFilterChange("date_creation", e.target.value)}
             InputLabelProps={{ shrink: true }}
+          />
+
+          <TextField
+            label="N° rapport"
+            size="small"
+            value={filters.numero_rapport}
+            onChange={(e) => handleFilterChange("numero_rapport", e.target.value.replace(/\D/g, ""))}
+            placeholder="Ex: 42"
+            sx={{ width: 140 }}
           />
 
           <Tooltip
@@ -612,14 +673,18 @@ const RapportsPage = () => {
             Chargement...
           </Typography>
         </Paper>
-      ) : !loading && rapportsCount === 0 && brouillonsFiltres.length === 0 ? (
+      ) : !loading && rapportsCount === 0 && (showTermines || brouillonsFiltres.length === 0) ? (
         <Paper elevation={0} sx={{ p: 4, textAlign: "center", borderRadius: 2, border: "1px solid #e0e0e0" }}>
           <Typography variant="body1" color="text.secondary">
             Aucun rapport d&apos;intervention ne correspond à ces critères.
           </Typography>
-          {!showTermines && (
+          {!showTermines ? (
             <Typography variant="body2" color="text.secondary" sx={{ mt: 1.5, maxWidth: 480, mx: "auto" }}>
-              Les rapports terminés sont masqués par défaut — cochez « Afficher terminés » pour les inclure.
+              Les rapports terminés sont masqués par défaut — cochez « Afficher terminés » pour les afficher.
+            </Typography>
+          ) : (
+            <Typography variant="body2" color="text.secondary" sx={{ mt: 1.5, maxWidth: 480, mx: "auto" }}>
+              Aucun rapport terminé ne correspond à ces critères.
             </Typography>
           )}
         </Paper>
@@ -630,16 +695,16 @@ const RapportsPage = () => {
             <Table size="small" stickyHeader>
               <TableHead>
                 <TableRow>
-                  <TableCell sx={{ fontWeight: 700, minWidth: 140 }}>Residence</TableCell>
-                  <TableCell sx={{ fontWeight: 700 }}>Date</TableCell>
-                  <TableCell sx={{ fontWeight: 700 }}>Type</TableCell>
-                  <TableCell sx={{ fontWeight: 700 }}>Lieu d&apos;intervention / Adresse</TableCell>
-                  <TableCell sx={{ fontWeight: 700 }}>Titre</TableCell>
-                  <TableCell sx={{ fontWeight: 700 }}>Technicien</TableCell>
-                  <TableCell sx={{ fontWeight: 700 }}>Client</TableCell>
-                  <TableCell sx={{ fontWeight: 700, textAlign: "center" }}>Devis à faire</TableCell>
-                  <TableCell sx={{ fontWeight: 700 }}>Statut</TableCell>
-                  <TableCell sx={{ fontWeight: 700, textAlign: "center" }}>Actions</TableCell>
+                  <TableCell sx={{ ...tableHeadCellSx, minWidth: 140 }}>Résidence</TableCell>
+                  <TableCell sx={tableHeadCellSx}>Date</TableCell>
+                  <TableCell sx={tableHeadCellSx}>Type</TableCell>
+                  <TableCell sx={tableHeadCellSx}>Lieu d&apos;intervention / Adresse</TableCell>
+                  <TableCell sx={tableHeadCellSx}>Titre</TableCell>
+                  <TableCell sx={tableHeadCellSx}>N° rapport</TableCell>
+                  <TableCell sx={tableHeadCellSx}>Client</TableCell>
+                  <TableCell sx={{ ...tableHeadCellSx, textAlign: "center" }}>Devis à faire</TableCell>
+                  <TableCell sx={tableHeadCellSx}>Statut</TableCell>
+                  <TableCell sx={{ ...tableHeadCellSx, textAlign: "center" }}>Actions</TableCell>
                 </TableRow>
               </TableHead>
               <TableBody>
@@ -660,7 +725,7 @@ const RapportsPage = () => {
                     }}
                   >
                     <TableCell sx={{ fontWeight: 600 }}>
-                      {rapport.residence_nom || "Sans residence"}
+                      {rapport.residence_nom || "Sans résidence"}
                     </TableCell>
                     <TableCell>{rapport.date ? new Date(rapport.date).toLocaleDateString("fr-FR") : "-"}</TableCell>
                     <TableCell>{TYPE_RAPPORT_LABELS[rapport.type_rapport] || rapport.type_rapport || "-"}</TableCell>
@@ -670,7 +735,11 @@ const RapportsPage = () => {
                         : (rapport.logement || "-")}
                     </TableCell>
                     <TableCell>{rapport.titre_nom || "-"}</TableCell>
-                    <TableCell>{rapport.technicien || "-"}</TableCell>
+                    <TableCell>
+                      {rapport.numero_rapport && rapport.annee_numero_rapport
+                        ? `N°${rapport.numero_rapport} - ${rapport.annee_numero_rapport}`
+                        : "-"}
+                    </TableCell>
                     <TableCell>{rapport.client_societe_nom || "-"}</TableCell>
                     <TableCell sx={{ textAlign: "center" }}>
                       {rapport.is_brouillon_serveur ? (
@@ -712,14 +781,26 @@ const RapportsPage = () => {
                     >
                       {!rapport.is_brouillon_serveur && (
                         <>
-                      <IconButton
-                        size="small"
-                        onClick={() => handleGeneratePDF(rapport)}
-                        sx={{ color: "success.main", "&:hover": { backgroundColor: "rgba(46, 125, 50, 0.04)" } }}
-                        title="Télécharger le PDF"
-                      >
-                        <AiFillFilePdf style={{ fontSize: "20px" }} />
-                      </IconButton>
+                      <Tooltip title={downloadingIds.has(rapport.id) ? "Génération en cours…" : "Télécharger le PDF"}>
+                        <span>
+                          <IconButton
+                            size="small"
+                            onClick={() => handleGeneratePDF(rapport)}
+                            disabled={downloadingIds.has(rapport.id)}
+                            sx={{
+                              color: "success.main",
+                              "&:hover": { backgroundColor: "rgba(46, 125, 50, 0.04)" },
+                              "&.Mui-disabled": { color: "success.main", opacity: 0.6 },
+                            }}
+                          >
+                            {downloadingIds.has(rapport.id) ? (
+                              <CircularProgress size={18} thickness={5} sx={{ color: "success.main" }} />
+                            ) : (
+                              <AiFillFilePdf style={{ fontSize: "20px" }} />
+                            )}
+                          </IconButton>
+                        </span>
+                      </Tooltip>
                       <RegeneratePDFIconButton
                         documentType={rapport.type_rapport === "vigik_plus" ? DOCUMENT_TYPES.RAPPORT_VIGIK_PLUS : DOCUMENT_TYPES.RAPPORT_INTERVENTION}
                         documentData={rapport}

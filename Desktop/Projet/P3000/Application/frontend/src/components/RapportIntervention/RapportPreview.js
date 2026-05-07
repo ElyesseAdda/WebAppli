@@ -51,7 +51,6 @@ const RapportPreview = ({ rapport }) => {
         backgroundColor: "#fff",
       }}
     >
-      {/* Header */}
       <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", mb: 3, borderBottom: `3px solid ${COLORS.infoDark || "#1976d2"}`, pb: 2 }}>
         <Box>
           {rapport.client_societe_logo_url && (
@@ -67,7 +66,6 @@ const RapportPreview = ({ rapport }) => {
         </Typography>
       </Box>
 
-      {/* Infos generales */}
       <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", sm: "1fr 1fr" }, gap: 2, mb: 3 }}>
         <InfoBlock title="Client / Bailleur">
           <Typography sx={{ fontWeight: 600 }}>{rapport.client_societe_nom || "-"}</Typography>
@@ -109,7 +107,6 @@ const RapportPreview = ({ rapport }) => {
         </InfoBlock>
       )}
 
-      {/* Section Vigik+ : adresse, batiment, installation, platine + photos */}
       {rapport.type_rapport === "vigik_plus" && (
         <Box sx={{ mt: 3 }}>
           <Box sx={{ backgroundColor: COLORS.infoDark || "#1976d2", color: "#fff", px: 2, py: 1, borderRadius: "6px 6px 0 0", fontWeight: 700 }}>
@@ -142,7 +139,7 @@ const RapportPreview = ({ rapport }) => {
             </Box>
             <Box sx={{ mt: 2 }}>
               <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 1, color: COLORS.infoDark || "#1976d2" }}>
-                Présence d&apos;un portail
+                Presence d&apos;un portail
               </Typography>
               <Chip
                 label={rapport.presence_portail === true ? "Oui" : rapport.presence_portail === false ? "Non" : "-"}
@@ -165,7 +162,7 @@ const RapportPreview = ({ rapport }) => {
             {(rapport.presence_portail === true || (rapport.presence_portail == null && rapport.presence_platine_portail != null)) && (
               <Box sx={{ mt: 2 }}>
                 <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 1, color: COLORS.infoDark || "#1976d2" }}>
-                  Présence de platine Vigik+ au portail
+                  Presence de platine Vigik+ au portail
                 </Typography>
                 <Chip
                   label={rapport.presence_platine_portail === true ? "Oui" : rapport.presence_platine_portail === false ? "Non" : "-"}
@@ -174,7 +171,7 @@ const RapportPreview = ({ rapport }) => {
                   variant="outlined"
                   sx={{ mr: 1 }}
                 />
-                {rapport.presence_platine_portail === true &&
+                {(rapport.presence_platine_portail === true || rapport.presence_platine_portail === false) &&
                   (rapport.vigik_platine_portail_photos || []).filter((x) => x?.url).map((row, idx) => (
                     <Box key={row.s3_key || idx} sx={{ mt: 1 }}>
                       <img
@@ -190,7 +187,6 @@ const RapportPreview = ({ rapport }) => {
         </Box>
       )}
 
-      {/* Prestations */}
       {rapport.prestations?.map((prestation, index) => (
         <Box key={prestation.id || index} sx={{ mt: 3 }}>
           <Box sx={{ backgroundColor: COLORS.infoDark || "#1976d2", color: "#fff", px: 2, py: 1, borderRadius: "6px 6px 0 0", fontWeight: 700 }}>
@@ -217,7 +213,6 @@ const RapportPreview = ({ rapport }) => {
               <PreviewField label="Prestations realisees" value={prestation.prestation_realisee} />
             )}
 
-            {/* Photos */}
             {prestation.photos?.length > 0 && (
               <Box sx={{ mt: 2 }}>
                 <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 1, color: COLORS.infoDark || "#1976d2" }}>
@@ -252,7 +247,6 @@ const RapportPreview = ({ rapport }) => {
         </Box>
       ))}
 
-      {/* Signature */}
       {rapport.signature_url && (
         <Box sx={{ mt: 4, textAlign: "right" }}>
           <Typography variant="subtitle2" sx={{ fontWeight: 600, color: COLORS.infoDark || "#1976d2", mb: 1 }}>

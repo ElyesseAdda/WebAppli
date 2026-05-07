@@ -3,6 +3,7 @@ Storage Manager - Abstraction pour S3 avec les mêmes credentials
 """
 
 import os
+import json
 import boto3
 from typing import Optional, Dict, List, BinaryIO
 from datetime import datetime, timedelta
@@ -69,7 +70,7 @@ class StorageManager:
         max_keys: int = 1000
     ) -> Dict:
         """
-        Liste les objets dans S3
+        Liste les objets dans S3, enrichis avec les métadonnées modified_by.
         
         Args:
             prefix: Préfixe pour filtrer
@@ -107,16 +108,15 @@ class StorageManager:
                     # Ignorer les marqueurs de dossier (.keep, trailing /)
                     if obj['Key'].endswith('/') or obj['Key'].endswith('/.keep'):
                         continue
+                    # Ignorer le .metadata.json
+                    if obj['Key'].endswith('/.metadata.json'):
+                        continue
                     
-                    if obj['Key'] != prefix:  # Ne pas inclure le dossier lui-même
+                    if obj['Key'] != prefix:
                         file_name = obj['Key'].split('/')[-1]
-                        # Masquer les fichiers système (.metadata.json, .DS_Store)
-                        if file_name in ('.metadata.json', '.DS_Store'):
-                            continue
-
-                        # Déterminer le type de contenu
+                        
                         content_type = get_content_type(file_name)
-
+                        
                         files.append({
                             'name': file_name,
                             'path': obj['Key'],
@@ -125,6 +125,19 @@ class StorageManager:
                             'type': 'file',
                             'content_type': content_type
                         })
+            
+            # Enrichir avec les métadonnées modified_by
+            metadata = self.get_folder_metadata(prefix)
+            items_meta = metadata.get("items", {})
+            for folder in folders:
+                folder_key = folder['name'] + '/'
+                meta = items_meta.get(folder_key, {})
+                folder['modified_by'] = meta.get('modified_by', None)
+                folder['modified_at'] = meta.get('modified_at', None)
+            for file_item in files:
+                meta = items_meta.get(file_item['name'], {})
+                file_item['modified_by'] = meta.get('modified_by', None)
+                file_item['modified_at'] = meta.get('modified_at', None)
             
             return {
                 'folders': folders,
@@ -473,6 +486,10 @@ class StorageManager:
                     if len(folders) >= max_results:
                         break
                     
+                    # Ignorer les fichiers .metadata.json
+                    if key.endswith('/.metadata.json'):
+                        continue
+                    
                     # Traiter les marqueurs de dossier (.keep)
                     if key.endswith('/.keep'):
                         folder_path = key[:-6]  # Enlever '/.keep'
@@ -512,8 +529,6 @@ class StorageManager:
                         # Traiter le fichier lui-même (si on cherche aussi les fichiers)
                         file_name = path_parts[-1]
                         if file_name and search_lower in file_name.lower():
-                            if file_name in ('.metadata.json', '.DS_Store'):
-                                continue
                             content_type = get_content_type(file_name)
                             files.append({
                                 'name': file_name,
@@ -621,3 +636,399 @@ class StorageManager:
             
         except Exception as e:
             raise Exception(f"Erreur lors du téléchargement du fichier {key}: {str(e)}")
+
+    def _metadata_key(self, folder_path: str) -> str:
+        """Retourne la clé S3 du fichier .metadata.json pour un dossier donné."""
+        if folder_path and not folder_path.endswith('/'):
+            folder_path += '/'
+        return f"{folder_path}.metadata.json"
+
+    def get_folder_metadata(self, folder_path: str) -> Dict:
+        """
+        Lit le .metadata.json d'un dossier.
+
+        Returns:
+            Dict {"items": { "nom": {"modified_by": ..., "modified_at": ...}, ... }}
+            ou {"items": {}} si le fichier n'existe pas.
+        """
+        key = self._metadata_key(folder_path)
+        try:
+            response = self.s3_client.get_object(
+                Bucket=self.bucket_name,
+                Key=key
+            )
+            return json.loads(response['Body'].read().decode('utf-8'))
+        except self.s3_client.exceptions.NoSuchKey:
+            return {"items": {}}
+        except Exception:
+            return {"items": {}}
+
+    def update_folder_metadata(
+        self,
+        folder_path: str,
+        item_name: str,
+        modified_by: str,
+        modified_at: Optional[str] = None
+    ) -> bool:
+        """
+        Met à jour l'entrée d'un item dans le .metadata.json du dossier (read-modify-write).
+
+        Args:
+            folder_path: Chemin du dossier parent
+            item_name: Nom de l'item (fichier ou sous-dossier avec / final)
+            modified_by: Nom de l'utilisateur
+            modified_at: Date ISO (auto-générée si None)
+        """
+        try:
+            metadata = self.get_folder_metadata(folder_path)
+            if modified_at is None:
+                modified_at = datetime.utcnow().isoformat() + 'Z'
+            metadata.setdefault("items", {})[item_name] = {
+                "modified_by": modified_by,
+                "modified_at": modified_at
+            }
+            key = self._metadata_key(folder_path)
+            self.s3_client.put_object(
+                Bucket=self.bucket_name,
+                Key=key,
+                Body=json.dumps(metadata).encode('utf-8'),
+                ContentType='application/json'
+            )
+            return True
+        except Exception:
+            return False
+
+    def remove_folder_metadata_entry(self, folder_path: str, item_name: str) -> bool:
+        """Supprime une entrée du .metadata.json d'un dossier."""
+        try:
+            metadata = self.get_folder_metadata(folder_path)
+            items = metadata.get("items", {})
+            if item_name in items:
+                del items[item_name]
+                metadata["items"] = items
+                key = self._metadata_key(folder_path)
+                self.s3_client.put_object(
+                    Bucket=self.bucket_name,
+                    Key=key,
+                    Body=json.dumps(metadata).encode('utf-8'),
+                    ContentType='application/json'
+                )
+            return True
+        except Exception:
+            return False
+
+    def delete_folder_metadata_file(self, folder_path: str) -> bool:
+        """Supprime le fichier .metadata.json d'un dossier entier."""
+        try:
+            key = self._metadata_key(folder_path)
+            self.s3_client.delete_object(Bucket=self.bucket_name, Key=key)
+            return True
+        except Exception:
+            return False
+
+    # ── S3 Versioning (récupération de fichiers supprimés) ──
+
+    def list_deleted_objects(
+        self,
+        prefix: str = "",
+        max_keys: int = 500
+    ) -> List[Dict]:
+        """
+        Liste les objets supprimés (avec delete markers) dans un préfixe donné.
+        Nécessite que le versioning soit activé sur le bucket.
+        """
+        deleted = []
+        try:
+            paginator = self.s3_client.get_paginator('list_object_versions')
+            pages = paginator.paginate(
+                Bucket=self.bucket_name,
+                Prefix=prefix,
+            )
+
+            delete_marker_keys = set()
+            latest_versions = {}
+
+            for page in pages:
+                for marker in page.get('DeleteMarkers', []):
+                    if marker.get('IsLatest'):
+                        delete_marker_keys.add(marker['Key'])
+
+                for version in page.get('Versions', []):
+                    key = version['Key']
+                    if key.endswith('/.keep') or key.endswith('/.metadata.json'):
+                        continue
+                    if key not in latest_versions:
+                        latest_versions[key] = version
+
+            for key in delete_marker_keys:
+                if key.endswith('/.keep') or key.endswith('/.metadata.json') or key.endswith('/'):
+                    continue
+                version = latest_versions.get(key)
+                if version:
+                    file_name = key.split('/')[-1]
+                    parent = '/'.join(key.split('/')[:-1]) + '/' if '/' in key else ''
+                    deleted.append({
+                        'key': key,
+                        'name': file_name,
+                        'parent_path': parent,
+                        'size': version.get('Size', 0),
+                        'last_modified': version['LastModified'].isoformat(),
+                        'version_id': version['VersionId'],
+                    })
+                    if len(deleted) >= max_keys:
+                        break
+                if len(deleted) >= max_keys:
+                    break
+
+            deleted.sort(key=lambda x: x['last_modified'], reverse=True)
+            return deleted
+
+        except self.s3_client.exceptions.NoSuchBucket:
+            return []
+        except Exception as e:
+            raise Exception(f"Erreur lors du listage des objets supprimés: {str(e)}")
+
+    def list_object_versions(self, key: str) -> List[Dict]:
+        """
+        Liste toutes les versions d'un objet spécifique.
+        """
+        versions = []
+        try:
+            response = self.s3_client.list_object_versions(
+                Bucket=self.bucket_name,
+                Prefix=key,
+            )
+
+            for version in response.get('Versions', []):
+                if version['Key'] != key:
+                    continue
+                versions.append({
+                    'version_id': version['VersionId'],
+                    'last_modified': version['LastModified'].isoformat(),
+                    'size': version.get('Size', 0),
+                    'is_latest': version.get('IsLatest', False),
+                })
+
+            for marker in response.get('DeleteMarkers', []):
+                if marker['Key'] != key:
+                    continue
+                versions.append({
+                    'version_id': marker['VersionId'],
+                    'last_modified': marker['LastModified'].isoformat(),
+                    'size': 0,
+                    'is_latest': marker.get('IsLatest', False),
+                    'is_delete_marker': True,
+                })
+
+            versions.sort(key=lambda x: x['last_modified'], reverse=True)
+            return versions
+
+        except Exception as e:
+            raise Exception(f"Erreur lors du listage des versions: {str(e)}")
+
+    def restore_deleted_object(self, key: str) -> bool:
+        """
+        Restaure un objet supprimé en supprimant son delete marker.
+        """
+        try:
+            response = self.s3_client.list_object_versions(
+                Bucket=self.bucket_name,
+                Prefix=key,
+            )
+
+            for marker in response.get('DeleteMarkers', []):
+                if marker['Key'] == key and marker.get('IsLatest'):
+                    self.s3_client.delete_object(
+                        Bucket=self.bucket_name,
+                        Key=key,
+                        VersionId=marker['VersionId']
+                    )
+                    return True
+
+            return False
+
+        except Exception as e:
+            raise Exception(f"Erreur lors de la restauration: {str(e)}")
+
+    def restore_deleted_folder(self, prefix: str) -> Dict:
+        """
+        Restaure tous les objets supprimés sous un préfixe (= dossier).
+        Supprime le delete marker de chaque fichier + recrée le marqueur .keep du dossier.
+
+        Returns:
+            Dict avec restored_count, failed_count, details
+        """
+        if prefix and not prefix.endswith('/'):
+            prefix += '/'
+
+        restored = 0
+        failed = 0
+        details = []
+
+        try:
+            paginator = self.s3_client.get_paginator('list_object_versions')
+            pages = paginator.paginate(
+                Bucket=self.bucket_name,
+                Prefix=prefix,
+            )
+
+            delete_markers_to_remove = []
+            for page in pages:
+                for marker in page.get('DeleteMarkers', []):
+                    if marker.get('IsLatest') and marker['Key'].startswith(prefix):
+                        delete_markers_to_remove.append({
+                            'key': marker['Key'],
+                            'version_id': marker['VersionId'],
+                        })
+
+            for dm in delete_markers_to_remove:
+                try:
+                    self.s3_client.delete_object(
+                        Bucket=self.bucket_name,
+                        Key=dm['key'],
+                        VersionId=dm['version_id']
+                    )
+                    restored += 1
+                    details.append({'key': dm['key'], 'success': True})
+                except Exception as e:
+                    failed += 1
+                    details.append({'key': dm['key'], 'success': False, 'error': str(e)})
+
+            if restored > 0:
+                keep_key = f"{prefix}.keep"
+                needs_keep = True
+                try:
+                    self.s3_client.head_object(Bucket=self.bucket_name, Key=keep_key)
+                    needs_keep = False
+                except:
+                    pass
+                if needs_keep:
+                    try:
+                        self.s3_client.put_object(
+                            Bucket=self.bucket_name,
+                            Key=keep_key,
+                            Body=b''
+                        )
+                    except:
+                        pass
+
+            return {
+                'restored_count': restored,
+                'failed_count': failed,
+                'details': details,
+            }
+
+        except Exception as e:
+            raise Exception(f"Erreur lors de la restauration du dossier: {str(e)}")
+
+    def restore_object_version(self, key: str, version_id: str) -> bool:
+        """
+        Restaure une version spécifique d'un objet en la copiant comme version courante.
+        """
+        try:
+            self.s3_client.copy_object(
+                Bucket=self.bucket_name,
+                Key=key,
+                CopySource={
+                    'Bucket': self.bucket_name,
+                    'Key': key,
+                    'VersionId': version_id,
+                }
+            )
+            return True
+
+        except Exception as e:
+            raise Exception(f"Erreur lors de la restauration de version: {str(e)}")
+
+    def get_presigned_url_for_version(self, key: str, version_id: str, expires_in: int = 3600) -> str:
+        """
+        Génère une URL présignée pour télécharger une version spécifique d'un objet
+        (y compris un objet supprimé, en ciblant la version avant le delete marker).
+        """
+        try:
+            url = self.s3_client.generate_presigned_url(
+                'get_object',
+                Params={
+                    'Bucket': self.bucket_name,
+                    'Key': key,
+                    'VersionId': version_id,
+                    'ResponseContentDisposition': f'attachment; filename="{key.split("/")[-1]}"',
+                },
+                ExpiresIn=expires_in,
+            )
+            return url
+        except Exception as e:
+            raise Exception(f"Erreur lors de la génération de l'URL de téléchargement: {str(e)}")
+
+    def object_currently_exists(self, key: str) -> bool:
+        """
+        Vérifie si un objet existe actuellement (pas seulement en version supprimée).
+        Retourne False si le dernier état est un delete marker.
+        """
+        try:
+            self.s3_client.head_object(Bucket=self.bucket_name, Key=key)
+            return True
+        except self.s3_client.exceptions.ClientError as e:
+            error_code = e.response.get('Error', {}).get('Code', '')
+            if error_code in ('404', 'NoSuchKey'):
+                return False
+            raise
+        except Exception:
+            return False
+
+    def copy_version_to_key(self, source_key: str, version_id: str, dest_key: str) -> bool:
+        """
+        Copie une version spécifique d'un objet vers une nouvelle clé.
+        Utile pour restaurer un fichier supprimé avec un nouveau nom (gestion de conflit).
+        """
+        try:
+            self.s3_client.copy_object(
+                Bucket=self.bucket_name,
+                Key=dest_key,
+                CopySource={
+                    'Bucket': self.bucket_name,
+                    'Key': source_key,
+                    'VersionId': version_id,
+                }
+            )
+            return True
+        except Exception as e:
+            raise Exception(f"Erreur lors de la copie de version: {str(e)}")
+
+    def get_latest_version_before_delete(self, key: str) -> Optional[Dict]:
+        """
+        Récupère l'ID de la dernière version réelle (non-delete-marker) d'un objet supprimé.
+        """
+        try:
+            response = self.s3_client.list_object_versions(
+                Bucket=self.bucket_name,
+                Prefix=key,
+            )
+            for version in response.get('Versions', []):
+                if version['Key'] == key:
+                    return {
+                        'version_id': version['VersionId'],
+                        'size': version.get('Size', 0),
+                        'last_modified': version['LastModified'].isoformat(),
+                    }
+            return None
+        except Exception:
+            return None
+
+    def check_versioning_status(self) -> Dict:
+        """
+        Vérifie si le versioning est activé sur le bucket.
+        """
+        try:
+            response = self.s3_client.get_bucket_versioning(
+                Bucket=self.bucket_name
+            )
+            return {
+                'status': response.get('Status', 'Disabled'),
+                'mfa_delete': response.get('MFADelete', 'Disabled'),
+            }
+        except Exception as e:
+            return {
+                'status': 'Error',
+                'error': str(e),
+            }

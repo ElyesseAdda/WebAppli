@@ -287,14 +287,30 @@ export const groupSituationsByMonth = (situationsTriees, facturesTriees = []) =>
     }, 0);
 
     const sousTotalMois = sousTotalSituations + sousTotalFactures;
+
+    const montantRecuSituations = situations.reduce((total, situation) => {
+      return total + (parseFloat(situation.montant_reel_ht) || 0);
+    }, 0);
+
+    const montantRecuFactures = factures.reduce((total, facture) => {
+      const priceHt = parseFloat(facture.price_ht) || 0;
+      return total + (facture.state_facture === "Payée" ? priceHt : 0);
+    }, 0);
+
+    const montantRecuMois = montantRecuSituations + montantRecuFactures;
+    const ecartMois = montantRecuMois - sousTotalMois;
     
-    // Ajouter uniquement le sous-total des situations au cumul cumulatif (pas les factures)
-    cumulCumulatif += sousTotalSituations;
+    // Le cumul suit le "Montant HT Situation" du récap mensuel
+    // (mois courant + tous les mois précédents de l'année en cours)
+    cumulCumulatif += sousTotalMois;
 
     itemsAvecSousTotaux.push({
       isSousTotal: true,
       mois: parseInt(mois),
       sousTotal: sousTotalMois,
+      montantHTSituation: sousTotalMois,
+      montantRecuHT: montantRecuMois,
+      ecartMois: ecartMois,
       cumulCumulatif: cumulCumulatif, // Cumul cumulatif jusqu'à ce mois inclus
     });
   });

@@ -1,40 +1,83 @@
-#!/bin/bash
+#!/usr/bin/env bash
+# =============================================================================
+# setup_aliases.sh — Configure les alias sur le serveur P3000
+# =============================================================================
+# À exécuter UNE SEULE FOIS après installation sur le serveur P3000.
+# Usage : bash setup_aliases.sh
+# =============================================================================
 
-echo "🔧 Configuration des alias P3000..."
+CLIENT_NAME="p3000"
+DOMAIN="myp3000app.com"
+APP_DIR="/var/www/p3000/Desktop/Projet/P3000/Application"
+VENV_PATH="/root/venv"
+SERVICE="gunicorn"
+BASHRC="$HOME/.bashrc"
 
-# Configuration
-PROJECT_DIR="/var/www/p3000/Desktop/Projet/P3000/Application"
-
-echo "[INFO] 📁 Répertoire: $PROJECT_DIR"
-cd "$PROJECT_DIR"
+echo ""
+echo "🔧 Configuration des alias ${CLIENT_NAME}..."
+echo ""
 
 # Rendre les scripts exécutables
-chmod +x deploy_auto.sh
-chmod +x restart_app.sh
+chmod +x "${APP_DIR}/deploy_production.sh" 2>/dev/null || true
+chmod +x "${APP_DIR}/restart_app.sh"       2>/dev/null || true
 
-# Ajouter les alias au .bashrc
-echo "[INFO] 🔧 Ajout des alias..."
+# Bloc d'aliases
+ALIASES_BLOCK="
+# ─── Aliases ${CLIENT_NAME} (auto-générés) ───────────────────────────────────
 
-# Alias pour le déploiement complet
-if ! grep -q "alias p3000-deploy" ~/.bashrc; then
-    echo 'alias p3000-deploy="/var/www/p3000/Desktop/Projet/P3000/Application/deploy_auto.sh"' >> ~/.bashrc
-    echo "[INFO] ✅ Alias p3000-deploy ajouté"
-else
-    echo "[INFO] ℹ️ Alias p3000-deploy déjà présent"
+# Aller dans le projet + activer le venv
+function ${CLIENT_NAME}-go() {
+    cd \"${APP_DIR}\"
+    source \"${VENV_PATH}/bin/activate\"
+    export DJANGO_SETTINGS_MODULE=Application.settings_production
+    echo \"✅ Environnement ${CLIENT_NAME} activé\"
+    echo \"📁 \$(pwd)\"
+    echo \"🐍 Python : \$(python --version)\"
+}
+
+# Déploiement complet
+alias ${CLIENT_NAME}-deploy='bash ${APP_DIR}/deploy_production.sh'
+
+# Redémarrage rapide
+alias ${CLIENT_NAME}-restart='bash ${APP_DIR}/restart_app.sh'
+
+# Logs en direct
+alias ${CLIENT_NAME}-logs='journalctl -u ${SERVICE} -f --no-pager'
+
+# Logs des 50 dernières lignes
+alias ${CLIENT_NAME}-logs-tail='journalctl -u ${SERVICE} -n 50 --no-pager'
+
+# Statut du service
+alias ${CLIENT_NAME}-status='systemctl status ${SERVICE} --no-pager'
+
+# Manage.py rapide (depuis n'importe où)
+alias ${CLIENT_NAME}-manage='cd ${APP_DIR} && source ${VENV_PATH}/bin/activate && DJANGO_SETTINGS_MODULE=Application.settings_production python manage.py'
+
+# ─────────────────────────────────────────────────────────────────────────────
+"
+
+# Injection dans .bashrc (évite les doublons)
+if grep -q "Aliases ${CLIENT_NAME}" "$BASHRC" 2>/dev/null; then
+    echo "   ℹ️  Aliases ${CLIENT_NAME} déjà présents — mise à jour..."
+    sed -i "/# ─── Aliases ${CLIENT_NAME}/,/# ───────────────/d" "$BASHRC" 2>/dev/null || true
 fi
 
-# Alias pour le redémarrage rapide
-if ! grep -q "alias p3000-restart" ~/.bashrc; then
-    echo 'alias p3000-restart="/var/www/p3000/Desktop/Projet/P3000/Application/restart_app.sh"' >> ~/.bashrc
-    echo "[INFO] ✅ Alias p3000-restart ajouté"
-else
-    echo "[INFO] ℹ️ Alias p3000-restart déjà présent"
-fi
+echo "$ALIASES_BLOCK" >> "$BASHRC"
+echo "   ✅ Aliases ajoutés dans $BASHRC"
 
-# Recharger le .bashrc
-source ~/.bashrc
+source "$BASHRC" 2>/dev/null || true
 
-echo "[INFO] ✅ Configuration terminée!"
-echo "[INFO] 📝 Commandes disponibles:"
-echo "   - p3000-deploy    : Déploiement complet"
-echo "   - p3000-restart   : Redémarrage rapide"
+echo ""
+echo "✅ Configuration terminée ! Commandes disponibles :"
+echo ""
+echo "   ${CLIENT_NAME}-go          → cd ${APP_DIR} + activer venv"
+echo "   ${CLIENT_NAME}-deploy      → Déploiement complet"
+echo "   ${CLIENT_NAME}-restart     → Redémarrage rapide"
+echo "   ${CLIENT_NAME}-logs        → Logs en direct"
+echo "   ${CLIENT_NAME}-logs-tail   → 50 derniers logs"
+echo "   ${CLIENT_NAME}-status      → Statut du service"
+echo "   ${CLIENT_NAME}-manage <cmd>→ python manage.py <cmd>"
+echo ""
+echo "   ⚠️  Pour que 'p3000-go' fonctionne dans votre shell actuel :"
+echo "   source ~/.bashrc"
+echo ""

@@ -2,7 +2,7 @@ from rest_framework import serializers
 from django.db.models import Q
 from .models import (
     Chantier, Societe, Devis, Partie, SousPartie, LigneDetail, Client, 
-    Agent, Stock, Presence, StockMovement, StockHistory, Event, MonthlyHours, 
+    Agent, Stock, Presence, StockMovement, StockHistory, Event, MonthlyHours, PointageMensuel,
     Schedule, LaborCost, DevisLigne, Facture, FactureLigne, BonCommande, LigneBonCommande,
     Avenant, FactureTS, Situation, SituationLigne, SituationLigneSupplementaire, SituationLigneSpeciale,
     ChantierLigneSupplementaire, SituationLigneAvenant, AgencyExpense, AgencyExpenseOverride,
@@ -10,8 +10,8 @@ from .models import (
     PaiementFournisseurMateriel, FactureFournisseurMateriel, HistoriqueModificationPaiementFournisseur, Fournisseur, Magasin, Banque, AppelOffres, AgencyExpenseAggregate,
     Document, PaiementGlobalSousTraitant, Emetteur, FactureSousTraitant, PaiementFactureSousTraitant,
     AgentPrime, Color, LigneSpeciale, AgencyExpenseMonth, SuiviPaiementSousTraitantMensuel, FactureSuiviSousTraitant,
-    Distributeur, DistributeurMouvement, DistributeurCell, DistributeurVente, DistributeurReapproSession, DistributeurReapproLigne, DistributeurFrais, StockProduct, StockPurchase, StockPurchaseItem, StockLot, StockLoss,
-    EntrepriseConfig
+    Distributeur, DistributeurMouvement, DistributeurCell, DistributeurVente, DistributeurReapproSession, DistributeurReapproLigne, DistributeurFrais, StockProduct, StockProductBestPurchase, StockPurchase, StockPurchaseItem, StockLot, StockLoss,
+    Agence
 )
 from decimal import Decimal, ROUND_HALF_UP
 
@@ -101,12 +101,14 @@ class DevisListSerializer(serializers.ModelSerializer):
     """Serializer allégé pour la liste des devis (pagination rapide)"""
     chantier_name = serializers.SerializerMethodField()
     client_name = serializers.SerializerMethodField()
+    societe_name = serializers.SerializerMethodField()
 
     class Meta:
         model = Devis
         fields = [
             'id', 'numero', 'date_creation', 'price_ht', 'price_ttc',
-            'status', 'chantier_name', 'client_name', 'devis_chantier', 'appel_offres', 'chantier'
+            'status', 'chantier_name', 'client_name', 'societe_name',
+            'devis_chantier', 'appel_offres', 'chantier'
         ]
 
     def get_chantier_name(self, obj):
@@ -138,6 +140,14 @@ class DevisListSerializer(serializers.ModelSerializer):
             return f"{contact.name} {contact.surname}".strip()
         return None
 
+    def get_societe_name(self, obj):
+        societe = None
+        if obj.devis_chantier and obj.appel_offres and obj.appel_offres.societe:
+            societe = obj.appel_offres.societe
+        elif obj.chantier and obj.chantier.societe:
+            societe = obj.chantier.societe
+        return getattr(societe, 'nom_societe', None) if societe else None
+
 
 class DevisSerializer(serializers.ModelSerializer):
     lignes = DevisLigneSerializer(many=True, required=False)
@@ -152,16 +162,17 @@ class DevisSerializer(serializers.ModelSerializer):
     )
     chantier_name = serializers.SerializerMethodField()
     client_name = serializers.SerializerMethodField()
+    societe_name = serializers.SerializerMethodField()
 
     class Meta:
         model = Devis
         fields = [
             'id', 'numero', 'date_creation', 'price_ht', 'price_ttc',
             'tva_rate', 'nature_travaux', 'description', 'status',
-            'chantier', 'appel_offres', 'chantier_name', 'client_name',
+            'chantier', 'appel_offres', 'chantier_name', 'client_name', 'societe_name',
             'client', 'lignes', 'lignes_speciales', 'lignes_display', 'parties_metadata', 'devis_chantier',
             'cout_estime_main_oeuvre', 'cout_estime_materiel', 'lignes_speciales_v2', 'version_systeme_lignes',
-            'contact_societe'
+            'contact_societe', 'societe_devis'
         ]
         read_only_fields = ['client']  # ✅ Retirer date_creation pour permettre sa modification
 
@@ -203,6 +214,14 @@ class DevisSerializer(serializers.ModelSerializer):
         if contact:
             return f"{contact.name} {contact.surname}".strip()
         return None
+
+    def get_societe_name(self, obj):
+        societe = None
+        if obj.devis_chantier and obj.appel_offres and obj.appel_offres.societe:
+            societe = obj.appel_offres.societe
+        elif obj.chantier and obj.chantier.societe:
+            societe = obj.chantier.societe
+        return getattr(societe, 'nom_societe', None) if societe else None
 
     def to_representation(self, instance):
         """
@@ -492,20 +511,10 @@ class ContactSocieteSerializer(serializers.ModelSerializer):
     
 class SocieteSerializer(serializers.ModelSerializer):
     contacts = ContactSocieteSerializer(many=True, read_only=True)
-    logo_url = serializers.SerializerMethodField()
-
+    
     class Meta:
         model = Societe
         fields = '__all__'
-
-    def get_logo_url(self, obj):
-        if obj.logo_s3_key:
-            try:
-                from .utils import generate_presigned_url_for_display
-                return generate_presigned_url_for_display(obj.logo_s3_key, expires_in=3600)
-            except Exception:
-                return None
-        return None
 
 class ChantierSerializer(serializers.ModelSerializer):
     marge_fourniture = serializers.SerializerMethodField()
@@ -530,6 +539,17 @@ class ChantierSerializer(serializers.ModelSerializer):
         cout_estime = float(obj.cout_estime_materiel or 0)
         cout_reel = float(obj.cout_materiel or 0)
         return cout_estime - cout_reel
+
+    def to_representation(self, instance):
+        data = super().to_representation(instance)
+        # Au chargement, privilégier les montants du devis de marché s'il existe (devis déjà modifiés pris en compte)
+        devis_marche = Devis.objects.filter(chantier=instance, devis_chantier=True).first()
+        if devis_marche is not None:
+            if devis_marche.price_ht is not None:
+                data['montant_ht'] = float(devis_marche.price_ht)
+            if devis_marche.price_ttc is not None:
+                data['montant_ttc'] = float(devis_marche.price_ttc)
+        return data
 
 
 
@@ -679,6 +699,12 @@ class ClientSerializer(serializers.ModelSerializer):
     class Meta:
         model = Client
         fields = '__all__'
+        extra_kwargs = {
+            'name': {'required': False, 'allow_blank': True},
+            'surname': {'required': False, 'allow_blank': True},
+            'client_mail': {'required': False, 'allow_blank': True, 'allow_null': True},
+            'phone_Number': {'required': False, 'allow_null': True},
+        }
 
 class MonthlyHoursSerializer(serializers.ModelSerializer):
     class Meta:
@@ -697,6 +723,27 @@ class AgentSerializer(serializers.ModelSerializer):
     class Meta:
         model = Agent
         fields = '__all__'
+
+
+class PointageMensuelSerializer(serializers.ModelSerializer):
+    # Champs complets du pointage mensuel utilises par le tableau de pointage
+    class Meta:
+        model = PointageMensuel
+        fields = [
+            'id',
+            'agent',
+            'month',
+            'salaire_net_initial_hors_prime',
+            'agence',
+            'repartition_montant_charge',
+            'montant_charge',
+            'montant_brut',
+            'accompte',
+            'paiement',
+            'date_paiement',
+            'commentaire',
+            'salaire_overridden',
+        ]
 
 
 class PresenceSerializer(serializers.ModelSerializer):
@@ -885,6 +932,8 @@ class DistributeurCellSerializer(serializers.ModelSerializer):
 class StockProductSerializer(serializers.ModelSerializer):
     initiales = serializers.CharField(read_only=True)
     image_display_url = serializers.SerializerMethodField()
+    best_purchase_price = serializers.SerializerMethodField()
+    best_purchase_location = serializers.SerializerMethodField()
 
     class Meta:
         model = StockProduct
@@ -933,6 +982,18 @@ class StockProductSerializer(serializers.ModelSerializer):
             except Exception:
                 return obj.image_url
         return obj.image_url
+
+    def get_best_purchase_price(self, obj):
+        bp = getattr(obj, 'best_purchase', None)
+        if not bp:
+            return None
+        return float(bp.prix_unitaire)
+
+    def get_best_purchase_location(self, obj):
+        bp = getattr(obj, 'best_purchase', None)
+        if not bp:
+            return None
+        return bp.lieu_achat
 
 
 class StockPurchaseItemSerializer(serializers.ModelSerializer):
@@ -992,6 +1053,11 @@ class StockPurchaseCreateSerializer(serializers.Serializer):
             if 'quantite' not in item or 'prix_unitaire' not in item or 'unite' not in item:
                 raise serializers.ValidationError("Chaque item doit avoir quantite, prix_unitaire et unite")
         return value
+
+    @staticmethod
+    def _is_useful_location(value):
+        v = (value or "").strip().lower()
+        return bool(v) and v not in ["non renseigné", "ajustement manuel", "—"]
 
     def create(self, validated_data):
         """Crée l'achat et ses items, et met à jour les stocks"""
@@ -1081,6 +1147,21 @@ class StockPurchaseCreateSerializer(serializers.Serializer):
                 prix_achat_unitaire=prix_unitaire,
                 date_achat=achat.date_achat
             )
+
+            # 8. Mettre à jour le meilleur achat historique persisté (si lieu utile)
+            lieu_achat = (achat.lieu_achat or "").strip()
+            if produit and self._is_useful_location(lieu_achat):
+                current = StockProductBestPurchase.objects.filter(produit=produit).first()
+                candidate_price = Decimal(str(prix_unitaire))
+                if (not current) or (candidate_price < current.prix_unitaire):
+                    StockProductBestPurchase.objects.update_or_create(
+                        produit=produit,
+                        defaults={
+                            'prix_unitaire': candidate_price,
+                            'lieu_achat': lieu_achat,
+                            'purchase_item': item,
+                        }
+                    )
         
         # Mettre à jour le total de l'achat
         achat.total = total
@@ -1092,7 +1173,7 @@ class StockPurchaseCreateSerializer(serializers.Serializer):
 class ScheduleSerializer(serializers.ModelSerializer):
     class Meta:
         model = Schedule
-        fields = ['id', 'agent', 'week', 'year', 'day', 'hour', 'chantier_id', 'is_sav', 'overtime_hours']
+        fields = ['id', 'agent', 'week', 'year', 'day', 'hour', 'chantier_id', 'is_sav', 'overtime_hours', 'comment']
 
 class LaborCostSerializer(serializers.ModelSerializer):
     # Champs calculés/dérivés
@@ -1138,7 +1219,7 @@ class FactureSerializer(serializers.ModelSerializer):
             'date_echeance', 'date_paiement', 'date_envoi', 'delai_paiement', 
             'mode_paiement', 'devis', 'price_ht', 'price_ttc', 'chantier', 
             'chantier_name', 'devis_numero', 'type_facture', 'designation',
-            'cout_estime_main_oeuvre', 'cout_estime_materiel', 'contact_societe'
+            'cout_estime_main_oeuvre', 'cout_estime_materiel', 'contact_societe', 'societe_devis'
         ]
         read_only_fields = ['date_creation', 'price_ht', 'price_ttc', 'chantier', 'chantier_name']
 
@@ -1265,7 +1346,7 @@ class BonCommandeSerializer(serializers.ModelSerializer):
         return None
 
 class FactureTSSerializer(serializers.ModelSerializer):
-    devis_numero = serializers.CharField(source='numero_complet', read_only=True)
+    devis_numero = serializers.CharField(source='devis.numero', read_only=True)
     devis_date_creation = serializers.DateTimeField(source='devis.date_creation', read_only=True)
     devis_nature_travaux = serializers.CharField(source='devis.nature_travaux', read_only=True)
     devis_status = serializers.CharField(source='devis.status', read_only=True)
@@ -1533,11 +1614,12 @@ class SituationCreateSerializer(serializers.ModelSerializer):
 
     def create(self, validated_data):
         try:
-            # ✅ Si contact_societe n'est pas fourni, copier celui du devis si disponible
-            if 'contact_societe' not in validated_data or validated_data.get('contact_societe') is None:
-                devis = validated_data.get('devis')
-                if devis and hasattr(devis, 'contact_societe') and devis.contact_societe:
+            devis = validated_data.get('devis')
+            if devis:
+                if ('contact_societe' not in validated_data or validated_data.get('contact_societe') is None) and devis.contact_societe:
                     validated_data['contact_societe'] = devis.contact_societe
+                if ('societe_devis' not in validated_data or validated_data.get('societe_devis') is None) and devis.societe_devis:
+                    validated_data['societe_devis'] = devis.societe_devis
             return super().create(validated_data)
         except Exception as e:
             print(f"Erreur lors de la création: {str(e)}")
@@ -1586,8 +1668,8 @@ class SituationLigneUpdateSerializer(serializers.ModelSerializer):
         return instance
 
 class FactureTSListSerializer(serializers.ModelSerializer):
-    devis_numero = serializers.CharField(source='numero_complet', read_only=True)
-    avenant_numero = serializers.IntegerField(source='avenant.numero', read_only=True)
+    devis_numero = serializers.CharField(source='devis.numero', read_only=True)
+    avenant_numero = serializers.CharField(source='avenant.numero', read_only=True)
     
     class Meta:
         model = FactureTS
@@ -1613,17 +1695,42 @@ class AgencyExpenseOverrideSerializer(serializers.ModelSerializer):
         model = AgencyExpenseOverride
         fields = ['month', 'year', 'description', 'amount']
 
+class AgenceSerializer(serializers.ModelSerializer):
+    chantier_name = serializers.CharField(source='chantier.chantier_name', read_only=True)
+    can_delete = serializers.SerializerMethodField()
+    delete_blockers = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Agence
+        fields = ['id', 'nom', 'chantier', 'chantier_name', 'created_at', 'can_delete', 'delete_blockers']
+        read_only_fields = ['chantier', 'chantier_name', 'created_at']
+
+    def _get_delete_blockers(self, obj):
+        blockers = []
+        if (obj.nom or "").strip().lower() == "agence":
+            blockers.append("Agence par défaut protégée")
+        return blockers
+
+    def get_can_delete(self, obj):
+        return len(self._get_delete_blockers(obj)) == 0
+
+    def get_delete_blockers(self, obj):
+        return self._get_delete_blockers(obj)
+
+
 class AgencyExpenseSerializer(serializers.ModelSerializer):
     current_override = serializers.SerializerMethodField()
     sous_traitant_name = serializers.CharField(source='sous_traitant.entreprise', read_only=True)
     chantier_name = serializers.CharField(source='chantier.chantier_name', read_only=True)
+    agence_nom = serializers.CharField(source='agence.nom', read_only=True)
 
     class Meta:
         model = AgencyExpense
         fields = [
             'id', 'description', 'amount', 'type', 'date', 'end_date', 
             'category', 'current_override', 'sous_traitant', 'sous_traitant_name',
-            'chantier', 'chantier_name', 'agent', 'is_ecole_expense', 'ecole_hours'
+            'chantier', 'chantier_name', 'agent', 'is_ecole_expense', 'ecole_hours',
+            'agence', 'agence_nom'
         ]
 
     def get_current_override(self, obj):
@@ -1639,11 +1746,12 @@ class AgencyExpenseMonthSerializer(serializers.ModelSerializer):
     agent_name = serializers.SerializerMethodField()
     date_paiement_prevue = serializers.SerializerMethodField()
     recurrence_parent = serializers.PrimaryKeyRelatedField(read_only=True)
+    agence_nom = serializers.CharField(source='agence.nom', read_only=True)
 
     class Meta:
         model = AgencyExpenseMonth
         fields = [
-            'id', 'description', 'amount', 'category', 'month', 'year', 
+            'id', 'description', 'amount', 'montant_paye', 'category', 'month', 'year', 
             'date_paiement', 'date_reception_facture', 'date_paiement_reel', 'delai_paiement',
             'date_paiement_prevue', 'factures',
             'sous_traitant', 'sous_traitant_name', 'chantier', 'chantier_name',
@@ -1651,6 +1759,8 @@ class AgencyExpenseMonthSerializer(serializers.ModelSerializer):
             'source_expense',
             'is_recurring_template', 'recurrence_start', 'recurrence_end',
             'closed_until', 'recurrence_parent',
+            'agence', 'agence_nom',
+            'commentaire',
             'created_at', 'updated_at'
         ]
     
@@ -1893,6 +2003,14 @@ class RecapFinancierSerializer(serializers.Serializer):
     montant_ht = serializers.FloatField()
     taux_fixe = serializers.FloatField()
     montant_taux_fixe = serializers.FloatField()
+    # Présent uniquement en mode mois/année : coûts payés cumulés depuis l'origine jusqu'à fin du mois
+    cout_chantier_cumul_jusqua_fin_mois = serializers.DictField(
+        required=False, allow_null=True
+    )
+    # Encaissements clients encore dus (toutes périodes), ventilés par échéance vs aujourd'hui
+    encours_paiements_clients = serializers.DictField(required=False, allow_null=True)
+    # Prévisionnel coûts chantier (source: décomposition devis + factures + avenants)
+    previsionnel_couts_chantier = serializers.DictField(required=False, allow_null=True)
 
 class FactureFournisseurMaterielSerializer(serializers.ModelSerializer):
     class Meta:
@@ -1945,24 +2063,46 @@ class AppelOffresSerializer(serializers.ModelSerializer):
     deja_transforme = serializers.SerializerMethodField()
     chantier_transformé_id = serializers.SerializerMethodField()
     chantier_transformé_name = serializers.SerializerMethodField()
-    
+
+    def _get_devis_chantier(self, obj):
+        """
+        Retourne le devis le plus pertinent pour l'affichage des montants :
+        - AO transformé → devis de chantier (devis_chantier=True) du chantier lié
+        - AO non transformé → devis lié directement via FK appel_offres, le plus récent
+        """
+        if obj.chantier_transformé:
+            return obj.chantier_transformé.devis.filter(devis_chantier=True).first()
+        # Devis lié directement à l'AO (non transformé)
+        return obj.devis.order_by('-date_creation').first()
+
     def get_deja_transforme(self, obj):
         """Vérifie si l'appel d'offres a déjà été transformé en chantier"""
         # ✅ Utiliser le champ chantier_transformé qui persiste même après rechargement
         return obj.chantier_transformé is not None
-    
+
     def get_chantier_transformé_id(self, obj):
         """Retourne l'ID du chantier transformé si existant"""
         if obj.chantier_transformé:
             return obj.chantier_transformé.id
         return None
-    
+
     def get_chantier_transformé_name(self, obj):
         """Retourne le nom du chantier transformé si existant"""
         if obj.chantier_transformé:
             return obj.chantier_transformé.chantier_name
         return None
-    
+
+    def to_representation(self, instance):
+        """Affiche les montants du devis de chantier quand l'appel d'offres a été transformé."""
+        data = super().to_representation(instance)
+        devis = self._get_devis_chantier(instance)
+        if devis is not None:
+            if devis.price_ht is not None:
+                data['montant_ht'] = float(devis.price_ht)
+            if devis.price_ttc is not None:
+                data['montant_ttc'] = float(devis.price_ttc)
+        return data
+
     class Meta:
         model = AppelOffres
         fields = '__all__'
@@ -2081,6 +2221,7 @@ class AgentPrimeSerializer(serializers.ModelSerializer):
     agent_name = serializers.CharField(source='agent.name', read_only=True)
     agent_surname = serializers.CharField(source='agent.surname', read_only=True)
     chantier_name = serializers.CharField(source='chantier.chantier_name', read_only=True, allow_null=True)
+    agence_nom = serializers.CharField(source='agence.nom', read_only=True, allow_null=True)
     type_affectation_display = serializers.CharField(source='get_type_affectation_display', read_only=True)
     
     class Meta:
@@ -2090,25 +2231,33 @@ class AgentPrimeSerializer(serializers.ModelSerializer):
             'mois', 'annee', 'montant', 'description',
             'type_affectation', 'type_affectation_display',
             'chantier', 'chantier_name',
+            'agence', 'agence_nom',
             'created_at', 'updated_at', 'created_by'
         ]
         read_only_fields = ['created_at', 'updated_at', 'created_by']
     
     def validate(self, data):
         """Validation personnalisée"""
-        # Si type_affectation = 'chantier', chantier est obligatoire
         if data.get('type_affectation') == 'chantier' and not data.get('chantier'):
             raise serializers.ValidationError({
                 'chantier': "Un chantier doit être spécifié pour une prime de type 'chantier'"
             })
         
-        # Si type_affectation = 'agence', chantier doit être null
+        if data.get('type_affectation') == 'agence' and not data.get('agence'):
+            raise serializers.ValidationError({
+                'agence': "Une agence doit être spécifiée pour une prime de type 'agence'"
+            })
+        
         if data.get('type_affectation') == 'agence' and data.get('chantier'):
             raise serializers.ValidationError({
                 'chantier': "Une prime de type 'agence' ne peut pas avoir de chantier associé"
             })
         
-        # Vérifier que le montant est positif
+        if data.get('type_affectation') == 'chantier' and data.get('agence'):
+            raise serializers.ValidationError({
+                'agence': "Une prime de type 'chantier' ne peut pas avoir d'agence associée"
+            })
+        
         if data.get('montant') and data['montant'] <= 0:
             raise serializers.ValidationError({
                 'montant': "Le montant de la prime doit être positif"
@@ -2145,6 +2294,7 @@ class FactureSuiviSousTraitantSerializer(serializers.ModelSerializer):
         model = FactureSuiviSousTraitant
         fields = [
             'id',
+            'suivi_paiement',
             'numero_facture',
             'montant_facture_ht',
             'payee',
@@ -2199,37 +2349,3 @@ class SuiviPaiementSousTraitantMensuelSerializer(serializers.ModelSerializer):
             })
         
         return data
-
-
-class EntrepriseConfigSerializer(serializers.ModelSerializer):
-    """Serializer pour la configuration entreprise (lecture seule pour le frontend)."""
-    logo_url = serializers.SerializerMethodField()
-
-    class Meta:
-        model = EntrepriseConfig
-        fields = [
-            'nom', 'forme_juridique', 'capital',
-            'adresse', 'code_postal', 'ville',
-            'rcs', 'siret', 'tva_intra',
-            'email', 'telephone',
-            'representant_nom', 'representant_fonction',
-            'nom_application', 'domaine_public',
-            'logo_url',
-        ]
-        read_only_fields = [
-            'nom', 'forme_juridique', 'capital',
-            'adresse', 'code_postal', 'ville',
-            'rcs', 'siret', 'tva_intra',
-            'email', 'telephone',
-            'representant_nom', 'representant_fonction',
-            'nom_application', 'domaine_public',
-        ]
-
-    def get_logo_url(self, obj):
-        if obj and getattr(obj, 'logo_s3_key', None):
-            try:
-                from .utils import generate_presigned_url_for_display
-                return generate_presigned_url_for_display(obj.logo_s3_key, expires_in=3600)
-            except Exception:
-                return None
-        return None

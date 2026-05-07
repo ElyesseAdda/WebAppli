@@ -12,6 +12,14 @@ from rest_framework.response import Response
 from rest_framework import status
 
 from .pdf_manager import pdf_manager
+from .utils import get_user_initials
+
+
+def _get_modified_by(request):
+    """Retourne les initiales de l'utilisateur ou 'Application' si non authentifié."""
+    if hasattr(request, 'user') and request.user and request.user.is_authenticated:
+        return get_user_initials(request.user)
+    return "Application"
 
 
 @api_view(['GET'])
@@ -61,6 +69,7 @@ def planning_hebdo_pdf_drive(request):
             preview_url=preview_url,
             societe_name=societe_name,
             force_replace=force_replace,
+            modified_by=_get_modified_by(request),
             **pdf_kwargs
         )
         
@@ -134,6 +143,7 @@ def generate_monthly_agents_pdf_drive(request):
             preview_url=preview_url,
             societe_name=societe_name,
             force_replace=force_replace,
+            modified_by=_get_modified_by(request),
             **pdf_kwargs
         )
         
@@ -250,6 +260,7 @@ def generate_devis_travaux_pdf_drive(request):
             preview_url=preview_url,
             societe_name=societe_name,
             force_replace=force_replace,
+            modified_by=_get_modified_by(request),
             **pdf_kwargs
         )
         
@@ -370,6 +381,7 @@ def generate_devis_marche_pdf_drive(request):
             preview_url=preview_url,
             societe_name=societe_name,
             force_replace=force_replace,
+            modified_by=_get_modified_by(request),
             **pdf_kwargs
         )
         
@@ -497,6 +509,7 @@ def replace_file_after_confirmation(request):
             document_type=document_type,
             preview_url=preview_url,
             societe_name=societe_name,
+            modified_by=_get_modified_by(request),
             **kwargs
         )
         
@@ -727,6 +740,7 @@ def generate_devis_marche_auto(request):
             document_type='devis_marche',
             preview_url=preview_url,
             societe_name=societe_name,
+            modified_by=_get_modified_by(request),
             appel_offres_id=appel_offres_id,
             appel_offres_name=appel_offres_name
         )
@@ -810,10 +824,11 @@ def generate_contrat_sous_traitance_pdf_drive(request):
             document_type='contrat_sous_traitance',
             preview_url=preview_url,
             societe_name=societe_name,
+            force_replace=request.GET.get('force_replace', 'false').lower() == 'true',
+            modified_by=_get_modified_by(request),
             chantier_id=chantier_id,
             chantier_name=chantier_name,
-            sous_traitant_name=sous_traitant_name,
-            force_replace=request.GET.get('force_replace', 'false').lower() == 'true'
+            sous_traitant_name=sous_traitant_name
         )
         
         if success:
@@ -874,11 +889,12 @@ def generate_avenant_sous_traitance_pdf_drive(request):
             document_type='avenant_sous_traitance',
             preview_url=preview_url,
             societe_name=societe_name,
+            force_replace=request.GET.get('force_replace', 'false').lower() == 'true',
+            modified_by=_get_modified_by(request),
             chantier_id=chantier_id,
             chantier_name=chantier_name,
             sous_traitant_name=sous_traitant_name,
-            avenant_numero=numero_avenant,
-            force_replace=request.GET.get('force_replace', 'false').lower() == 'true'
+            avenant_numero=numero_avenant
         )
         
         if success:
@@ -903,6 +919,125 @@ def generate_avenant_sous_traitance_pdf_drive(request):
                 'error': message
             }, status=500)
             
+    except Exception as e:
+        error_msg = f'Erreur inattendue: {str(e)}'
+        print(f"ERREUR: {error_msg}")
+        return JsonResponse({'error': error_msg}, status=500)
+
+
+@api_view(['GET'])
+@permission_classes([AllowAny])
+def generate_certificat_paiement_pdf_drive(request):
+    """
+    Vue pour générer le PDF du certificat de paiement sous-traitant et le stocker dans AWS S3
+    """
+    try:
+        contrat_id = request.GET.get('contrat_id')
+        chantier_id = request.GET.get('chantier_id')
+        chantier_name = request.GET.get('chantier_name', 'Chantier')
+        societe_name = request.GET.get('societe_name', 'Société par défaut')
+        sous_traitant_name = request.GET.get('sous_traitant_name', 'Sous-traitant')
+        numero_certificat = request.GET.get('numero_certificat', '1')
+        facture_id = request.GET.get('facture_id', '')
+        mois = request.GET.get('mois', '')
+        annee = request.GET.get('annee', '')
+        force_replace = request.GET.get('force_replace', 'false').lower() == 'true'
+        custom_filename = request.GET.get('custom_filename', '')
+
+        if not contrat_id:
+            return JsonResponse({
+                'success': False,
+                'error': 'contrat_id est requis pour générer le certificat de paiement'
+            }, status=400)
+
+        # Construire l'URL de prévisualisation
+        preview_url = request.build_absolute_uri(
+            f"/api/preview-certificat-paiement/{contrat_id}/"
+        )
+        # Ajouter les paramètres GET pour la preview
+        preview_params = []
+        if facture_id:
+            preview_params.append(f"facture_id={facture_id}")
+        if numero_certificat:
+            preview_params.append(f"numero_certificat={numero_certificat}")
+        if preview_params:
+            preview_url += '?' + '&'.join(preview_params)
+
+        # Si mois/annee non fournis, essayer de les récupérer depuis la facture
+        if facture_id and (not mois or not annee):
+            try:
+                from .models import FactureSousTraitant
+                facture_obj = FactureSousTraitant.objects.get(id=facture_id)
+                if not mois:
+                    mois = str(facture_obj.mois)
+                if not annee:
+                    annee = str(facture_obj.annee)
+            except Exception:
+                pass
+
+        # Préparer les kwargs pour le PDF manager
+        pdf_kwargs = {
+            'chantier_id': chantier_id,
+            'chantier_name': chantier_name,
+            'sous_traitant_name': sous_traitant_name,
+            'numero_certificat': numero_certificat,
+            'mois': mois or '01',
+            'annee': annee or '2026',
+        }
+        if custom_filename:
+            pdf_kwargs['custom_filename'] = custom_filename
+
+        # Générer le PDF et le stocker dans AWS S3
+        success, message, s3_file_path, conflict_detected = pdf_manager.generate_andStore_pdf(
+            document_type='certificat_paiement',
+            preview_url=preview_url,
+            societe_name=societe_name,
+            force_replace=force_replace,
+            modified_by=_get_modified_by(request),
+            **pdf_kwargs
+        )
+
+        if conflict_detected and not success:
+            return JsonResponse({
+                'success': False,
+                'error': message,
+                'conflict_detected': True,
+                'file_name': s3_file_path.split('/')[-1] if s3_file_path else '',
+                'file_path': s3_file_path,
+                'drive_url': f"/drive-v2?path={s3_file_path}&focus=file" if s3_file_path else '',
+                'contrat_id': contrat_id,
+                'chantier_id': chantier_id,
+                'chantier_name': chantier_name,
+                'societe_name': societe_name,
+                'sous_traitant_name': sous_traitant_name,
+                'numero_certificat': numero_certificat,
+                'mois': mois,
+                'annee': annee,
+            }, status=409)
+
+        if success:
+            return JsonResponse({
+                'success': True,
+                'message': f'Certificat de paiement n°{numero_certificat} - {sous_traitant_name} généré et stocké avec succès dans le Drive',
+                'file_path': s3_file_path,
+                'file_name': s3_file_path.split('/')[-1],
+                'drive_url': f"/drive-v2?path={s3_file_path}&focus=file",
+                'redirect_to': f"/drive-v2?path={s3_file_path}&focus=file",
+                'document_type': 'certificat_paiement',
+                'societe_name': societe_name,
+                'chantier_id': chantier_id,
+                'chantier_name': chantier_name,
+                'sous_traitant_name': sous_traitant_name,
+                'numero_certificat': numero_certificat,
+                'download_url': f"/api/download-pdf-from-s3?path={s3_file_path}",
+                'conflict_detected': conflict_detected,
+            })
+        else:
+            return JsonResponse({
+                'success': False,
+                'error': message
+            }, status=500)
+
     except Exception as e:
         error_msg = f'Erreur inattendue: {str(e)}'
         print(f"ERREUR: {error_msg}")
@@ -949,6 +1084,7 @@ def generate_situation_pdf_drive(request):
             preview_url=preview_url,
             societe_name=societe_name,
             force_replace=force_replace,
+            modified_by=_get_modified_by(request),
             **pdf_kwargs
         )
         
@@ -1050,6 +1186,7 @@ def generate_bon_commande_pdf_drive(request):
             preview_url=preview_url,
             societe_name=societe_name,
             force_replace=force_replace,
+            modified_by=_get_modified_by(request),
             **pdf_kwargs
         )
         
@@ -1138,6 +1275,7 @@ def generate_facture_pdf_drive(request):
             preview_url=preview_url,
             societe_name=societe_name,
             force_replace=force_replace,
+            modified_by=_get_modified_by(request),
             facture_id=facture_id,
             chantier_id=chantier_id,
             chantier_name=chantier_name,

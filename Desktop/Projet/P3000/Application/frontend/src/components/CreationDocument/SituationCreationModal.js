@@ -27,7 +27,6 @@ import axios from "axios";
 import React, { useEffect, useState } from "react";
 import { FaChevronDown, FaChevronUp, FaTrash } from "react-icons/fa";
 import { generatePDFDrive } from "../../utils/universalDriveGenerator";
-import { COLORS, withOpacity } from "../../constants/colors";
 
 const MOIS = [
   { value: 1, label: "Janvier" },
@@ -107,7 +106,7 @@ const PartieRow = ({ partie, handlePourcentageChange, lignesSpeciales }) => {
   // Fonction pour obtenir la couleur de comparaison
   const getComparisonColor = (current, previous) => {
     if (current < previous) return "error.main"; // Rouge
-    if (current > previous) return COLORS.success; // Vert personnalisé
+    if (current > previous) return "rgb(0, 223, 56)"; // Vert personnalisé
     return "text.primary"; // Noir
   };
 
@@ -115,7 +114,7 @@ const PartieRow = ({ partie, handlePourcentageChange, lignesSpeciales }) => {
     <>
       <TableRow
         sx={{
-          backgroundColor: COLORS.primary,
+          backgroundColor: "rgba(27, 120, 188, 1)",
           "& td": { color: "white", padding: "8px" },
         }}
       >
@@ -169,7 +168,7 @@ const PartieRow = ({ partie, handlePourcentageChange, lignesSpeciales }) => {
                           key={ligne.id}
                           sx={{
                             backgroundColor:
-                              index % 2 === 0 ? "white" : withOpacity(COLORS.black, 0.05),
+                              index % 2 === 0 ? "white" : "rgba(0, 0, 0, 0.05)",
                             "& td": { padding: "8px" },
                           }}
                         >
@@ -280,7 +279,7 @@ const PartieRow = ({ partie, handlePourcentageChange, lignesSpeciales }) => {
                       key={ligne.id}
                       sx={{
                         backgroundColor:
-                          index % 2 === 0 ? "white" : withOpacity(COLORS.black, 0.05),
+                          index % 2 === 0 ? "white" : "rgba(0, 0, 0, 0.05)",
                         "& td": { padding: "8px" },
                       }}
                     >
@@ -434,7 +433,7 @@ const SousPartieTable = ({
 
   const getComparisonColor = (current, previous) => {
     if (current < previous) return "error.main"; // Rouge
-    if (current > previous) return COLORS.success; // Vert personnalisé
+    if (current > previous) return "rgb(0, 223, 56)"; // Vert personnalisé
     return "text.primary"; // Noir
   };
 
@@ -444,13 +443,12 @@ const SousPartieTable = ({
         <TableBody>
           <TableRow
             sx={{
-              backgroundColor: COLORS.primaryLight,
-              color: "white",
-              "& td": { padding: "8px", color: "white" },
+              backgroundColor: "rgb(157, 197, 226)",
+              "& td": { padding: "8px" },
             }}
           >
             <TableCell sx={{ width: "50px", padding: "8px" }}>
-              <IconButton size="small" onClick={() => setOpen(!open)} sx={{ color: "white" }}>
+              <IconButton size="small" onClick={() => setOpen(!open)}>
                 {open ? <FaChevronUp /> : <FaChevronDown />}
               </IconButton>
             </TableCell>
@@ -491,7 +489,7 @@ const SousPartieTable = ({
                 key={ligne.id}
                 sx={{
                   backgroundColor:
-                    index % 2 === 0 ? "white" : withOpacity(COLORS.black, 0.05),
+                    index % 2 === 0 ? "white" : "rgba(0, 0, 0, 0.05)",
                   "& td": { padding: "8px" },
                 }}
               >
@@ -581,7 +579,7 @@ const SousPartieTable = ({
                     key={ligne.id}
                     sx={{
                       backgroundColor:
-                        index % 2 === 0 ? "white" : withOpacity(COLORS.black, 0.05),
+                        index % 2 === 0 ? "white" : "rgba(0, 0, 0, 0.05)",
                       "& td": { padding: "8px" },
                     }}
                   >
@@ -711,7 +709,7 @@ const AvenantSousPartieTable = ({ avenant, handlePourcentageChange }) => {
 
   const getComparisonColor = (current, previous) => {
     if (current < previous) return "error.main"; // Rouge
-    if (current > previous) return COLORS.success; // Vert personnalisé
+    if (current > previous) return "rgb(0, 223, 56)"; // Vert personnalisé
     return "text.primary"; // Noir
   };
 
@@ -721,18 +719,17 @@ const AvenantSousPartieTable = ({ avenant, handlePourcentageChange }) => {
         <TableBody>
           <TableRow
             sx={{
-              backgroundColor: COLORS.primaryLight,
-              color: "white",
-              "& td": { padding: "8px", color: "white" },
+              backgroundColor: "rgb(157, 197, 226)",
+              "& td": { padding: "8px" },
             }}
           >
             <TableCell sx={{ width: "50px", padding: "8px" }}>
-              <IconButton size="small" onClick={() => setOpen(!open)} sx={{ color: "white" }}>
+              <IconButton size="small" onClick={() => setOpen(!open)}>
                 {open ? <FaChevronUp /> : <FaChevronDown />}
               </IconButton>
             </TableCell>
             <TableCell sx={{ width: "300px", padding: "8px" }}>
-              Avenant n°{avenant.numero}
+              {avenant.numero}
             </TableCell>
             <TableCell
               sx={{ width: "100px", padding: "8px" }}
@@ -765,7 +762,7 @@ const AvenantSousPartieTable = ({ avenant, handlePourcentageChange }) => {
                         key={ts.id}
                         sx={{
                           backgroundColor:
-                            index % 2 === 0 ? "white" : withOpacity(COLORS.black, 0.05),
+                            index % 2 === 0 ? "white" : "rgba(0, 0, 0, 0.05)",
                           "& td": { padding: "8px" },
                         }}
                       >
@@ -775,7 +772,6 @@ const AvenantSousPartieTable = ({ avenant, handlePourcentageChange }) => {
                         <TableCell sx={{ width: "300px", padding: "8px" }}>
                           {ts.devis_numero ||
                             `TS n°${String(ts.numero_ts).padStart(3, "0")}`}
-                          {ts.designation}
                         </TableCell>
                         <TableCell
                           sx={{ width: "100px", padding: "8px" }}
@@ -896,7 +892,7 @@ const AvenantsPartieRow = ({ avenants, handlePourcentageChange }) => {
     <>
       <TableRow
         sx={{
-          backgroundColor: COLORS.primary,
+          backgroundColor: "rgba(27, 120, 188, 1)",
           "& td": { color: "white", padding: "8px" },
         }}
       >
@@ -969,8 +965,8 @@ const SituationCreationModal = ({
   const [totalAvancement, setTotalAvancement] = useState(0);
   const [avenants, setAvenants] = useState([]);
   const [montantTotalAvenants, setMontantTotalAvenants] = useState(0);
-  const [tauxProrata, setTauxProrata] = useState(0); // Elekable: 0 par défaut
-  const [tauxRetenueGarantie, setTauxRetenueGarantie] = useState(0); // Elekable: 0 par défaut
+  const [tauxProrata, setTauxProrata] = useState(2.5);
+  const [tauxRetenueGarantie, setTauxRetenueGarantie] = useState(5.0);
   const [montantHTMois, setMontantHTMois] = useState(0);
   const [lastSituation, setLastSituation] = useState(null);
   const [lignesSupplementaires, setLignesSupplementaires] = useState([]);
@@ -1728,8 +1724,8 @@ const SituationCreationModal = ({
             }
 
             // Pré-remplir les champs avec les données existantes
-            setTauxProrata(currentSituation.taux_prorata ?? 0); // Elekable: 0 par défaut
-            setTauxRetenueGarantie(currentSituation.taux_retenue_garantie ?? 0); // Elekable: 0 par défaut
+            setTauxProrata(currentSituation.taux_prorata || 2.5);
+            setTauxRetenueGarantie(currentSituation.taux_retenue_garantie !== null && currentSituation.taux_retenue_garantie !== undefined ? currentSituation.taux_retenue_garantie : 5.0);
             setRetenueCIE(currentSituation.retenue_cie || 0);
             setTypeRetenueCIE(currentSituation.type_retenue_cie || 'deduction');
             
@@ -1854,6 +1850,12 @@ const SituationCreationModal = ({
 
               // Définir la situation précédente comme lastSituation
               setLastSituation(situationPrecedente);
+
+              // Propager les taux depuis la situation précédente
+              setTauxProrata(situationPrecedente.taux_prorata ?? 2.5);
+              setTauxRetenueGarantie(situationPrecedente.taux_retenue_garantie ?? 5.0);
+              setRetenueCIE(situationPrecedente.retenue_cie ?? 0);
+              setTypeRetenueCIE(situationPrecedente.type_retenue_cie ?? 'deduction');
 
               // Réinitialiser la structure avec les pourcentages précédents
               const newStructure = structure.map((partie) => ({
@@ -1994,7 +1996,8 @@ const SituationCreationModal = ({
     isNewSituation = false,
     mergedLignes = null
   ) => {
-    setTauxProrata(situation.taux_prorata);
+    setTauxProrata(situation.taux_prorata ?? 2.5);
+    setTauxRetenueGarantie(situation.taux_retenue_garantie ?? 5.0);
     setLastSituation(situation);
 
     // Mettre à jour les pourcentages de la structure
@@ -2073,8 +2076,8 @@ const SituationCreationModal = ({
 
   // Fonction pour réinitialiser les données
   const resetSituationData = () => {
-    setTauxProrata(0); // Elekable: 0 par défaut
-    setTauxRetenueGarantie(0); // Elekable: 0 par défaut
+    setTauxProrata(2.5); // Valeur par défaut
+    setTauxRetenueGarantie(5.0); // Valeur par défaut
     setLastSituation(null);
     setLignesSupplementaires([]);
     setRetenueCIE(0);
@@ -2158,7 +2161,7 @@ const SituationCreationModal = ({
 
   const getComparisonColor = (current, previous) => {
     if (current < previous) return "error.main"; // Rouge
-    if (current > previous) return COLORS.success; // Vert personnalisé
+    if (current > previous) return "rgb(0, 223, 56)"; // Vert personnalisé
     return "text.primary"; // Noir
   };
 
@@ -2946,7 +2949,7 @@ const SituationCreationModal = ({
                       key={ligne.id}
                       sx={{
                         backgroundColor:
-                          index % 2 === 0 ? "white" : withOpacity(COLORS.black, 0.05),
+                          index % 2 === 0 ? "white" : "rgba(0, 0, 0, 0.05)",
                         "& td": { padding: "8px" },
                       }}
                     >

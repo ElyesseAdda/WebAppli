@@ -36,6 +36,13 @@ const clearReapproFromStorage = () => {
   }
 };
 
+const formatLocalDateTimeForInput = (date = new Date()) => {
+  const pad = (n) => String(n).padStart(2, "0");
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(
+    date.getHours()
+  )}:${pad(date.getMinutes())}`;
+};
+
 export function getReapproFromStorage() {
   try {
     const raw = localStorage.getItem(REAPPRO_STORAGE_KEY);
@@ -64,6 +71,7 @@ const MouvementReapproPage = ({
   const [errorModal, setErrorModal] = useState({ open: false, error: null, insuffisant: [] });
   const [confirmAnnuler, setConfirmAnnuler] = useState(false);
   const [annulating, setAnnulating] = useState(false);
+  const [dateMouvement, setDateMouvement] = useState(formatLocalDateTimeForInput());
 
   const rows = distributeur?.grid_rows || 3;
   const columns =
@@ -95,6 +103,11 @@ const MouvementReapproPage = ({
         `/api/distributeur-reappro-sessions/${sessionId}/`
       );
       setSession(response.data);
+      setDateMouvement(
+        response.data?.date_fin
+          ? formatLocalDateTimeForInput(new Date(response.data.date_fin))
+          : formatLocalDateTimeForInput()
+      );
     } catch (error) {
       console.error("Erreur chargement session:", error);
       if (error.response?.status === 404) {
@@ -159,7 +172,8 @@ const MouvementReapproPage = ({
     setTerminating(true);
     try {
       await axios.post(
-        `/api/distributeur-reappro-sessions/${sessionId}/terminer/`
+        `/api/distributeur-reappro-sessions/${sessionId}/terminer/`,
+        { date_fin: dateMouvement }
       );
       clearReapproFromStorage();
       if (onTerminer) onTerminer();
@@ -500,6 +514,15 @@ const MouvementReapproPage = ({
 
       {/* Terminer / Annuler le mouvement */}
       <Box sx={{ px: 2, pt: 1, pb: 2, display: "flex", flexDirection: "column", gap: 1 }}>
+        <TextField
+          label="Date du mouvement"
+          type="datetime-local"
+          value={dateMouvement}
+          onChange={(event) => setDateMouvement(event.target.value)}
+          InputLabelProps={{ shrink: true }}
+          fullWidth
+          size="small"
+        />
         <Button
           variant="contained"
           fullWidth

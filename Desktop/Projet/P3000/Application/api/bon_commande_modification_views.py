@@ -8,7 +8,7 @@ from rest_framework import status
 from django.http import JsonResponse
 from .models import BonCommande, Chantier
 from .pdf_manager import PDFManager
-from .utils import create_s3_folder_recursive
+from .utils import create_s3_folder_recursive, get_user_initials
 import logging
 from datetime import datetime
 
@@ -104,11 +104,13 @@ def regenerate_bon_commande_pdf(request, bon_commande_id):
         
         # Générer le PDF avec le PDF Manager
         logger.info("🚀 Début de la génération du nouveau PDF...")
+        _modified_by = get_user_initials(request.user) if hasattr(request, 'user') and request.user and request.user.is_authenticated else "Application"
         success, message, s3_file_path, conflict_detected = pdf_manager.generate_andStore_pdf(
             document_type='bon_commande',
             preview_url=preview_url,
             societe_name=societe_name,
             force_replace=True,
+            modified_by=_modified_by,
             bon_commande_id=bon_commande.id,
             chantier_id=chantier_id,
             chantier_name=chantier_name,

@@ -44,6 +44,46 @@ const formatNumber = (number) => {
   return formatted.replace(/\B(?=(\d{3})+(?!\d))/g, " ");
 };
 
+const toInputDate = (value) => {
+  if (!value) return "";
+  if (/^\d{4}-\d{2}-\d{2}$/.test(value)) return value;
+
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "";
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+};
+
+const formatDateFr = (value) => {
+  if (!value) return "-";
+  if (/^\d{4}-\d{2}-\d{2}$/.test(value)) {
+    const [year, month, day] = value.split("-");
+    return `${day}/${month}/${year}`;
+  }
+
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "-";
+  return date.toLocaleDateString("fr-FR", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+  });
+};
+
+const getEditableDevisNumero = (item) => {
+  const fullNumero = String(item?.devis_numero ?? "").trim();
+  const designation = String(item?.designation ?? "").trim();
+  if (!fullNumero) return "";
+  if (!designation) return fullNumero;
+
+  const suffix = ` - ${designation}`;
+  return fullNumero.endsWith(suffix)
+    ? fullNumero.slice(0, -suffix.length).trim()
+    : fullNumero;
+};
+
 const ChantierListeAvenants = ({
   chantierData,
   avenants,
@@ -60,6 +100,12 @@ const ChantierListeAvenants = ({
   const [anchorEl, setAnchorEl] = useState(null);
   const [selectedAvenant, setSelectedAvenant] = useState(null);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [editNumeroDialogOpen, setEditNumeroDialogOpen] = useState(false);
+  const [avenantToEditNumero, setAvenantToEditNumero] = useState(null);
+  const [newNumeroValue, setNewNumeroValue] = useState("");
+  const [editDevisNumeroDialogOpen, setEditDevisNumeroDialogOpen] = useState(false);
+  const [devisToEditNumero, setDevisToEditNumero] = useState(null);
+  const [newDevisNumeroValue, setNewDevisNumeroValue] = useState("");
   const [pendingSave, setPendingSave] = useState(false);
   const [snackbar, setSnackbar] = useState({ open: false, message: "", severity: "info" });
 
@@ -145,9 +191,7 @@ const ChantierListeAvenants = ({
               .includes(filters[key].toLowerCase());
           case "date_creation":
             if (!filters[key]) return true;
-            const itemDate = new Date(item.date_creation)
-              .toISOString()
-              .split("T")[0];
+            const itemDate = toInputDate(item.date_creation);
             return itemDate === filters[key];
           case "montant":
             const itemMontant = item.montant_ht?.toString() || "";
@@ -227,6 +271,106 @@ const ChantierListeAvenants = ({
     setAnchorEl(null);
   };
 
+  const handleEditNumeroClick = () => {
+    if (selectedAvenant) {
+      setAvenantToEditNumero(selectedAvenant);
+      setNewNumeroValue(String(selectedAvenant.avenant_numero ?? ""));
+      setEditNumeroDialogOpen(true);
+    }
+    setAnchorEl(null);
+  };
+
+  const handleEditNumeroClose = () => {
+    setEditNumeroDialogOpen(false);
+    setAvenantToEditNumero(null);
+    setNewNumeroValue("");
+  };
+
+  const handleEditNumeroSave = async () => {
+    if (!avenantToEditNumero) return;
+    const value = String(newNumeroValue ?? "").trim();
+    if (!value) {
+      setSnackbar({
+        open: true,
+        message: "Veuillez entrer un numéro ou un libellé.",
+        severity: "error",
+      });
+      return;
+    }
+    try {
+      const response = await axios.patch(
+        `/api/avenants/${avenantToEditNumero.avenant_id}/update-numero/`,
+        { numero: value }
+      );
+      if (response.data.success) {
+        await fetchAvenants();
+        handleEditNumeroClose();
+        setSnackbar({
+          open: true,
+          message: `Avenant mis à jour : ${value}`,
+          severity: "success",
+        });
+      } else {
+        setSnackbar({
+          open: true,
+          message: response.data.error || "Erreur lors de la mise à jour.",
+          severity: "error",
+        });
+      }
+    } catch (error) {
+      const msg =
+        error.response?.data?.error ||
+        "Erreur lors de la mise à jour du numéro d'avenant.";
+      setSnackbar({ open: true, message: msg, severity: "error" });
+    }
+  };
+
+  const handleEditDevisNumeroClick = () => {
+    if (selectedAvenant) {
+      setDevisToEditNumero(selectedAvenant);
+      setNewDevisNumeroValue(getEditableDevisNumero(selectedAvenant));
+      setEditDevisNumeroDialogOpen(true);
+    }
+    setAnchorEl(null);
+  };
+
+  const handleEditDevisNumeroClose = () => {
+    setEditDevisNumeroDialogOpen(false);
+    setDevisToEditNumero(null);
+    setNewDevisNumeroValue("");
+  };
+
+  const handleEditDevisNumeroSave = async () => {
+    if (!devisToEditNumero) return;
+    const value = String(newDevisNumeroValue ?? "").trim();
+    if (!value) {
+      setSnackbar({
+        open: true,
+        message: "Veuillez entrer un numéro de devis valide.",
+        severity: "error",
+      });
+      return;
+    }
+    try {
+      await axios.patch(`/api/devisa/${devisToEditNumero.devis_id}/`, {
+        numero: value,
+      });
+      await fetchAvenants();
+      handleEditDevisNumeroClose();
+      setSnackbar({
+        open: true,
+        message: `Numéro de devis mis à jour : ${value}`,
+        severity: "success",
+      });
+    } catch (error) {
+      const msg =
+        error.response?.data?.numero?.[0] ||
+        error.response?.data?.detail ||
+        "Erreur lors de la mise à jour du numéro de devis.";
+      setSnackbar({ open: true, message: msg, severity: "error" });
+    }
+  };
+
   const handleGeneratePDF = async (item) => {
     try {
       // Afficher le message de téléchargement en cours
@@ -298,7 +442,7 @@ const ChantierListeAvenants = ({
 
   // Obtenir les numéros d'avenants uniques pour le filtre
   const avenantNumeros = [...new Set(avenants.map((a) => a.numero))].sort(
-    (a, b) => a - b
+    (a, b) => String(a).localeCompare(String(b), undefined, { numeric: true })
   );
 
   return (
@@ -382,7 +526,7 @@ const ChantierListeAvenants = ({
                     <MenuItem value="Tous">Tous</MenuItem>
                     {avenantNumeros.map((numero) => (
                       <MenuItem key={numero} value={numero.toString()}>
-                        Avenant n°{numero}
+                        {numero}
                       </MenuItem>
                     ))}
                   </StyledSelect>
@@ -422,10 +566,9 @@ const ChantierListeAvenants = ({
                       sx={{ cursor: "pointer", fontWeight: 700 }}
                     >
                       {item.devis_numero}
-                      {item.designation && ` - ${item.designation}`}
                     </DevisNumber>
                     <CenteredTableCell>
-                      {new Date(item.date_creation).toLocaleDateString()}
+                      {formatDateFr(item.date_creation)}
                     </CenteredTableCell>
                     <CenteredTableCell
                       sx={{ fontWeight: 600, color: green[500] }}
@@ -433,7 +576,7 @@ const ChantierListeAvenants = ({
                       {formatNumber(item.montant_ht)} €
                     </CenteredTableCell>
                     <CenteredTableCell>
-                      Avenant n°{item.avenant_numero}
+                      {item.avenant_numero}
                     </CenteredTableCell>
                     <CenteredTableCell sx={{ width: "120px", padding: "0 8px" }}>
                       <div
@@ -520,6 +663,12 @@ const ChantierListeAvenants = ({
         >
           Télécharger le PDF
         </MenuItem>
+        <MenuItem onClick={handleEditNumeroClick}>
+          Modifier le numéro d'avenant
+        </MenuItem>
+        <MenuItem onClick={handleEditDevisNumeroClick}>
+          Modifier le numéro de devis
+        </MenuItem>
         <MenuItem
           onClick={handleDeleteClick}
           sx={{
@@ -571,6 +720,80 @@ const ChantierListeAvenants = ({
             sx={{ borderRadius: 2 }}
           >
             Supprimer
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      <Dialog
+        open={editNumeroDialogOpen}
+        onClose={handleEditNumeroClose}
+        PaperProps={{
+          sx: { borderRadius: 2, padding: 1 },
+        }}
+      >
+        <DialogTitle>Modifier le numéro d'avenant</DialogTitle>
+        <DialogContent>
+          <StyledTextField
+            autoFocus
+            label="Numéro ou libellé"
+            type="text"
+            placeholder="ex: 3, 3 bis, A..."
+            value={newNumeroValue}
+            onChange={(e) => setNewNumeroValue(e.target.value)}
+            variant="outlined"
+            fullWidth
+            inputProps={{ maxLength: 50 }}
+            sx={{
+              mt: 1,
+              "& .MuiInputBase-input": { color: "black" },
+              "& .MuiInputLabel-root": { color: "rgba(0,0,0,0.6)" },
+              "& .MuiOutlinedInput-notchedOutline": { borderColor: "rgba(0,0,0,0.23)" },
+            }}
+          />
+        </DialogContent>
+        <DialogActions sx={{ padding: 2 }}>
+          <Button onClick={handleEditNumeroClose} variant="outlined" sx={{ borderRadius: 2 }}>
+            Annuler
+          </Button>
+          <Button onClick={handleEditNumeroSave} variant="contained" sx={{ borderRadius: 2 }}>
+            Enregistrer
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      <Dialog
+        open={editDevisNumeroDialogOpen}
+        onClose={handleEditDevisNumeroClose}
+        PaperProps={{
+          sx: { borderRadius: 2, padding: 1 },
+        }}
+      >
+        <DialogTitle>Modifier le numéro de devis</DialogTitle>
+        <DialogContent>
+          <StyledTextField
+            autoFocus
+            label="Numéro de devis"
+            type="text"
+            placeholder="ex: D-2026-014"
+            value={newDevisNumeroValue}
+            onChange={(e) => setNewDevisNumeroValue(e.target.value)}
+            variant="outlined"
+            fullWidth
+            inputProps={{ maxLength: 100 }}
+            sx={{
+              mt: 1,
+              "& .MuiInputBase-input": { color: "black" },
+              "& .MuiInputLabel-root": { color: "rgba(0,0,0,0.6)" },
+              "& .MuiOutlinedInput-notchedOutline": { borderColor: "rgba(0,0,0,0.23)" },
+            }}
+          />
+        </DialogContent>
+        <DialogActions sx={{ padding: 2 }}>
+          <Button onClick={handleEditDevisNumeroClose} variant="outlined" sx={{ borderRadius: 2 }}>
+            Annuler
+          </Button>
+          <Button onClick={handleEditDevisNumeroSave} variant="contained" sx={{ borderRadius: 2 }}>
+            Enregistrer
           </Button>
         </DialogActions>
       </Dialog>

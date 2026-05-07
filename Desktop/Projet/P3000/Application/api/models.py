@@ -1,4 +1,3 @@
-import os
 from django.db import models
 from django.core.validators import RegexValidator, MinValueValidator, MaxValueValidator
 from django.utils import timezone
@@ -34,10 +33,10 @@ class Client(models.Model):
     ]
     
     civilite = models.CharField(max_length=10, choices=CIVILITE_CHOICES, blank=True, default='', verbose_name="Civilité")
-    name = models.CharField(max_length=100)
-    surname = models.CharField(max_length=25)
-    client_mail = models.EmailField()
-    phone_Number = models.IntegerField()
+    name = models.CharField(max_length=100, blank=True, default='')
+    surname = models.CharField(max_length=25, blank=True, default='')
+    client_mail = models.EmailField(blank=True, null=True)
+    phone_Number = models.IntegerField(blank=True, null=True)
     poste = models.CharField(max_length=100, blank=True, default='', verbose_name="Poste")
     
 
@@ -47,12 +46,13 @@ class Client(models.Model):
     
 class Societe(models.Model):
     nom_societe = models.CharField(max_length=100,)
-    ville_societe = models.CharField(max_length=100, blank=True, default="")
-    rue_societe = models.CharField(max_length=100, blank=True, default="")
+    ville_societe = models.CharField(max_length=100,)
+    rue_societe = models.CharField(max_length=100,)
+    rue_societe = models.CharField(max_length=100,)
     codepostal_societe = models.CharField(max_length=10,validators=[RegexValidator(regex=r'^\d{5}$',message='Le code postal doit être exactement 5 chiffres.',code='invalid_codepostal')],blank=True,null=True)
+    logo_s3_key = models.CharField(max_length=500, blank=True, null=True, verbose_name="Clé S3 du logo")
    #Change client_name to nom_contact
     client_name = models.ForeignKey(Client, on_delete=models.CASCADE)  # Association avec Client
-    logo_s3_key = models.CharField(max_length=500, blank=True, null=True, verbose_name="Clé S3 du logo")
     
     def __str__(self):
         return self.nom_societe
@@ -541,6 +541,7 @@ class Agent(models.Model):
     
     name = models.CharField(max_length=25)
     surname = models.CharField(max_length=25)
+    email = models.EmailField(max_length=254, blank=True, null=True)
     address = models.CharField(max_length=100, blank=True, null=True)
     phone_Number = models.IntegerField()
     taux_Horaire = models.FloatField(null=True, blank=True)
@@ -600,6 +601,31 @@ class MonthlyHours(models.Model):
     
     class Meta:
         unique_together = ('agent', 'month')
+
+
+class PointageMensuel(models.Model):
+    agent = models.ForeignKey(Agent, on_delete=models.CASCADE, related_name='pointages_mensuels')
+    month = models.DateField(help_text="Premier jour du mois (YYYY-MM-01)")
+    salaire_net_initial_hors_prime = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    agence = models.BooleanField(default=False)
+    # Répartition du montant_charge entre agences et main d'œuvre chantier (null = chantier classique).
+    repartition_montant_charge = models.JSONField(
+        default=list,
+        blank=True,
+        help_text='[{"agence_id": <int ou null>, "montant": <nombre>}, ...] ; somme = montant_charge.',
+    )
+    montant_charge = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    montant_brut = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    accompte = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    paiement = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    date_paiement = models.DateField(null=True, blank=True)
+    commentaire = models.TextField(blank=True, default="")
+    # Permet de distinguer un salaire explicitement saisi d'une valeur héritée automatiquement.
+    salaire_overridden = models.BooleanField(default=False)
+
+    class Meta:
+        unique_together = ('agent', 'month')
+        ordering = ['month', 'agent_id']
 
 class Presence(models.Model):
     agent = models.ForeignKey(Agent, on_delete=models.CASCADE, related_name='presences')
@@ -670,7 +696,7 @@ class Event(models.Model):
 
 class Stock(models.Model):
     code_produit = models.CharField(max_length=50, default='')
-    designation = models.CharField(max_length=50)
+    designation = models.CharField(max_length=255)
     fournisseur = models.ForeignKey(
         'Fournisseur',
         on_delete=models.CASCADE,
@@ -1056,6 +1082,32 @@ class StockProduct(models.Model):
         return self.nom_produit[:2].upper()
 
 
+class StockProductBestPurchase(models.Model):
+    """Meilleur prix d'achat historique d'un produit (persisté pour pilotage des futurs achats)."""
+    produit = models.OneToOneField(
+        StockProduct,
+        on_delete=models.CASCADE,
+        related_name='best_purchase'
+    )
+    prix_unitaire = models.DecimalField(max_digits=10, decimal_places=2)
+    lieu_achat = models.CharField(max_length=150)
+    purchase_item = models.ForeignKey(
+        'StockPurchaseItem',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='best_purchase_refs'
+    )
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = "Meilleur achat produit"
+        verbose_name_plural = "Meilleurs achats produits"
+
+    def __str__(self):
+        return f"{self.produit.nom} -> {self.prix_unitaire}€ ({self.lieu_achat})"
+
+
 class StockPurchase(models.Model):
     """Achat de stock - enregistre un achat avec lieu et date"""
     lieu_achat = models.CharField(max_length=150, help_text="Lieu d'achat (ex: Leclerc, Intermarché)")
@@ -1257,6 +1309,9 @@ class Devis(models.Model):
     
     # Contact de la société (optionnel, remplace le client par défaut)
     contact_societe = models.ForeignKey('ContactSociete', on_delete=models.SET_NULL, null=True, blank=True, related_name='devis', verbose_name="Contact société")
+    
+    # Société alternative pour l'affichage du devis (optionnel, remplace la société du chantier)
+    societe_devis = models.ForeignKey('Societe', on_delete=models.SET_NULL, null=True, blank=True, related_name='devis_affichage', verbose_name="Société pour affichage devis")
     
     # NOUVEAUX CHAMPS pour le système de lignes spéciales amélioré
     lignes_speciales_v2 = models.JSONField(default=dict, blank=True, null=True, verbose_name="Lignes spéciales v2")
@@ -1520,8 +1575,11 @@ class LigneDetail(models.Model):
     # Nouveaux champs pour la décomposition du prix
     cout_main_oeuvre = models.DecimalField(max_digits=10, decimal_places=2, default=0)
     cout_materiel = models.DecimalField(max_digits=10, decimal_places=2, default=0)
-    taux_fixe = models.DecimalField(max_digits=5, decimal_places=2, default=0)  # en pourcentage
-    marge = models.DecimalField(max_digits=5, decimal_places=2, default=0)  # en pourcentage
+    # null = non renseigné à la création (rempli par TauxFixe dans save). 0 % est une valeur valide.
+    taux_fixe = models.DecimalField(
+        max_digits=5, decimal_places=2, null=True, blank=True
+    )  # en pourcentage
+    marge = models.DecimalField(max_digits=8, decimal_places=2, default=0)  # en pourcentage, illimité
     prix = models.DecimalField(max_digits=10, decimal_places=2)
     is_deleted = models.BooleanField(default=False, null=True, blank=True)
     
@@ -1570,15 +1628,14 @@ class LigneDetail(models.Model):
         self.prix = sous_total + montant_marge
 
     def save(self, *args, **kwargs):
-        if not self.taux_fixe:
-            # Utiliser le dernier taux fixe enregistré
+        # Ne pas utiliser `if not self.taux_fixe` : Decimal('0') est falsy en Python et serait remplacé par 20 %.
+        if self.taux_fixe is None:
             try:
                 dernier_taux = TauxFixe.objects.latest()
                 self.taux_fixe = dernier_taux.valeur
             except TauxFixe.DoesNotExist:
-                # Aucun taux fixe en base, utiliser 20% par défaut
                 self.taux_fixe = 20
-        
+
         # Ne recalculer le prix que si on a des coûts (sinon c'est un prix manuel)
         has_couts = self.cout_main_oeuvre > 0 or self.cout_materiel > 0
         if has_couts:
@@ -1625,6 +1682,9 @@ class Facture(models.Model):
     
     # Contact de la société (optionnel, remplace le client par défaut)
     contact_societe = models.ForeignKey('ContactSociete', on_delete=models.SET_NULL, null=True, blank=True, related_name='factures', verbose_name="Contact société")
+    
+    # Société alternative pour l'affichage de la facture
+    societe_devis = models.ForeignKey('Societe', on_delete=models.SET_NULL, null=True, blank=True, related_name='factures_affichage', verbose_name="Société pour affichage facture")
     
     # NOUVEAUX CHAMPS pour les coûts estimés
     cout_estime_main_oeuvre = models.DecimalField(
@@ -1749,6 +1809,9 @@ class Situation(models.Model):
     
     # Contact de la société (optionnel, remplace le client par défaut)
     contact_societe = models.ForeignKey('ContactSociete', on_delete=models.SET_NULL, null=True, blank=True, related_name='situations', verbose_name="Contact société")
+    
+    # Société alternative pour l'affichage de la situation
+    societe_devis = models.ForeignKey('Societe', on_delete=models.SET_NULL, null=True, blank=True, related_name='situations_affichage', verbose_name="Société pour affichage situation")
     
     # Montants calculés
     montant_precedent = models.DecimalField(max_digits=10, decimal_places=2, default=0)
@@ -1960,6 +2023,7 @@ class Schedule(models.Model):
     chantier = models.ForeignKey(Chantier, on_delete=models.SET_NULL, null=True, blank=True)
     is_sav = models.BooleanField(default=False)  # True si c'est du SAV (Service Après-Vente)
     overtime_hours = models.DecimalField(max_digits=4, decimal_places=2, default=0, blank=True, null=True, help_text="Heures supplémentaires (+25%)")
+    comment = models.TextField(blank=True, default='')
 
     class Meta:
         unique_together = ('agent', 'week', 'year', 'day', 'hour')
@@ -2354,7 +2418,7 @@ class Parametres(models.Model):
 
 class Avenant(models.Model):
     chantier = models.ForeignKey('Chantier', on_delete=models.CASCADE, related_name='avenants')
-    numero = models.IntegerField()  # Numéro séquentiel de l'avenant pour ce chantier
+    numero = models.CharField(max_length=50)  # Numéro ou libellé de l'avenant (ex: "3", "3 bis")
     date_creation = models.DateTimeField(auto_now_add=True)
     montant_total = models.DecimalField(max_digits=10, decimal_places=2, default=0)
 
@@ -2422,6 +2486,23 @@ class SituationFactureCIE(models.Model):
     facture = models.ForeignKey('Facture', on_delete=models.CASCADE)
     montant_ht = models.DecimalField(max_digits=10, decimal_places=2)
 
+class Agence(models.Model):
+    nom = models.CharField(max_length=200, unique=True)
+    chantier = models.OneToOneField(
+        'Chantier', on_delete=models.SET_NULL,
+        related_name='agence_linked', null=True, blank=True
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['id']
+        verbose_name = "Agence"
+        verbose_name_plural = "Agences"
+
+    def __str__(self):
+        return self.nom
+
+
 class AgencyExpense(models.Model):
     EXPENSE_TYPES = [
         ('fixed', 'Mensuel fixe'),
@@ -2437,6 +2518,7 @@ class AgencyExpense(models.Model):
     agent = models.ForeignKey('Agent', on_delete=models.CASCADE, null=True, blank=True)
     sous_traitant = models.ForeignKey('SousTraitant', on_delete=models.CASCADE, null=True, blank=True, related_name='agency_expenses')
     chantier = models.ForeignKey('Chantier', on_delete=models.CASCADE, null=True, blank=True, related_name='agency_expenses')
+    agence = models.ForeignKey('Agence', on_delete=models.CASCADE, null=True, blank=True, related_name='agency_expenses')
     is_ecole_expense = models.BooleanField(default=False)
     ecole_hours = models.FloatField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
@@ -2457,6 +2539,14 @@ class AgencyExpenseMonth(models.Model):
     """
     description = models.CharField(max_length=500)
     amount = models.DecimalField(max_digits=10, decimal_places=2)
+    montant_paye = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        default=0,
+        help_text="Montant payé (suivi tableau fournisseur, dépenses agence)",
+    )
     category = models.CharField(max_length=50)
     month = models.IntegerField()  # 1-12
     year = models.IntegerField()
@@ -2476,6 +2566,9 @@ class AgencyExpenseMonth(models.Model):
     chantier = models.ForeignKey('Chantier', on_delete=models.CASCADE, null=True, blank=True, related_name='agency_expenses_month')
     is_ecole_expense = models.BooleanField(default=False)
     ecole_hours = models.FloatField(null=True, blank=True)
+    
+    agence = models.ForeignKey('Agence', on_delete=models.CASCADE, null=True, blank=True, related_name='agency_expenses_month')
+    commentaire = models.TextField(blank=True, null=True)
     
     # Lien vers la dépense source (si générée depuis AgencyExpense)
     source_expense = models.ForeignKey('AgencyExpense', on_delete=models.SET_NULL, null=True, blank=True, related_name='monthly_entries')
@@ -2498,7 +2591,7 @@ class AgencyExpenseMonth(models.Model):
 
     class Meta:
         ordering = ['-year', '-month']
-        unique_together = ('description', 'category', 'month', 'year')
+        unique_together = ('description', 'category', 'month', 'year', 'agence')
         verbose_name = "Dépense Mensuelle Agence"
         verbose_name_plural = "Dépenses Mensuelles Agence"
         indexes = [
@@ -2525,10 +2618,11 @@ class AgencyExpenseAggregate(models.Model):
     month = models.IntegerField()  # 1-12
     total_amount = models.DecimalField(max_digits=12, decimal_places=2, default=0)
     totals_by_category = models.JSONField(default=list, blank=True)
+    agence = models.ForeignKey('Agence', on_delete=models.CASCADE, null=True, blank=True, related_name='expense_aggregates')
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
-        unique_together = ('year', 'month')
+        unique_together = ('year', 'month', 'agence')
         ordering = ['year', 'month']
         indexes = [
             models.Index(fields=['year', 'month'])
@@ -2706,6 +2800,9 @@ class AgentPrime(models.Model):
     # Chantier optionnel (si type = 'chantier')
     chantier = models.ForeignKey('Chantier', on_delete=models.CASCADE, null=True, blank=True, related_name='primes_chantier')
     
+    # Agence optionnelle (si type = 'agence')
+    agence = models.ForeignKey('Agence', on_delete=models.CASCADE, null=True, blank=True, related_name='primes_agence')
+    
     # Métadonnées
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -2718,72 +2815,86 @@ class AgentPrime(models.Model):
         indexes = [
             models.Index(fields=['agent', 'mois', 'annee']),
             models.Index(fields=['chantier', 'mois', 'annee']),
+            models.Index(fields=['agence', 'mois', 'annee']),
         ]
     
     def __str__(self):
-        affectation = self.chantier.chantier_name if self.chantier else "Agence"
+        if self.chantier:
+            affectation = self.chantier.chantier_name
+        elif self.agence:
+            affectation = f"Agence {self.agence.nom}"
+        else:
+            affectation = "Agence"
         return f"Prime {self.agent.name} {self.agent.surname} - {self.mois}/{self.annee} - {affectation} - {self.montant}€"
     
     def clean(self):
         """Validation personnalisée"""
         if self.type_affectation == 'chantier' and not self.chantier:
             raise ValidationError("Un chantier doit être spécifié pour une prime de type 'chantier'")
+        if self.type_affectation == 'agence' and not self.agence:
+            raise ValidationError("Une agence doit être spécifiée pour une prime de type 'agence'")
         if self.type_affectation == 'agence' and self.chantier:
             raise ValidationError("Une prime de type 'agence' ne peut pas avoir de chantier associé")
+        if self.type_affectation == 'chantier' and self.agence:
+            raise ValidationError("Une prime de type 'chantier' ne peut pas avoir d'agence associée")
     
     def save(self, *args, **kwargs):
         self.full_clean()
         super().save(*args, **kwargs)
 
-# Signal pour créer automatiquement une AgencyExpense quand une prime de type 'agence' est créée
+# Signal pour créer automatiquement une AgencyExpenseMonth quand une prime de type 'agence' est créée
 @receiver(post_save, sender=AgentPrime)
 def create_agency_expense_from_prime(sender, instance, created, **kwargs):
     """
-    Crée ou met à jour automatiquement une AgencyExpense quand type_affectation='agence'
-    Format: "Prime - Nom Prenom - Description de la prime"
-    L'ID de la prime est stocké de manière cachée pour la gestion interne
+    Crée ou met à jour automatiquement une AgencyExpenseMonth quand type_affectation='agence'
+    Format: "Prime - Nom Prenom - Description de la prime [PRIME_ID:X]"
+    Rattachée à l'agence choisie par l'utilisateur
     """
     if instance.type_affectation == 'agence':
-        # Format description: "Prime - Jean Dupont - Performance Q3"
         description = f"Prime - {instance.agent.name} {instance.agent.surname} - {instance.description}"
+        final_description = f"{description} [PRIME_ID:{instance.id}]"
         
-        # Calculer la date (premier jour du mois)
-        expense_date = date(instance.annee, instance.mois, 1)
-        
-        # Chercher une dépense existante pour cette prime
-        # On stocke l'ID de manière invisible pour pouvoir faire le lien
-        existing_expense = AgencyExpense.objects.filter(
+        existing_expense = AgencyExpenseMonth.objects.filter(
             description__contains=f"[PRIME_ID:{instance.id}]",
             category='Prime'
         ).first()
         
-        # Format final avec ID caché : "Prime - Jean Dupont - Performance Q3 [PRIME_ID:5]"
-        final_description = f"{description} [PRIME_ID:{instance.id}]"
-        
         if existing_expense:
-            # Mettre à jour la dépense existante
             existing_expense.description = final_description
             existing_expense.amount = instance.montant
-            existing_expense.date = expense_date
+            existing_expense.month = instance.mois
+            existing_expense.year = instance.annee
+            existing_expense.agence = instance.agence
+            existing_expense.agent = instance.agent
             existing_expense.save()
         else:
-            # Créer une nouvelle dépense
-            AgencyExpense.objects.create(
+            AgencyExpenseMonth.objects.create(
                 description=final_description,
                 amount=instance.montant,
-                type='punctual',
                 category='Prime',
-                date=expense_date,
+                month=instance.mois,
+                year=instance.annee,
                 agent=instance.agent,
+                agence=instance.agence,
             )
+        
+        # Nettoyage : supprimer l'ancien AgencyExpense s'il existe (migration depuis l'ancien système)
+        AgencyExpense.objects.filter(
+            description__contains=f"[PRIME_ID:{instance.id}]",
+            category='Prime'
+        ).delete()
 
 @receiver(post_delete, sender=AgentPrime)
 def delete_agency_expense_from_prime(sender, instance, **kwargs):
     """
-    Supprime l'AgencyExpense associée quand une prime de type 'agence' est supprimée
+    Supprime l'AgencyExpenseMonth associée quand une prime de type 'agence' est supprimée
     """
     if instance.type_affectation == 'agence':
-        # Supprimer l'AgencyExpense correspondante en utilisant l'ID caché dans la description
+        AgencyExpenseMonth.objects.filter(
+            description__contains=f"[PRIME_ID:{instance.id}]",
+            category='Prime'
+        ).delete()
+        # Nettoyage : supprimer aussi l'ancien AgencyExpense si présent
         AgencyExpense.objects.filter(
             description__contains=f"[PRIME_ID:{instance.id}]",
             category='Prime'
@@ -3387,6 +3498,27 @@ class PaiementFournisseurMateriel(models.Model):
             return float(self.montant_a_payer) * 1.20
         return 0
 
+class RecapFinancierPreference(models.Model):
+    """
+    Préférences du récap financier par chantier (ex: liste des fournisseurs à afficher).
+    one-to-one avec Chantier.
+    """
+    chantier = models.OneToOneField(
+        'Chantier',
+        on_delete=models.CASCADE,
+        related_name='recap_financier_preference'
+    )
+    # Liste des noms de fournisseurs à afficher dans le récap matériel. None ou [] = tous afficher
+    fournisseurs_visibles = models.JSONField(default=None, null=True, blank=True)
+
+    class Meta:
+        verbose_name = 'Préférence Récap Financier'
+        verbose_name_plural = 'Préférences Récap Financier'
+
+    def __str__(self):
+        return f"Récap préf. {self.chantier.chantier_name}"
+
+
 class FactureFournisseurMateriel(models.Model):
     """Modèle pour gérer les factures liées aux paiements fournisseur matériel"""
     paiement = models.ForeignKey(PaiementFournisseurMateriel, on_delete=models.CASCADE, related_name='factures')
@@ -3489,60 +3621,54 @@ class Document(models.Model):
         return f"/api/drive/download/{self.id}/"
 
 
-class EntrepriseConfig(models.Model):
+class DashboardSettings(models.Model):
     """
-    Configuration de l'entreprise utilisatrice de l'application (singleton).
-    Stocke l'identité de l'entreprise cliente (nom, adresse, contact, infos légales).
-    Une seule instance autorisée (pk=1).
+    Préférences du tableau de bord (ligne logique unique via singleton_key).
+    Stocke notamment la sélection des agences pour la carte « Dépenses agence »
+    et un JSON libre pour d'autres besoins futurs du dashboard.
     """
-    nom = models.CharField(max_length=200, verbose_name="Raison sociale")  # ex: "SAS ELEKABLE"
-    forme_juridique = models.CharField(max_length=50, blank=True, default='', verbose_name="Forme juridique")  # ex: "SAS"
-    capital = models.CharField(max_length=50, blank=True, default='', verbose_name="Capital social")  # ex: "1 000,00€"
-    adresse = models.CharField(max_length=300, verbose_name="Adresse")  # ex: "64, Boulevard les Arbousiers"
-    code_postal = models.CharField(max_length=10, verbose_name="Code postal")
-    ville = models.CharField(max_length=100, verbose_name="Ville")
-    rcs = models.CharField(max_length=100, blank=True, default='', verbose_name="RCS")  # ex: "Aix-en-Provence 978 038 248"
-    siret = models.CharField(max_length=50, blank=True, default='', verbose_name="SIRET")
-    tva_intra = models.CharField(max_length=50, blank=True, default='', verbose_name="TVA intracommunautaire")
-    email = models.EmailField(blank=True, default='', verbose_name="Email de contact")
-    telephone = models.CharField(max_length=30, blank=True, default='', verbose_name="Téléphone")
-    representant_nom = models.CharField(max_length=200, blank=True, default='', verbose_name="Nom du représentant")
-    representant_fonction = models.CharField(max_length=100, blank=True, default='', verbose_name="Fonction du représentant")
-    nom_application = models.CharField(max_length=100, default='Webapplication P3000', verbose_name="Nom de l'application")
-    domaine_public = models.CharField(max_length=200, blank=True, default='', verbose_name="Domaine public", help_text="Ex: myp3000app.com")
-    logo_s3_key = models.CharField(max_length=500, blank=True, null=True, verbose_name="Clé S3 du logo (login mobile)")
+
+    singleton_key = models.CharField(
+        max_length=40,
+        unique=True,
+        default="default",
+        editable=False,
+        help_text="Clé fixe pour une seule configuration applicative.",
+    )
+    depenses_agence_use_default = models.BooleanField(
+        default=True,
+        help_text="Si vrai, la carte applique la règle « première agence » (id minimal).",
+    )
+    depenses_agence_included_agence_ids = models.JSONField(
+        default=list,
+        blank=True,
+        help_text="Ids d'agence et/ou null pour « Non rattaché » ; utilisé si use_default est faux.",
+    )
+    extra = models.JSONField(
+        default=dict,
+        blank=True,
+        help_text="Champs futurs (filtres, options d'affichage, etc.).",
+    )
+    updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
-        verbose_name = "Configuration entreprise"
-        verbose_name_plural = "Configuration entreprise"
-
-    def __str__(self):
-        return self.nom or "Configuration entreprise"
-
-    def save(self, *args, **kwargs):
-        # Singleton : force toujours pk=1
-        self.pk = 1
-        super().save(*args, **kwargs)
-
-    def delete(self, *args, **kwargs):
-        # Empêche la suppression du singleton
-        pass
+        verbose_name = "Paramètres dashboard"
+        verbose_name_plural = "Paramètres dashboard"
 
     @classmethod
-    def get_config(cls):
-        """Récupère ou crée la configuration entreprise (singleton)."""
-        obj, created = cls.objects.get_or_create(
-            pk=1,
+    def get_singleton(cls):
+        obj, _ = cls.objects.get_or_create(
+            singleton_key="default",
             defaults={
-                'nom': os.getenv('CLIENT_COMPANY_NAME', 'Mon Entreprise'),
-                'adresse': '',
-                'code_postal': '',
-                'ville': '',
-                'nom_application': os.getenv('CLIENT_APP_NAME', 'Webapplication P3000'),
-                'domaine_public': os.getenv('CLIENT_PUBLIC_DOMAIN', ''),
-            }
+                "depenses_agence_use_default": True,
+                "depenses_agence_included_agence_ids": [],
+                "extra": {},
+            },
         )
         return obj
+
+    def __str__(self):
+        return "Paramètres dashboard"
 
 
 # Signal pour créer automatiquement les émetteurs après les migrations
@@ -3559,10 +3685,40 @@ def create_default_emetteurs(sender, **kwargs):
             print(f"❌ Erreur lors de la création des émetteurs : {e}")
 
 
-from .models_rapport import (
+# --- Rapport d'intervention / Vigik+ -------------------------------------
+# Modèles dédiés à la fonctionnalité « Rapport d'intervention / Vigik+ ».
+# Ils sont définis dans ``api/models_rapport.py`` et réexportés ici afin
+# de rester accessibles via ``from api.models import RapportIntervention``.
+from .models_rapport import (  # noqa: E402  (import après signaux/post_migrate)
     TitreRapport,
+    Residence,
     RapportIntervention,
+    RapportInterventionNumeroCompteur,
     RapportInterventionBrouillon,
     PrestationRapport,
     PhotoRapport,
+    assign_numero_rapport_si_absent,
+    default_dates_intervention_list,
 )
+
+
+class UserMobileAccess(models.Model):
+    """Droits d'accès aux sections mobiles (PWA) par utilisateur."""
+    user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='mobile_access')
+    can_access_rapports = models.BooleanField(default=False, verbose_name="Accès Rapports")
+    can_access_distributeur = models.BooleanField(default=False, verbose_name="Accès Distributeur")
+    can_access_drive = models.BooleanField(default=False, verbose_name="Accès Drive")
+
+    class Meta:
+        verbose_name = "Accès mobile utilisateur"
+        verbose_name_plural = "Accès mobiles utilisateurs"
+
+    def __str__(self):
+        return f"Accès mobile de {self.user.username}"
+
+
+@receiver(post_save, sender=User)
+def create_user_mobile_access(sender, instance, created, **kwargs):
+    """Crée automatiquement un profil d'accès mobile à la création de chaque utilisateur."""
+    if created:
+        UserMobileAccess.objects.get_or_create(user=instance)

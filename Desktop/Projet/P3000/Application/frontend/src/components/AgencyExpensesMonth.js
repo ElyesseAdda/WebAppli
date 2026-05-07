@@ -13,6 +13,7 @@ import {
   TableBody,
   TableCell,
   TableContainer,
+  TableHead,
   TableRow,
   TextField,
   Typography,
@@ -20,15 +21,7 @@ import {
 import axios from "axios";
 import React, { useEffect, useState } from "react";
 import { FaEdit, FaTrash } from "react-icons/fa";
-import { COLORS } from "../constants/colors";
-
-const filterFieldSx = {
-  backgroundColor: "white",
-  "& .MuiInputBase-root": { backgroundColor: "white" },
-  "& .MuiInputBase-input": { color: COLORS.primary },
-  "& .MuiOutlinedInput-notchedOutline": { borderColor: COLORS.primary },
-  "& .MuiSvgIcon-root": { color: COLORS.primary },
-};
+import { FilterCell, StyledTextField } from "../styles/tableStyles";
 
 const AgencyExpensesMonth = () => {
   const [expenses, setExpenses] = useState([]);
@@ -58,6 +51,7 @@ const AgencyExpensesMonth = () => {
     "Prime",
     "Loyer",
     "Fournitures",
+    "Fournisseur",
     "Équipement",
     "Assurance",
     "Services",
@@ -235,20 +229,7 @@ const AgencyExpensesMonth = () => {
         <Typography sx={{ fontWeight: "bold", color: "white" }} variant="h5">
           Dépenses Mensuelles de l'Agence
         </Typography>
-        <Button
-          variant="outlined"
-          onClick={() => setOpenDialog(true)}
-          sx={{
-            backgroundColor: "white",
-            color: COLORS.primary,
-            borderColor: COLORS.primary,
-            "&:hover": {
-              backgroundColor: COLORS.primaryLight,
-              color: "white",
-              borderColor: COLORS.primaryLight,
-            },
-          }}
-        >
+        <Button variant="contained" onClick={() => setOpenDialog(true)}>
           Ajouter une dépense
         </Button>
       </Box>
@@ -299,29 +280,30 @@ const AgencyExpensesMonth = () => {
       </Box>
 
       <TableContainer component={Paper}>
-        <Table className="agency-expenses-table">
-          <TableBody>
-            <TableRow sx={{ backgroundColor: "white", "& td": { backgroundColor: "white", padding: "8px" } }}>
-              <TableCell>
-                <TextField
+        <Table>
+          <TableHead>
+            <TableRow>
+              <FilterCell>
+                <StyledTextField
                   size="small"
                   fullWidth
                   value={filters.description}
                   onChange={handleFilterChange("description")}
                   placeholder="Description..."
-                  variant="outlined"
-                  sx={filterFieldSx}
                 />
-              </TableCell>
-              <TableCell>
-                <TextField
+              </FilterCell>
+              <FilterCell>
+                <StyledTextField
                   select
                   size="small"
                   fullWidth
                   value={filters.category}
                   onChange={handleFilterChange("category")}
-                  variant="outlined"
-                  sx={{ ...filterFieldSx, "& .MuiInputBase-input": { textAlign: "center" } }}
+                  sx={{
+                    "& .MuiInputBase-input": {
+                      textAlign: "center",
+                    },
+                  }}
                 >
                   <MenuItem sx={{ textAlign: "center" }} value="Tous">
                     Tous
@@ -335,22 +317,32 @@ const AgencyExpensesMonth = () => {
                       {cat.charAt(0).toUpperCase() + cat.slice(1)}
                     </MenuItem>
                   ))}
-                </TextField>
-              </TableCell>
-              <TableCell>
-                <TextField
+                </StyledTextField>
+              </FilterCell>
+              <FilterCell>
+                <StyledTextField
                   type="number"
                   size="small"
+                  sx={{
+                    "& .MuiInputBase-input": {
+                      textAlign: "center",
+                    },
+                  }}
                   fullWidth
                   value={filters.amount}
                   onChange={handleFilterChange("amount")}
                   placeholder="Montant..."
-                  variant="outlined"
-                  sx={{ ...filterFieldSx, "& .MuiInputBase-input": { textAlign: "center" } }}
                 />
-              </TableCell>
-              <TableCell />
+              </FilterCell>
+              <FilterCell>
+                <Typography variant="caption" sx={{ color: "#fff", px: 1 }}>
+                  Commentaire
+                </Typography>
+              </FilterCell>
+              <FilterCell />
             </TableRow>
+          </TableHead>
+          <TableBody>
             {expenses.map((expense, index) => (
               <TableRow
                 key={expense.id}
@@ -373,6 +365,39 @@ const AgencyExpensesMonth = () => {
                 <TableCell align="center">{expense.category}</TableCell>
                 <TableCell align="center">
                   {parseFloat(expense.amount).toFixed(2)} €
+                </TableCell>
+                <TableCell sx={{ minWidth: 160, maxWidth: 280, verticalAlign: "top" }}>
+                  <TextField
+                    size="small"
+                    variant="standard"
+                    fullWidth
+                    multiline
+                    minRows={1}
+                    maxRows={6}
+                    placeholder="—"
+                    defaultValue={expense.commentaire || ""}
+                    onBlur={(e) => {
+                      const val = e.target.value.trim();
+                      if (val !== (expense.commentaire || "")) {
+                        axios
+                          .patch(`/api/agency-expenses-month/${expense.id}/`, {
+                            commentaire: val || null,
+                          })
+                          .catch(() => {});
+                      }
+                    }}
+                    InputProps={{
+                      disableUnderline: true,
+                      sx: {
+                        fontSize: "0.82rem",
+                        color: "#555",
+                        lineHeight: 1.4,
+                        alignItems: "flex-start",
+                        "&:hover": { borderBottom: "1px solid #ccc" },
+                        "&.Mui-focused": { borderBottom: "1px solid #1976d2" },
+                      },
+                    }}
+                  />
                 </TableCell>
                 <TableCell>
                   <Box sx={{ display: "flex", gap: 1 }}>
@@ -421,6 +446,7 @@ const AgencyExpensesMonth = () => {
               >
                 {calculateMonthlyTotal().toFixed(2)} €
               </TableCell>
+              <TableCell />
               <TableCell />
             </TableRow>
           </TableBody>

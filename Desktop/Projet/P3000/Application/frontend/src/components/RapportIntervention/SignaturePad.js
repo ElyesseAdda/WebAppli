@@ -63,7 +63,6 @@ const SignaturePad = forwardRef(
           }
         };
         img.onerror = () => {
-          // Sans CORS sur le bucket S3 : repli sans crossOrigin (affichage OK, canvas parfois non exportable — clé S3 conservée côté brouillon).
           if (withCrossOrigin && typeof src === "string" && /^https?:\/\//i.test(src)) {
             load(false);
             return;

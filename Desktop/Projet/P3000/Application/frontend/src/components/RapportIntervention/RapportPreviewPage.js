@@ -54,7 +54,7 @@ const RapportPreviewPage = () => {
           onClick={() => navigate("/RapportsIntervention")}
           sx={{ color: COLORS.textOnDark }}
         >
-          Retour à la liste
+          Retour a la liste
         </Button>
         <Button
           variant="contained"

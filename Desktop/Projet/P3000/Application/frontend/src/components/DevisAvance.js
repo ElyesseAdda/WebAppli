@@ -224,6 +224,9 @@ const DevisAvance = () => {
   const [selectedChantierId, setSelectedChantierId] = useState(null);
   const [showChantierForm, setShowChantierForm] = useState(false);
   const [isLoadingChantiers, setIsLoadingChantiers] = useState(false);
+  const [chantierSearchQuery, setChantierSearchQuery] = useState('');
+  const [chantierDropdownOpen, setChantierDropdownOpen] = useState(false);
+  const chantierDropdownRef = useRef(null);
   
   // États pour la création de nouveau chantier (même logique que CreationDevis.js)
   const [pendingChantierData, setPendingChantierData] = useState(() => createInitialPendingChantierData());
@@ -241,6 +244,12 @@ const DevisAvance = () => {
   const [selectedContactId, setSelectedContactId] = useState(null);
   const [showContactModal, setShowContactModal] = useState(false);
   const [currentSocieteId, setCurrentSocieteId] = useState(null);
+
+  // États pour la sélection de société alternative (affichage devis uniquement)
+  const [societeDevisId, setSocieteDevisId] = useState(null);
+  const [availableSocietes, setAvailableSocietes] = useState([]);
+  const [showSelectSocieteDevisModal, setShowSelectSocieteDevisModal] = useState(false);
+  const [showCreateSocieteDevisModal, setShowCreateSocieteDevisModal] = useState(false);
 
   // États pour la gestion du devis
   const [isGeneratingNumber, setIsGeneratingNumber] = useState(false);
@@ -292,6 +301,7 @@ const DevisAvance = () => {
     selectedContactId: null,
     currentSocieteId: null,
     selectedSocieteId: null,
+    societeDevisId: null,
     customDrivePath: null,
     chantierDrivePath: null,
     clientId: null
@@ -504,6 +514,47 @@ const DevisAvance = () => {
     }
   };
 
+  // Charger les sociétés du même client (pour le sélecteur société devis)
+  const fetchAvailableSocietes = async (forClientId) => {
+    const cid = forClientId || clientId;
+    if (!cid) {
+      setAvailableSocietes([]);
+      return;
+    }
+    try {
+      const response = await axios.get(`/api/societe/?client=${cid}`);
+      setAvailableSocietes(response.data);
+    } catch (error) {
+      console.error('Erreur lors du chargement des sociétés:', error);
+      setAvailableSocietes([]);
+    }
+  };
+
+  // Créer une nouvelle société en DB et la sélectionner pour l'affichage devis
+  const handleCreateSocieteDevis = async (societeData) => {
+    try {
+      const clientIdForSociete = clientId || (await getClientIdFromChantier(selectedChantierId));
+      if (!clientIdForSociete) {
+        alert('Impossible de créer la société : aucun client associé.');
+        return;
+      }
+      const response = await axios.post('/api/societe/', {
+        ...societeData,
+        client_name: clientIdForSociete
+      });
+      if (response.data?.id) {
+        setSocieteDevisId(response.data.id);
+        fetchContactsSociete(response.data.id);
+        setSelectedContactId(null);
+        await fetchAvailableSocietes();
+      }
+      setShowCreateSocieteDevisModal(false);
+    } catch (error) {
+      console.error('Erreur lors de la création de la société:', error);
+      alert('Erreur lors de la création de la société.');
+    }
+  };
+
   // Gérer la sélection d'un chantier
   const handleChantierSelection = async (chantierId) => {
     setSelectedChantierId(chantierId);
@@ -580,6 +631,7 @@ const DevisAvance = () => {
           // Si societe est un objet avec les détails (via serializer)
           if (typeof chantierData.societe === 'object' && chantierData.societe.id) {
             setSociete({
+              id: chantierData.societe.id,
               nom_societe: chantierData.societe.nom_societe || '',
               rue_societe: chantierData.societe.rue_societe || '',
               codepostal_societe: chantierData.societe.codepostal_societe || '',
@@ -587,14 +639,18 @@ const DevisAvance = () => {
             });
             // Charger les contacts de la société
             await fetchContactsSociete(chantierData.societe.id);
+            // Réinitialiser la société devis alternative
+            setSocieteDevisId(null);
             
             // Récupérer les informations du client
             if (chantierData.societe.client_name) {
               const clientId = typeof chantierData.societe.client_name === 'object' 
                 ? chantierData.societe.client_name.id 
                 : chantierData.societe.client_name;
-              
               if (clientId) {
+                // Charger les sociétés du même client pour le sélecteur devis
+                fetchAvailableSocietes(clientId);
+
                 const clientResponse = await axios.get(`/api/client/${clientId}/`);
                 const clientData = clientResponse.data;
                 
@@ -617,6 +673,7 @@ const DevisAvance = () => {
             const societeData = societeResponse.data;
             
             setSociete({
+              id: chantierData.societe,
               nom_societe: societeData.nom_societe || '',
               rue_societe: societeData.rue_societe || '',
               codepostal_societe: societeData.codepostal_societe || '',
@@ -624,6 +681,8 @@ const DevisAvance = () => {
             });
             // Charger les contacts de la société
             await fetchContactsSociete(chantierData.societe);
+            // Réinitialiser la société devis alternative
+            setSocieteDevisId(null);
             
             if (societeData.client_name) {
               const clientId = typeof societeData.client_name === 'object' 
@@ -631,6 +690,9 @@ const DevisAvance = () => {
                 : societeData.client_name;
               
               if (clientId) {
+                // Charger les sociétés du même client pour le sélecteur devis
+                fetchAvailableSocietes(clientId);
+
                 const clientResponse = await axios.get(`/api/client/${clientId}/`);
                 const clientData = clientResponse.data;
                 
@@ -719,10 +781,6 @@ const DevisAvance = () => {
   // Handlers pour le flux de création de nouveau chantier
 
   const handleClientInfoSubmit = async (clientData) => {
-    if (!clientData.name || !clientData.surname || !clientData.phone_Number) {
-      alert("Tous les champs sont obligatoires");
-      return;
-    }
     if (!clientData) {
       return;
     }
@@ -730,7 +788,7 @@ const DevisAvance = () => {
       const updatedClient = {
         name: clientData.name || "",
         surname: clientData.surname || "",
-        phone_Number: parseInt(clientData.phone_Number) || 0,
+        phone_Number: clientData.phone_Number ? parseInt(clientData.phone_Number) : 0,
         client_mail: clientData.client_mail || "",
         civilite: clientData.civilite || "",
         poste: clientData.poste || "",
@@ -1102,16 +1160,48 @@ const DevisAvance = () => {
   const loadParties = async (searchQuery = '') => {
     try {
       setIsLoadingParties(true);
-      const response = await axios.get('/api/parties/');
-      const allParties = response.data;
+      // DRF peut paginer: {count, next, previous, results: [...]}
+      const firstResponse = await axios.get('/api/parties/');
+      const firstRaw = firstResponse.data;
+
+      let allParties = [];
+      if (Array.isArray(firstRaw)) {
+        allParties = firstRaw;
+      } else if (firstRaw && Array.isArray(firstRaw.results)) {
+        allParties = [...firstRaw.results];
+
+        // Si pagination activée, récupérer toutes les pages pour avoir TOUTES les parties
+        let nextUrl = firstRaw.next;
+        let guard = 0;
+        while (nextUrl && guard < 50) {
+          guard += 1;
+          const nextResp = await axios.get(nextUrl);
+          const nextRaw = nextResp.data;
+
+          if (Array.isArray(nextRaw)) {
+            // Format non paginé (cas atypique)
+            allParties = nextRaw;
+            break;
+          }
+
+          if (nextRaw && Array.isArray(nextRaw.results)) {
+            allParties = allParties.concat(nextRaw.results);
+            nextUrl = nextRaw.next;
+          } else {
+            break;
+          }
+        }
+      }
       
       // Filtrer les parties si une recherche est spécifiée
       let filteredParties = allParties;
       if (searchQuery) {
-        filteredParties = allParties.filter(partie => 
-          partie.titre.toLowerCase().includes(searchQuery.toLowerCase()) ||
-          partie.type.toLowerCase().includes(searchQuery.toLowerCase())
-        );
+        const q = searchQuery.toLowerCase();
+        filteredParties = allParties.filter(partie => {
+          const titre = (partie?.titre || '').toString().toLowerCase();
+          const type = (partie?.type || partie?.type_activite || '').toString().toLowerCase();
+          return titre.includes(q) || type.includes(q);
+        });
       }
       
       setAvailableParties(allParties);
@@ -1146,9 +1236,10 @@ const DevisAvance = () => {
   // Fonction pour rechercher les parties (pour React Select)
   const searchParties = useCallback(async (inputValue) => {
     try {
+      const partiesArray = Array.isArray(availableParties) ? availableParties : [];
       // ✅ Utiliser availableParties comme source principale (contient TOUTES les parties)
       // car l'endpoint /api/parties/search/ limite à 50 résultats
-      const localResults = availableParties
+      const localResults = partiesArray
         .filter(partie => {
           if (!inputValue) return true;
           const searchLower = inputValue.toLowerCase();
@@ -1165,7 +1256,7 @@ const DevisAvance = () => {
         }));
       
       // Si availableParties est vide ou si on veut compléter avec l'API (optionnel)
-      if (localResults.length === 0 || availableParties.length === 0) {
+      if (localResults.length === 0 || partiesArray.length === 0) {
         try {
           const apiResults = await searchPartiesAPI(inputValue);
           // Combiner et éliminer les doublons
@@ -1183,7 +1274,8 @@ const DevisAvance = () => {
       return localResults;
     } catch (error) {
       // En cas d'erreur, retourner au moins les parties locales filtrées
-      return availableParties
+      const partiesArray = Array.isArray(availableParties) ? availableParties : [];
+      return partiesArray
         .filter(partie => {
           if (!inputValue) return true;
           const searchLower = inputValue.toLowerCase();
@@ -1770,6 +1862,10 @@ const DevisAvance = () => {
         setSelectedSocieteId(draft.selectedSocieteId ?? null);
       }
       
+      if (typeof draft.societeDevisId !== 'undefined') {
+        setSocieteDevisId(draft.societeDevisId ?? null);
+      }
+      
       // ✅ Restaurer les chemins du drive
       if (typeof draft.customDrivePath !== 'undefined') {
         setCustomDrivePath(draft.customDrivePath ?? null);
@@ -1830,15 +1926,13 @@ const DevisAvance = () => {
         pendingLineForBase,
         isSelectingBase,
         recurringLineDraft,
-        // ✅ Ajouter les contacts de société
         contactsSociete,
         selectedContactId,
         currentSocieteId,
         selectedSocieteId,
-        // ✅ Ajouter les chemins du drive
+        societeDevisId,
         customDrivePath,
         chantierDrivePath,
-        // ✅ Ajouter l'ID du client
         clientId
       };
       
@@ -1871,15 +1965,13 @@ const DevisAvance = () => {
     pendingLineForBase,
     isSelectingBase,
     recurringLineDraft,
-    // ✅ Ajouter les dépendances pour les contacts
     contactsSociete,
     selectedContactId,
     currentSocieteId,
     selectedSocieteId,
-    // ✅ Ajouter les dépendances pour les chemins du drive
+    societeDevisId,
     customDrivePath,
     chantierDrivePath,
-    // ✅ Ajouter la dépendance pour l'ID du client
     clientId
   ]);
   
@@ -1891,18 +1983,20 @@ const DevisAvance = () => {
     };
   }, []);
   
-  // ✅ Recharger les contacts après restauration si une société est disponible
+  // Recharger les contacts et sociétés après restauration si une société est disponible
   useEffect(() => {
     if (!isDraftHydrated) {
       return;
     }
     
-    // Si on a une société restaurée (via selectedSocieteId ou currentSocieteId ou pendingChantierData)
     const societeIdToUse = currentSocieteId || selectedSocieteId || pendingChantierData?.societe?.id;
     
     if (societeIdToUse && (!contactsSociete || contactsSociete.length === 0)) {
-      // Recharger les contacts si on a une société mais pas de contacts chargés
       fetchContactsSociete(societeIdToUse);
+    }
+    
+    if (societeIdToUse && availableSocietes.length === 0) {
+      fetchAvailableSocietes();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isDraftHydrated, currentSocieteId, selectedSocieteId, pendingChantierData?.societe?.id]);
@@ -1931,6 +2025,7 @@ const DevisAvance = () => {
       selectedContactId,
       currentSocieteId,
       selectedSocieteId,
+      societeDevisId,
       customDrivePath,
       chantierDrivePath,
       clientId
@@ -1957,6 +2052,7 @@ const DevisAvance = () => {
     selectedContactId,
     currentSocieteId,
     selectedSocieteId,
+    societeDevisId,
     customDrivePath,
     chantierDrivePath,
     clientId
@@ -1995,6 +2091,7 @@ const DevisAvance = () => {
             selectedContactId: latest.selectedContactId,
             currentSocieteId: latest.currentSocieteId,
             selectedSocieteId: latest.selectedSocieteId,
+            societeDevisId: latest.societeDevisId,
             customDrivePath: latest.customDrivePath,
             chantierDrivePath: latest.chantierDrivePath,
             clientId: latest.clientId
@@ -2903,9 +3000,11 @@ const DevisAvance = () => {
         } else {
           // Créer le client avec tous les champs (incluant civilite et poste)
           const clientResponse = await axios.post("/api/client/", {
-            name: pendingChantierData.client.name,
-            surname: pendingChantierData.client.surname,
-            phone_Number: pendingChantierData.client.phone_Number.toString(),
+            name: pendingChantierData.client.name || "",
+            surname: pendingChantierData.client.surname || "",
+            phone_Number: pendingChantierData.client.phone_Number
+              ? pendingChantierData.client.phone_Number.toString()
+              : null,
             client_mail: pendingChantierData.client.client_mail || "",
             civilite: pendingChantierData.client.civilite || "",
             poste: pendingChantierData.client.poste || "",
@@ -3035,7 +3134,8 @@ const DevisAvance = () => {
           ...devisData,
           price_ht: total_ht,
           price_ttc: montant_ttc,
-          contact_societe: selectedContactId || null, // Ajouter le contact sélectionné
+          contact_societe: selectedContactId || null,
+          societe_devis: societeDevisId || null,
         },
         selectedChantierId: finalChantierId,
         clientIds: finalClientId ? [finalClientId] : [],
@@ -3198,6 +3298,18 @@ const DevisAvance = () => {
     loadParties();
   }, []);
 
+  // Fermer la liste chantier au clic à l'extérieur
+  useEffect(() => {
+    if (!chantierDropdownOpen) return;
+    const handleClickOutside = (e) => {
+      if (chantierDropdownRef.current && !chantierDropdownRef.current.contains(e.target)) {
+        setChantierDropdownOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [chantierDropdownOpen]);
+
   useEffect(() => {
     const hasAtLeastOnePartie = devisItems.some(item => item.type === 'partie');
     const recurringLineExists = devisItems.some(isRecurringSpecialLine);
@@ -3267,31 +3379,112 @@ const DevisAvance = () => {
             </h2>
             
             <Box sx={{ display: 'flex', gap: '20px', alignItems: 'center', flexWrap: 'wrap' }}>
-              <FormControl sx={{ minWidth: 300, flex: 1 }}>
-                <InputLabel shrink>Chantier existant</InputLabel>
-                <Select
-                  value={selectedChantierId || ''}
-                  onChange={(e) => handleChantierSelection(e.target.value)}
-                  disabled={isLoadingChantiers} // Permettre de recliquer même si appel d'offres
-                  displayEmpty
-                  notched
-                >
-                  <MenuItem value="">
-                    <em>-- Choisir un chantier --</em>
-                  </MenuItem>
-                  {chantiers
-                    .filter((chantier) => chantier.chantier_name !== "École - Formation")
-                    .filter(
-                      (chantier) =>
-                        chantier.state_chantier !== "Terminé" &&
-                        chantier.state_chantier !== "En attente"
-                    )
-                    .map((chantier) => (
-                      <MenuItem key={chantier.id} value={chantier.id}>
-                        {chantier.chantier_name}
-                      </MenuItem>
-                    ))}
-                </Select>
+              <FormControl sx={{ minWidth: 300, flex: 1 }} ref={chantierDropdownRef}>
+                <InputLabel shrink sx={{ backgroundColor: 'transparent', px: 0.5 }}>
+                  Chantier existant
+                </InputLabel>
+                <input
+                  type="text"
+                  placeholder="Rechercher un chantier..."
+                  value={
+                    selectedChantierId && selectedChantierId !== -1
+                      ? (chantiers.find((c) => c.id === selectedChantierId)?.chantier_name ?? '')
+                      : chantierSearchQuery
+                  }
+                  onChange={(e) => {
+                    setChantierSearchQuery(e.target.value);
+                    if (selectedChantierId && selectedChantierId !== -1) {
+                      handleChantierSelection('');
+                    }
+                    setChantierDropdownOpen(true);
+                  }}
+                  onFocus={() => setChantierDropdownOpen(true)}
+                  disabled={isLoadingChantiers}
+                  style={{
+                    width: '100%',
+                    padding: '14px 12px 14px 12px',
+                    marginTop: '8px',
+                    border: '2px solid #e0e0e0',
+                    borderRadius: '8px',
+                    fontSize: '14px',
+                    boxSizing: 'border-box',
+                  }}
+                />
+                {chantierDropdownOpen && (
+                  <ul
+                    style={{
+                      position: 'absolute',
+                      top: '100%',
+                      left: 0,
+                      right: 0,
+                      margin: 0,
+                      marginTop: '4px',
+                      padding: 0,
+                      listStyle: 'none',
+                      maxHeight: '240px',
+                      overflowY: 'auto',
+                      backgroundColor: '#fff',
+                      border: '2px solid #2196f3',
+                      borderRadius: '8px',
+                      boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
+                      zIndex: 10,
+                    }}
+                  >
+                    {(() => {
+                      const chantiersEnCours = chantiers
+                        .filter((c) => c.chantier_name !== 'École - Formation')
+                        .filter(
+                          (c) =>
+                            c.state_chantier !== 'Terminé' &&
+                            c.state_chantier !== 'En attente'
+                        );
+                      const sorted = [...chantiersEnCours].sort((a, b) =>
+                        (a.chantier_name || '').localeCompare(b.chantier_name || '', 'fr')
+                      );
+                      const filtered = chantierSearchQuery.trim()
+                        ? sorted.filter((c) =>
+                            (c.chantier_name || '')
+                              .toLowerCase()
+                              .includes(chantierSearchQuery.trim().toLowerCase())
+                          )
+                        : sorted;
+                      if (filtered.length === 0) {
+                        return (
+                          <li style={{ padding: '12px 14px', color: '#666', fontSize: '14px' }}>
+                            Aucun chantier trouvé
+                          </li>
+                        );
+                      }
+                      return filtered.map((chantier) => (
+                        <li
+                          key={chantier.id}
+                          onClick={() => {
+                            handleChantierSelection(chantier.id);
+                            setChantierDropdownOpen(false);
+                            setChantierSearchQuery('');
+                          }}
+                          style={{
+                            padding: '10px 14px',
+                            cursor: 'pointer',
+                            fontSize: '14px',
+                            borderBottom: '1px solid #eee',
+                            backgroundColor:
+                              selectedChantierId === chantier.id ? '#e3f2fd' : 'transparent',
+                          }}
+                          onMouseEnter={(e) => {
+                            e.currentTarget.style.backgroundColor = '#e3f2fd';
+                          }}
+                          onMouseLeave={(e) => {
+                            e.currentTarget.style.backgroundColor =
+                              selectedChantierId === chantier.id ? '#e3f2fd' : 'transparent';
+                          }}
+                        >
+                          {chantier.chantier_name}
+                        </li>
+                      ));
+                    })()}
+                  </ul>
+                )}
               </FormControl>
               
               <Typography sx={{ color: COLORS.textMuted, fontSize: '14px' }}>
@@ -3373,6 +3566,22 @@ const DevisAvance = () => {
               contacts={contactsSociete}
               selectedContactId={selectedContactId}
               societeId={currentSocieteId || selectedSocieteId || (pendingChantierData.societe?.id)}
+              availableSocietes={availableSocietes}
+              selectedSocieteDevisId={societeDevisId}
+              onSocieteDevisSelect={(id) => {
+                setSocieteDevisId(id);
+                if (id) {
+                  fetchContactsSociete(id);
+                  setSelectedContactId(null);
+                } else {
+                  const fallbackSocieteId = currentSocieteId || selectedSocieteId || societe?.id || pendingChantierData?.societe?.id;
+                  if (fallbackSocieteId) {
+                    fetchContactsSociete(fallbackSocieteId);
+                  }
+                  setSelectedContactId(null);
+                }
+              }}
+              onOpenSelectSocieteModal={() => setShowSelectSocieteDevisModal(true)}
               onContactSelect={(contactId) => {
                 setSelectedContactId(contactId || null);
               }}
@@ -3381,7 +3590,6 @@ const DevisAvance = () => {
               }}
               onClientChange={(updatedClient) => {
                 setClient(updatedClient);
-                // Mettre à jour pendingChantierData avec tous les champs (incluant civilite et poste)
                 setPendingChantierData((prev) => ({
                   ...prev,
                   client: {
@@ -3396,7 +3604,6 @@ const DevisAvance = () => {
               }}
               onSocieteChange={(updatedSociete) => {
                 setSociete(updatedSociete);
-                // Mettre à jour pendingChantierData
                 setPendingChantierData((prev) => ({
                   ...prev,
                   societe: {
@@ -3755,7 +3962,8 @@ const DevisAvance = () => {
                         ...devisData,
                         price_ht: total_ht,
                         price_ttc: montant_ttc,
-                        contact_societe: selectedContactId || null, // Ajouter le contact sélectionné
+                        contact_societe: selectedContactId || null,
+                        societe_devis: societeDevisId || null,
                       },
                       selectedChantierId,
                       clientIds: finalClientId ? [finalClientId] : []
@@ -3907,18 +4115,41 @@ const DevisAvance = () => {
         open={showSelectSocieteModal}
         onClose={() => {
           setShowSelectSocieteModal(false);
-          setSelectedClientSocietes(null); // Réinitialiser les sociétés filtrées
-          // ✅ Ne pas réinitialiser le processus si l'utilisateur a déjà commencé
-          // Le devisType doit être conservé
+          setSelectedClientSocietes(null);
         }}
         onSocieteSelect={handleSocieteSelect}
         filteredSocietes={selectedClientSocietes}
         onCreateNew={() => {
-          // ✅ Permettre de créer une nouvelle société même si plusieurs existent déjà
           setShowSelectSocieteModal(false);
-          setShowClientInfoModal(false); // ✅ Fermer aussi le modal client
+          setShowClientInfoModal(false);
           setShowSocieteInfoModal(true);
         }}
+      />
+
+      {/* Modal de sélection de société pour affichage devis */}
+      <SelectSocieteModal
+        open={showSelectSocieteDevisModal}
+        onClose={() => setShowSelectSocieteDevisModal(false)}
+        filteredSocietes={availableSocietes}
+        onSocieteSelect={(societeId) => {
+          setSocieteDevisId(societeId);
+          setShowSelectSocieteDevisModal(false);
+          if (societeId) {
+            fetchContactsSociete(societeId);
+            setSelectedContactId(null);
+          }
+        }}
+        onCreateNew={() => {
+          setShowSelectSocieteDevisModal(false);
+          setShowCreateSocieteDevisModal(true);
+        }}
+      />
+
+      {/* Modal de création de société pour affichage devis */}
+      <SocieteInfoModal
+        open={showCreateSocieteDevisModal}
+        onClose={() => setShowCreateSocieteDevisModal(false)}
+        onSubmit={handleCreateSocieteDevis}
       />
 
       {/* Modal de création de chantier */}

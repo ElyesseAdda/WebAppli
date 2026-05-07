@@ -1,6 +1,8 @@
 import React, { useState } from "react";
 import { Box, BottomNavigation, BottomNavigationAction, Paper, Typography, AppBar, Toolbar, IconButton } from "@mui/material";
 import { MdList, MdAdd, MdDescription, MdLogout } from "react-icons/md";
+import { Home as HomeIcon } from "@mui/icons-material";
+import { useNavigate } from "react-router-dom";
 import RapportsPageMobile from "./RapportsPageMobile";
 import RapportDetailMobile from "./RapportDetailMobile";
 import RapportForm from "./RapportForm";
@@ -13,6 +15,7 @@ const RapportMobileLayout = () => {
   const [selectedServerBrouillonId, setSelectedServerBrouillonId] = useState(null);
   const [navValue, setNavValue] = useState(0);
   const { logout, user } = useAuth();
+  const navigate = useNavigate();
 
   const handleCreateNew = () => {
     setSelectedRapportId(null);
@@ -130,9 +133,17 @@ const RapportMobileLayout = () => {
         bgcolor: "#f5f5f5",
       }}
     >
-      {/* Header mobile */}
       <AppBar position="static" sx={{ backgroundColor: COLORS.infoDark || "#1976d2" }}>
         <Toolbar sx={{ minHeight: 56 }}>
+          <IconButton
+            color="inherit"
+            onClick={() => navigate("/mobile-home")}
+            size="small"
+            aria-label="Accueil mobile"
+            sx={{ mr: 0.5 }}
+          >
+            <HomeIcon />
+          </IconButton>
           <MdDescription size={24} style={{ marginRight: 8 }} />
           <Typography variant="h6" sx={{ flexGrow: 1, fontSize: "1rem" }}>
             Rapports d'intervention
@@ -148,7 +159,6 @@ const RapportMobileLayout = () => {
         </Toolbar>
       </AppBar>
 
-      {/* Contenu principal - minHeight: 0 pour que le scroll fonctionne en flex */}
       <Box
         sx={{
           flex: 1,
@@ -162,7 +172,6 @@ const RapportMobileLayout = () => {
         {renderContent()}
       </Box>
 
-      {/* Navigation bottom */}
       <Paper
         sx={{ position: "fixed", bottom: 0, left: 0, right: 0, zIndex: 10 }}
         elevation={3}

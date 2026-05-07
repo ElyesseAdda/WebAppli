@@ -31,6 +31,7 @@ const CreateAgentModal = ({ isOpen, handleClose, refreshAgents }) => {
   const [agentData, setAgentData] = useState({
     name: "",
     surname: "",
+    email: "",
     address: "",
     phone_Number: "",
     taux_Horaire: "",
@@ -96,6 +97,7 @@ const CreateAgentModal = ({ isOpen, handleClose, refreshAgents }) => {
       setAgentData({
         name: "",
         surname: "",
+        email: "",
         address: "",
         phone_Number: "",
         taux_Horaire: "",
@@ -167,6 +169,14 @@ const CreateAgentModal = ({ isOpen, handleClose, refreshAgents }) => {
           margin="normal"
         />
         <TextField
+          label="Adresse mail"
+          name="email"
+          value={agentData.email}
+          onChange={handleChange}
+          fullWidth
+          margin="normal"
+        />
+        <TextField
           label="Numéro de téléphone"
           name="phone_Number"
           value={agentData.phone_Number}
@@ -219,6 +229,7 @@ const CreateAgentModal = ({ isOpen, handleClose, refreshAgents }) => {
               onChange={handleChange}
               fullWidth
               margin="normal"
+              InputLabelProps={{ shrink: true }}
             />
             <TextField
               label="Heure de fin"
@@ -228,6 +239,7 @@ const CreateAgentModal = ({ isOpen, handleClose, refreshAgents }) => {
               onChange={handleChange}
               fullWidth
               margin="normal"
+              InputLabelProps={{ shrink: true }}
             />
             <TextField
               label="Heure de début de pause"
@@ -237,6 +249,7 @@ const CreateAgentModal = ({ isOpen, handleClose, refreshAgents }) => {
               onChange={handleChange}
               fullWidth
               margin="normal"
+              InputLabelProps={{ shrink: true }}
             />
             <TextField
               label="Heure de fin de pause"
@@ -246,6 +259,7 @@ const CreateAgentModal = ({ isOpen, handleClose, refreshAgents }) => {
               onChange={handleChange}
               fullWidth
               margin="normal"
+              InputLabelProps={{ shrink: true }}
             />
           </>
         )}

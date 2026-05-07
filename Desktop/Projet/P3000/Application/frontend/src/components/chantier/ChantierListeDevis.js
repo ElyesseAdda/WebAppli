@@ -1,5 +1,10 @@
 import {
   Alert,
+  Button,
+  Dialog,
+  DialogActions,
+  DialogContent,
+  DialogTitle,
   IconButton,
   Menu,
   MenuItem,
@@ -44,6 +49,34 @@ const formatNumber = (number) => {
   return formatted.replace(/\B(?=(\d{3})+(?!\d))/g, " ");
 };
 
+const toInputDate = (value) => {
+  if (!value) return "";
+  if (/^\d{4}-\d{2}-\d{2}$/.test(value)) return value;
+
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "";
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+};
+
+const formatDateFr = (value) => {
+  if (!value) return "-";
+  if (/^\d{4}-\d{2}-\d{2}$/.test(value)) {
+    const [year, month, day] = value.split("-");
+    return `${day}/${month}/${year}`;
+  }
+
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "-";
+  return date.toLocaleDateString("fr-FR", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+  });
+};
+
 const ChantierListeDevis = ({
   chantierData,
   devis,
@@ -73,6 +106,9 @@ const ChantierListeDevis = ({
   const statusOptions = ["En attente", "Validé", "Refusé"];
   const [pendingSave, setPendingSave] = useState(false);
   const [snackbar, setSnackbar] = useState({ open: false, message: "", severity: "info" });
+  const [editNumeroDialogOpen, setEditNumeroDialogOpen] = useState(false);
+  const [devisToEditNumero, setDevisToEditNumero] = useState(null);
+  const [newNumeroValue, setNewNumeroValue] = useState("");
 
   // Fonction pour obtenir les styles de statut (mêmes que le dashboard)
   const getStatusStyles = (status) => {
@@ -152,9 +188,7 @@ const ChantierListeDevis = ({
               .includes(filters[key].toLowerCase());
           case "date_creation":
             if (!filters[key]) return true;
-            const devisDate = new Date(devis.date_creation)
-              .toISOString()
-              .split("T")[0];
+            const devisDate = toInputDate(devis.date_creation);
             return devisDate === filters[key];
           case "price_ht":
             const devisPrice = devis.price_ht?.toString() || "";
@@ -190,9 +224,7 @@ const ChantierListeDevis = ({
               .includes(newFilters[key].toLowerCase());
           case "date_creation":
             if (!newFilters[key]) return true;
-            const devisDate = new Date(devis.date_creation)
-              .toISOString()
-              .split("T")[0];
+            const devisDate = toInputDate(devis.date_creation);
             return devisDate === newFilters[key];
           case "price_ht":
             const devisPrice = devis.price_ht?.toString() || "";
@@ -399,6 +431,52 @@ const ChantierListeDevis = ({
     setDevisToUpdate(selectedDevis);
     setShowStatusModal(true);
     handleClose();
+  };
+
+  const handleEditNumeroClick = () => {
+    if (selectedDevis) {
+      setDevisToEditNumero(selectedDevis);
+      setNewNumeroValue(String(selectedDevis.numero ?? ""));
+      setEditNumeroDialogOpen(true);
+    }
+    setAnchorEl(null);
+  };
+
+  const handleEditNumeroClose = () => {
+    setEditNumeroDialogOpen(false);
+    setDevisToEditNumero(null);
+    setNewNumeroValue("");
+  };
+
+  const handleEditNumeroSave = async () => {
+    if (!devisToEditNumero) return;
+    const value = String(newNumeroValue ?? "").trim();
+    if (!value) {
+      setSnackbar({
+        open: true,
+        message: "Veuillez entrer un numéro valide.",
+        severity: "error",
+      });
+      return;
+    }
+    try {
+      await axios.patch(`/api/devisa/${devisToEditNumero.id}/`, {
+        numero: value,
+      });
+      await fetchDevis();
+      handleEditNumeroClose();
+      setSnackbar({
+        open: true,
+        message: `Numéro de devis mis à jour : ${value}`,
+        severity: "success",
+      });
+    } catch (error) {
+      const msg =
+        error.response?.data?.numero?.[0] ||
+        error.response?.data?.detail ||
+        "Erreur lors de la mise à jour du numéro de devis.";
+      setSnackbar({ open: true, message: msg, severity: "error" });
+    }
   };
 
   const handleCreateSituation = async () => {
@@ -647,7 +725,7 @@ const ChantierListeDevis = ({
                     {devis.numero}
                   </DevisNumber>
                   <CenteredTableCell>
-                    {new Date(devis.date_creation).toLocaleDateString()}
+                    {formatDateFr(devis.date_creation)}
                   </CenteredTableCell>
                   <CenteredTableCell
                     style={{ fontWeight: 600, color: green[500] }}
@@ -721,8 +799,47 @@ const ChantierListeDevis = ({
         )}
         <MenuItem onClick={handleEditCIE}>Éditer en CIE</MenuItem>
         <MenuItem onClick={handleConvertToBonCommande}>Convertir en bon de commande</MenuItem>
+        <MenuItem onClick={handleEditNumeroClick}>Modifier le numéro</MenuItem>
         <MenuItem onClick={handleChangeStatus}>Modifier le statut</MenuItem>
       </Menu>
+
+      <Dialog
+        open={editNumeroDialogOpen}
+        onClose={handleEditNumeroClose}
+        PaperProps={{
+          sx: { borderRadius: 2, padding: 1 },
+        }}
+      >
+        <DialogTitle>Modifier le numéro de devis</DialogTitle>
+        <DialogContent>
+          <StyledTextField
+            autoFocus
+            label="Numéro"
+            type="text"
+            value={newNumeroValue}
+            onChange={(e) => setNewNumeroValue(e.target.value)}
+            variant="outlined"
+            fullWidth
+            inputProps={{ maxLength: 100 }}
+            sx={{
+              mt: 1,
+              "& .MuiInputBase-input": { color: "black" },
+              "& .MuiInputLabel-root": { color: "rgba(0,0,0,0.6)" },
+              "& .MuiOutlinedInput-notchedOutline": {
+                borderColor: "rgba(0,0,0,0.23)",
+              },
+            }}
+          />
+        </DialogContent>
+        <DialogActions sx={{ padding: 2 }}>
+          <Button onClick={handleEditNumeroClose} variant="outlined">
+            Annuler
+          </Button>
+          <Button onClick={handleEditNumeroSave} variant="contained">
+            Enregistrer
+          </Button>
+        </DialogActions>
+      </Dialog>
 
       <StatusChangeModal
         open={showStatusModal}

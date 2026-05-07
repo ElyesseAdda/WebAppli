@@ -134,6 +134,7 @@ const BonCommandeModif = () => {
       .map((product) => ({
         produit: product.id,
         designation: product.designation || product.nom_materiel,
+        unite: product.unite,
         quantite: quantities[product.id] || 0,
         prix_unitaire: product.prix_unitaire,
         total: (quantities[product.id] || 0) * product.prix_unitaire,
@@ -171,6 +172,7 @@ const BonCommandeModif = () => {
         .map((product) => ({
           produit: product.id,
           designation: product.designation || product.nom_materiel,
+          unite: product.unite,
           quantite: quantities[product.id] || 0,
           prix_unitaire: product.prix_unitaire,
         }));

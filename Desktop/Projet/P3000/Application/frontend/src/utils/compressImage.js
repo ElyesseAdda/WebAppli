@@ -11,6 +11,8 @@ export const VIGIK_REPORT_PHOTO_OPTIONS = {
 };
 
 /**
+ * Compresse une image via un canvas pour limiter le poids de l'upload.
+ *
  * @param {File} file
  * @param {{ maxWidth?: number, maxHeight?: number, quality?: number, force?: boolean, skipIfBytesUnder?: number }} [opts]
  *   force : si true, repasse toujours par le canvas JPEG (ignore le court-circuit « déjà léger »).

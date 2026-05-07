@@ -12,10 +12,9 @@ import axios from "axios";
 import dayjs from "dayjs";
 import "dayjs/locale/fr"; // Assurez-vous d'importer la locale
 import isoWeek from "dayjs/plugin/isoWeek";
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 
 import { generatePDFDrive } from "../utils/universalDriveGenerator";
-import { COLORS, PLANNING_PALETTE, withOpacity } from "../constants/colors";
 import "./../../static/css/planningHebdo.css";
 import LaborCostsSummary from "./LaborCostsSummary";
 
@@ -82,11 +81,17 @@ const PlanningHebdoAgent = ({
   const [events, setEvents] = useState([]);
   const [selectedCells, setSelectedCells] = useState([]);
   const [lastSelectedCell, setLastSelectedCell] = useState(null);
-  const [chantiers, setChantiers] = useState([]); // Nouvel état pour les chantiers
+  const [chantiers, setChantiers] = useState([]);
+  const [agenceChantier, setAgenceChantier] = useState(null);
+  const [agenceChantiers, setAgenceChantiers] = useState([]);
   const [isChantierModalOpen, setIsChantierModalOpen] = useState(false); // État pour le modal
   const [selectedChantier, setSelectedChantier] = useState(null); // Chantier sélectionné
   const [isSav, setIsSav] = useState(false); // État pour la checkbox SAV
   const [overtimeHours, setOvertimeHours] = useState(0); // État pour les heures supplémentaires
+  const [scheduleComment, setScheduleComment] = useState("");
+  const [chantierSearchQuery, setChantierSearchQuery] = useState("");
+  const [chantierDropdownOpen, setChantierDropdownOpen] = useState(false);
+  const chantierDropdownRef = useRef(null);
 
   // Nouvel état pour le modal de copie
   const [targetAgentId, setTargetAgentId] = useState(null);
@@ -96,7 +101,10 @@ const PlanningHebdoAgent = ({
   const [isCopying, setIsCopying] = useState(false);
 
   const [showCostsSummary, setShowCostsSummary] = useState(false);
-  const [publicHolidays, setPublicHolidays] = useState({}); // État pour stocker les jours fériés de la semaine
+  const [publicHolidays, setPublicHolidays] = useState({});
+  const [isCommentModalOpen, setIsCommentModalOpen] = useState(false);
+  const [editingCommentCells, setEditingCommentCells] = useState([]);
+  const [editingComment, setEditingComment] = useState("");
 
   const currentYear = dayjs().year();
   const currentWeek = dayjs().isoWeek();
@@ -230,18 +238,30 @@ const PlanningHebdoAgent = ({
     return week1Start.add(week - 1, 'week');
   };
 
-  // Récupérer les chantiers depuis l'API
+  // Récupérer les chantiers depuis l'API (+ toutes les agences pour le planning)
   useEffect(() => {
     const fetchChantiers = async () => {
       try {
-        const response = await axios.get("/api/chantier/"); // URL de votre API pour les chantiers
-        // Filtrer les chantiers avec le statut "Terminé" ou "En attente"
+        const [response, agencesRes] = await Promise.all([
+          axios.get("/api/chantier/"),
+          axios.get("/api/chantier/agences_list/").catch(() => ({ data: [] })),
+        ]);
+        const agencesListData = agencesRes?.data || [];
+        setAgenceChantiers(agencesListData);
+        setAgenceChantier(agencesListData[0] || null);
+        const agenceIds = new Set(agencesListData.map((a) => a.id));
         const filteredChantiers = response.data.filter(
           (chantier) =>
             chantier.state_chantier !== "Terminé" &&
             chantier.state_chantier !== "En attente"
         );
-        setChantiers(filteredChantiers);
+        const merged = [...filteredChantiers];
+        for (const ac of agencesListData) {
+          if (!merged.some((c) => c.id === ac.id)) {
+            merged.unshift(ac);
+          }
+        }
+        setChantiers(merged);
       } catch (error) {
         console.error("Erreur lors de la récupération des chantiers :", error);
       }
@@ -249,6 +269,18 @@ const PlanningHebdoAgent = ({
 
     fetchChantiers();
   }, []);
+
+  // Fermer la liste chantiers au clic à l'extérieur
+  useEffect(() => {
+    if (!chantierDropdownOpen) return;
+    const handleClickOutside = (e) => {
+      if (chantierDropdownRef.current && !chantierDropdownRef.current.contains(e.target)) {
+        setChantierDropdownOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, [chantierDropdownOpen]);
 
   // Charger les jours fériés de la semaine
   useEffect(() => {
@@ -335,6 +367,7 @@ const PlanningHebdoAgent = ({
                     chantierName: getChantierName(item.chantier_id),
                     isSav: item.is_sav || false,
                     overtimeHours: item.overtime_hours || 0,
+                    comment: item.comment || "",
                   }
                 : "";
             }
@@ -453,16 +486,145 @@ const PlanningHebdoAgent = ({
     return range;
   };
 
+  const getCellKey = (agentSchedule, hour, day) => {
+    const cellData = agentSchedule?.[hour]?.[day];
+    if (!cellData || cellData === "") return null;
+    const name = typeof cellData === "object" ? cellData.chantierName : cellData;
+    const comment = typeof cellData === "object" ? (cellData.comment || "") : "";
+    return name ? `${name}|||${comment}` : null;
+  };
+
+  const mergedBlocks = useMemo(() => {
+    const agentSchedule = schedule[selectedAgentId];
+    if (!agentSchedule) return { cells: {}, skipped: new Set() };
+
+    const vertBlocks = {};
+    daysOfWeek.forEach((day, dayIdx) => {
+      vertBlocks[dayIdx] = [];
+      let prevKey = null;
+      let spanStart = null;
+      let spanCount = 0;
+      hours.forEach((hour) => {
+        let cellKey = getCellKey(agentSchedule, hour, day);
+        // Coupure obligatoire sur la pause déjeuner : sinon un rowspan « plein » recouvre 12h-13h
+        // (et la ligne suivante via skipped), alors que ces créneaux ne doivent pas être colorés chantier.
+        if (!isAgentJournalier && isPauseHour(hour)) {
+          cellKey = null;
+        }
+        if (cellKey && cellKey === prevKey) {
+          spanCount++;
+        } else {
+          if (prevKey && spanStart !== null) {
+            vertBlocks[dayIdx].push({ startHour: spanStart, rowSpan: spanCount, key: prevKey });
+          }
+          prevKey = cellKey;
+          spanStart = cellKey ? hour : null;
+          spanCount = cellKey ? 1 : 0;
+        }
+      });
+      if (prevKey && spanStart !== null) {
+        vertBlocks[dayIdx].push({ startHour: spanStart, rowSpan: spanCount, key: prevKey });
+      }
+    });
+
+    const cells = {};
+    const skipped = new Set();
+    const usedBlocks = new Set();
+
+    daysOfWeek.forEach((day, dayIdx) => {
+      vertBlocks[dayIdx].forEach((block, blockIdx) => {
+        const blockId = `${dayIdx}-${blockIdx}`;
+        if (usedBlocks.has(blockId)) return;
+
+        let colSpan = 1;
+        for (let nextDayIdx = dayIdx + 1; nextDayIdx < daysOfWeek.length; nextDayIdx++) {
+          const match = vertBlocks[nextDayIdx].find(
+            (b, idx) =>
+              !usedBlocks.has(`${nextDayIdx}-${idx}`) &&
+              b.startHour === block.startHour &&
+              b.rowSpan === block.rowSpan &&
+              b.key === block.key
+          );
+          if (match) {
+            const matchIdx = vertBlocks[nextDayIdx].indexOf(match);
+            usedBlocks.add(`${nextDayIdx}-${matchIdx}`);
+            colSpan++;
+          } else {
+            break;
+          }
+        }
+
+        cells[`${block.startHour}-${day}`] = { rowSpan: block.rowSpan, colSpan };
+
+        const startHourIdx = hours.indexOf(block.startHour);
+        for (let r = 0; r < block.rowSpan; r++) {
+          for (let c = 0; c < colSpan; c++) {
+            if (r === 0 && c === 0) continue;
+            skipped.add(`${hours[startHourIdx + r]}-${daysOfWeek[dayIdx + c]}`);
+          }
+        }
+      });
+    });
+
+    return { cells, skipped };
+  }, [schedule, selectedAgentId, hours, daysOfWeek, isAgentJournalier]);
+
+  const getSpanCells = (hour, day) => {
+    const info = mergedBlocks.cells[`${hour}-${day}`];
+    if (info) {
+      const result = [];
+      const startHourIdx = hours.indexOf(hour);
+      const startDayIdx = daysOfWeek.indexOf(day);
+      for (let r = 0; r < info.rowSpan; r++) {
+        for (let c = 0; c < info.colSpan; c++) {
+          result.push({ hour: hours[startHourIdx + r], day: daysOfWeek[startDayIdx + c] });
+        }
+      }
+      return result;
+    }
+    return [{ hour, day }];
+  };
+
+  /** Étend chaque cellule à tout le bloc visuellement fusionné (rowspan/colspan), sans doublons. */
+  const expandCellsToMergeGroups = (cells) => {
+    const seen = new Set();
+    const out = [];
+    for (const cell of cells) {
+      for (const c of getSpanCells(cell.hour, cell.day)) {
+        const k = `${c.hour}-${c.day}`;
+        if (!seen.has(k)) {
+          seen.add(k);
+          out.push(c);
+        }
+      }
+    }
+    return out;
+  };
+
   // Double-clic pour ouvrir directement le modal
   const handleCellDoubleClick = (hour, day, event) => {
     event.preventDefault();
     event.stopPropagation();
 
-    const newCell = { hour, day };
-    setSelectedCells([newCell]);
-    setLastSelectedCell(newCell);
-    
-    openChantierModal();
+    const cellData = schedule[selectedAgentId]?.[hour]?.[day];
+    if (cellData && cellData !== "") {
+      const cellsInGroup = getSpanCells(hour, day);
+      const comments = cellsInGroup
+        .map((c) => {
+          const d = schedule[selectedAgentId]?.[c.hour]?.[c.day];
+          return d && typeof d === "object" ? d.comment : "";
+        })
+        .filter((c) => c);
+      const currentComment = [...new Set(comments)].join("; ");
+      setEditingCommentCells(cellsInGroup);
+      setEditingComment(currentComment);
+      setIsCommentModalOpen(true);
+    } else {
+      const newCell = { hour, day };
+      setSelectedCells([newCell]);
+      setLastSelectedCell(newCell);
+      openChantierModal();
+    }
   };
 
   // Gestionnaire pour onMouseDown pour capturer les modificateurs plus tôt
@@ -495,49 +657,39 @@ const PlanningHebdoAgent = ({
     // Récupérer les informations stockées
     const cellInfo = window.tempCellInfo;
     if (!cellInfo || cellInfo.hour !== hour || cellInfo.day !== day) {
-      return; // Pas le même élément
+      return;
     }
 
     // Nettoyer
     delete window.tempCellInfo;
 
-    const newCell = { hour, day };
+    const groupCells = getSpanCells(hour, day);
 
     if (cellInfo.ctrlKey || cellInfo.metaKey) {
-      // Ctrl/Cmd + clic : ajouter/supprimer de la sélection
-
       setSelectedCells((prev) => {
-        const exists = prev.some(
-          (cell) => cell.hour === newCell.hour && cell.day === newCell.day
+        const groupSet = new Set(groupCells.map((c) => `${c.hour}-${c.day}`));
+        const existingSet = new Set(prev.map((c) => `${c.hour}-${c.day}`));
+        // Tout le bloc fusionné doit être pris en compte (pas seulement l’ancrage) : sinon Ctrl+Maj
+        // laisse une sélection partielle et la suppression n’efface qu’une partie du groupe.
+        const allGroupSelected = groupCells.every((c) =>
+          existingSet.has(`${c.hour}-${c.day}`)
         );
-        if (exists) {
-          // Supprimer la cellule de la sélection
-
-          return prev.filter(
-            (cell) => !(cell.hour === newCell.hour && cell.day === newCell.day)
-          );
-        } else {
-          // Ajouter la cellule à la sélection
-
-          setLastSelectedCell(newCell);
-          return [...prev, newCell];
+        if (allGroupSelected) {
+          return prev.filter((cell) => !groupSet.has(`${cell.hour}-${cell.day}`));
         }
+        setLastSelectedCell({ hour, day });
+        const toAdd = groupCells.filter((c) => !existingSet.has(`${c.hour}-${c.day}`));
+        return [...prev, ...toAdd];
       });
     } else if (cellInfo.shiftKey && lastSelectedCell) {
-      // Shift + clic : sélection de plage depuis la dernière cellule sélectionnée
-      const range = getCellRange(lastSelectedCell, newCell);
-      setSelectedCells(range);
-      // Ne pas changer lastSelectedCell pour permettre des extensions de sélection
+      const range = getCellRange(lastSelectedCell, { hour, day });
+      setSelectedCells(expandCellsToMergeGroups(range));
     } else if (cellInfo.shiftKey && !lastSelectedCell) {
-      // Shift sans cellule de référence - traiter comme un clic simple
-
-      setSelectedCells([newCell]);
-      setLastSelectedCell(newCell);
+      setSelectedCells(groupCells);
+      setLastSelectedCell({ hour, day });
     } else {
-      // Clic simple : nouvelle sélection
-
-      setSelectedCells([newCell]);
-      setLastSelectedCell(newCell);
+      setSelectedCells(groupCells);
+      setLastSelectedCell({ hour, day });
     }
   };
 
@@ -548,6 +700,24 @@ const PlanningHebdoAgent = ({
 
   // Fonctions pour gérer le modal des chantiers
   const openChantierModal = () => {
+    if (selectedCells.length > 0) {
+      const firstCell = selectedCells[0];
+      const cellData = schedule[selectedAgentId]?.[firstCell.hour]?.[firstCell.day];
+      if (cellData && cellData !== "" && typeof cellData === "object") {
+        const existingChantier = chantiers.find(
+          (c) => c.chantier_name === cellData.chantierName
+        ) || agenceChantiers.find(
+          (c) => c.chantier_name === cellData.chantierName
+        );
+        if (existingChantier) {
+          setSelectedChantier(existingChantier);
+          setChantierSearchQuery(existingChantier.chantier_name);
+        }
+        setIsSav(cellData.isSav || false);
+        setOvertimeHours(cellData.overtimeHours || 0);
+        setScheduleComment(cellData.comment || "");
+      }
+    }
     setIsChantierModalOpen(true);
   };
 
@@ -558,6 +728,9 @@ const PlanningHebdoAgent = ({
     setLastSelectedCell(null); // Réinitialiser la dernière cellule sélectionnée
     setIsSav(false); // Réinitialiser la checkbox SAV
     setOvertimeHours(0); // Réinitialiser les heures supplémentaires
+    setScheduleComment("");
+    setChantierSearchQuery("");
+    setChantierDropdownOpen(false);
   };
 
   // Fonction pour gérer le changement d'agent
@@ -640,9 +813,10 @@ const PlanningHebdoAgent = ({
     }
 
     try {
+      const expandedSelection = expandCellsToMergeGroups(selectedCells);
       // Filtrer les cellules pour exclure les heures de pause
-      const validCells = selectedCells.filter(cell => !isPauseHour(cell.hour));
-      const excludedPauseCells = selectedCells.filter(cell => isPauseHour(cell.hour));
+      const validCells = expandedSelection.filter(cell => !isPauseHour(cell.hour));
+      const excludedPauseCells = expandedSelection.filter(cell => isPauseHour(cell.hour));
       
       if (validCells.length === 0) {
         alert("Aucune cellule valide sélectionnée (les heures de pause sont automatiquement exclues).");
@@ -670,8 +844,9 @@ const PlanningHebdoAgent = ({
           day: cell.day,
           hour: cell.hour,
           chantierId: selectedChantier.id,
-          isSav: isSav, // Ajouter le paramètre SAV
-          overtimeHours: overtimeHours, // Ajouter les heures supplémentaires
+          isSav: isSav,
+          overtimeHours: overtimeHours,
+          comment: scheduleComment,
         };
 
         return update;
@@ -686,7 +861,7 @@ const PlanningHebdoAgent = ({
           newSchedule[selectedAgentId] = {};
         }
 
-        selectedCells.forEach((cell) => {
+        expandedSelection.forEach((cell) => {
           if (!newSchedule[selectedAgentId][cell.hour]) {
             newSchedule[selectedAgentId][cell.hour] = {};
           }
@@ -694,6 +869,7 @@ const PlanningHebdoAgent = ({
             chantierName: selectedChantier.chantier_name,
             isSav: isSav,
             overtimeHours: overtimeHours,
+            comment: scheduleComment,
           };
         });
 
@@ -726,13 +902,15 @@ const PlanningHebdoAgent = ({
       return;
     }
 
+    const cellsToDelete = expandCellsToMergeGroups(selectedCells);
+
     const confirmation = window.confirm(
-      `Êtes-vous sûr de vouloir supprimer les assignations de ${selectedCells.length} cellule(s) sélectionnée(s) ?`
+      `Êtes-vous sûr de vouloir supprimer les assignations de ${cellsToDelete.length} créneau(x) (groupes fusionnés inclus) ?`
     );
     if (!confirmation) return;
 
     // Préparer les données à envoyer
-    const deletions = selectedCells.map((cell) => {
+    const deletions = cellsToDelete.map((cell) => {
       // Calculer la date réelle du créneau
       // Utiliser la fonction utilitaire pour gérer correctement les semaines qui chevauchent les années
       const startOfWeek = getWeekStartDate(selectedWeek, selectedYear).startOf("isoWeek");
@@ -772,7 +950,7 @@ const PlanningHebdoAgent = ({
           newSchedule[selectedAgentId] = {};
         }
 
-        selectedCells.forEach((cell) => {
+        cellsToDelete.forEach((cell) => {
           if (!newSchedule[selectedAgentId][cell.hour]) {
             newSchedule[selectedAgentId][cell.hour] = {};
           }
@@ -788,7 +966,7 @@ const PlanningHebdoAgent = ({
       closeChantierModal();
 
       alert(
-        `${selectedCells.length} assignation(s) supprimée(s) avec succès !`
+        `${cellsToDelete.length} assignation(s) supprimée(s) avec succès !`
       );
     } catch (error) {
       console.error("Erreur lors de la suppression des assignations :", error);
@@ -798,11 +976,45 @@ const PlanningHebdoAgent = ({
     }
   };
 
-  // Fonction utilitaire pour générer une couleur unique par chantier
+  const agenceIdSet = useMemo(
+    () => new Set(agenceChantiers.map((a) => a.id)),
+    [agenceChantiers]
+  );
+
+  const agencePalette = [
+    "#7b1fa2", "#6a1b9a", "#8e24aa", "#9c27b0", "#ab47bc",
+    "#7c4dff", "#651fff", "#536dfe", "#304ffe",
+  ];
+
   function getColorForChantier(chantierId) {
-    // Palette de couleurs centralisée
-    const palette = PLANNING_PALETTE;
-    if (!chantierId) return COLORS.borderLight;
+    if (agenceIdSet.has(chantierId)) {
+      const idx = agenceChantiers.findIndex((a) => a.id === chantierId);
+      return agencePalette[idx % agencePalette.length];
+    }
+    // Palette de couleurs (ajustable)
+    const palette = [
+      "#1b78bc",
+      "#e57373",
+      "#81c784",
+      "#ffd54f",
+      "#ba68c8",
+      "#4dd0e1",
+      "#ff8a65",
+      "#a1887f",
+      "#90a4ae",
+      "#f06292",
+      "#7986cb",
+      "#dce775",
+      "#9575cd",
+      "#ffb74d",
+      "#aed581",
+      "#64b5f6",
+      "#fff176",
+      "#4db6ac",
+      "#f44336",
+      "#8d6e63",
+    ];
+    if (!chantierId) return "#bdbdbd";
     // Simple hash pour indexer la palette
     let hash = 0;
     const str = chantierId.toString();
@@ -817,7 +1029,7 @@ const PlanningHebdoAgent = ({
   const getCellStyle = (hour, day, scheduleData) => {
     // Vérifier si c'est une heure de pause
     if (isPauseHour(hour)) {
-      return COLORS.backgroundDark; // Gris clair doux pour les heures de pause
+      return "#e8e8e8"; // Gris clair doux pour les heures de pause
     }
 
     // Convertir le format de date pour la comparaison
@@ -845,7 +1057,7 @@ const PlanningHebdoAgent = ({
 
       // Si pas d'événement, appliquer le style jour férié (gris léger)
       if (!hasEvent) {
-        return COLORS.borderLight; // Gris léger pour les jours fériés
+        return "#e0e0e0"; // Gris léger pour les jours fériés
       }
     }
 
@@ -862,22 +1074,22 @@ const PlanningHebdoAgent = ({
     if (hasEvent) {
       // Couleur selon le sous-type
       if (hasEvent.event_type === "absence") {
-        if (hasEvent.subtype === "justifiee") return COLORS.warningLight; // jaune
-        if (hasEvent.subtype === "injustifiee") return COLORS.error; // rouge foncé
-        if (hasEvent.subtype === "maladie") return COLORS.infoDark; // bleu
-        if (hasEvent.subtype === "rtt") return COLORS.accentDark; // violet
-        return COLORS.error;
+        if (hasEvent.subtype === "justifiee") return "#fbc02d"; // jaune
+        if (hasEvent.subtype === "injustifiee") return "#d32f2f"; // rouge foncé
+        if (hasEvent.subtype === "maladie") return "#1976d2"; // bleu
+        if (hasEvent.subtype === "rtt") return "#7b1fa2"; // violet
+        return "red";
       }
       if (hasEvent.event_type === "conge") {
-        if (hasEvent.subtype === "paye") return COLORS.successDark; // vert foncé
-        if (hasEvent.subtype === "sans_solde") return COLORS.warningDark; // orange
-        if (hasEvent.subtype === "parental") return COLORS.info; // bleu clair
+        if (hasEvent.subtype === "paye") return "#388e3c"; // vert foncé
+        if (hasEvent.subtype === "sans_solde") return "#ffa000"; // orange
+        if (hasEvent.subtype === "parental") return "#0288d1"; // bleu clair
         if (
           hasEvent.subtype === "maternite" ||
           hasEvent.subtype === "paternite"
         )
-          return COLORS.accentLight; // rose
-        return COLORS.accent;
+          return "#f06292"; // rose
+        return "purple";
       }
     }
 
@@ -899,7 +1111,14 @@ const PlanningHebdoAgent = ({
       }
 
       const chantier = chantiers.find((c) => c.chantier_name === chantierName);
-      return getColorForChantier(chantier ? chantier.id : chantierName);
+      if (chantier) {
+        return getColorForChantier(chantier.id);
+      }
+      const matchedAgence = agenceChantiers.find((a) => a.chantier_name === chantierName);
+      if (matchedAgence) {
+        return getColorForChantier(matchedAgence.id);
+      }
+      return getColorForChantier(chantierName);
     }
 
     return "white";
@@ -926,7 +1145,48 @@ const PlanningHebdoAgent = ({
     return "";
   };
 
-  // Ajouter cette fonction après les autres fonctions utilitaires
+  const saveComment = async () => {
+    if (editingCommentCells.length === 0) return;
+    try {
+      const startOfWeek = getWeekStartDate(selectedWeek, selectedYear).startOf("isoWeek");
+      const cells = editingCommentCells.map((cell) => {
+        const dayIndex = daysOfWeek.indexOf(cell.day);
+        const date = startOfWeek.add(dayIndex, "day");
+        return {
+          day: cell.day,
+          hour: cell.hour,
+          week: date.isoWeek(),
+          year: date.isoWeekYear(),
+        };
+      });
+      await axios.post("/api/update_schedule_comment/", {
+        agentId: selectedAgentId,
+        week: cells[0].week,
+        year: cells[0].year,
+        cells: cells.map((c) => ({ day: c.day, hour: c.hour })),
+        comment: editingComment,
+      });
+      setSchedule((prev) => {
+        const newSchedule = { ...prev };
+        const agentSch = { ...newSchedule[selectedAgentId] };
+        editingCommentCells.forEach((cell) => {
+          if (agentSch[cell.hour]?.[cell.day] && typeof agentSch[cell.hour][cell.day] === "object") {
+            agentSch[cell.hour] = { ...agentSch[cell.hour] };
+            agentSch[cell.hour][cell.day] = { ...agentSch[cell.hour][cell.day], comment: editingComment };
+          }
+        });
+        newSchedule[selectedAgentId] = agentSch;
+        return newSchedule;
+      });
+      setIsCommentModalOpen(false);
+      setEditingCommentCells([]);
+      setEditingComment("");
+    } catch (error) {
+      console.error("Erreur lors de la sauvegarde du commentaire:", error);
+      alert("Erreur lors de la sauvegarde du commentaire.");
+    }
+  };
+
   const fetchSchedule = async (agentId, week, year) => {
     setIsLoading(true);
     try {
@@ -1097,7 +1357,7 @@ const PlanningHebdoAgent = ({
                     style={{
                       marginLeft: "10px",
                       fontSize: "12px",
-                      color: COLORS.textMuted,
+                      color: "#666",
                     }}
                   >
                     (Dernière: {lastSelectedCell.hour} - {lastSelectedCell.day})
@@ -1114,14 +1374,14 @@ const PlanningHebdoAgent = ({
                     onClick={validateSelection}
                     disabled={selectedCells.length === 0}
                     sx={{
-                      backgroundColor: COLORS.infoDark,
+                      backgroundColor: "#1976d2",
                       color: "white",
                       "&:hover": {
-                        backgroundColor: COLORS.infoDark,
+                        backgroundColor: "#1565c0",
                         transform: "scale(1.05)",
                       },
                       "&:disabled": {
-                        backgroundColor: COLORS.infoDark,
+                        backgroundColor: "#1976d2",
                         color: "white",
                         opacity: 0.5,
                       },
@@ -1141,14 +1401,14 @@ const PlanningHebdoAgent = ({
                     onClick={deleteChantierAssignment}
                     disabled={selectedCells.length === 0}
                     sx={{
-                      backgroundColor: COLORS.error,
+                      backgroundColor: "#f44336",
                       color: "white",
                       "&:hover": {
-                        backgroundColor: COLORS.error,
+                        backgroundColor: "#d32f2f",
                         transform: "scale(1.05)",
                       },
                       "&:disabled": {
-                        backgroundColor: COLORS.error,
+                        backgroundColor: "#f44336",
                         color: "white",
                         opacity: 0.5,
                       },
@@ -1189,7 +1449,7 @@ const PlanningHebdoAgent = ({
                 <IconButton
                   size="small"
                   sx={{
-                    color: COLORS.infoDark,
+                    color: "#1976d2",
                     "&:hover": {
                       backgroundColor: "rgba(25, 118, 210, 0.1)",
                     },
@@ -1218,8 +1478,14 @@ const PlanningHebdoAgent = ({
                   <tr key={hour}>
                     <td className="hour-cell">{formatHourDisplay(hour)}</td>
                     {daysOfWeek.map((day) => {
-                      // Détermination de l'événement pour la cellule
-                      // Utiliser la fonction utilitaire pour gérer correctement les semaines qui chevauchent les années
+                      const spanKey = `${hour}-${day}`;
+
+                      if (mergedBlocks.skipped.has(spanKey)) return null;
+
+                      const mergeInfo = mergedBlocks.cells[spanKey];
+                      const rowSpan = mergeInfo?.rowSpan > 1 ? mergeInfo.rowSpan : undefined;
+                      const colSpan = mergeInfo?.colSpan > 1 ? mergeInfo.colSpan : undefined;
+
                       const startOfWeek = getWeekStartDate(selectedWeek, selectedYear).startOf("isoWeek");
                       const dayIndex = daysOfWeek.indexOf(day) + 1;
                       const currentDate = startOfWeek
@@ -1236,21 +1502,23 @@ const PlanningHebdoAgent = ({
                           event.agent === selectedAgentId
                         );
                       });
+
+                      const blockCells = mergeInfo ? getSpanCells(hour, day) : [{ hour, day }];
+                      const isAnySelected = blockCells.some(
+                        (c) => selectedCells.some((s) => s.hour === c.hour && s.day === c.day)
+                      );
+
                       return (
                         <td
-                          key={`${hour}-${day}`}
+                          key={spanKey}
+                          rowSpan={rowSpan}
+                          colSpan={colSpan}
                           onMouseDown={(e) => handleCellMouseDown(hour, day, e)}
                           onMouseUp={(e) => handleCellMouseUp(hour, day, e)}
                           onDoubleClick={(e) =>
                             handleCellDoubleClick(hour, day, e)
                           }
-                          className={`schedule-cell ${
-                            selectedCells.some(
-                              (cell) => cell.hour === hour && cell.day === day
-                            )
-                              ? "selected"
-                              : ""
-                          }`}
+                          className={`schedule-cell ${isAnySelected ? "selected" : ""}`}
                           style={{
                             backgroundColor: getCellStyle(
                               hour,
@@ -1260,14 +1528,11 @@ const PlanningHebdoAgent = ({
                             fontWeight: cellEvent ? "bold" : "normal",
                             color: cellEvent ? "#222" : undefined,
                             textAlign: "center",
-                            border: selectedCells.some(
-                              (cell) => cell.hour === hour && cell.day === day
-                            )
+                            verticalAlign: "middle",
+                            border: isAnySelected
                               ? "3px solid #1976d2"
                               : "1px solid #ddd",
-                            boxShadow: selectedCells.some(
-                              (cell) => cell.hour === hour && cell.day === day
-                            )
+                            boxShadow: isAnySelected
                               ? "0 0 8px rgba(25, 118, 210, 0.5)"
                               : "none",
                             cursor: "pointer",
@@ -1276,7 +1541,6 @@ const PlanningHebdoAgent = ({
                           {cellEvent
                             ? getEventInitials(cellEvent)
                             : (() => {
-                                // Ne pas afficher le nom du chantier dans les heures de pause
                                 if (isPauseHour(hour)) {
                                   return "";
                                 }
@@ -1285,12 +1549,13 @@ const PlanningHebdoAgent = ({
                                   schedule[selectedAgentId]?.[hour]?.[day];
                                 if (!cellData) return "";
 
-                                // Si c'est un objet (nouveau format)
                                 if (typeof cellData === "object") {
-                                  // Vérifier que les chantiers sont chargés avant d'afficher le nom
                                   if (!chantiers || chantiers.length === 0) {
                                     return "Chargement...";
                                   }
+
+                                  const comment = cellData.comment || "";
+
                                   return (
                                     <span>
                                       {cellData.chantierName}
@@ -1299,7 +1564,7 @@ const PlanningHebdoAgent = ({
                                           style={{
                                             marginLeft: "4px",
                                             fontSize: "12px",
-                                            color: COLORS.accentLight,
+                                            color: "#ff5722",
                                             fontWeight: "bold",
                                           }}
                                         >
@@ -1311,9 +1576,9 @@ const PlanningHebdoAgent = ({
                                           style={{
                                             marginTop: "2px",
                                             fontSize: "12px",
-                                            color: COLORS.white,
+                                            color: "#ffffff",
                                             fontWeight: "bold",
-                                            backgroundColor: COLORS.accentLight,
+                                            backgroundColor: "#ff5722",
                                             padding: "2px 6px",
                                             borderRadius: "4px",
                                             border: "2px solid #d32f2f",
@@ -1324,11 +1589,27 @@ const PlanningHebdoAgent = ({
                                           ⏰ +{cellData.overtimeHours}h SUP
                                         </div>
                                       )}
+                                      {comment && (
+                                        <Tooltip title={comment} arrow placement="top">
+                                          <div
+                                            style={{
+                                              marginTop: "4px",
+                                              fontSize: "13px",
+                                              fontWeight: "600",
+                                              fontStyle: "italic",
+                                              lineHeight: "1.3",
+                                              wordBreak: "break-word",
+                                              whiteSpace: "normal",
+                                            }}
+                                          >
+                                            {comment}
+                                          </div>
+                                        </Tooltip>
+                                      )}
                                     </span>
                                   );
                                 }
 
-                                // Si c'est une chaîne (ancien format pour compatibilité)
                                 return cellData;
                               })()}
                         </td>
@@ -1345,29 +1626,122 @@ const PlanningHebdoAgent = ({
       {/* Modal pour sélectionner un chantier */}
       {isChantierModalOpen && (
         <div className="modal">
-          <div className="modal-content">
-            <h2>Sélectionner un chantier</h2>
-            <select
-              value={selectedChantier ? selectedChantier.id : ""}
-              onChange={(e) => {
-                const selectedId = Number(e.target.value);
-                const chantier = chantiers.find((c) => c.id === selectedId);
-                setSelectedChantier(chantier);
-              }}
+          <div className="modal-content modal-content-chantier">
+            <h2>Sélectionner un chantier ou l&apos;agence</h2>
+            <div
+              className="chantier-search-wrapper"
+              ref={chantierDropdownRef}
+              style={{ position: "relative", marginTop: "10px" }}
             >
-              <option value="">--Sélectionner un chantier--</option>
-              {chantiers
-                .filter(
-                  (chantier) =>
-                    chantier.state_chantier !== "Terminé" &&
-                    chantier.state_chantier !== "En attente"
-                )
-                .map((chantier) => (
-                  <option key={chantier.id} value={chantier.id}>
-                    {chantier.chantier_name}
-                  </option>
-                ))}
-            </select>
+              <input
+                type="text"
+                className="chantier-search-input"
+                placeholder="Rechercher un chantier..."
+                value={selectedChantier ? selectedChantier.chantier_name : chantierSearchQuery}
+                onChange={(e) => {
+                  setSelectedChantier(null);
+                  setChantierSearchQuery(e.target.value);
+                  setChantierDropdownOpen(true);
+                }}
+                onFocus={() => setChantierDropdownOpen(true)}
+                style={{
+                  width: "100%",
+                  padding: "10px 12px",
+                  border: "2px solid #e0e0e0",
+                  borderRadius: "8px",
+                  fontSize: "14px",
+                  boxSizing: "border-box",
+                }}
+              />
+              {chantierDropdownOpen && (
+                <ul
+                  className="chantier-search-list"
+                  style={{
+                    position: "absolute",
+                    top: "100%",
+                    left: 0,
+                    right: 0,
+                    margin: 0,
+                    marginTop: "4px",
+                    padding: 0,
+                    listStyle: "none",
+                    maxHeight: "240px",
+                    overflowY: "auto",
+                    backgroundColor: "#fff",
+                    border: "2px solid #2196f3",
+                    borderRadius: "8px",
+                    boxShadow: "0 4px 12px rgba(0,0,0,0.15)",
+                    zIndex: 10,
+                  }}
+                >
+                  {(() => {
+                    const chantiersEnCours = chantiers.filter(
+                      (c) =>
+                        (c.state_chantier !== "Terminé" &&
+                          c.state_chantier !== "En attente") ||
+                        agenceIdSet.has(c.id)
+                    );
+                    const sorted = [...chantiersEnCours].sort((a, b) =>
+                      (a.chantier_name || "").localeCompare(b.chantier_name || "", "fr")
+                    );
+                    const agencesFirst = agenceChantiers.filter((a) => sorted.some((c) => c.id === a.id));
+                    const rest = sorted.filter((c) => !agenceIdSet.has(c.id));
+                    const ordered = [...agencesFirst, ...rest];
+                    const filtered = chantierSearchQuery.trim()
+                      ? ordered.filter((c) =>
+                          (c.chantier_name || "")
+                            .toLowerCase()
+                            .includes(chantierSearchQuery.trim().toLowerCase())
+                        )
+                      : ordered;
+                    if (filtered.length === 0) {
+                      return (
+                        <li
+                          style={{
+                            padding: "12px 14px",
+                            color: "#666",
+                            fontSize: "14px",
+                          }}
+                        >
+                          Aucun chantier trouvé
+                        </li>
+                      );
+                    }
+                    return filtered.map((chantier) => (
+                      <li
+                        key={chantier.id}
+                        onClick={() => {
+                          setSelectedChantier(chantier);
+                          setChantierDropdownOpen(false);
+                          setChantierSearchQuery("");
+                        }}
+                        style={{
+                          padding: "10px 14px",
+                          cursor: "pointer",
+                          fontSize: "14px",
+                          borderBottom: "1px solid #eee",
+                          backgroundColor:
+                            selectedChantier?.id === chantier.id
+                              ? "#e3f2fd"
+                              : "transparent",
+                        }}
+                        onMouseEnter={(e) => {
+                          e.currentTarget.style.backgroundColor = "#e3f2fd";
+                        }}
+                        onMouseLeave={(e) => {
+                          e.currentTarget.style.backgroundColor =
+                            selectedChantier?.id === chantier.id
+                              ? "#e3f2fd"
+                              : "transparent";
+                        }}
+                      >
+                        {chantier.chantier_name}
+                      </li>
+                    ));
+                  })()}
+                </ul>
+              )}
+            </div>
 
             {/* Champ Heures Supplémentaires */}
             <div
@@ -1375,7 +1749,7 @@ const PlanningHebdoAgent = ({
                 marginTop: "20px",
                 marginBottom: "15px",
                 padding: "16px",
-                backgroundColor: COLORS.infoLight,
+                backgroundColor: "#f0f8ff",
                 borderRadius: "12px",
                 border: "2px solid #2196f3",
               }}
@@ -1386,7 +1760,7 @@ const PlanningHebdoAgent = ({
                   alignItems: "center",
                   fontSize: "16px",
                   fontWeight: "600",
-                  color: COLORS.infoDark,
+                  color: "#1976d2",
                   marginBottom: "8px",
                   gap: "8px",
                 }}
@@ -1418,14 +1792,14 @@ const PlanningHebdoAgent = ({
                     fontWeight: "600",
                     textAlign: "center",
                     backgroundColor: "white",
-                    color: COLORS.infoDark,
+                    color: "#1976d2",
                   }}
                   placeholder="0"
                 />
                 <span
                   style={{
                     fontSize: "14px",
-                    color: COLORS.infoDark,
+                    color: "#1976d2",
                     fontWeight: "500",
                   }}
                 >
@@ -1438,7 +1812,7 @@ const PlanningHebdoAgent = ({
                       borderRadius: "12px",
                       fontSize: "11px",
                       fontWeight: "600",
-                      backgroundColor: COLORS.success,
+                      backgroundColor: "#4caf50",
                       color: "white",
                     }}
                   >
@@ -1448,15 +1822,58 @@ const PlanningHebdoAgent = ({
               </div>
             </div>
 
+            {/* Champ Commentaire */}
+            <div
+              style={{
+                marginTop: "10px",
+                marginBottom: "10px",
+                padding: "16px",
+                backgroundColor: "#f8f9fa",
+                borderRadius: "12px",
+                border: "2px solid #e0e0e0",
+              }}
+            >
+              <div
+                style={{
+                  fontSize: "16px",
+                  fontWeight: "600",
+                  color: "#333",
+                  marginBottom: "8px",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "8px",
+                }}
+              >
+                <span style={{ fontSize: "18px" }}>💬</span>
+                <span>Commentaire</span>
+              </div>
+              <textarea
+                value={scheduleComment}
+                onChange={(e) => setScheduleComment(e.target.value)}
+                placeholder="Ajouter un commentaire (optionnel)..."
+                rows={2}
+                style={{
+                  width: "100%",
+                  padding: "10px 12px",
+                  border: "2px solid #e0e0e0",
+                  borderRadius: "8px",
+                  fontSize: "14px",
+                  resize: "vertical",
+                  boxSizing: "border-box",
+                  fontFamily: "inherit",
+                }}
+              />
+            </div>
+
             {/* Checkbox SAV Modernisée */}
             <div
               style={{
                 marginTop: "10px",
                 marginBottom: "20px",
                 padding: "16px",
-                backgroundColor: isSav ? COLORS.warningLight : COLORS.backgroundAlt,
+                backgroundColor: isSav ? "#fff3e0" : "#f8f9fa",
                 borderRadius: "12px",
-                border: `2px solid ${isSav ? COLORS.warning : COLORS.borderLight}`,
+                border: `2px solid ${isSav ? "#ff9800" : "#e0e0e0"}`,
                 transition: "all 0.3s ease",
                 cursor: "pointer",
               }}
@@ -1477,8 +1894,8 @@ const PlanningHebdoAgent = ({
                       width: "20px",
                       height: "20px",
                       borderRadius: "4px",
-                      border: `2px solid ${isSav ? COLORS.warning : COLORS.borderDark}`,
-                      backgroundColor: isSav ? COLORS.warning : "transparent",
+                      border: `2px solid ${isSav ? "#ff9800" : "#ccc"}`,
+                      backgroundColor: isSav ? "#ff9800" : "transparent",
                       display: "flex",
                       alignItems: "center",
                       justifyContent: "center",
@@ -1503,7 +1920,7 @@ const PlanningHebdoAgent = ({
                       style={{
                         fontSize: "16px",
                         fontWeight: "600",
-                        color: isSav ? COLORS.warningDark : COLORS.text,
+                        color: isSav ? "#e65100" : "#333",
                         display: "flex",
                         alignItems: "center",
                         gap: "8px",
@@ -1515,7 +1932,7 @@ const PlanningHebdoAgent = ({
                     <div
                       style={{
                         fontSize: "13px",
-                        color: isSav ? COLORS.warningDark : COLORS.textMuted,
+                        color: isSav ? "#bf360c" : "#666",
                         marginTop: "2px",
                         marginLeft: "26px",
                       }}
@@ -1530,8 +1947,8 @@ const PlanningHebdoAgent = ({
                     borderRadius: "12px",
                     fontSize: "11px",
                     fontWeight: "600",
-                    backgroundColor: isSav ? COLORS.warning : COLORS.borderLight,
-                    color: isSav ? "white" : COLORS.textMuted,
+                    backgroundColor: isSav ? "#ff9800" : "#e0e0e0",
+                    color: isSav ? "white" : "#666",
                     transition: "all 0.2s ease",
                   }}
                 >
@@ -1558,12 +1975,78 @@ const PlanningHebdoAgent = ({
                 variant="contained"
                 onClick={closeChantierModal}
                 sx={{
-                  backgroundColor: COLORS.borderDark,
-                  color: "white",
+                  backgroundColor: "#ccc",
+                  color: "black",
                   "&:hover": {
                     backgroundColor: "#999",
-                    color: "white",
                   },
+                }}
+              >
+                Annuler
+              </StyledButton>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal d'édition de commentaire */}
+      {isCommentModalOpen && (
+        <div className="modal">
+          <div
+            className="modal-content"
+            style={{
+              width: "420px",
+              maxWidth: "95vw",
+              padding: "24px",
+              borderRadius: "12px",
+            }}
+          >
+            <h2 style={{ marginTop: 0, display: "flex", alignItems: "center", gap: "8px" }}>
+              <span style={{ fontSize: "22px" }}>💬</span>
+              Modifier le commentaire
+            </h2>
+            <p style={{ fontSize: "13px", color: "#666", margin: "0 0 12px" }}>
+              {editingCommentCells.length} créneau(x) concerné(s)
+            </p>
+            <textarea
+              value={editingComment}
+              onChange={(e) => setEditingComment(e.target.value)}
+              placeholder="Saisir un commentaire..."
+              rows={3}
+              style={{
+                width: "100%",
+                padding: "10px 12px",
+                border: "2px solid #e0e0e0",
+                borderRadius: "8px",
+                fontSize: "14px",
+                resize: "vertical",
+                boxSizing: "border-box",
+                fontFamily: "inherit",
+              }}
+              autoFocus
+            />
+            <div style={{ marginTop: "16px", display: "flex", gap: "8px" }}>
+              <StyledButton
+                variant="contained"
+                onClick={saveComment}
+                sx={{
+                  backgroundColor: "rgba(27, 120, 188, 1)",
+                  "&:hover": { backgroundColor: "rgba(27, 120, 188, 0.8)" },
+                }}
+              >
+                Enregistrer
+              </StyledButton>
+              <StyledButton
+                variant="contained"
+                onClick={() => {
+                  setIsCommentModalOpen(false);
+                  setEditingCommentCells([]);
+                  setEditingComment("");
+                }}
+                sx={{
+                  backgroundColor: "#ccc",
+                  color: "black",
+                  "&:hover": { backgroundColor: "#999" },
                 }}
               >
                 Annuler
@@ -1596,6 +2079,11 @@ const PlanningHebdoAgent = ({
           box-shadow: 0 5px 15px rgba(0, 0, 0, 0.3);
         }
 
+        .modal-content.modal-content-chantier {
+          width: 400px;
+          max-width: 95vw;
+        }
+
         .modal-content h2 {
           margin-top: 0;
         }
@@ -1604,6 +2092,11 @@ const PlanningHebdoAgent = ({
           width: 100%;
           padding: 8px;
           margin-top: 10px;
+        }
+
+        .chantier-search-input:focus {
+          outline: none;
+          border-color: #2196f3 !important;
         }
 
         .modal-content button {

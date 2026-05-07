@@ -22,17 +22,19 @@ import {
   DialogContentText,
   DialogActions,
   Tooltip,
+  Accordion,
+  AccordionSummary,
+  AccordionDetails,
+  LinearProgress,
 } from "@mui/material";
 import FactureModal from "./FactureModal";
 import DatePaiementModal from "./DatePaiementModal";
 import DateEnvoiModal from "./DateEnvoiModal";
 import DatePaiementFactureModal from "./DatePaiementFactureModal";
-// import RecapSousTraitant from "./RecapSousTraitant"; // À créer plus tard
-import { Add as AddIcon, Close as CloseIcon, CheckCircle as CheckCircleIcon, AddCircleOutline as AddCircleOutlineIcon } from "@mui/icons-material";
+import { Add as AddIcon, Close as CloseIcon, CheckCircle as CheckCircleIcon, AddCircleOutline as AddCircleOutlineIcon, ExpandMore as ExpandMoreIcon } from "@mui/icons-material";
 import axios from "axios";
 import React, { useEffect, useState, useRef, useCallback, useMemo } from "react";
 import { FaSync } from "react-icons/fa";
-import { COLORS } from "../../../constants/colors";
 
 const TableauSousTraitant = () => {
   const [data, setData] = useState([]);
@@ -457,12 +459,22 @@ const TableauSousTraitant = () => {
       d.sous_traitant === sous_traitant && 
       d.chantier_id === chantierId
     );
+    const isAgentJournalierRow = chantierId === 0 || chantierId === null;
+    const resolvedCurrentData = currentData || (
+      isAgentJournalierRow
+        ? data.find(d =>
+            d.mois === mois &&
+            d.sous_traitant === sous_traitant &&
+            d.source_type === 'agent_journalier'
+          )
+        : null
+    );
     
     setCurrentEnvoi({
       mois,
       sous_traitant,
       chantierId,
-      dateEnvoi: currentData?.date_envoi || null
+      dateEnvoi: resolvedCurrentData?.date_envoi || null
     });
     setDateEnvoiModalOpen(true);
   };
@@ -483,15 +495,25 @@ const TableauSousTraitant = () => {
           d.sous_traitant === sous_traitant && 
           d.chantier_id === chantierId
         );
+        const isAgentJournalierRow = chantierId === 0 || chantierId === null;
+        const resolvedCurrentData = currentData || (
+          isAgentJournalierRow
+            ? data.find(d =>
+                d.mois === mois &&
+                d.sous_traitant === sous_traitant &&
+                d.source_type === 'agent_journalier'
+              )
+            : null
+        );
         
         // Si c'est une ligne AgencyExpenseMonth, utiliser l'API spécifique
-        if (currentData?.source_type === 'agency_expense' && currentData?.agency_expense_id) {
-          await axios.patch(`/api/agency-expenses-month/${currentData.agency_expense_id}/`, {
+        if (resolvedCurrentData?.source_type === 'agency_expense' && resolvedCurrentData?.agency_expense_id) {
+          await axios.patch(`/api/agency-expenses-month/${resolvedCurrentData.agency_expense_id}/`, {
             date_reception_facture: dateEnvoi  // ✅ Utiliser le bon champ
           });
           
           // ✅ Calcul de la date de paiement prévue (date_envoi + delai_paiement jours)
-          const delai = currentData.delai_paiement || 45;
+          const delai = resolvedCurrentData.delai_paiement || 45;
           let datePaiementPrevue = null;
           let ecartPaiementReel = null;
           
@@ -502,8 +524,8 @@ const TableauSousTraitant = () => {
             datePaiementPrevue = datePrevue.toISOString().split('T')[0];
             
             // Calculer l'écart si date de paiement réel existe
-            if (currentData.date_paiement) {
-              const datePaiementObj = new Date(currentData.date_paiement);
+            if (resolvedCurrentData.date_paiement) {
+              const datePaiementObj = new Date(resolvedCurrentData.date_paiement);
               const diffTime = datePaiementObj - datePrevue;
               ecartPaiementReel = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
             }
@@ -543,11 +565,16 @@ const TableauSousTraitant = () => {
           
           setData((prevData) => {
             return prevData.map((item) => {
-              if (
+              const isSameAgentGroup =
+                isAgentJournalierRow &&
                 item.mois === mois &&
                 item.sous_traitant === sous_traitant &&
-                item.chantier_id === chantierId
-              ) {
+                item.source_type === 'agent_journalier';
+              const isExactRow =
+                item.mois === mois &&
+                item.sous_traitant === sous_traitant &&
+                item.chantier_id === chantierId;
+              if (isExactRow || isSameAgentGroup) {
                 return {
                   ...item,
                   date_envoi: suiviData.date_envoi_facture,
@@ -646,29 +673,29 @@ const TableauSousTraitant = () => {
               date_paiement_facture: f.date_paiement_facture || null
             })));
         
-        // Préparer le payload
-        const payload = [{
+        // Préparer le payload pour le suivi
+        const payload = {
           sous_traitant: sous_traitant,
           mois: moisNum,
           annee: anneeComplete,
-          montant_facture_ht: montantAPayer,
+          chantier_id: ligne.chantier_id || null,
           montant_paye_ht: montantAPayer,
-          date_paiement: dateDuJour,
+          date_paiement_reel: dateDuJour,
           date_envoi_facture: ligne.date_envoi || null,
           delai_paiement: ligne.delai_paiement || 45,
-        }];
+        };
 
-        // Appel API direct (sans debounce)
+        // Appel API via le bon endpoint suivi
         const response = await axios.post(
-          `/api/chantier/${ligne.chantier_id}/paiements-sous-traitant/`,
+          `/api/suivi-paiements-sous-traitant-mensuel/update_or_create_suivi/`,
           payload
         );
 
         // Mettre à jour les données locales
-        if (response.data && response.data.length > 0) {
-          const updatedPaiement = response.data[0];
-          const annee2digits = anneeComplete.toString().slice(-2);
-          const moisKey = `${moisNum.toString().padStart(2, '0')}/${annee2digits}`;
+        if (response.data) {
+          const updatedPaiement = response.data;
+          const annee2digitsKey = anneeComplete.toString().slice(-2);
+          const moisKey = `${moisNum.toString().padStart(2, '0')}/${annee2digitsKey}`;
           
           const dataIndex = updatedData.findIndex(item => 
             item.mois === moisKey &&
@@ -680,12 +707,12 @@ const TableauSousTraitant = () => {
             updatedData[dataIndex] = {
               ...updatedData[dataIndex],
               paye: parseFloat(updatedPaiement.montant_paye_ht) || 0,
-              a_payer: parseFloat(updatedPaiement.montant_facture_ht) || updatedData[dataIndex].a_payer,
-              ecart: (parseFloat(updatedPaiement.montant_facture_ht) || updatedData[dataIndex].a_payer) - (parseFloat(updatedPaiement.montant_paye_ht) || 0),
-              date_paiement: updatedPaiement.date_paiement_reel || updatedData[dataIndex].date_paiement || null,
+              ecart: (updatedData[dataIndex].a_payer || 0) - (parseFloat(updatedPaiement.montant_paye_ht) || 0),
+              date_paiement: updatedPaiement.date_paiement_reel || dateDuJour,
               date_envoi: updatedPaiement.date_envoi_facture !== undefined ? updatedPaiement.date_envoi_facture : updatedData[dataIndex].date_envoi,
               date_paiement_prevue: updatedPaiement.date_paiement_prevue !== undefined ? updatedPaiement.date_paiement_prevue : updatedData[dataIndex].date_paiement_prevue,
               ecart_paiement_reel: updatedPaiement.ecart_paiement_reel !== undefined ? updatedPaiement.ecart_paiement_reel : updatedData[dataIndex].ecart_paiement_reel,
+              suivi_paiement_id: updatedPaiement.id,
             };
           }
         }
@@ -772,6 +799,8 @@ const TableauSousTraitant = () => {
       ajustement_montant: item.ajustement_montant || 0,
       ajustement_description: item.ajustement_description || "",
       chantiersDetails: item.chantiersDetails || [],
+      primes: item.primes || [],
+      total_primes: item.total_primes || 0,
     });
     setAjustementFormData({
       montant: item.ajustement_montant || "",
@@ -787,7 +816,6 @@ const TableauSousTraitant = () => {
     setAjustementFormData({ montant: "", description: "" });
   };
   
-  // Sauvegarder l'ajustement
   const handleSaveAjustement = async () => {
     if (!currentAjustement || !currentAjustement.agent_id) {
       return;
@@ -795,12 +823,18 @@ const TableauSousTraitant = () => {
     
     setSavingAjustement(true);
     try {
+      // Extraire les chantier_ids des détails de la ligne pour déduire l'agence côté backend
+      const chantierIds = (currentAjustement.chantiersDetails || [])
+        .map(ch => ch.chantier_id)
+        .filter(id => id && id !== 0);
+      
       const response = await axios.post("/api/ajustement-agent-journalier/", {
         agent_id: currentAjustement.agent_id,
         mois: currentAjustement.mois,
         annee: currentAjustement.annee,
         montant_ajustement: parseFloat(ajustementFormData.montant) || 0,
-        description: ajustementFormData.description.trim()
+        description: ajustementFormData.description.trim(),
+        chantier_ids: chantierIds,
       });
       
       // Rafraîchir les données
@@ -1088,20 +1122,31 @@ const TableauSousTraitant = () => {
       d.sous_traitant === sous_traitant && 
       d.chantier_id === chantierId
     );
+    const isAgentJournalierRow = chantierId === 0 || chantierId === null;
+    const resolvedCurrentData = currentData || (
+      isAgentJournalierRow
+        ? data.find(d =>
+            d.mois === mois &&
+            d.sous_traitant === sous_traitant &&
+            d.source_type === 'agent_journalier'
+          )
+        : null
+    );
     
     // ✅ Utiliser TOUJOURS le même format de clé que dans organizeData
     // Pour les agents journaliers avec isAgentJournalier, la clé spéciale est utilisée dans l'affichage
-    const key = currentData?.isAgentJournalier 
+    const key = isAgentJournalierRow
       ? `${mois}_${sous_traitant}_AGENT_JOURNALIER`
       : `${mois}_${sous_traitant}_${chantierId}`;
+    const isAgentJournalierType = resolvedCurrentData?.source_type === 'agent_journalier' || isAgentJournalierRow;
     
     // ✅ Pour AgencyExpenseMonth, utiliser currentData.factures
     // Pour les autres, utiliser editedFactures
     let currentFactures;
-    if (currentData?.source_type === 'agency_expense') {
-      currentFactures = currentData.factures || [];
+    if (resolvedCurrentData?.source_type === 'agency_expense') {
+      currentFactures = resolvedCurrentData.factures || [];
     } else {
-      currentFactures = editedFactures[key] || currentData?.factures || [];
+      currentFactures = editedFactures[key] || resolvedCurrentData?.factures || [];
     }
     
     const facture = currentFactures[factureIndex];
@@ -1109,18 +1154,24 @@ const TableauSousTraitant = () => {
     if (!facture) {
       return;
     }
+    
+    const montantPayeActuelRef = parseFloat(
+      editedValuesPaye[key] !== undefined
+        ? editedValuesPaye[key]
+        : (resolvedCurrentData?.paye || 0)
+    ) || 0;
 
     // Vérifier si c'est une ligne AgencyExpenseMonth
-    if (currentData?.source_type === 'agency_expense' && currentData?.agency_expense_id) {
+    if (resolvedCurrentData?.source_type === 'agency_expense' && resolvedCurrentData?.agency_expense_id) {
       try {
         setSaving(true);
         
         const montantFacture = parseFloat(facture.montant_facture) || 0;
-        const montantPayeActuel = parseFloat(currentData?.paye) || 0;
+        const montantPayeActuel = montantPayeActuelRef;
         const nouveauMontantPaye = montantPayeActuel + montantFacture;
         
         // Mettre à jour les factures dans AgencyExpenseMonth
-        const currentFacturesAgency = currentData.factures || [];
+        const currentFacturesAgency = resolvedCurrentData.factures || [];
         const updatedFactures = currentFacturesAgency.map((f, idx) => {
           if (idx === factureIndex) {
             return {
@@ -1142,7 +1193,7 @@ const TableauSousTraitant = () => {
           : datePaiementFacture;
         
         // ✅ Sauvegarder les factures dans AgencyExpenseMonth (sans modifier amount)
-        await axios.patch(`/api/agency-expenses-month/${currentData.agency_expense_id}/`, {
+        await axios.patch(`/api/agency-expenses-month/${resolvedCurrentData.agency_expense_id}/`, {
           factures: updatedFactures
         });
         
@@ -1207,11 +1258,11 @@ const TableauSousTraitant = () => {
         
         // Optionnel : mettre à jour aussi le montant payé total
         const montantFacture = parseFloat(facture.montant_facture) || 0;
-        const montantPayeActuel = parseFloat(currentData?.paye) || 0;
+        const montantPayeActuel = montantPayeActuelRef;
         const nouveauMontantPaye = montantPayeActuel + montantFacture;
         
-        // Calculer la liste des factures mises à jour pour déterminer la date la plus récente
-        const updatedFacturesList = (currentData?.factures || []).map((f, idx) => {
+        // Utiliser la liste courante (agrégée pour agents journaliers) pour conserver l'index cliqué
+        const updatedFacturesList = (currentFactures || []).map((f, idx) => {
           if (idx === factureIndex) {
             return {
               ...f,
@@ -1247,10 +1298,17 @@ const TableauSousTraitant = () => {
         // ✅ Mise à jour dynamique : mettre à jour uniquement cette ligne dans data
         setData((prevData) => {
           return prevData.map((item) => {
-            if (
+            const isSameAgentGroup =
+              isAgentJournalierType &&
               item.mois === mois &&
               item.sous_traitant === sous_traitant &&
-              item.chantier_id === chantierId
+              item.source_type === 'agent_journalier';
+            const isExactRow =
+              item.mois === mois &&
+              item.sous_traitant === sous_traitant &&
+              item.chantier_id === chantierId;
+            if (
+              isExactRow || isSameAgentGroup
             ) {
               return {
                 ...item,
@@ -1285,7 +1343,7 @@ const TableauSousTraitant = () => {
       } finally {
         setSaving(false);
       }
-    } else if (currentData?.source_type === 'facture_sous_traitant' && facture.id && !isNaN(Number(facture.id))) {
+    } else if (resolvedCurrentData?.source_type === 'facture_sous_traitant' && facture.id && !isNaN(Number(facture.id))) {
       // ✅ NOUVEAU : Factures de sous-traitants réels (FactureSousTraitant)
       // Créer un PaiementFactureSousTraitant dans la base de données
       try {
@@ -1302,7 +1360,7 @@ const TableauSousTraitant = () => {
         });
         
         // Calculer le nouveau montant payé total
-        const montantPayeActuel = parseFloat(currentData?.paye || 0);
+        const montantPayeActuel = montantPayeActuelRef;
         const nouveauMontantPaye = montantPayeActuel + montantFacture;
         
         // Mettre à jour les factures localement
@@ -1316,10 +1374,17 @@ const TableauSousTraitant = () => {
         // ✅ Mise à jour dynamique de data
         setData((prevData) => {
           return prevData.map((item) => {
-            if (
+            const isSameAgentGroup =
+              isAgentJournalierType &&
               item.mois === mois &&
               item.sous_traitant === sous_traitant &&
-              item.chantier_id === chantierId
+              item.source_type === 'agent_journalier';
+            const isExactRow =
+              item.mois === mois &&
+              item.sous_traitant === sous_traitant &&
+              item.chantier_id === chantierId;
+            if (
+              isExactRow || isSameAgentGroup
             ) {
               return {
                 ...item,
@@ -1354,12 +1419,11 @@ const TableauSousTraitant = () => {
       // Ancienne méthode pour les factures non-suivi (rétrocompatibilité)
       const montantFacture = parseFloat(facture.montant_facture) || 0;
       const isAgentJournalier = chantierId === 0 || chantierId === null;
-      const keyPaye = key;
       
       const montantPayeActuel = parseFloat(
-        editedValuesPaye[keyPaye] !== undefined 
-          ? editedValuesPaye[keyPaye] 
-          : (currentData?.paye || 0)
+        editedValuesPaye[key] !== undefined 
+          ? editedValuesPaye[key] 
+          : (resolvedCurrentData?.paye || 0)
       ) || 0;
       
       const nouveauMontantPaye = montantPayeActuel + montantFacture;
@@ -1371,6 +1435,15 @@ const TableauSousTraitant = () => {
         date_paiement_facture: datePaiementFacture
       };
 
+      // Calculer la date de paiement la plus récente parmi toutes les factures payées
+      const datesPaiementFactures = updatedFactures
+        .filter(f => f.payee && f.date_paiement_facture)
+        .map(f => new Date(f.date_paiement_facture));
+      
+      const datePaiementReelGlobale = datesPaiementFactures.length > 0
+        ? new Date(Math.max(...datesPaiementFactures)).toISOString().split('T')[0]
+        : datePaiementFacture;
+
       setEditedFactures((prev) => ({
         ...prev,
         [key]: updatedFactures,
@@ -1381,8 +1454,34 @@ const TableauSousTraitant = () => {
         [key]: nouveauMontantPaye,
       }));
 
+      // Mise à jour immédiate de data pour refléter le changement dans l'UI
+      setData((prevData) => {
+        return prevData.map((item) => {
+          const isSameAgentGroup =
+            isAgentJournalierType &&
+            item.mois === mois &&
+            item.sous_traitant === sous_traitant &&
+            item.source_type === 'agent_journalier';
+          const isExactRow =
+            item.mois === mois &&
+            item.sous_traitant === sous_traitant &&
+            item.chantier_id === chantierId;
+          if (
+            isExactRow || isSameAgentGroup
+          ) {
+            return {
+              ...item,
+              factures: updatedFactures,
+              paye: nouveauMontantPaye,
+              date_paiement: datePaiementReelGlobale
+            };
+          }
+          return item;
+        });
+      });
+
       if (!isAgentJournalier) {
-        savePaiement(mois, sous_traitant, chantierId, nouveauMontantPaye, updatedFactures, currentData?.date_paiement || null, currentData?.date_envoi || null);
+        savePaiement(mois, sous_traitant, chantierId, nouveauMontantPaye, updatedFactures, datePaiementReelGlobale, resolvedCurrentData?.date_envoi || null);
       }
     }
     
@@ -1399,15 +1498,26 @@ const TableauSousTraitant = () => {
       d.sous_traitant === sous_traitant && 
       d.chantier_id === chantierId
     );
+    const isAgentJournalierRow = chantierId === 0 || chantierId === null;
+    const resolvedCurrentData = currentData || (
+      isAgentJournalierRow
+        ? data.find(d =>
+            d.mois === mois &&
+            d.sous_traitant === sous_traitant &&
+            d.source_type === 'agent_journalier'
+          )
+        : null
+    );
+    const isAgentJournalierType = resolvedCurrentData?.source_type === 'agent_journalier' || isAgentJournalierRow;
     
     // Si c'est une ligne AgencyExpenseMonth, supprimer via l'API
-    if (currentData?.source_type === 'agency_expense' && currentData?.agency_expense_id) {
+    if (resolvedCurrentData?.source_type === 'agency_expense' && resolvedCurrentData?.agency_expense_id) {
       try {
         setSaving(true);
-        const currentFactures = currentData.factures || [];
+        const currentFactures = resolvedCurrentData.factures || [];
         const updatedFactures = currentFactures.filter((_, idx) => idx !== factureIndex);
         
-        await axios.patch(`/api/agency-expenses-month/${currentData.agency_expense_id}/`, {
+        await axios.patch(`/api/agency-expenses-month/${resolvedCurrentData.agency_expense_id}/`, {
           factures: updatedFactures
         });
         
@@ -1445,7 +1555,7 @@ const TableauSousTraitant = () => {
       ? `${mois}_${sous_traitant}_AGENT_JOURNALIER`
       : `${mois}_${sous_traitant}_${chantierId}`;
     
-    const factures = editedFactures[key] || currentData?.factures || [];
+    const factures = editedFactures[key] || resolvedCurrentData?.factures || [];
     const factureToDelete = factures[factureIndex];
     
     if (!factureToDelete) return;
@@ -1460,10 +1570,17 @@ const TableauSousTraitant = () => {
         // ✅ Mise à jour dynamique : mettre à jour uniquement cette ligne dans data
         setData((prevData) => {
           return prevData.map((item) => {
-            if (
+            const isSameAgentGroup =
+              isAgentJournalierType &&
               item.mois === mois &&
               item.sous_traitant === sous_traitant &&
-              item.chantier_id === chantierId
+              item.source_type === 'agent_journalier';
+            const isExactRow =
+              item.mois === mois &&
+              item.sous_traitant === sous_traitant &&
+              item.chantier_id === chantierId;
+            if (
+              isExactRow || isSameAgentGroup
             ) {
               const updatedFactures = (item.factures || []).filter((_, idx) => idx !== factureIndex);
               return {
@@ -1494,16 +1611,39 @@ const TableauSousTraitant = () => {
       }
     } else {
       // Ancienne méthode pour les factures non-suivi (rétrocompatibilité)
-      const isAgentJournalier = chantierId === 0 || chantierId === null;
+      const isAgentJournalier = isAgentJournalierType;
       
       setEditedFactures((prev) => {
-        const currentFactures = prev[key] || [];
+        const currentFactures = prev[key] || factures || [];
         const newFactures = currentFactures.filter((_, idx) => idx !== factureIndex);
         // Sauvegarder après suppression (sauf pour les agents journaliers)
         if (!isAgentJournalier) {
           savePaiement(mois, sous_traitant, chantierId, editedValuesPaye[key] || 0, newFactures);
         }
         return { ...prev, [key]: newFactures };
+      });
+
+      // Mise à jour dynamique de data pour refléter la suppression sans rechargement
+      setData((prevData) => {
+        return prevData.map((item) => {
+          const isSameAgentGroup =
+            isAgentJournalierType &&
+            item.mois === mois &&
+            item.sous_traitant === sous_traitant &&
+            item.source_type === 'agent_journalier';
+          const isExactRow =
+            item.mois === mois &&
+            item.sous_traitant === sous_traitant &&
+            item.chantier_id === chantierId;
+          if (isExactRow || isSameAgentGroup) {
+            const newFactures = (item.factures || []).filter((_, idx) => idx !== factureIndex);
+            return {
+              ...item,
+              factures: newFactures
+            };
+          }
+          return item;
+        });
       });
     }
   };
@@ -1533,6 +1673,12 @@ const TableauSousTraitant = () => {
         return anneeItem === annee2digits;
       });
     }
+
+    // Ne pas afficher les lignes avec montant à payer = 0 (inclut "0", "0.00", etc.)
+    filteredData = filteredData.filter((item) => {
+      const aPayer = Number(item.a_payer ?? 0);
+      return !Number.isNaN(aPayer) && aPayer !== 0;
+    });
 
     // Séparer les agents journaliers des autres sous-traitants
     const agentsJournaliers = {};
@@ -1627,6 +1773,10 @@ const TableauSousTraitant = () => {
         const ajustementDescription = chantiers[0]?.ajustement_description || '';
         const agentId = chantiers[0]?.agent_id || null;
         
+        // Récupérer les primes depuis le premier chantier (elles sont identiques pour tous)
+        const primes = chantiers[0]?.primes || [];
+        const totalPrimes = chantiers[0]?.total_primes || 0;
+        
         chantiers.forEach((chantier) => {
           totalLaborCost += chantier.a_payer || 0;
           totalPaye += chantier.paye || 0;
@@ -1640,14 +1790,13 @@ const TableauSousTraitant = () => {
             ecart: chantier.ecart || 0,
           });
           
-          // Collecter toutes les factures
           if (chantier.factures && chantier.factures.length > 0) {
             allFactures.push(...chantier.factures);
           }
         });
         
-        // Montant total à payer = LaborCost + ajustement
-        const totalAPayer = totalLaborCost + ajustementMontant;
+        // Montant total à payer = LaborCost + ajustement + primes
+        const totalAPayer = totalLaborCost + ajustementMontant + totalPrimes;
         
         // Pour les agents journaliers, utiliser une clé sans chantier_id pour le montant payé et les factures
         const keyAgentJournalier = `${mois}_${sous_traitant}_AGENT_JOURNALIER`;
@@ -1686,6 +1835,9 @@ const TableauSousTraitant = () => {
           ajustement_id: ajustementId,
           ajustement_montant: ajustementMontant,
           ajustement_description: ajustementDescription,
+          // Infos de primes
+          primes: primes,
+          total_primes: totalPrimes,
         }];
       });
     });
@@ -1702,7 +1854,6 @@ const TableauSousTraitant = () => {
           organized[mois][sous_traitant] = autresSousTraitants[mois][sous_traitant];
         } else {
           // Une entrée existe déjà (agent journalier). Ne pas écraser.
-          // Ajouter uniquement les lignes qui ne sont pas des entrées fantômes (a_payer > 0)
           const existingItems = organized[mois][sous_traitant];
           const isExistingAgentJournalier = existingItems.some(item => item.isAgentJournalier);
           if (!isExistingAgentJournalier) {
@@ -1831,6 +1982,7 @@ const TableauSousTraitant = () => {
   // Créer la structure de lignes avec récap entre chaque mois
   const buildTableRows = () => {
     const rows = [];
+    let cumulSituation = 0;
 
     moisSorted.forEach((mois, moisIndex) => {
       const sous_traitants = Object.keys(organized[mois]).sort();
@@ -1887,10 +2039,12 @@ const TableauSousTraitant = () => {
 
       // Ajouter la ligne de récap après chaque mois
       const totaux = calculerTotauxMois(mois);
+      cumulSituation += totaux.totalAPayer || 0;
       rows.push({
         type: "recap",
         mois: mois,
         totaux: totaux,
+        cumulSituation: cumulSituation,
       });
     });
 
@@ -1902,6 +2056,63 @@ const TableauSousTraitant = () => {
     () => buildTableRows(),
     [organizedData, organized, moisSorted]
   );
+
+  const recapTotaux = useMemo(() => {
+    let globalAPayer = 0, globalPaye = 0, globalEcart = 0, globalAPayerTTC = 0;
+    const parSousTraitant = {};
+
+    moisSorted.forEach((mois) => {
+      const sousTraitants = organized[mois] || {};
+      Object.keys(sousTraitants).forEach((st) => {
+        if (!parSousTraitant[st]) {
+          parSousTraitant[st] = { totalAPayer: 0, totalPaye: 0, totalEcart: 0, totalAPayerTTC: 0, mois: {} };
+        }
+        const chantiers = sousTraitants[st];
+        chantiers.forEach((item) => {
+          const ap = item.a_payer || 0;
+          const apTTC = item.a_payer_ttc || 0;
+          const p = item.paye || 0;
+          const e = item.ecart || 0;
+          globalAPayer += ap;
+          globalPaye += p;
+          globalEcart += e;
+          globalAPayerTTC += apTTC;
+          parSousTraitant[st].totalAPayer += ap;
+          parSousTraitant[st].totalPaye += p;
+          parSousTraitant[st].totalEcart += e;
+          parSousTraitant[st].totalAPayerTTC += apTTC;
+          if (!parSousTraitant[st].mois[mois]) {
+            parSousTraitant[st].mois[mois] = { totalAPayer: 0, totalPaye: 0, totalEcart: 0, totalAPayerTTC: 0 };
+          }
+          parSousTraitant[st].mois[mois].totalAPayer += ap;
+          parSousTraitant[st].mois[mois].totalPaye += p;
+          parSousTraitant[st].mois[mois].totalEcart += e;
+          parSousTraitant[st].mois[mois].totalAPayerTTC += apTTC;
+        });
+      });
+    });
+
+    return {
+      global: { totalAPayer: globalAPayer, totalPaye: globalPaye, totalEcart: globalEcart, totalAPayerTTC: globalAPayerTTC },
+      parSousTraitant,
+      sorted: Object.keys(parSousTraitant).sort(),
+    };
+  }, [organized, moisSorted]);
+
+  const colorForAmount = (value, isEcart = false) => {
+    const n = Number(value ?? 0);
+    if (isEcart) return n > 0 ? "rgba(211, 47, 47, 1)" : "rgba(46, 125, 50, 1)";
+    return n < 0 ? "rgba(211, 47, 47, 1)" : "rgba(27, 120, 188, 1)";
+  };
+
+  const trierMoisRecap = (moisArray) => {
+    return [...moisArray].sort((a, b) => {
+      const [moisA, anneeA] = a.split("/").map(Number);
+      const [moisB, anneeB] = b.split("/").map(Number);
+      if (anneeA !== anneeB) return anneeA - anneeB;
+      return moisA - moisB;
+    });
+  };
 
   return (
     <Box sx={{ width: "100%", p: 2 }}>
@@ -2081,7 +2292,7 @@ const TableauSousTraitant = () => {
                         <TableRow
                           key={`recap-${row.mois}`}
                           sx={{
-                            backgroundColor: COLORS.black, // Fond noir
+                            backgroundColor: "#000000", // Fond noir
                             fontWeight: "bold",
                             borderTop: "2px solid rgba(255, 255, 255, 0.2)",
                             borderBottom: "2px solid rgba(255, 255, 255, 0.2)",
@@ -2095,7 +2306,7 @@ const TableauSousTraitant = () => {
                             <Typography
                               sx={{
                                 fontWeight: "bold",
-                                color: COLORS.white,
+                                color: "#ffffff",
                                 fontSize: "0.95rem",
                               }}
                             >
@@ -2103,10 +2314,18 @@ const TableauSousTraitant = () => {
                             </Typography>
                           </TableCell>
                           <TableCell sx={commonBodyCellStyle}>
-                            <Typography sx={{ color: COLORS.white }}>-</Typography>
+                            <Typography
+                              sx={{
+                                color: "#ffffff",
+                                fontWeight: "bold",
+                                fontSize: "0.75rem",
+                              }}
+                            >
+                              Facture cumul : {formatNumber(row.cumulSituation || 0)} €
+                            </Typography>
                           </TableCell>
                           <TableCell sx={commonBodyCellStyle}>
-                            <Typography sx={{ color: COLORS.white }}>-</Typography>
+                            <Typography sx={{ color: "#ffffff" }}>-</Typography>
                           </TableCell>
                           <TableCell sx={commonBodyCellStyle}>
                             <Typography
@@ -2114,8 +2333,8 @@ const TableauSousTraitant = () => {
                                 fontWeight: "bold",
                                 fontSize: "0.9rem",
                                 color: row.totaux.totalAPayer !== 0 
-                                  ? COLORS.errorLight // Rouge clair si différent de 0
-                                  : COLORS.white, // Blanc si égal à 0
+                                  ? "#ff6b6b" // Rouge clair si différent de 0
+                                  : "#ffffff", // Blanc si égal à 0
                               }}
                             >
                               {formatNumber(row.totaux.totalAPayer)} €
@@ -2126,40 +2345,40 @@ const TableauSousTraitant = () => {
                               sx={{
                                 fontWeight: "bold",
                                 fontSize: "0.9rem",
-                                color: COLORS.white,
+                                color: "#ffffff",
                               }}
                             >
                               {formatNumber(row.totaux.totalPaye)} €
                             </Typography>
                           </TableCell>
                           <TableCell sx={commonBodyCellStyle}>
-                            <Typography sx={{ color: COLORS.white }}>-</Typography>
+                            <Typography sx={{ color: "#ffffff" }}>-</Typography>
                           </TableCell>
                           <TableCell sx={commonBodyCellStyle}>
                             <Typography
                               sx={{
                                 fontWeight: "bold",
                                 fontSize: "0.9rem",
-                                color: COLORS.errorLight, // Rouge clair pour l'écart
+                                color: "#ff6b6b", // Rouge clair pour l'écart
                               }}
                             >
                               {row.totaux.totalEcart < 0 ? "-" : ""}{formatNumber(Math.abs(row.totaux.totalEcart))} €
                             </Typography>
                           </TableCell>
                           <TableCell sx={commonBodyCellStyle}>
-                            <Typography sx={{ color: COLORS.white }}>-</Typography>
+                            <Typography sx={{ color: "#ffffff" }}>-</Typography>
                           </TableCell>
                           <TableCell sx={commonBodyCellStyle}>
-                            <Typography sx={{ color: COLORS.white }}>-</Typography>
+                            <Typography sx={{ color: "#ffffff" }}>-</Typography>
                           </TableCell>
                           <TableCell sx={commonBodyCellStyle}>
-                            <Typography sx={{ color: COLORS.white }}>-</Typography>
+                            <Typography sx={{ color: "#ffffff" }}>-</Typography>
                           </TableCell>
                           <TableCell sx={commonBodyCellStyle}>
-                            <Typography sx={{ color: COLORS.white }}>-</Typography>
+                            <Typography sx={{ color: "#ffffff" }}>-</Typography>
                           </TableCell>
                           <TableCell sx={commonBodyCellStyle}>
-                            <Typography sx={{ color: COLORS.white }}>-</Typography>
+                            <Typography sx={{ color: "#ffffff" }}>-</Typography>
                           </TableCell>
                         </TableRow>
                       );
@@ -2171,7 +2390,7 @@ const TableauSousTraitant = () => {
                       const anneeComplete = annee2digits < 50 ? 2000 + annee2digits : 1900 + annee2digits;
 
                       // Alternance simple basée sur l'ordre d'affichage : bleu clair / blanc
-                      const backgroundColor = isEvenRow ? "rgba(27, 120, 188, 0.05)" : COLORS.white;
+                      const backgroundColor = isEvenRow ? "rgba(27, 120, 188, 0.05)" : "#ffffff";
                       // Si c'est un nouveau chantier, accentuer la séparation
                       const borderTop = row.isNewChantier ? "2px solid rgba(27, 120, 188, 0.2)" : "none";
                       
@@ -2181,7 +2400,7 @@ const TableauSousTraitant = () => {
                           sx={{
                             backgroundColor: backgroundColor,
                             borderTop: borderTop,
-                            "&:hover": { backgroundColor: isEvenRow ? "rgba(27, 120, 188, 0.1)" : COLORS.backgroundHover },
+                            "&:hover": { backgroundColor: isEvenRow ? "rgba(27, 120, 188, 0.1)" : "#f0f0f0" },
                           }}
                         >
                           {isFirstRowOfMois ? (
@@ -2192,7 +2411,7 @@ const TableauSousTraitant = () => {
                                 verticalAlign: "middle",
                                 textAlign: "center",
                                 borderRight: "1px solid #e0e0e0",
-                                backgroundColor: COLORS.white, // Background blanc sans alternance
+                                backgroundColor: "#ffffff", // Background blanc sans alternance
                               }}
                             >
                               <Typography
@@ -2214,7 +2433,7 @@ const TableauSousTraitant = () => {
                                 verticalAlign: "middle",
                                 textAlign: "center",
                                 borderRight: "1px solid #e0e0e0",
-                                backgroundColor: COLORS.white, // Background blanc sans alternance
+                                backgroundColor: "#ffffff", // Background blanc sans alternance
                               }}
                             >
                               <Typography
@@ -2246,6 +2465,33 @@ const TableauSousTraitant = () => {
                                   </span>
                                 ))}
                               </Typography>
+                            ) : item.commentaire ? (
+                              <Tooltip
+                                title={item.commentaire}
+                                arrow
+                                placement="top"
+                                slotProps={{
+                                  tooltip: {
+                                    sx: {
+                                      maxWidth: 350,
+                                      fontSize: "0.8rem",
+                                      whiteSpace: "pre-line",
+                                    },
+                                  },
+                                }}
+                              >
+                                <Typography
+                                  sx={{
+                                    fontSize: "0.8rem",
+                                    color: "text.primary",
+                                    cursor: "help",
+                                    borderBottom: "1px dashed rgba(27, 120, 188, 0.4)",
+                                    display: "inline",
+                                  }}
+                                >
+                                  {item.chantier_name}
+                                </Typography>
+                              </Tooltip>
                             ) : (
                               <Typography
                                 sx={{
@@ -2276,16 +2522,15 @@ const TableauSousTraitant = () => {
                                 {formatNumber(item.a_payer)} €
                               </Typography>
                             ) : item.isAgentJournalier ? (
-                              // Pour les agents journaliers, afficher avec Tooltip détaillé et clic pour ajustement
                               <Tooltip
                                 title={
-                                  <Box sx={{ p: 1 }}>
+                                  <Box sx={{ p: 1, minWidth: 280 }}>
                                     <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 1, borderBottom: '1px solid rgba(255,255,255,0.3)', pb: 0.5 }}>
                                       {item.sous_traitant} - Détail
                                     </Typography>
                                     {item.chantiersDetails && item.chantiersDetails.length > 0 && (
                                       <Box sx={{ mb: 1 }}>
-                                        <Typography variant="caption" sx={{ fontWeight: 500, display: 'block', mb: 0.5 }}>
+                                        <Typography variant="caption" sx={{ fontWeight: 500, display: 'block', mb: 0.5, opacity: 0.9 }}>
                                           Par chantier :
                                         </Typography>
                                         {item.chantiersDetails.map((ch, idx) => (
@@ -2298,12 +2543,27 @@ const TableauSousTraitant = () => {
                                     )}
                                     <Box sx={{ borderTop: '1px solid rgba(255,255,255,0.3)', pt: 0.5, mt: 0.5 }}>
                                       <Box sx={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.8rem' }}>
-                                        <span>Total planning :</span>
+                                        <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                                          <span style={{ width: 8, height: 8, borderRadius: '50%', backgroundColor: '#90a4ae', display: 'inline-block' }} />
+                                          Planning :
+                                        </span>
                                         <span style={{ fontWeight: 600 }}>{formatNumber(item.a_payer_labor_cost || item.a_payer)} €</span>
                                       </Box>
+                                      {item.primes && item.primes.length > 0 && item.primes.map((prime, idx) => (
+                                        <Box key={`prime-${idx}`} sx={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.8rem', color: '#ff9800' }}>
+                                          <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                                            <span style={{ width: 8, height: 8, borderRadius: '50%', backgroundColor: '#ff9800', display: 'inline-block' }} />
+                                            Prime ({prime.description}) :
+                                          </span>
+                                          <span style={{ fontWeight: 600 }}>+{formatNumber(prime.montant)} €</span>
+                                        </Box>
+                                      ))}
                                       {(item.ajustement_montant !== 0 && item.ajustement_montant !== undefined) && (
                                         <Box sx={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.8rem', color: item.ajustement_montant > 0 ? '#4caf50' : '#f44336' }}>
-                                          <span>Ajustement ({item.ajustement_description || 'Manuel'}) :</span>
+                                          <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                                            <span style={{ width: 8, height: 8, borderRadius: '50%', backgroundColor: item.ajustement_montant > 0 ? '#4caf50' : '#f44336', display: 'inline-block' }} />
+                                            Ajust. ({item.ajustement_description || 'Manuel'}) :
+                                          </span>
                                           <span style={{ fontWeight: 600 }}>
                                             {item.ajustement_montant > 0 ? '+' : ''}{formatNumber(item.ajustement_montant)} €
                                           </span>
@@ -2325,10 +2585,10 @@ const TableauSousTraitant = () => {
                                 <Typography
                                   sx={{
                                     fontSize: "0.8rem",
-                                    color: item.ajustement_montant ? "rgba(27, 120, 188, 1)" : "text.primary",
+                                    color: (item.ajustement_montant || item.total_primes) ? "rgba(27, 120, 188, 1)" : "text.primary",
                                     textAlign: "center",
                                     cursor: "pointer",
-                                    fontWeight: item.ajustement_montant ? 500 : 400,
+                                    fontWeight: (item.ajustement_montant || item.total_primes) ? 500 : 400,
                                     "&:hover": {
                                       backgroundColor: "rgba(27, 120, 188, 0.1)",
                                       borderRadius: "4px",
@@ -2337,18 +2597,6 @@ const TableauSousTraitant = () => {
                                   onClick={() => handleOpenAjustementModal(item)}
                                 >
                                   {formatNumber(item.a_payer)} €
-                                  {item.ajustement_montant !== 0 && item.ajustement_montant !== undefined && (
-                                    <Typography 
-                                      component="span" 
-                                      sx={{ 
-                                        fontSize: "0.65rem", 
-                                        color: item.ajustement_montant > 0 ? COLORS.success : COLORS.error,
-                                        ml: 0.5 
-                                      }}
-                                    >
-                                      ({item.ajustement_montant > 0 ? '+' : ''}{formatNumber(item.ajustement_montant)})
-                                    </Typography>
-                                  )}
                                 </Typography>
                               </Tooltip>
                             ) : (
@@ -2633,7 +2881,7 @@ const TableauSousTraitant = () => {
                               sx={{
                                 fontSize: "0.75rem",
                                 color:
-                                  item.ecart > 0 ? COLORS.error : COLORS.successDark,
+                                  item.ecart > 0 ? "#d32f2f" : "#2e7d32",
                                 fontWeight: item.ecart !== 0 ? "bold" : "normal",
                               }}
                             >
@@ -2691,17 +2939,6 @@ const TableauSousTraitant = () => {
                             )}
                           </TableCell>
                           <TableCell sx={commonBodyCellStyle}>
-                            {item.isAgentJournalier ? (
-                              <Typography
-                                sx={{
-                                  fontSize: "0.75rem",
-                                  color: "text.secondary",
-                                  fontStyle: "italic",
-                                }}
-                              >
-                                -
-                              </Typography>
-                            ) : (
                               <Box sx={{ display: "flex", flexDirection: "column", gap: 0.5, alignItems: "center" }}>
                                 {/* ✅ Ne pas afficher la date principale si des factures sont payées */}
                                 {(() => {
@@ -2784,11 +3021,12 @@ const TableauSousTraitant = () => {
                                         const isDifferentFromMain = !item.date_paiement || datePaiement !== item.date_paiement;
                                         const isAgencyExpense = item.source_type === 'agency_expense';
                                         const isFactureSousTraitant = item.source_type === 'facture_sous_traitant';
-                                        // Toujours afficher pour AgencyExpense et FactureSousTraitant
-                                        if (!isAgencyExpense && !isFactureSousTraitant && !isDifferentFromMain) return null;
+                                        const isAgentJournalierType = item.source_type === 'agent_journalier' || item.isAgentJournalier;
+                                        // Toujours afficher pour AgencyExpense, FactureSousTraitant et AgentJournalier
+                                        if (!isAgencyExpense && !isFactureSousTraitant && !isAgentJournalierType && !isDifferentFromMain) return null;
                                         
-                                        // ✅ Pour AgencyExpenseMonth et FactureSousTraitant, mettre en évidence la facture avec la date la plus récente
-                                        const isLatestDate = (item.source_type === 'agency_expense' || item.source_type === 'facture_sous_traitant') && datePaiement === item.date_paiement;
+                                        // ✅ Mettre en évidence la facture avec la date la plus récente selon le type
+                                        const isLatestDate = (item.source_type === 'agency_expense' || item.source_type === 'facture_sous_traitant' || isAgentJournalierType) && datePaiement === item.date_paiement;
                                         
                                         return (
                                           <Box
@@ -2827,7 +3065,6 @@ const TableauSousTraitant = () => {
                                   </Box>
                                 ) : null}
                             </Box>
-                            )}
                           </TableCell>
                           <TableCell sx={commonBodyCellStyle}>
                             {item.ecart_paiement_reel !== null && item.ecart_paiement_reel !== undefined ? (
@@ -2906,15 +3143,269 @@ const TableauSousTraitant = () => {
             </Table>
           </TableContainer>
 
-          {/* Récapitulatif par sous-traitant - À créer plus tard */}
-          {/* {tableRows.length > 0 && (
-            <RecapSousTraitant
-              data={data}
-              selectedAnnee={selectedAnnee}
-              organized={organized}
-              moisSorted={moisSorted}
-            />
-          )} */}
+          {/* Récapitulatif par sous-traitant */}
+          {tableRows.length > 0 && (
+            <Box sx={{ width: "100%", mt: 3 }}>
+              <Typography
+                variant="h6"
+                sx={{
+                  fontFamily: "Merriweather, serif",
+                  color: "white",
+                  fontWeight: "bold",
+                  mb: 2,
+                }}
+              >
+                RÉCAPITULATIF ANNÉE {selectedAnnee}
+              </Typography>
+
+              <Paper
+                sx={{
+                  p: 2,
+                  mb: 3,
+                  backgroundColor: "rgba(27, 120, 188, 0.1)",
+                  border: "2px solid rgba(27, 120, 188, 0.3)",
+                }}
+              >
+                <Typography
+                  variant="h6"
+                  sx={{ color: "rgba(27, 120, 188, 1)", fontWeight: "bold", mb: 2 }}
+                >
+                  Totaux Globaux
+                </Typography>
+                <Box sx={{ display: "flex", gap: 3, flexWrap: "wrap" }}>
+                  <Box>
+                    <Typography sx={{ fontSize: "0.85rem", color: "text.secondary" }}>
+                      Montant à payer HT
+                    </Typography>
+                    <Typography
+                      sx={{
+                        fontSize: "1.1rem",
+                        fontWeight: "bold",
+                        color: colorForAmount(recapTotaux.global.totalAPayer),
+                      }}
+                    >
+                      {formatNumber(recapTotaux.global.totalAPayer)} €
+                    </Typography>
+                  </Box>
+                  <Box>
+                    <Typography sx={{ fontSize: "0.85rem", color: "text.secondary" }}>
+                      Montant à payer TTC
+                    </Typography>
+                    <Typography
+                      sx={{
+                        fontSize: "1.1rem",
+                        fontWeight: "bold",
+                        color: colorForAmount(recapTotaux.global.totalAPayerTTC),
+                      }}
+                    >
+                      {formatNumber(recapTotaux.global.totalAPayerTTC)} €
+                    </Typography>
+                  </Box>
+                  <Box>
+                    <Typography sx={{ fontSize: "0.85rem", color: "text.secondary" }}>
+                      Montant payé
+                    </Typography>
+                    <Typography
+                      sx={{ fontSize: "1.1rem", fontWeight: "bold", color: "rgba(46, 125, 50, 1)" }}
+                    >
+                      {formatNumber(recapTotaux.global.totalPaye)} €
+                    </Typography>
+                  </Box>
+                  <Box>
+                    <Typography sx={{ fontSize: "0.85rem", color: "text.secondary" }}>
+                      Écart
+                    </Typography>
+                    <Typography
+                      sx={{
+                        fontSize: "1.1rem",
+                        fontWeight: "bold",
+                        color: colorForAmount(recapTotaux.global.totalEcart, true),
+                      }}
+                    >
+                      {formatNumber(recapTotaux.global.totalEcart)} €
+                    </Typography>
+                  </Box>
+                </Box>
+              </Paper>
+
+              <Box sx={{ display: "flex", flexDirection: "column", gap: 1 }}>
+                {recapTotaux.sorted.map((st) => {
+                  const totaux = recapTotaux.parSousTraitant[st];
+                  const moisST = trierMoisRecap(Object.keys(totaux.mois));
+                  const isPayeComplet = Math.abs(totaux.totalAPayer - totaux.totalPaye) < 0.01;
+                  const pctCA = recapTotaux.global.totalAPayer
+                    ? ((totaux.totalAPayer / recapTotaux.global.totalAPayer) * 100).toFixed(1)
+                    : "0.0";
+                  const pctPaye = totaux.totalAPayer
+                    ? Math.min((totaux.totalPaye / totaux.totalAPayer) * 100, 100)
+                    : 0;
+
+                  return (
+                    <Accordion
+                      key={st}
+                      sx={{
+                        backgroundColor: "white",
+                        "&:before": { display: "none" },
+                        boxShadow: 2,
+                      }}
+                    >
+                      <AccordionSummary
+                        expandIcon={<ExpandMoreIcon />}
+                        sx={{
+                          backgroundColor: isPayeComplet
+                            ? "rgba(46, 125, 50, 0.1)"
+                            : "rgba(27, 120, 188, 0.1)",
+                          "&:hover": {
+                            backgroundColor: isPayeComplet
+                              ? "rgba(46, 125, 50, 0.15)"
+                              : "rgba(27, 120, 188, 0.15)",
+                          },
+                        }}
+                      >
+                        <Box sx={{ display: "flex", flexDirection: "column", width: "100%", pr: 2, gap: 0.5 }}>
+                          <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", width: "100%" }}>
+                            <Box sx={{ display: "flex", alignItems: "center", gap: 1.5 }}>
+                              <Typography
+                                sx={{
+                                  fontWeight: "bold",
+                                  fontSize: "1rem",
+                                  color: isPayeComplet ? "rgba(46, 125, 50, 1)" : "rgba(27, 120, 188, 1)",
+                                }}
+                              >
+                                {st}
+                              </Typography>
+                              <Box
+                                sx={{
+                                  display: "inline-flex",
+                                  alignItems: "center",
+                                  backgroundColor: isPayeComplet
+                                    ? "rgba(46, 125, 50, 0.15)"
+                                    : "rgba(27, 120, 188, 0.15)",
+                                  borderRadius: "12px",
+                                  px: 1.2,
+                                  py: 0.2,
+                                  border: `1px solid ${isPayeComplet ? "rgba(46, 125, 50, 0.3)" : "rgba(27, 120, 188, 0.3)"}`,
+                                }}
+                              >
+                                <Typography
+                                  sx={{
+                                    fontSize: "0.78rem",
+                                    fontWeight: 700,
+                                    color: isPayeComplet ? "rgba(46, 125, 50, 1)" : "rgba(27, 120, 188, 1)",
+                                    lineHeight: 1.4,
+                                  }}
+                                >
+                                  {pctCA}%
+                                </Typography>
+                              </Box>
+                            </Box>
+                            <Box sx={{ display: "flex", gap: 3 }}>
+                              <Box sx={{ textAlign: "right" }}>
+                                <Typography sx={{ fontSize: "0.75rem", color: "text.secondary" }}>À payer</Typography>
+                                <Typography sx={{ fontSize: "0.9rem", fontWeight: "bold", color: colorForAmount(totaux.totalAPayer) }}>
+                                  {formatNumber(totaux.totalAPayer)} €
+                                </Typography>
+                              </Box>
+                              <Box sx={{ textAlign: "right" }}>
+                                <Typography sx={{ fontSize: "0.75rem", color: "text.secondary" }}>Payé</Typography>
+                                <Typography
+                                  sx={{
+                                    fontSize: "0.9rem",
+                                    fontWeight: "bold",
+                                    color: isPayeComplet ? "rgba(46, 125, 50, 1)" : "rgba(27, 120, 188, 1)",
+                                  }}
+                                >
+                                  {formatNumber(totaux.totalPaye)} €
+                                </Typography>
+                              </Box>
+                              <Box sx={{ textAlign: "right" }}>
+                                <Typography sx={{ fontSize: "0.75rem", color: "text.secondary" }}>Écart</Typography>
+                                <Typography sx={{ fontSize: "0.9rem", fontWeight: "bold", color: colorForAmount(totaux.totalEcart, true) }}>
+                                  {formatNumber(totaux.totalEcart)} €
+                                </Typography>
+                              </Box>
+                            </Box>
+                          </Box>
+                          <LinearProgress
+                            variant="determinate"
+                            value={pctPaye}
+                            sx={{
+                              height: 4,
+                              borderRadius: 2,
+                              backgroundColor: isPayeComplet ? "rgba(46, 125, 50, 0.12)" : "rgba(27, 120, 188, 0.12)",
+                              "& .MuiLinearProgress-bar": {
+                                borderRadius: 2,
+                                backgroundColor: isPayeComplet ? "rgba(46, 125, 50, 0.7)" : "rgba(27, 120, 188, 0.7)",
+                              },
+                            }}
+                          />
+                        </Box>
+                      </AccordionSummary>
+                      <AccordionDetails>
+                        <TableContainer component={Paper} variant="outlined">
+                          <Table size="small">
+                            <TableHead>
+                              <TableRow sx={{ backgroundColor: "rgba(27, 120, 188, 0.1)" }}>
+                                <TableCell sx={{ fontWeight: "bold", color: "rgba(27, 120, 188, 1)" }}>Mois</TableCell>
+                                <TableCell align="right" sx={{ fontWeight: "bold", color: "rgba(27, 120, 188, 1)" }}>Montant à payer HT</TableCell>
+                                <TableCell align="right" sx={{ fontWeight: "bold", color: "rgba(27, 120, 188, 1)" }}>Montant à payer TTC</TableCell>
+                                <TableCell align="right" sx={{ fontWeight: "bold", color: "rgba(27, 120, 188, 1)" }}>Montant payé</TableCell>
+                                <TableCell align="right" sx={{ fontWeight: "bold", color: "rgba(27, 120, 188, 1)" }}>Écart</TableCell>
+                              </TableRow>
+                            </TableHead>
+                            <TableBody>
+                              {moisST.map((mois) => {
+                                const [moisNum, annee2d] = mois.split("/").map(Number);
+                                const moisName = getMoisName(moisNum);
+                                const anneeComplete = annee2d < 50 ? 2000 + annee2d : 1900 + annee2d;
+                                const tm = totaux.mois[mois];
+                                return (
+                                  <TableRow key={mois} hover>
+                                    <TableCell>
+                                      <Typography sx={{ fontWeight: 500, color: "text.primary" }}>
+                                        {moisName} {anneeComplete}
+                                      </Typography>
+                                    </TableCell>
+                                    <TableCell align="right">
+                                      <Typography sx={{ color: colorForAmount(tm.totalAPayer), fontWeight: 500 }}>
+                                        {formatNumber(tm.totalAPayer)} €
+                                      </Typography>
+                                    </TableCell>
+                                    <TableCell align="right">
+                                      <Typography sx={{ color: colorForAmount(tm.totalAPayerTTC), fontWeight: 500 }}>
+                                        {formatNumber(tm.totalAPayerTTC)} €
+                                      </Typography>
+                                    </TableCell>
+                                    <TableCell align="right">
+                                      <Typography sx={{ color: "rgba(46, 125, 50, 1)", fontWeight: 500 }}>
+                                        {formatNumber(tm.totalPaye)} €
+                                      </Typography>
+                                    </TableCell>
+                                    <TableCell align="right">
+                                      <Typography sx={{ color: colorForAmount(tm.totalEcart, true), fontWeight: 500 }}>
+                                        {formatNumber(tm.totalEcart)} €
+                                      </Typography>
+                                    </TableCell>
+                                  </TableRow>
+                                );
+                              })}
+                              <TableRow sx={{ backgroundColor: "rgba(27, 120, 188, 0.05)", borderTop: "2px solid rgba(27, 120, 188, 0.3)" }}>
+                                <TableCell><Typography sx={{ fontWeight: "bold", color: "rgba(27, 120, 188, 1)" }}>TOTAL</Typography></TableCell>
+                                <TableCell align="right"><Typography sx={{ fontWeight: "bold", color: colorForAmount(totaux.totalAPayer) }}>{formatNumber(totaux.totalAPayer)} €</Typography></TableCell>
+                                <TableCell align="right"><Typography sx={{ fontWeight: "bold", color: colorForAmount(totaux.totalAPayerTTC) }}>{formatNumber(totaux.totalAPayerTTC)} €</Typography></TableCell>
+                                <TableCell align="right"><Typography sx={{ fontWeight: "bold", color: isPayeComplet ? "rgba(46, 125, 50, 1)" : "rgba(27, 120, 188, 1)" }}>{formatNumber(totaux.totalPaye)} €</Typography></TableCell>
+                                <TableCell align="right"><Typography sx={{ fontWeight: "bold", color: colorForAmount(totaux.totalEcart, true) }}>{formatNumber(totaux.totalEcart)} €</Typography></TableCell>
+                              </TableRow>
+                            </TableBody>
+                          </Table>
+                        </TableContainer>
+                      </AccordionDetails>
+                    </Accordion>
+                  );
+                })}
+              </Box>
+            </Box>
+          )}
 
           {/* Modal pour ajouter/modifier une facture */}
           <FactureModal
@@ -3056,7 +3547,7 @@ const TableauSousTraitant = () => {
             <DialogContent sx={{ pt: 2 }}>
               {/* Détail par chantier */}
               {currentAjustement?.chantiersDetails && currentAjustement.chantiersDetails.length > 0 && (
-                <Box sx={{ mb: 3, p: 2, bgcolor: COLORS.backgroundHover, borderRadius: 1 }}>
+                <Box sx={{ mb: 3, p: 2, bgcolor: '#f5f5f5', borderRadius: 1 }}>
                   <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 1 }}>
                     Détail par chantier
                   </Typography>
@@ -3103,16 +3594,50 @@ const TableauSousTraitant = () => {
                 sx={{ mb: 2 }}
               />
               
+              {/* Primes existantes (lecture seule) */}
+              {currentAjustement?.primes && currentAjustement.primes.length > 0 && (
+                <Box sx={{ mb: 2, p: 2, bgcolor: 'rgba(255, 152, 0, 0.06)', borderRadius: 1, border: '1px solid rgba(255, 152, 0, 0.2)' }}>
+                  <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 1, color: '#f57c00' }}>
+                    Primes (depuis Planning)
+                  </Typography>
+                  {currentAjustement.primes.map((prime, idx) => (
+                    <Box key={idx} sx={{ display: 'flex', justifyContent: 'space-between', py: 0.3 }}>
+                      <Typography variant="body2" sx={{ color: '#f57c00' }}>
+                        {prime.description} {prime.agence_nom ? `(${prime.agence_nom})` : prime.chantier_name ? `(${prime.chantier_name})` : ''}
+                      </Typography>
+                      <Typography variant="body2" sx={{ fontWeight: 500, color: '#f57c00' }}>
+                        +{formatNumber(prime.montant)} €
+                      </Typography>
+                    </Box>
+                  ))}
+                </Box>
+              )}
+              
               {/* Récapitulatif */}
-              <Box sx={{ mt: 2, p: 2, bgcolor: COLORS.infoLight, borderRadius: 1 }}>
+              <Box sx={{ mt: 2, p: 2, bgcolor: '#e3f2fd', borderRadius: 1 }}>
                 <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 0.5 }}>
-                  <Typography variant="body2">Total planning :</Typography>
+                  <Typography variant="body2" sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                    <span style={{ width: 8, height: 8, borderRadius: '50%', backgroundColor: '#90a4ae', display: 'inline-block' }} />
+                    Planning :
+                  </Typography>
                   <Typography variant="body2" sx={{ fontWeight: 500 }}>
                     {formatNumber(currentAjustement?.a_payer_labor_cost || 0)} €
                   </Typography>
                 </Box>
-                <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 0.5, color: (parseFloat(ajustementFormData.montant) || 0) >= 0 ? COLORS.successDark : COLORS.errorDark }}>
-                  <Typography variant="body2">
+                {currentAjustement?.primes && currentAjustement.primes.length > 0 && (
+                  <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 0.5, color: '#f57c00' }}>
+                    <Typography variant="body2" sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                      <span style={{ width: 8, height: 8, borderRadius: '50%', backgroundColor: '#ff9800', display: 'inline-block' }} />
+                      Primes ({currentAjustement.primes.length}) :
+                    </Typography>
+                    <Typography variant="body2" sx={{ fontWeight: 500 }}>
+                      +{formatNumber(currentAjustement.total_primes || 0)} €
+                    </Typography>
+                  </Box>
+                )}
+                <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 0.5, color: (parseFloat(ajustementFormData.montant) || 0) >= 0 ? '#2e7d32' : '#c62828' }}>
+                  <Typography variant="body2" sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                    <span style={{ width: 8, height: 8, borderRadius: '50%', backgroundColor: (parseFloat(ajustementFormData.montant) || 0) >= 0 ? '#4caf50' : '#f44336', display: 'inline-block' }} />
                     Ajustement {ajustementFormData.description ? `(${ajustementFormData.description})` : ''} :
                   </Typography>
                   <Typography variant="body2" sx={{ fontWeight: 500 }}>
@@ -3122,7 +3647,11 @@ const TableauSousTraitant = () => {
                 <Box sx={{ display: 'flex', justifyContent: 'space-between', pt: 1, mt: 1, borderTop: '1px dashed #90caf9' }}>
                   <Typography variant="body1" sx={{ fontWeight: 700 }}>TOTAL À PAYER :</Typography>
                   <Typography variant="body1" sx={{ fontWeight: 700 }}>
-                    {formatNumber((currentAjustement?.a_payer_labor_cost || 0) + (parseFloat(ajustementFormData.montant) || 0))} €
+                    {formatNumber(
+                      (currentAjustement?.a_payer_labor_cost || 0) + 
+                      (currentAjustement?.total_primes || 0) + 
+                      (parseFloat(ajustementFormData.montant) || 0)
+                    )} €
                   </Typography>
                 </Box>
               </Box>

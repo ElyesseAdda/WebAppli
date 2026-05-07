@@ -2,7 +2,7 @@
  * Drive Explorer - Affichage du contenu du drive
  */
 
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 
 /**
  * Convertit un nom de fichier/dossier normalisé (avec underscores) en nom d'affichage (avec espaces)
@@ -51,6 +51,8 @@ import {
   Alert,
   Snackbar,
   CircularProgress,
+  Backdrop,
+  TableSortLabel,
 } from '@mui/material';
 import {
   Folder as FolderIcon,
@@ -110,7 +112,7 @@ const SelectionBox = styled(Box)(({ theme }) => ({
 
 const ListHeader = styled(Paper)(({ theme }) => ({
   display: 'grid',
-  gridTemplateColumns: '1fr minmax(80px, 100px) minmax(120px, 150px) minmax(80px, 100px)',
+  gridTemplateColumns: '1fr minmax(80px, 100px) minmax(100px, 140px) minmax(120px, 150px) minmax(80px, 100px)',
   gap: theme.spacing(2),
   padding: theme.spacing(2),
   backgroundColor: theme.palette.grey[100],
@@ -128,7 +130,7 @@ const ListHeader = styled(Paper)(({ theme }) => ({
 
 const StyledListItem = styled(ListItem)(({ theme, isSelected, isDragOver, isDragging }) => ({
   display: 'grid',
-  gridTemplateColumns: '1fr minmax(80px, 100px) minmax(120px, 150px) minmax(80px, 100px)',
+  gridTemplateColumns: '1fr minmax(80px, 100px) minmax(100px, 140px) minmax(120px, 150px) minmax(80px, 100px)',
   gap: theme.spacing(2),
   padding: '4px',
   marginLeft: theme.spacing(2), // Margin à gauche pour la zone de sélection
@@ -208,6 +210,12 @@ const DriveExplorer = ({
   const [mouseDownPos, setMouseDownPos] = useState(null);
   const [isDragging, setIsDragging] = useState(false);
   const [downloadingFolder, setDownloadingFolder] = useState(null);
+  const [isMovingItems, setIsMovingItems] = useState(false);
+  const [moveTargetLabel, setMoveTargetLabel] = useState('');
+  const [sortConfig, setSortConfig] = useState({
+    key: 'name',
+    direction: 'asc',
+  });
   const containerRef = useRef(null);
   const { preloadOfficeFiles, isOfficeFile } = usePreload();
   const { findAvailableFileName } = useUpload();
@@ -223,6 +231,64 @@ const DriveExplorer = ({
   useEffect(() => {
     setSelectedFiles(new Set());
   }, [currentPath]);
+
+  // Tri sur clic des en-têtes (Nom, Date)
+  const handleSort = useCallback((key) => {
+    setSortConfig((prev) => {
+      if (prev.key === key) {
+        return {
+          key,
+          direction: prev.direction === 'asc' ? 'desc' : 'asc',
+        };
+      }
+
+      // Par défaut, Nom = asc (A->Z), Date = desc (récent -> ancien)
+      return {
+        key,
+        direction: key === 'date' ? 'desc' : 'asc',
+      };
+    });
+  }, []);
+
+  const getTimestamp = (item) => {
+    const rawDate = item?.last_modified || item?.modified_at || item?.updated_at || item?.created_at;
+    if (!rawDate) return 0;
+    const timestamp = new Date(rawDate).getTime();
+    return Number.isNaN(timestamp) ? 0 : timestamp;
+  };
+
+  const compareBySort = useCallback((a, b) => {
+    const directionFactor = sortConfig.direction === 'asc' ? 1 : -1;
+
+    if (sortConfig.key === 'date') {
+      const dateDiff = getTimestamp(a) - getTimestamp(b);
+      if (dateDiff !== 0) {
+        return dateDiff * directionFactor;
+      }
+    } else if (sortConfig.key === 'size') {
+      const sizeA = a?.type === 'folder' ? -1 : (a?.size || 0);
+      const sizeB = b?.type === 'folder' ? -1 : (b?.size || 0);
+      const sizeDiff = sizeA - sizeB;
+      if (sizeDiff !== 0) {
+        return sizeDiff * directionFactor;
+      }
+    } else {
+      const nameA = displayFilename(a?.name || '').toLowerCase();
+      const nameB = displayFilename(b?.name || '').toLowerCase();
+      const nameDiff = nameA.localeCompare(nameB, 'fr', { sensitivity: 'base' });
+      if (nameDiff !== 0) {
+        return nameDiff * directionFactor;
+      }
+    }
+
+    // Fallback stable : nom alphabétique
+    const fallbackA = displayFilename(a?.name || '').toLowerCase();
+    const fallbackB = displayFilename(b?.name || '').toLowerCase();
+    return fallbackA.localeCompare(fallbackB, 'fr', { sensitivity: 'base' });
+  }, [sortConfig]);
+
+  const sortedFolders = useMemo(() => [...folders].sort(compareBySort), [folders, compareBySort]);
+  const sortedFiles = useMemo(() => [...files].sort(compareBySort), [files, compareBySort]);
 
   // Gérer les touches clavier (Escape pour désélectionner, Ctrl+C pour copier)
   useEffect(() => {
@@ -602,6 +668,8 @@ const DriveExplorer = ({
 
     // Déplacer chaque élément
     try {
+      setMoveTargetLabel(displayFilename(targetFolder.name));
+      setIsMovingItems(true);
       const movePromises = draggedItems.map(async (item) => {
         const fileName = item.name;
         const destPath = targetPath + fileName + (item.type === 'folder' ? '/' : '');
@@ -640,6 +708,9 @@ const DriveExplorer = ({
     } catch (error) {
       alert(`Erreur lors du déplacement: ${error.message}`);
       setDraggedItems(null);
+    } finally {
+      setIsMovingItems(false);
+      setMoveTargetLabel('');
     }
   }, [draggedItems, onRefresh]);
 
@@ -844,10 +915,33 @@ const DriveExplorer = ({
         return <AudioIcon color="info" />;
       case 'doc':
       case 'docx':
+      case 'docm':
+      case 'dot':
+      case 'dotx':
+      case 'dotm':
       case 'xls':
       case 'xlsx':
+      case 'xlsm':
+      case 'xlt':
+      case 'xltx':
+      case 'xltm':
       case 'ppt':
       case 'pptx':
+      case 'pptm':
+      case 'pot':
+      case 'potx':
+      case 'potm':
+      case 'odt':
+      case 'ods':
+      case 'odp':
+      case 'rtf':
+      case 'csv':
+      case 'fodt':
+      case 'fods':
+      case 'fodp':
+      case 'ott':
+      case 'ots':
+      case 'otp':
         return <DescriptionIcon color="success" />;
       case 'zip':
       case 'rar':
@@ -1713,7 +1807,15 @@ const DriveExplorer = ({
       {/* En-tête */}
       <ListHeader elevation={0}>
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, minWidth: 0, overflow: 'hidden', width: '100%' }}>
-          <Typography variant="subtitle2" sx={{ whiteSpace: 'nowrap', flexShrink: 0 }}>Nom</Typography>
+          <TableSortLabel
+            active={sortConfig.key === 'name'}
+            direction={sortConfig.key === 'name' ? sortConfig.direction : 'asc'}
+            onClick={() => handleSort('name')}
+          >
+            <Typography variant="subtitle2" sx={{ whiteSpace: 'nowrap', flexShrink: 0, fontWeight: 700 }}>
+              Nom
+            </Typography>
+          </TableSortLabel>
           {selectedFiles.size > 0 && (
             <Chip 
               label={`${selectedFiles.size} sélectionné${selectedFiles.size > 1 ? 's' : ''}`}
@@ -1723,15 +1825,34 @@ const DriveExplorer = ({
             />
           )}
         </Box>
-        <Typography variant="subtitle2" sx={{ whiteSpace: 'nowrap' }}>Taille</Typography>
-        <Typography variant="subtitle2" sx={{ whiteSpace: 'nowrap' }}>Date</Typography>
+        <TableSortLabel
+          active={sortConfig.key === 'size'}
+          direction={sortConfig.key === 'size' ? sortConfig.direction : 'asc'}
+          onClick={() => handleSort('size')}
+        >
+          <Typography variant="subtitle2" sx={{ whiteSpace: 'nowrap', fontWeight: 700 }}>
+            Taille
+          </Typography>
+        </TableSortLabel>
+        <Typography variant="subtitle2" sx={{ whiteSpace: 'nowrap', fontWeight: 700 }}>
+          Modifié par
+        </Typography>
+        <TableSortLabel
+          active={sortConfig.key === 'date'}
+          direction={sortConfig.key === 'date' ? sortConfig.direction : 'desc'}
+          onClick={() => handleSort('date')}
+        >
+          <Typography variant="subtitle2" sx={{ whiteSpace: 'nowrap', fontWeight: 700 }}>
+            Date
+          </Typography>
+        </TableSortLabel>
         <Typography variant="subtitle2" sx={{ whiteSpace: 'nowrap' }}>Actions</Typography>
       </ListHeader>
 
       {/* Liste */}
       <List sx={{ p: 0, width: '100%', maxWidth: '100%', overflow: 'hidden' }}>
         {/* Dossiers */}
-        {folders.map((folder) => {
+        {sortedFolders.map((folder) => {
           const folderItem = { ...folder, type: 'folder' };
           const isSelected = selectedFiles.has(folder.path);
           const isDragOverFolder = dragOverFolder === folder.path;
@@ -1831,7 +1952,10 @@ const DriveExplorer = ({
                 --
               </Typography>
               <Typography variant="body2" color="text.secondary" sx={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                --
+                {folder.modified_by || '--'}
+              </Typography>
+              <Typography variant="body2" color="text.secondary" sx={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                {formatDate(folder.modified_at)}
               </Typography>
               <Box sx={{ minWidth: 0, overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 0.5 }}>
                 <Tooltip title="Télécharger le dossier">
@@ -1866,7 +1990,7 @@ const DriveExplorer = ({
         })}
 
         {/* Fichiers */}
-        {files.map((file) => {
+        {sortedFiles.map((file) => {
           const fileItem = { ...file, type: 'file' };
           const isSelected = selectedFiles.has(file.path);
           const isDragging = draggedItems?.some(item => item.path === file.path) || false;
@@ -1951,7 +2075,10 @@ const DriveExplorer = ({
                 {formatFileSize(file.size)}
               </Typography>
               <Typography variant="body2" color="text.secondary" sx={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                {formatDate(file.last_modified)}
+                {file.modified_by || '--'}
+              </Typography>
+              <Typography variant="body2" color="text.secondary" sx={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                {formatDate(file.modified_at || file.last_modified)}
               </Typography>
               <Box sx={{ minWidth: 0, overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 0.5 }}>
                 <Tooltip title="Télécharger">
@@ -2223,6 +2350,26 @@ const DriveExplorer = ({
           </Typography>
         </Alert>
       </Snackbar>
+
+      {/* Modal de chargement pendant le déplacement d'éléments */}
+      <Backdrop
+        open={isMovingItems}
+        sx={(theme) => ({
+          color: '#fff',
+          zIndex: theme.zIndex.modal + 1,
+          display: 'flex',
+          flexDirection: 'column',
+          gap: 2,
+        })}
+      >
+        <CircularProgress color="inherit" />
+        <Typography variant="body1" fontWeight={600}>
+          Déplacement en cours...
+        </Typography>
+        <Typography variant="body2">
+          {moveTargetLabel ? `Vers "${moveTargetLabel}"` : 'Veuillez patienter'}
+        </Typography>
+      </Backdrop>
     </ExplorerContainer>
   );
 };
