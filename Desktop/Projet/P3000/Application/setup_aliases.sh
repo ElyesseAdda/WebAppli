@@ -35,8 +35,11 @@ function ${CLIENT_NAME}-go() {
     echo \"🐍 Python : \$(python --version)\"
 }
 
-# Déploiement complet
+# Déploiement complet P3000 uniquement
 alias ${CLIENT_NAME}-deploy='bash ${APP_DIR}/deploy_production.sh'
+
+# Déploiement de TOUTES les applications (P3000 + Elekable + MJRService)
+alias all-deploy='bash ${APP_DIR}/deploy/deploy-all.sh'
 
 # Redémarrage rapide
 alias ${CLIENT_NAME}-restart='bash ${APP_DIR}/restart_app.sh'
