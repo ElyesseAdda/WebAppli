@@ -13,3 +13,4 @@ requests==2.31.0
 python-decouple==3.8
 PyJWT==2.8.0
 holidays>=0.46
+redis>=5.0.0
