@@ -228,7 +228,20 @@ do_push() {
         git commit -m "chore: merge main (${main_commit}) into ${branch} — mise à jour fonctionnalités" || true
     fi
 
-    git push origin "$branch"
+    # Synchroniser avec origin avant de pusher (le serveur a pu pousser des commits entre-temps)
+    git fetch origin "$branch" 2>/dev/null || true
+    local remote_ref="origin/${branch}"
+    if git rev-parse "$remote_ref" &>/dev/null; then
+        if ! git merge-base --is-ancestor "$remote_ref" HEAD 2>/dev/null; then
+            log_info "Synchronisation avec origin/${branch}..."
+            git rebase "$remote_ref" 2>/dev/null || {
+                git rebase --abort 2>/dev/null || true
+                log_warn "Rebase impossible — force-push avec --force-with-lease..."
+            }
+        fi
+    fi
+
+    git push origin "$branch" --force-with-lease
     log_ok "Branch ${branch} pushée vers origin"
 }
 
