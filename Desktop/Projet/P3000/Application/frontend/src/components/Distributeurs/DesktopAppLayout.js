@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState } from "react";
 import {
   Box,
   Drawer,
@@ -27,7 +27,6 @@ import DistributeursDashboard from "./DistributeursDashboard";
 import StatsTab from "./StatsTab";
 import DocumentsTab from "./DocumentsTab";
 import StockTab from "./StockTab";
-import entrepriseConfigService from "../../services/entrepriseConfigService";
 
 // Logo client
 import mjrLogo from "../../img/MJR SERVICES logo.jpg";
@@ -67,21 +66,11 @@ const DesktopAppLayout = () => {
   const [selectedTab, setSelectedTab] = useState(1); // 0: Stats, 1: Distributeur, 2: Stock, 3: Documents
   const [distributeurToOpen, setDistributeurToOpen] = useState(null);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
-  const [appConfig, setAppConfig] = useState({ nom_application: "P3000", domaine_public: "" });
-
-  useEffect(() => {
-    entrepriseConfigService.getConfig().then((config) => {
-      if (config) {
-        setAppConfig(config);
-      }
-    });
-  }, []);
+  const appName = "P3000";
 
   // URL de retour vers l'application principale
-  const returnUrl = appConfig.domaine_public
-    ? `https://${appConfig.domaine_public}/`
-    : "/";
-  const returnLabel = `Retour à ${appConfig.nom_application || "l'application"}`;
+  const returnUrl = "/";
+  const returnLabel = `Retour à ${appName}`;
 
   const handleOpenDistributeur = (distributeurId) => {
     setDistributeurToOpen(distributeurId);

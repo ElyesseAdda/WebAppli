@@ -15,7 +15,6 @@ import { createTheme, ThemeProvider } from "@mui/material/styles";
 import { useNavigate } from "react-router-dom";
 import logoDefault from "../img/logo.png";
 import { COLORS } from "../constants/colors";
-import entrepriseConfigService from "../services/entrepriseConfigService";
 
 // Thème mobile optimisé - couleurs Elekable
 const mobileTheme = createTheme({
@@ -67,7 +66,6 @@ const mobileTheme = createTheme({
 
 const LoginMobile = ({ onLoginSuccess }) => {
   const navigate = useNavigate();
-  const [config, setConfig] = useState(null);
   const [formData, setFormData] = useState({
     username: "",
     password: "",
@@ -75,15 +73,6 @@ const LoginMobile = ({ onLoginSuccess }) => {
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
-
-  // Charger la config entreprise (logo, nom) pour personnaliser la page
-  useEffect(() => {
-    let cancelled = false;
-    entrepriseConfigService.getConfig().then((data) => {
-      if (!cancelled) setConfig(data);
-    });
-    return () => { cancelled = true; };
-  }, []);
 
   // Ajuster le body pour plein écran mobile
   useEffect(() => {
@@ -193,7 +182,7 @@ const LoginMobile = ({ onLoginSuccess }) => {
             }}
           >
             <img
-              src={config?.logo_url || logoDefault}
+              src={logoDefault}
               alt="Application Rapport Elekable"
               style={{
                 width: "240px",

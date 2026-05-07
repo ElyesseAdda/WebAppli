@@ -260,6 +260,51 @@ html {
   transition: max-height 0.3s ease;
 }
 
+/* Ligne principale Agence: lien + actions sur la meme ligne */
+.slide-bar .submenu li.agence-main-row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.slide-bar .submenu li.agence-main-row > a,
+.slide-bar .submenu li.agence-main-row > .agence-main-label {
+  flex: 1;
+  min-width: 0;
+}
+
+/* Boutons d'actions agence (plus de fond gris natif) */
+.slide-bar .add-agence-btn,
+.slide-bar .agence-toggle-btn {
+  width: 28px;
+  height: 28px;
+  min-width: 28px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--sidebar-muted);
+  cursor: pointer;
+  padding: 0;
+  box-shadow: none;
+  margin: 0;
+}
+
+.slide-bar .add-agence-btn:hover,
+.slide-bar .agence-toggle-btn:hover {
+  background: var(--sidebar-hover);
+  color: var(--color-primary);
+}
+
+/* Icones plus petites */
+.slide-bar .add-agence-btn svg,
+.slide-bar .agence-toggle-btn svg {
+  width: 16px;
+  height: 16px;
+}
+
 /* Boutons d’ouverture/fermeture */
 .burger-button,
 .close-button {

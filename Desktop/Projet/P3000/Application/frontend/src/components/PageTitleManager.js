@@ -1,6 +1,5 @@
 import { useEffect, useState } from "react";
 import { matchPath, useLocation } from "react-router-dom";
-import entrepriseConfigService from "../services/entrepriseConfigService";
 
 const DEFAULT_TITLE = "Webapplication P3000";
 
@@ -60,11 +59,7 @@ const PageTitleManager = () => {
   const [baseTitle, setBaseTitle] = useState(DEFAULT_TITLE);
 
   useEffect(() => {
-    entrepriseConfigService.getConfig().then((config) => {
-      if (config && config.nom_application) {
-        setBaseTitle(config.nom_application);
-      }
-    });
+    setBaseTitle(DEFAULT_TITLE);
   }, []);
 
   useEffect(() => {
