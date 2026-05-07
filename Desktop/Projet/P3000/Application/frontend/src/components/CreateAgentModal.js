@@ -31,6 +31,7 @@ const CreateAgentModal = ({ isOpen, handleClose, refreshAgents }) => {
   const [agentData, setAgentData] = useState({
     name: "",
     surname: "",
+    email: "",
     address: "",
     phone_Number: "",
     taux_Horaire: "",
@@ -96,6 +97,7 @@ const CreateAgentModal = ({ isOpen, handleClose, refreshAgents }) => {
       setAgentData({
         name: "",
         surname: "",
+        email: "",
         address: "",
         phone_Number: "",
         taux_Horaire: "",
@@ -162,6 +164,14 @@ const CreateAgentModal = ({ isOpen, handleClose, refreshAgents }) => {
           label="Prénom"
           name="surname"
           value={agentData.surname}
+          onChange={handleChange}
+          fullWidth
+          margin="normal"
+        />
+        <TextField
+          label="Adresse mail"
+          name="email"
+          value={agentData.email}
           onChange={handleChange}
           fullWidth
           margin="normal"

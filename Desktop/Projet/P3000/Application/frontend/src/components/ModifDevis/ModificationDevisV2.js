@@ -19,6 +19,7 @@ import DevisCostPieChart from '../Devis/DevisCostPieChart';
 import ContactSocieteModal from '../ContactSocieteModal';
 import SelectSocieteModal from '../SelectSocieteModal';
 import SocieteInfoModal from '../SocieteInfoModal';
+import ClientInfoModal from '../ClientInfoModal';
 
 // Hooks personnalisés
 import { useDevisLoader } from './hooks/useDevisLoader';
@@ -127,6 +128,9 @@ const ModificationDevisV2 = () => {
   const [selectedContactId, setSelectedContactId] = useState(null);
   const [showContactModal, setShowContactModal] = useState(false);
   const [currentSocieteId, setCurrentSocieteId] = useState(null);
+
+  // État pour l'édition du client
+  const [showEditClientModal, setShowEditClientModal] = useState(false);
 
   // États pour la sélection de société alternative (affichage devis uniquement)
   const [societeDevisId, setSocieteDevisId] = useState(null);
@@ -541,6 +545,28 @@ const ModificationDevisV2 = () => {
       alert('Erreur lors de la création de la société.');
     }
   }, [clientId, fetchContactsSociete, fetchAvailableSocietes]);
+
+  const handleSaveClient = useCallback(async (formData) => {
+    if (!clientId) return;
+    try {
+      await axios.put(`/api/client/${clientId}/`, {
+        ...formData,
+        phone_Number: formData.phone_Number ? parseInt(formData.phone_Number) : null,
+      });
+      setClient({
+        name: formData.name || '',
+        surname: formData.surname || '',
+        civilite: formData.civilite || '',
+        poste: formData.poste || '',
+        client_mail: formData.client_mail || '',
+        phone_Number: formData.phone_Number || '',
+      });
+      setShowEditClientModal(false);
+    } catch (error) {
+      console.error('Erreur lors de la mise à jour du client:', error);
+      alert('Erreur lors de la mise à jour du contact.');
+    }
+  }, [clientId]);
 
   // Changer le chantier (fetch détails et mettre à jour client/societe/chantier)
   const handleChantierChange = useCallback(async (chantierId) => {
@@ -1218,16 +1244,26 @@ const ModificationDevisV2 = () => {
             padding: '25px',
             marginBottom: '30px'
           }}>
-            <h2 style={{
-              color: '#1976d2',
-              fontSize: '20px',
-              fontWeight: 'bold',
-              margin: '0 0 20px 0',
-              paddingBottom: '10px',
-              borderBottom: '2px solid #1976d2'
-            }}>
-              👤 Client et contact
-            </h2>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', paddingBottom: '10px', borderBottom: '2px solid #1976d2' }}>
+              <h2 style={{
+                color: '#1976d2',
+                fontSize: '20px',
+                fontWeight: 'bold',
+                margin: 0,
+              }}>
+                👤 Client et contact
+              </h2>
+              {clientId && (
+                <Button
+                  variant="outlined"
+                  size="small"
+                  onClick={() => setShowEditClientModal(true)}
+                  sx={{ fontSize: '12px', padding: '4px 10px' }}
+                >
+                  Modifier le contact
+                </Button>
+              )}
+            </div>
             
             <ClientInfo 
               client={client} 
@@ -1662,6 +1698,13 @@ const ModificationDevisV2 = () => {
         open={showCreateSocieteDevisModal}
         onClose={() => setShowCreateSocieteDevisModal(false)}
         onSubmit={handleCreateSocieteDevis}
+      />
+
+      <ClientInfoModal
+        open={showEditClientModal}
+        onClose={() => setShowEditClientModal(false)}
+        onSubmit={handleSaveClient}
+        initialData={client}
       />
     </div>
   );

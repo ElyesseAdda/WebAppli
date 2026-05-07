@@ -2,7 +2,7 @@ from rest_framework import serializers
 from django.db.models import Q
 from .models import (
     Chantier, Societe, Devis, Partie, SousPartie, LigneDetail, Client, 
-    Agent, Stock, Presence, StockMovement, StockHistory, Event, MonthlyHours, 
+    Agent, Stock, Presence, StockMovement, StockHistory, Event, MonthlyHours, PointageMensuel,
     Schedule, LaborCost, DevisLigne, Facture, FactureLigne, BonCommande, LigneBonCommande,
     Avenant, FactureTS, Situation, SituationLigne, SituationLigneSupplementaire, SituationLigneSpeciale,
     ChantierLigneSupplementaire, SituationLigneAvenant, AgencyExpense, AgencyExpenseOverride,
@@ -101,12 +101,14 @@ class DevisListSerializer(serializers.ModelSerializer):
     """Serializer allégé pour la liste des devis (pagination rapide)"""
     chantier_name = serializers.SerializerMethodField()
     client_name = serializers.SerializerMethodField()
+    societe_name = serializers.SerializerMethodField()
 
     class Meta:
         model = Devis
         fields = [
             'id', 'numero', 'date_creation', 'price_ht', 'price_ttc',
-            'status', 'chantier_name', 'client_name', 'devis_chantier', 'appel_offres', 'chantier'
+            'status', 'chantier_name', 'client_name', 'societe_name',
+            'devis_chantier', 'appel_offres', 'chantier'
         ]
 
     def get_chantier_name(self, obj):
@@ -138,6 +140,14 @@ class DevisListSerializer(serializers.ModelSerializer):
             return f"{contact.name} {contact.surname}".strip()
         return None
 
+    def get_societe_name(self, obj):
+        societe = None
+        if obj.devis_chantier and obj.appel_offres and obj.appel_offres.societe:
+            societe = obj.appel_offres.societe
+        elif obj.chantier and obj.chantier.societe:
+            societe = obj.chantier.societe
+        return getattr(societe, 'nom_societe', None) if societe else None
+
 
 class DevisSerializer(serializers.ModelSerializer):
     lignes = DevisLigneSerializer(many=True, required=False)
@@ -152,13 +162,14 @@ class DevisSerializer(serializers.ModelSerializer):
     )
     chantier_name = serializers.SerializerMethodField()
     client_name = serializers.SerializerMethodField()
+    societe_name = serializers.SerializerMethodField()
 
     class Meta:
         model = Devis
         fields = [
             'id', 'numero', 'date_creation', 'price_ht', 'price_ttc',
             'tva_rate', 'nature_travaux', 'description', 'status',
-            'chantier', 'appel_offres', 'chantier_name', 'client_name',
+            'chantier', 'appel_offres', 'chantier_name', 'client_name', 'societe_name',
             'client', 'lignes', 'lignes_speciales', 'lignes_display', 'parties_metadata', 'devis_chantier',
             'cout_estime_main_oeuvre', 'cout_estime_materiel', 'lignes_speciales_v2', 'version_systeme_lignes',
             'contact_societe', 'societe_devis'
@@ -203,6 +214,14 @@ class DevisSerializer(serializers.ModelSerializer):
         if contact:
             return f"{contact.name} {contact.surname}".strip()
         return None
+
+    def get_societe_name(self, obj):
+        societe = None
+        if obj.devis_chantier and obj.appel_offres and obj.appel_offres.societe:
+            societe = obj.appel_offres.societe
+        elif obj.chantier and obj.chantier.societe:
+            societe = obj.chantier.societe
+        return getattr(societe, 'nom_societe', None) if societe else None
 
     def to_representation(self, instance):
         """
@@ -681,6 +700,8 @@ class ClientSerializer(serializers.ModelSerializer):
         model = Client
         fields = '__all__'
         extra_kwargs = {
+            'name': {'required': False, 'allow_blank': True},
+            'surname': {'required': False, 'allow_blank': True},
             'client_mail': {'required': False, 'allow_blank': True, 'allow_null': True},
             'phone_Number': {'required': False, 'allow_null': True},
         }
@@ -702,6 +723,27 @@ class AgentSerializer(serializers.ModelSerializer):
     class Meta:
         model = Agent
         fields = '__all__'
+
+
+class PointageMensuelSerializer(serializers.ModelSerializer):
+    # Champs complets du pointage mensuel utilises par le tableau de pointage
+    class Meta:
+        model = PointageMensuel
+        fields = [
+            'id',
+            'agent',
+            'month',
+            'salaire_net_initial_hors_prime',
+            'agence',
+            'repartition_montant_charge',
+            'montant_charge',
+            'montant_brut',
+            'accompte',
+            'paiement',
+            'date_paiement',
+            'commentaire',
+            'salaire_overridden',
+        ]
 
 
 class PresenceSerializer(serializers.ModelSerializer):
@@ -1304,7 +1346,7 @@ class BonCommandeSerializer(serializers.ModelSerializer):
         return None
 
 class FactureTSSerializer(serializers.ModelSerializer):
-    devis_numero = serializers.CharField(source='numero_complet', read_only=True)
+    devis_numero = serializers.CharField(source='devis.numero', read_only=True)
     devis_date_creation = serializers.DateTimeField(source='devis.date_creation', read_only=True)
     devis_nature_travaux = serializers.CharField(source='devis.nature_travaux', read_only=True)
     devis_status = serializers.CharField(source='devis.status', read_only=True)
@@ -1626,7 +1668,7 @@ class SituationLigneUpdateSerializer(serializers.ModelSerializer):
         return instance
 
 class FactureTSListSerializer(serializers.ModelSerializer):
-    devis_numero = serializers.CharField(source='numero_complet', read_only=True)
+    devis_numero = serializers.CharField(source='devis.numero', read_only=True)
     avenant_numero = serializers.CharField(source='avenant.numero', read_only=True)
     
     class Meta:
@@ -1655,11 +1697,25 @@ class AgencyExpenseOverrideSerializer(serializers.ModelSerializer):
 
 class AgenceSerializer(serializers.ModelSerializer):
     chantier_name = serializers.CharField(source='chantier.chantier_name', read_only=True)
+    can_delete = serializers.SerializerMethodField()
+    delete_blockers = serializers.SerializerMethodField()
 
     class Meta:
         model = Agence
-        fields = ['id', 'nom', 'chantier', 'chantier_name', 'created_at']
+        fields = ['id', 'nom', 'chantier', 'chantier_name', 'created_at', 'can_delete', 'delete_blockers']
         read_only_fields = ['chantier', 'chantier_name', 'created_at']
+
+    def _get_delete_blockers(self, obj):
+        blockers = []
+        if (obj.nom or "").strip().lower() == "agence":
+            blockers.append("Agence par défaut protégée")
+        return blockers
+
+    def get_can_delete(self, obj):
+        return len(self._get_delete_blockers(obj)) == 0
+
+    def get_delete_blockers(self, obj):
+        return self._get_delete_blockers(obj)
 
 
 class AgencyExpenseSerializer(serializers.ModelSerializer):
@@ -1947,6 +2003,14 @@ class RecapFinancierSerializer(serializers.Serializer):
     montant_ht = serializers.FloatField()
     taux_fixe = serializers.FloatField()
     montant_taux_fixe = serializers.FloatField()
+    # Présent uniquement en mode mois/année : coûts payés cumulés depuis l'origine jusqu'à fin du mois
+    cout_chantier_cumul_jusqua_fin_mois = serializers.DictField(
+        required=False, allow_null=True
+    )
+    # Encaissements clients encore dus (toutes périodes), ventilés par échéance vs aujourd'hui
+    encours_paiements_clients = serializers.DictField(required=False, allow_null=True)
+    # Prévisionnel coûts chantier (source: décomposition devis + factures + avenants)
+    previsionnel_couts_chantier = serializers.DictField(required=False, allow_null=True)
 
 class FactureFournisseurMaterielSerializer(serializers.ModelSerializer):
     class Meta:
@@ -2001,11 +2065,15 @@ class AppelOffresSerializer(serializers.ModelSerializer):
     chantier_transformé_name = serializers.SerializerMethodField()
 
     def _get_devis_chantier(self, obj):
-        """Retourne le devis de chantier (devis_chantier=True) du chantier transformé si existant.
-        Utilise le prefetch du viewset (chantier_transformé -> devis) en liste pour éviter N+1."""
-        if not obj.chantier_transformé:
-            return None
-        return obj.chantier_transformé.devis.filter(devis_chantier=True).first()
+        """
+        Retourne le devis le plus pertinent pour l'affichage des montants :
+        - AO transformé → devis de chantier (devis_chantier=True) du chantier lié
+        - AO non transformé → devis lié directement via FK appel_offres, le plus récent
+        """
+        if obj.chantier_transformé:
+            return obj.chantier_transformé.devis.filter(devis_chantier=True).first()
+        # Devis lié directement à l'AO (non transformé)
+        return obj.devis.order_by('-date_creation').first()
 
     def get_deja_transforme(self, obj):
         """Vérifie si l'appel d'offres a déjà été transformé en chantier"""

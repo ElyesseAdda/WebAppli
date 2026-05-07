@@ -63,10 +63,28 @@ def sync_single_appel_offres_from_devis(appel_offres):
     return updated
 
 
+def _get_devis_for_appel_offres(appel_offres):
+    """
+    Retourne le devis le plus pertinent pour un appel d'offres :
+    - Si transformé en chantier → devis de chantier (devis_chantier=True) du chantier lié
+    - Sinon → devis lié directement via la FK appel_offres, le plus récent en premier
+    """
+    if appel_offres.chantier_transformé_id:
+        return Devis.objects.filter(
+            chantier=appel_offres.chantier_transformé,
+            devis_chantier=True
+        ).first()
+    return Devis.objects.filter(
+        appel_offres=appel_offres
+    ).order_by('-date_creation').first()
+
+
 def sync_appel_offres_montants_depuis_devis(dry_run=False):
     """
     Rafraîchit les montants (montant_ht, montant_ttc) de tous les appels d'offres
-    déjà transformés en chantier, à partir du devis de chantier actuel.
+    à partir de leur devis associé :
+      - AO transformé en chantier → devis de chantier (devis_chantier=True) du chantier lié
+      - AO non transformé → devis lié directement (FK appel_offres), le plus récent
 
     Args:
         dry_run: si True, ne sauvegarde pas les modifications.
@@ -80,20 +98,17 @@ def sync_appel_offres_montants_depuis_devis(dry_run=False):
         }
     """
     result = {'updated': 0, 'skipped': 0, 'errors': 0, 'details': []}
-    qs = AppelOffres.objects.filter(chantier_transformé__isnull=False).select_related('chantier_transformé')
+    qs = AppelOffres.objects.select_related('chantier_transformé').all()
     for appel_offres in qs:
         try:
-            devis = Devis.objects.filter(
-                chantier=appel_offres.chantier_transformé,
-                devis_chantier=True
-            ).first()
+            devis = _get_devis_for_appel_offres(appel_offres)
             if not devis:
                 result['skipped'] += 1
                 result['details'].append({
                     'id': appel_offres.id,
                     'chantier_name': appel_offres.chantier_name,
                     'updated': False,
-                    'reason': 'aucun devis de chantier',
+                    'reason': 'aucun devis associé',
                 })
                 continue
             if devis.price_ht is None and devis.price_ttc is None:
@@ -107,7 +122,7 @@ def sync_appel_offres_montants_depuis_devis(dry_run=False):
                 continue
             new_ht = float(devis.price_ht) if devis.price_ht is not None else appel_offres.montant_ht
             new_ttc = float(devis.price_ttc) if devis.price_ttc is not None else appel_offres.montant_ttc
-            if (appel_offres.montant_ht == new_ht and appel_offres.montant_ttc == new_ttc):
+            if appel_offres.montant_ht == new_ht and appel_offres.montant_ttc == new_ttc:
                 result['skipped'] += 1
                 result['details'].append({
                     'id': appel_offres.id,

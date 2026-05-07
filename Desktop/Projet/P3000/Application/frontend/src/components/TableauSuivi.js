@@ -88,9 +88,13 @@ const PaiementModal = ({ open, onClose, situation, onSubmit }) => {
     if (situation) {
       // Si la situation n'a pas de date de paiement réelle, préremplir avec la date du jour
       const dateAujourdhui = new Date().toISOString().split("T")[0];
-      // Préremplir le montant reçu avec montant_reel_ht s'il existe, sinon avec montant_ht_mois (montant HT situation)
+      // Préremplir le montant reçu avec montant_reel_ht s'il existe,
+      // sinon avec le net à payer (montant_apres_retenues), puis fallback montant_ht_mois.
       setMontantRecu(
-        situation.montant_reel_ht || situation.montant_ht_mois || ""
+        situation.montant_reel_ht ||
+          situation.montant_apres_retenues ||
+          situation.montant_ht_mois ||
+          ""
       );
       setDatePaiementReel(situation.date_paiement_reel || dateAujourdhui);
     }
@@ -505,11 +509,17 @@ const TableauSuivi = () => {
       verticalAlign: "middle",
     };
 
+    const getMontantReferenceEcart = (situation) => {
+      const netAPayer = parseFloat(situation.montant_apres_retenues);
+      if (!isNaN(netAPayer)) return netAPayer;
+
+      return parseFloat(situation.montant_ht_mois) || 0;
+    };
+
     const calculerEcartMois = (situation) => {
-      const montantHTSituation =
-        parseFloat(situation.montant_ht_mois) || 0;
+      const montantReference = getMontantReferenceEcart(situation);
       const montantRecuHT = parseFloat(situation.montant_reel_ht) || 0;
-      const ecart = montantRecuHT - montantHTSituation;
+      const ecart = montantRecuHT - montantReference;
 
       if (ecart === 0 || isNaN(ecart)) return "-";
 
@@ -548,7 +558,7 @@ const TableauSuivi = () => {
             ecartMois:
               totaux.ecartMois +
               (parseFloat(situation.montant_reel_ht || 0) -
-                parseFloat(situation.montant_ht_mois || 0)),
+                getMontantReferenceEcart(situation)),
           };
         },
         {
@@ -642,7 +652,7 @@ const TableauSuivi = () => {
                       : ligne.description}
                   </TableCell>
                 ))}
-                <TableCell sx={{ ...commonCellStyle }}>Net à payer</TableCell>
+                <TableCell sx={{ ...commonCellStyle }}>HT à payer</TableCell>
                 <TableCell sx={{ ...commonCellStyle }}>
                   Situation Cumul HT
                 </TableCell>

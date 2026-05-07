@@ -891,7 +891,9 @@ const CreationDevis = () => {
           console.log("Création d'un nouveau client");
           const clientResponse = await axios.post("/api/client/", {
             ...pendingChantierData.client,
-            phone_Number: pendingChantierData.client.phone_Number.toString(),
+            phone_Number: pendingChantierData.client.phone_Number
+              ? pendingChantierData.client.phone_Number.toString()
+              : null,
           });
           clientId = clientResponse.data.id;
         }
@@ -1973,10 +1975,6 @@ const CreationDevis = () => {
   };
 
   const handleClientInfoSubmit = async (clientData) => {
-    if (!clientData.name || !clientData.surname) {
-      alert("Le nom et le prénom sont obligatoires");
-      return;
-    }
     if (!clientData) {
       console.error("clientData est undefined");
       return;

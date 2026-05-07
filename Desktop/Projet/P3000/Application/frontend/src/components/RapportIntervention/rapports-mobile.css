@@ -1,0 +1,11 @@
+/* Styles dedies a l'ecran /rapports-mobile (mobile et tablette). */
+
+.rapports-mobile-layout {
+  /* Safe area pour encoche / barre de navigation */
+  padding-bottom: max(env(safe-area-inset-bottom), 8px);
+}
+
+/* Zone scroll : evite que le contenu passe sous la bottom nav */
+.rapports-mobile-layout + .rapports-mobile-bottom-nav {
+  padding-bottom: env(safe-area-inset-bottom);
+}

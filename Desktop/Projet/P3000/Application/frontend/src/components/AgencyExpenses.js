@@ -27,6 +27,27 @@ import { useParams } from "react-router-dom";
 import { FaEdit, FaTrash, FaChevronRight, FaChevronDown } from "react-icons/fa";
 import { FilterCell, StyledTextField } from "../styles/tableStyles";
 
+/** Euros formatés localement (espaces milliers, virgule décimale), ex. 12 270,30 € */
+function formatMontantEuroFR(value) {
+  const n = Number(value);
+  if (!Number.isFinite(n)) return "0,00 €";
+  return new Intl.NumberFormat("fr-FR", {
+    style: "currency",
+    currency: "EUR",
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  }).format(n);
+}
+
+/** Montant utilisé pour totaux et affichage : montant_paye si suivi non nul, sinon amount (planning : amount uniquement). */
+function effectiveAgencyTableAmount(row) {
+  if (!row) return 0;
+  if (row.isPlanningRow) return parseFloat(row.amount) || 0;
+  const paye = row.montant_paye;
+  if (paye != null && paye !== "" && Number(paye) !== 0) return Number(paye);
+  return parseFloat(row.amount) || 0;
+}
+
 const AgencyExpenses = () => {
   const { agenceId } = useParams();
   const [expenses, setExpenses] = useState([]);
@@ -50,6 +71,9 @@ const AgencyExpenses = () => {
   const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
   const [expenseToDelete, setExpenseToDelete] = useState(null);
   const [yearlyTotal, setYearlyTotal] = useState(0);
+  /** Décomposition du total annuel (tableau vs planning, aligné dashboard sur la somme). */
+  const [yearlyTotalTableau, setYearlyTotalTableau] = useState(0);
+  const [yearlyTotalPlanning, setYearlyTotalPlanning] = useState(0);
   /** Totaux annuels par catégorie (dépenses saisies + planning agence sur 12 mois) */
   const [yearlyCategoryTotals, setYearlyCategoryTotals] = useState({});
   const [yearlyCategoryLoading, setYearlyCategoryLoading] = useState(false);
@@ -134,10 +158,16 @@ const AgencyExpenses = () => {
 
         const categoryMerged = {};
         let yearTotal = 0;
+        let sumTableau = 0;
+        let sumPlanning = 0;
         for (let i = 0; i < 12; i++) {
           const em = expMonths[i] || { total: 0, totals_by_category: [] };
           const sm = schedMonths[i] || { total_montant: 0 };
-          yearTotal += (Number(em.total) || 0) + (Number(sm.total_montant) || 0);
+          const tEm = Number(em.total) || 0;
+          const tSm = Number(sm.total_montant) || 0;
+          sumTableau += tEm;
+          sumPlanning += tSm;
+          yearTotal += tEm + tSm;
           (em.totals_by_category || []).forEach(({ category, total }) => {
             const c = category || "Autres";
             categoryMerged[c] = (categoryMerged[c] || 0) + (Number(total) || 0);
@@ -148,12 +178,16 @@ const AgencyExpenses = () => {
 
         setYearlyCategoryTotals(categoryMerged);
         setYearlyTotal(yearTotal);
+        setYearlyTotalTableau(sumTableau);
+        setYearlyTotalPlanning(sumPlanning);
         setPlanningAgence(planMonthRes.data);
       } catch (e) {
         console.error("Erreur chargement données annuelles/planning:", e);
         if (!cancelled) {
           setYearlyCategoryTotals({});
           setYearlyTotal(0);
+          setYearlyTotalTableau(0);
+          setYearlyTotalPlanning(0);
           setPlanningAgence(null);
         }
       } finally {
@@ -389,27 +423,46 @@ const AgencyExpenses = () => {
     return `${h.toFixed(2)} h`;
   };
 
+  const planningCommentKey = (comment) => {
+    const s = comment || "";
+    let h = 0;
+    for (let i = 0; i < s.length; i++) {
+      h = (Math.imul(31, h) + s.charCodeAt(i)) | 0;
+    }
+    return String(Math.abs(h));
+  };
+
   const planningRowsVirtual = useMemo(() => {
     if (!planningAgence?.details?.length) return [];
-    return planningAgence.details.map((row) => ({
-      id: `planning-agence-${row.agent_id}`,
-      description: `${row.agent_nom} — planning agence (${formatHeuresCommeResume(
+    return planningAgence.details.map((row, idx) => {
+      const cmt = (row.comment || "").trim();
+      const suffix = planningCommentKey(cmt);
+      const chantierLabel = row.chantier_nom ? `${row.chantier_nom} — ` : "";
+      const heuresLabel = formatHeuresCommeResume(
         sumHeuresPlanningAgent(row),
         row.type_paiement
-      )})`,
-      category: "Planning agence",
-      amount: sumMontantPlanningAgent(row),
-      isPlanningRow: true,
-    }));
+      );
+      return {
+        id: `planning-agence-${row.agent_id}-${suffix}-${idx}`,
+        // Description : agent + chantier (si multi-agence) + heures — le texte planning reste en colonne Commentaire
+        description: `${row.agent_nom} — ${chantierLabel}${heuresLabel}`,
+        planningComment: cmt,
+        category: "Planning agence",
+        amount: sumMontantPlanningAgent(row),
+        isPlanningRow: true,
+      };
+    });
   }, [planningAgence]);
 
   const planningRowsFiltered = useMemo(() => {
     return planningRowsVirtual.filter((row) => {
-      if (
-        filters.description &&
-        !row.description.toLowerCase().includes(filters.description.toLowerCase())
-      ) {
-        return false;
+      if (filters.description) {
+        const q = filters.description.toLowerCase();
+        const inDesc = row.description.toLowerCase().includes(q);
+        const inPlanningComment =
+          row.isPlanningRow &&
+          (row.planningComment || "").toLowerCase().includes(q);
+        if (!inDesc && !inPlanningComment) return false;
       }
       if (
         filters.category &&
@@ -475,7 +528,7 @@ const AgencyExpenses = () => {
     const result = [...standaloneRows];
     
     Object.entries(agentGroups).forEach(([key, group]) => {
-      const totalAmount = group.rows.reduce((sum, r) => sum + (parseFloat(r.amount) || 0), 0);
+      const totalAmount = group.rows.reduce((sum, r) => sum + effectiveAgencyTableAmount(r), 0);
       
       // Ligne de header (total agent)
       result.push({
@@ -522,11 +575,13 @@ const AgencyExpenses = () => {
     return rows;
   }, [yearlyCategoryTotals]);
 
-  const calculateMonthlyTotal = () => {
+  /** Total mensuel : une seule fois chaque ligne réelle (pas les en-têtes de groupe qui dupliquent la somme). */
+  const monthlyTotalDisplayed = useMemo(() => {
     return tableRowsCombined.reduce((total, row) => {
-      return total + parseFloat(row.amount || 0);
+      if (row.isGroupHeader) return total;
+      return total + effectiveAgencyTableAmount(row);
     }, 0);
-  };
+  }, [tableRowsCombined]);
 
 
   const getExpenseCommentaire = (expense) => {
@@ -760,7 +815,7 @@ const AgencyExpenses = () => {
                       align="center"
                       sx={{ fontWeight: 700, color: "rgba(27, 120, 188, 1)", fontSize: "0.9rem" }}
                     >
-                      {parseFloat(row.amount).toFixed(2)} €
+                      {formatMontantEuroFR(effectiveAgencyTableAmount(row))}
                     </TableCell>
                     <TableCell />
                     <TableCell />
@@ -824,10 +879,24 @@ const AgencyExpenses = () => {
                       {row.category}
                     </TableCell>
                     <TableCell align="center" sx={{ color: sourceColor }}>
-                      {parseFloat(row.amount).toFixed(2)} €
+                      {formatMontantEuroFR(effectiveAgencyTableAmount(row))}
                     </TableCell>
                     <TableCell sx={{ minWidth: 160, maxWidth: 280, verticalAlign: "top" }}>
-                      {(row.isPlanningRow || row.category === "Prime") ? null : (
+                      {row.isPlanningRow ? (
+                        <Typography
+                          variant="body2"
+                          sx={{
+                            fontSize: "0.82rem",
+                            color: "#555",
+                            lineHeight: 1.4,
+                            whiteSpace: "pre-wrap",
+                            wordBreak: "break-word",
+                            py: 0.5,
+                          }}
+                        >
+                          {row.planningComment ? row.planningComment : "—"}
+                        </Typography>
+                      ) : row.category === "Prime" ? null : (
                         <TextField
                           size="small"
                           variant="standard"
@@ -903,7 +972,7 @@ const AgencyExpenses = () => {
                   </TableCell>
                   <TableCell align="center">{row.category}</TableCell>
                   <TableCell align="center">
-                    {parseFloat(row.amount).toFixed(2)} €
+                    {formatMontantEuroFR(effectiveAgencyTableAmount(row))}
                   </TableCell>
                   <TableCell sx={{ minWidth: 160, maxWidth: 280, verticalAlign: "top" }}>
                     <TextField
@@ -955,7 +1024,7 @@ const AgencyExpenses = () => {
                 align="center"
                 sx={{ fontWeight: "bold", color: "rgba(27, 120, 188, 1)" }}
               >
-                {calculateMonthlyTotal().toFixed(2)} €
+                {formatMontantEuroFR(monthlyTotalDisplayed)}
               </TableCell>
               <TableCell />
               <TableCell />
@@ -1003,6 +1072,11 @@ const AgencyExpenses = () => {
               <Typography variant="caption" sx={{ color: "text.secondary", display: "block", mt: 0.35 }}>
                 Dépenses saisies + planning agence (12 mois)
               </Typography>
+              <Typography variant="caption" sx={{ color: "text.secondary", display: "block", mt: 0.5, lineHeight: 1.4 }}>
+                Détail : tableau mensuel {formatMontantEuroFR(yearlyTotalTableau)} · planning{" "}
+                {formatMontantEuroFR(yearlyTotalPlanning)}
+                {" (le dashboard « dépenses agence » reprend la même logique sur l'année ou la période filtrée)"}
+              </Typography>
             </Box>
             <Box
               sx={{
@@ -1022,7 +1096,7 @@ const AgencyExpenses = () => {
                   lineHeight: 1.15,
                 }}
               >
-                {yearlyTotal.toFixed(2)} €
+                {formatMontantEuroFR(yearlyTotal)}
               </Typography>
               <Box
                 sx={{
@@ -1159,7 +1233,7 @@ const AgencyExpenses = () => {
                       bgcolor: "rgba(27, 120, 188, 0.08)",
                     }}
                   >
-                    {total.toFixed(2)} €
+                    {formatMontantEuroFR(total)}
                   </Typography>
                 </Box>
               ))}

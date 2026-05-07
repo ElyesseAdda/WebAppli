@@ -77,7 +77,8 @@ class PDFManager:
             'rapport_chantier': 'Documents_Execution',
             'contrat_sous_traitance': 'SOUS_TRAITANT',
             'avenant_sous_traitance': 'SOUS_TRAITANT',
-            'certificat_paiement': 'SOUS_TRAITANT'
+            'certificat_paiement': 'SOUS_TRAITANT',
+            'rapport_intervention': 'RAPPORT_INTERVENTION',
         }
 
     def _build_historique_destination_path(self, source_path: str) -> str:
@@ -265,6 +266,11 @@ class PDFManager:
             custom_path = kwargs['custom_path'].strip()
             # Nettoyer le chemin (supprimer les slashes en début/fin)
             custom_path = custom_path.strip('/')
+            # Mode "chemin complet" : on utilise custom_path tel quel sans ajouter
+            # de sous-dossier type. Utile pour les rapports d'intervention (Vigik+
+            # ou rapport classique) dont le dossier cible est déjà connu.
+            if kwargs.get('custom_path_is_full'):
+                return custom_path
             # Déterminer le sous-dossier selon le type de document et le contexte
             # Pour les appels d'offres avec devis_marche, utiliser DEVIS/DEVIS_MARCHE
             if document_type == 'devis_marche' and ('appel_offres_id' in kwargs or 'appel_offres_name' in kwargs):

@@ -30,6 +30,7 @@ const ROUTE_TITLES = [
   { path: "/TableauSuivi", title: "Tableau suivi" },
   { path: "/PlanningContainer", title: "Planning" },
   { path: "/CalendrierAgentContainer", title: "Calendrier agents" },
+  { path: "/TableauPointage", title: "Tableau de pointage" },
   { path: "/AgentCardContainer", title: "Agents" },
   { path: "/AgencyExpenses", title: "Frais d'agence" },
   { path: "/agence/:agenceId/expenses", title: "Frais d'agence" },

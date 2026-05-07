@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState } from "react";
+import React, { createContext, useCallback, useContext, useState } from "react";
 
 // Création du contexte pour les filtres du Dashboard
 const DashboardFiltersContext = createContext();
@@ -16,16 +16,55 @@ export const useDashboardFilters = () => {
 
 // Provider des filtres du Dashboard
 export const DashboardFiltersProvider = ({ children }) => {
+  const currentYear = new Date().getFullYear();
   // État pour l'année sélectionnée (par défaut : année courante)
-  const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
-  
+  const [selectedYear, setSelectedYear] = useState(currentYear);
+  // Années de comparaison (multi-sélection)
+  const [comparisonYears, setComparisonYears] = useState([]);
+  // Période personnalisée au format YYYY-MM
+  const [periodStart, setPeriodStart] = useState("");
+  const [periodEnd, setPeriodEnd] = useState("");
+
   // État pour gérer l'accordéon ouvert (un seul à la fois)
   const [openAccordion, setOpenAccordion] = useState(null);
+
+  // Sélection des agences pour le montant de la carte « Dépenses agence »
+  // null = défaut (première agence par id dans le breakdown) ; [] = aucune (0 € + consigne)
+  const [depensesAgenceIncludedAgenceIds, setDepensesAgenceIncludedAgenceIds] = useState(null);
+
+  const clearDepensesAgenceSelection = useCallback(() => {
+    setDepensesAgenceIncludedAgenceIds(null);
+  }, []);
 
   // Fonction pour mettre à jour l'année
   const updateYear = (year) => {
     setSelectedYear(year);
   };
+
+  const updateComparisonYears = (years) => {
+    const normalizedYears = (years || [])
+      .map((year) => Number(year))
+      .filter((year) => !Number.isNaN(year));
+    setComparisonYears(normalizedYears);
+  };
+
+  const updatePeriod = (start, end) => {
+    setPeriodStart(start || "");
+    setPeriodEnd(end || "");
+  };
+
+  const clearPeriod = () => {
+    setPeriodStart("");
+    setPeriodEnd("");
+  };
+
+  /** Mois YYYY-MM mis en avant sur le graphique CA ; null = stats sur toute la période filtrée. */
+  const [chartFocusMonthKey, setChartFocusMonthKey] = useState(null);
+
+  const toggleChartFocusMonthKey = useCallback((ymKey) => {
+    if (!ymKey || !/^\d{4}-\d{2}$/.test(String(ymKey))) return;
+    setChartFocusMonthKey((prev) => (prev === ymKey ? null : ymKey));
+  }, []);
 
   // Fonction pour ouvrir/fermer un accordéon
   const toggleAccordion = (accordionId) => {
@@ -36,8 +75,20 @@ export const DashboardFiltersProvider = ({ children }) => {
   const value = {
     selectedYear,
     updateYear,
+    comparisonYears,
+    updateComparisonYears,
+    periodStart,
+    periodEnd,
+    updatePeriod,
+    clearPeriod,
     openAccordion,
     toggleAccordion,
+    depensesAgenceIncludedAgenceIds,
+    setDepensesAgenceIncludedAgenceIds,
+    clearDepensesAgenceSelection,
+    chartFocusMonthKey,
+    setChartFocusMonthKey,
+    toggleChartFocusMonthKey,
   };
 
   return (

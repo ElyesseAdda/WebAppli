@@ -1,533 +1,220 @@
 #!/bin/bash
 
-# Script de déploiement robuste pour P3000 Production
-# Usage: ./deploy_production.sh ou p3000-deploy
-# Auteur: Assistant IA
-# Version: 2.0
+# Script de déploiement P3000 Production
+# Usage: ./deploy_production.sh  ou  p3000-deploy
 
-set -e  # Arrêter le script en cas d'erreur
+set -e
 
+# =============================================================================
 # Configuration
+# =============================================================================
 PROJECT_DIR="/var/www/p3000/Desktop/Projet/P3000/Application"
 VENV_PATH="/root/venv"
 ENV_BACKUP_DIR="/root/p3000-env-backup"
 PRODUCTION_ENV_FILE="$ENV_BACKUP_DIR/.env.production"
-STATIC_BACKUP_DIR="/var/backups/p3000-static"
-TIMESTAMP=$(date +"%Y%m%d_%H%M%S")
-BACKUP_NAME="backup_${TIMESTAMP}"
 
-# Couleurs pour les logs
-RED='\033[0;31m'
-GREEN='\033[0;32m'
-YELLOW='\033[1;33m'
-BLUE='\033[0;34m'
-NC='\033[0m' # No Color
+# Couleurs
+RED='\033[0;31m'; GREEN='\033[0;32m'; YELLOW='\033[1;33m'
+BLUE='\033[0;34m'; NC='\033[0m'
 
-# Fonction de logging
-log() {
-    echo -e "${BLUE}[$(date '+%Y-%m-%d %H:%M:%S')]${NC} $1"
-}
+log()         { echo -e "${BLUE}[$(date '+%H:%M:%S')]${NC} $1"; }
+log_ok()      { echo -e "${GREEN}[$(date '+%H:%M:%S')] ✅ $1${NC}"; }
+log_warn()    { echo -e "${YELLOW}[$(date '+%H:%M:%S')] ⚠️  $1${NC}"; }
+log_error()   { echo -e "${RED}[$(date '+%H:%M:%S')] ❌ $1${NC}"; exit 1; }
 
-# Fonction pour activer l'environnement virtuel
+# =============================================================================
+# Activation du venv (toujours forcer le bon venv)
+# =============================================================================
 activate_venv() {
-    if [ -z "$VIRTUAL_ENV" ]; then
-        source "$VENV_PATH/bin/activate"
-        log "🐍 Environnement virtuel activé"
-    fi
+    source "$VENV_PATH/bin/activate"
+    export DJANGO_SETTINGS_MODULE=Application.settings_production
+    log "🐍 Venv activé : $VENV_PATH"
 }
 
-log_success() {
-    echo -e "${GREEN}[$(date '+%Y-%m-%d %H:%M:%S')] ✅ $1${NC}"
-}
-
-log_warning() {
-    echo -e "${YELLOW}[$(date '+%Y-%m-%d %H:%M:%S')] ⚠️  $1${NC}"
-}
-
-log_error() {
-    echo -e "${RED}[$(date '+%Y-%m-%d %H:%M:%S')] ❌ $1${NC}"
-}
-
-# Fonction de vérification des prérequis
+# =============================================================================
+# Vérification des prérequis
+# =============================================================================
 check_prerequisites() {
-    log "🔍 Vérification des prérequis..."
-    
-    # Vérifier que nous sommes sur le serveur de production
-    if [ ! -d "$PROJECT_DIR" ]; then
-        log_error "Répertoire du projet non trouvé: $PROJECT_DIR"
-        exit 1
-    fi
-    
-    # Vérifier l'environnement virtuel
-    if [ ! -d "$VENV_PATH" ]; then
-        log_error "Environnement virtuel non trouvé: $VENV_PATH"
-        exit 1
-    fi
-    
-    # Créer le répertoire de sauvegarde des env s'il n'existe pas
+    log "🔍 Vérification des prérequis P3000..."
+    [ -d "$PROJECT_DIR" ] || log_error "Répertoire projet non trouvé : $PROJECT_DIR"
+    [ -d "$VENV_PATH" ]   || log_error "Venv non trouvé : $VENV_PATH"
     mkdir -p "$ENV_BACKUP_DIR"
-    
-    log_success "Prérequis vérifiés"
+    log_ok "Prérequis OK"
 }
 
-# Fonction de sauvegarde de l'environnement de production
-backup_production_env() {
-    log "💾 Sauvegarde de l'environnement de production..."
-    
+# =============================================================================
+# Sauvegarde de l'environnement de production
+# =============================================================================
+backup_env() {
+    log "💾 Sauvegarde de l'environnement..."
     cd "$PROJECT_DIR"
-    
-    # Si c'est la première fois, créer le fichier de production
     if [ ! -f "$PRODUCTION_ENV_FILE" ] && [ -f ".env" ]; then
-        log "📄 Première sauvegarde - création du fichier de production permanent"
         cp .env "$PRODUCTION_ENV_FILE"
-        log_success "Fichier d'environnement de production créé: $PRODUCTION_ENV_FILE"
+        log_ok "Fichier .env.production créé"
     elif [ -f ".env" ]; then
-        # Sauvegarder la version actuelle avec timestamp
         cp .env "$ENV_BACKUP_DIR/.env.backup.$(date +%Y%m%d_%H%M%S)"
-        log_success "Environnement sauvegardé avec timestamp"
+        log_ok "Environnement sauvegardé"
     fi
 }
 
-# Fonction de déploiement du code
+# =============================================================================
+# Mise à jour du code depuis Git (branche main uniquement)
+# =============================================================================
 deploy_code() {
-    log "🚀 Déploiement du code depuis Git..."
-    
+    log "🚀 Mise à jour du code depuis Git (branche: main)..."
     cd "$PROJECT_DIR"
-    
-    # Nettoyer les fichiers temporaires
-    log "🧹 Nettoyage des fichiers temporaires..."
     find . -name "*.pyc" -delete 2>/dev/null || true
     find . -name "__pycache__" -type d -exec rm -rf {} + 2>/dev/null || true
-    
-    # Récupérer les dernières modifications
-    log "📡 Récupération des dernières modifications..."
     git fetch origin
-    
-    # Vérifier s'il y a des modifications locales non commitées
-    if ! git diff-index --quiet HEAD --; then
-        log_warning "Modifications locales détectées, elles seront perdues"
-    fi
-    
-    # Reset hard vers la dernière version de main
-    log "🔄 Synchronisation forcée avec origin/main..."
+    git checkout main
     git reset --hard origin/main
-    
-    # Vérifier que nous sommes bien sur la dernière version
-    LOCAL_COMMIT=$(git rev-parse HEAD)
-    REMOTE_COMMIT=$(git rev-parse origin/main)
-    
-    if [ "$LOCAL_COMMIT" = "$REMOTE_COMMIT" ]; then
-        log_success "Code synchronisé avec la dernière version de main ($LOCAL_COMMIT)"
-    else
-        log_error "Échec de la synchronisation avec origin/main"
-        exit 1
-    fi
+    local commit
+    commit=$(git log --oneline -1)
+    log_ok "Code synchronisé — $commit"
 }
 
-# Fonction de restauration de l'environnement
-restore_production_env() {
+# =============================================================================
+# Restauration du .env de production (après git reset qui peut l'écraser)
+# =============================================================================
+restore_env() {
     log "🔧 Restauration de l'environnement de production..."
-    
     cd "$PROJECT_DIR"
-    
     if [ -f "$PRODUCTION_ENV_FILE" ]; then
         cp "$PRODUCTION_ENV_FILE" .env
-        log_success "Environnement de production restauré"
+        log_ok "Environnement restauré"
     else
-        log_error "Fichier d'environnement de production non trouvé: $PRODUCTION_ENV_FILE"
-        log_error "Veuillez créer manuellement le fichier .env avec les bonnes variables de production"
-        exit 1
+        log_error "Fichier $PRODUCTION_ENV_FILE non trouvé — créez-le d'abord"
     fi
 }
 
-# Fonction de mise à jour des dépendances
-update_dependencies() {
-    log "📦 Mise à jour des dépendances Python..."
-    
+# =============================================================================
+# Mise à jour des dépendances Python
+# =============================================================================
+update_python_deps() {
+    log "🐍 Mise à jour des dépendances Python..."
     cd "$PROJECT_DIR"
     activate_venv
-    
-    pip install --upgrade pip
-    pip install -r requirements.txt
-    
-    log_success "Dépendances Python mises à jour"
+    pip install -r requirements.txt -q
+    log_ok "Dépendances Python à jour"
 }
 
-# Fonction d'installation de Node.js
-install_nodejs() {
-    log "📦 Vérification et installation de Node.js..."
-    
-    # Vérifier si Node.js est installé
-    if ! command -v node &> /dev/null; then
-        log "🔧 Installation de Node.js 18.x..."
-        
-        # Installer Node.js 18.x (LTS)
-        curl -fsSL https://deb.nodesource.com/setup_18.x | sudo -E bash -
-        apt-get install -y nodejs
-        
-        log_success "Node.js installé avec succès"
-    else
-        log_success "Node.js déjà installé: $(node --version)"
-    fi
-    
-    # Vérifier npm
-    if ! command -v npm &> /dev/null; then
-        log_error "npm non trouvé après installation de Node.js"
-        exit 1
-    else
-        log_success "npm disponible: $(npm --version)"
-    fi
-}
-
-# Fonction de build du frontend avec hachage et synchronisation
+# =============================================================================
+# Build du frontend React (webpack)
+# Webpack écrit directement dans frontend/static/frontend/ — pas besoin de copier
+# =============================================================================
 build_frontend() {
-    log "🎨 Build du frontend avec hachage et synchronisation..."
-    
+    log "🎨 Build du frontend React..."
     cd "$PROJECT_DIR/frontend"
-    
-    # Installer les dépendances Node.js (y compris dev pour le build)
-    log "📦 Installation des dépendances npm..."
-    npm install
-    
-    # Vérifier que webpack est configuré pour le hachage
-    if ! grep -q "contenthash" webpack.config.js; then
-        log_warning "Webpack n'est pas configuré pour le hachage - les fichiers ne seront pas hashés"
-    fi
-    
-    # Build de production avec hachage
-    log "🔨 Build de production avec hachage..."
+
+    npm install --silent
     npm run build
-    
-    # Vérifier que le build a généré les fichiers
-    if [ ! -d "static/frontend" ]; then
-        log_error "Le build React n'a pas généré le dossier static/frontend"
-        exit 1
+
+    # Vérifier que le build a produit les fichiers attendus
+    if [ -z "$(ls -A static/frontend/*.js 2>/dev/null)" ]; then
+        log_error "Aucun fichier JS trouvé dans frontend/static/frontend/ après le build"
     fi
-    
-    log_success "Build React terminé"
-    
-    # --- Synchronisation des fichiers React vers Django ---
-    log "🔄 Synchronisation des fichiers React vers Django..."
-    
-    # Créer le répertoire de destination
-    STATIC_DEST="$PROJECT_DIR/frontend/static/frontend"
-    mkdir -p "$STATIC_DEST"
-    
-    # Copier les fichiers React vers Django (ils sont déjà dans static/frontend)
-    log "📁 Copie des fichiers React vers Django..."
-    cp -r static/frontend/* "$STATIC_DEST/"
-    
-    # Copier le manifest si il existe
-    if [ -f "static/frontend/asset-manifest.json" ]; then
-        log "📄 Copie du manifest React..."
-        cp static/frontend/asset-manifest.json "$STATIC_DEST/"
-    else
-        log_info "Aucun manifest React trouvé (optionnel)"
-    fi
-    
-    # Vérifier que les fichiers ont été copiés
-    if [ ! -d "$STATIC_DEST" ] || [ -z "$(ls -A "$STATIC_DEST"/*.js 2>/dev/null)" ]; then
-        log_error "Aucun fichier JS copié vers Django"
-        exit 1
-    fi
-    
-    log_success "Fichiers React synchronisés vers Django:"
-    ls -la "$STATIC_DEST"/*.js "$STATIC_DEST"/*.css 2>/dev/null || true
-    
+
+    log_ok "Frontend buildé"
     cd "$PROJECT_DIR"
-    log_success "Frontend buildé et synchronisé avec succès"
 }
 
-# Fonction de gestion de Django avec hachage
+# =============================================================================
+# Migrations Django, collectstatic, fichiers complémentaires
+# =============================================================================
 manage_django() {
-    log "🗄️ Gestion Django avec hachage..."
-    
+    log "🗄️  Migrations et fichiers statiques..."
     cd "$PROJECT_DIR"
     activate_venv
-    
-    # Créer les dossiers staticfiles et staticfiles/frontend
-    log "📁 Création des dossiers staticfiles..."
+
+    # Migrations
+    python manage.py migrate --noinput
+
+    # Créer les dossiers nécessaires avant collectstatic
     mkdir -p staticfiles/frontend
-    log_success "Dossiers staticfiles et staticfiles/frontend créés"
-    
-    # Vérifier et corriger les permissions et propriétaire du dossier staticfiles
-    log "🔐 Vérification des permissions et propriétaire du dossier staticfiles..."
-    chmod 755 staticfiles
-    chmod 755 staticfiles/frontend
-    if [ -d "staticfiles/frontend" ]; then
-        chmod -R 755 staticfiles/frontend
-    fi
-    
-    # Définir le bon propriétaire pour les dossiers staticfiles
-    log "👤 Définition du propriétaire www-data pour staticfiles..."
-    sudo chown -R www-data:www-data staticfiles/
-    log_success "Permissions et propriétaire du dossier staticfiles vérifiés"
-    
-    # Vérifier que ManifestStaticFilesStorage est configuré
-    export DJANGO_SETTINGS_MODULE=Application.settings_production
-    if ! python -c "from django.conf import settings; print(settings.STATICFILES_STORAGE)" | grep -q "ManifestStaticFilesStorage"; then
-        log_warning "ManifestStaticFilesStorage non configuré - le hachage Django ne fonctionnera pas"
-    fi
-    
-    # Collecter les fichiers statiques avec hachage
-    log "📁 Collecte des fichiers statiques avec hachage..."
-    export DJANGO_SETTINGS_MODULE=Application.settings_production
-    python manage.py collectstatic --noinput --clear --verbosity 2
-    
-    # Vérifier que le manifest.json a été généré
-    if [ ! -f "staticfiles/staticfiles.json" ]; then
-        log_error "Manifest staticfiles.json non généré"
-        exit 1
+
+    # Collecte des fichiers statiques
+    python manage.py collectstatic --noinput --clear
+
+    # Copier les fichiers qui ne sont pas dans STATICFILES_DIRS
+    # (frontend/static/ root n'est pas inclus dans les settings, seulement frontend/static/frontend/)
+    for f in manifest.json manifest_rapports.json; do
+        if [ -f "frontend/static/$f" ]; then
+            cp -f "frontend/static/$f" "staticfiles/$f"
+            log "   → staticfiles/$f copié"
+        fi
+    done
+
+    # Copier les CSS client-spécifiques (couleurs, layout, etc.)
+    if [ -d "frontend/static/css" ]; then
+        mkdir -p staticfiles/css
+        cp -rf frontend/static/css/. staticfiles/css/
+        log "   → staticfiles/css/ synchronisé"
     fi
 
-    log_success "Manifest généré avec $(python -c "import json; print(len(json.load(open('staticfiles/staticfiles.json'))))") fichiers"
-    
-    # Vérifier que les dossiers staticfiles existent et ont les bonnes permissions
-    log "🔍 Vérification finale des dossiers staticfiles..."
-    if [ ! -d "staticfiles" ]; then
-        log_error "Dossier staticfiles manquant après collectstatic"
-        exit 1
-    fi
-    
-    if [ ! -d "staticfiles/frontend" ]; then
-        log_error "Dossier staticfiles/frontend manquant après collectstatic"
-        exit 1
-    fi
-    
-    # Vérifier les permissions finales
-    sudo chown -R www-data:www-data staticfiles/
+    # Permissions pour Nginx/Gunicorn
+    chown -R www-data:www-data staticfiles/
     chmod -R 755 staticfiles/
-    log_success "Dossiers staticfiles vérifiés et permissions corrigées"
-    
-    # Vérifier que les fichiers référencés dans le template existent
-    TEMPLATE_FILE="frontend/templates/frontend/index.html"
-    if [ -f "$TEMPLATE_FILE" ]; then
-        log "🔍 Vérification des fichiers référencés dans le template..."
-        STATIC_FILES=$(grep -o "{% static '[^']*' %}" "$TEMPLATE_FILE" | sed "s/{% static '//g" | sed "s/' %}//g")
-        
-        for file in $STATIC_FILES; do
-            if [ ! -f "staticfiles/$file" ]; then
-                log_error "Fichier statique manquant: $file"
-                exit 1
-            fi
-        done
-        
-        log_success "Tous les fichiers référencés dans le template existent"
-    fi
-    
-    # Appliquer les migrations
-    log "🗄️ Application des migrations..."
-    export DJANGO_SETTINGS_MODULE=Application.settings_production
-    python manage.py migrate
-    
-    log_success "Gestion Django terminée avec hachage"
+
+    log_ok "Django configuré"
 }
 
-# Fonction de génération de version de déploiement
-generate_deploy_version() {
-    log "🔄 Génération de la version de déploiement..."
-    
-    # On est déjà dans PROJECT_DIR depuis manage_django()
-    # L'environnement virtuel est déjà activé
-    
-    # Exécuter le script de génération de version
-    if [ -f "deploy_version.py" ]; then
-        log "📝 Exécution de deploy_version.py..."
-        python deploy_version.py
-        log_success "Version de déploiement générée"
-    else
-        log_warning "Script deploy_version.py non trouvé - version par défaut utilisée"
-    fi
-}
-
-# Fonction de redémarrage des services
+# =============================================================================
+# Redémarrage des services
+# =============================================================================
 restart_services() {
-    log "🔄 Redémarrage des services..."
-    
-    # Arrêter Gunicorn
-    log "🛑 Arrêt de Gunicorn..."
-    systemctl stop gunicorn || log_warning "Gunicorn était déjà arrêté"
-    
-    # Attendre un peu
+    log "🔄 Redémarrage du service P3000..."
+    systemctl restart gunicorn
     sleep 2
-    
-    # Démarrer Gunicorn
-    log "🚀 Démarrage de Gunicorn..."
-    systemctl start gunicorn
-    
-    # Vérifier le statut de Gunicorn
     if systemctl is-active --quiet gunicorn; then
-        log_success "Gunicorn redémarré avec succès"
+        log_ok "Gunicorn actif"
     else
-        log_error "Échec du redémarrage de Gunicorn"
-        systemctl status gunicorn --no-pager
-        exit 1
+        log_error "Gunicorn n'a pas démarré — vérifiez : journalctl -u gunicorn -n 50"
     fi
-    
-    # Recharger Nginx (pas de restart complet nécessaire)
-    log "🔄 Rechargement de Nginx..."
-    if systemctl reload nginx; then
-        log_success "Nginx rechargé avec succès"
-    else
-        log_warning "Échec du rechargement de Nginx"
-        # Essayer un restart complet en cas d'échec
-        log "🔄 Tentative de restart complet de Nginx..."
-        systemctl restart nginx
-    fi
+    systemctl reload nginx && log_ok "Nginx rechargé"
 }
 
-# Fonction de sauvegarde des fichiers statiques
-backup_static_files() {
-    log "💾 Sauvegarde des fichiers statiques..."
-    
-    cd "$PROJECT_DIR"
-    
-    # Créer le répertoire de sauvegarde
-    mkdir -p "$STATIC_BACKUP_DIR/$BACKUP_NAME"
-    
-    # Sauvegarder les fichiers statiques existants
-    if [ -d "staticfiles" ]; then
-        cp -r staticfiles "$STATIC_BACKUP_DIR/$BACKUP_NAME/"
-        log_success "Fichiers statiques sauvegardés"
-    fi
-    
-    # Sauvegarder les templates
-    if [ -d "frontend/templates" ]; then
-        cp -r frontend/templates "$STATIC_BACKUP_DIR/$BACKUP_NAME/"
-        log_success "Templates sauvegardés"
-    fi
-    
-    log_success "Sauvegarde créée: $BACKUP_NAME"
-}
-
-# Fonction de rollback
-rollback_deployment() {
-    log_error "Erreur détectée, démarrage du rollback..."
-    
-    if [ -d "$STATIC_BACKUP_DIR/$BACKUP_NAME" ]; then
-        log "🔄 Restauration de la sauvegarde $BACKUP_NAME"
-        
-        cd "$PROJECT_DIR"
-        
-        # Restaurer les fichiers statiques
-        if [ -d "$STATIC_BACKUP_DIR/$BACKUP_NAME/staticfiles" ]; then
-            rm -rf staticfiles
-            cp -r "$STATIC_BACKUP_DIR/$BACKUP_NAME/staticfiles" .
-            log_success "Fichiers statiques restaurés"
-        fi
-        
-        # Restaurer les templates
-        if [ -d "$STATIC_BACKUP_DIR/$BACKUP_NAME/templates" ]; then
-            rm -rf frontend/templates
-            cp -r "$STATIC_BACKUP_DIR/$BACKUP_NAME/templates" frontend/
-            log_success "Templates restaurés"
-        fi
-        
-        # Redémarrer les services (restart complet pour le rollback)
-        log "🔄 Redémarrage des services après rollback..."
-        systemctl restart gunicorn
-        systemctl restart nginx
-        log_success "Services redémarrés après rollback"
-        
-        log_warning "Rollback terminé. Vérifiez l'application."
-    else
-        log_error "Aucune sauvegarde trouvée pour le rollback"
-    fi
-    
-    exit 1
-}
-
-# Fonction de vérification post-déploiement
-post_deployment_check() {
+# =============================================================================
+# Vérification post-déploiement
+# =============================================================================
+post_check() {
     log "🔍 Vérification post-déploiement..."
-    
-    # Vérifier les services
-    if systemctl is-active --quiet gunicorn; then
-        log_success "✅ Gunicorn est actif"
+    systemctl is-active --quiet gunicorn && log_ok "Service P3000 : actif" || log_warn "Service P3000 : inactif"
+    systemctl is-active --quiet nginx    && log_ok "Nginx : actif"         || log_warn "Nginx : inactif"
+
+    local http_code
+    http_code=$(curl -sk -o /dev/null -w "%{http_code}" https://myp3000app.com/ 2>/dev/null || echo "000")
+    if [[ "$http_code" =~ ^(200|301|302|400|403)$ ]]; then
+        log_ok "Application accessible sur https://myp3000app.com (HTTP $http_code)"
     else
-        log_error "❌ Gunicorn n'est pas actif"
+        log_warn "Application non accessible (HTTP $http_code) — vérifiez les logs"
     fi
-    
-    if systemctl is-active --quiet nginx; then
-        log_success "✅ Nginx est actif"
-    else
-        log_warning "⚠️ Nginx n'est pas actif"
-    fi
-    
-    # Test de connectivité
-    log "🌐 Test de connectivité..."
-    if curl -s -o /dev/null -w "%{http_code}" http://localhost:8000 | grep -q "200"; then
-        log_success "Application accessible"
-    else
-        log_warning "Application non accessible, vérifiez les logs"
-    fi
-    
-    # Test des fichiers statiques
-    STATIC_TEST_FILE=$(find staticfiles -name "*.js" | head -1)
-    if [ -n "$STATIC_TEST_FILE" ]; then
-        STATIC_URL="/static/${STATIC_TEST_FILE#staticfiles/}"
-        if curl -s -o /dev/null -w "%{http_code}" "http://localhost:8000$STATIC_URL" | grep -q "200"; then
-            log_success "Fichiers statiques accessibles"
-        else
-            log_warning "Problème d'accès aux fichiers statiques"
-        fi
-    fi
-    
-    # Afficher les logs récents en cas de problème
-    log "📊 Statut des services:"
-    systemctl status gunicorn --no-pager -l
-    
-    log_success "🌐 Application disponible sur: https://myp3000app.com"
 }
 
-# Fonction principale
+# =============================================================================
+# Main
+# =============================================================================
 main() {
-    log "🚀 Début du déploiement P3000 Production v2.0 avec hachage"
-    
-    # Donner les permissions d'exécution à ce script
-    chmod +x "$0"
-    
-    # Étapes du déploiement
+    echo ""
+    echo -e "${BLUE}╔══════════════════════════════════════════════════╗${NC}"
+    echo -e "${BLUE}║  Déploiement P3000 — $(date '+%d/%m/%Y %H:%M')         ║${NC}"
+    echo -e "${BLUE}╚══════════════════════════════════════════════════╝${NC}"
+    echo ""
+
     check_prerequisites
-    backup_production_env
-    backup_static_files
+    backup_env
     deploy_code
-    restore_production_env
-    update_dependencies
-    install_nodejs
+    restore_env
+    update_python_deps
     build_frontend
     manage_django
-    generate_deploy_version
     restart_services
-    post_deployment_check
-    
-    # Nettoyage des anciennes sauvegardes (garder les 5 dernières)
-    log "🧹 Nettoyage des anciennes sauvegardes..."
-    cd "$STATIC_BACKUP_DIR"
-    ls -t | tail -n +6 | xargs -r rm -rf
-    log_success "Anciennes sauvegardes nettoyées"
-    
-    # Validation post-déploiement
-    log "🔍 Validation post-déploiement..."
-    if [ -f "validate_deployment.sh" ]; then
-        chmod +x validate_deployment.sh
-        if ./validate_deployment.sh; then
-            log_success "Validation post-déploiement réussie"
-        else
-            log_warning "Validation post-déploiement échouée - vérifiez manuellement"
-        fi
-    else
-        log_warning "Script de validation non trouvé - validation manuelle recommandée"
-    fi
-    
-    log_success "✅ Déploiement terminé avec succès!"
-    log "📝 Logs disponibles dans les journaux système (journalctl -u gunicorn)"
-    log "💾 Sauvegarde créée: $BACKUP_NAME"
-    log "🔍 Validation: ./validate_deployment.sh"
+    post_check
+
+    echo ""
+    log_ok "✅ Déploiement P3000 terminé avec succès !"
+    echo -e "   🌐 https://myp3000app.com"
+    echo -e "   📋 Logs : journalctl -u gunicorn -f"
+    echo ""
 }
 
-# Gestion des erreurs avec rollback
-trap 'rollback_deployment' ERR
-
-# Exécution du script principal
 main "$@"

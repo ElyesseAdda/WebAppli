@@ -495,6 +495,7 @@ const CreationSituation = ({ open, onClose, devis, chantier, onSuccess }) => {
   const [facturesCIE, setFacturesCIE] = useState([]);
   const [calculatedValues, setCalculatedValues] = useState(null);
   const [existingSituation, setExistingSituation] = useState(null);
+  const [pendingAvenantLignes, setPendingAvenantLignes] = useState(null);
 
   useEffect(() => {
     if (devis?.id) {
@@ -580,6 +581,40 @@ const CreationSituation = ({ open, onClose, devis, chantier, onSuccess }) => {
     }
   }, [avenants]);
 
+  const applyAvenantPercentages = (avenantsBase, lignesAvenantSource = []) => {
+    return (avenantsBase || []).map((avenant) => ({
+      ...avenant,
+      factures_ts: (avenant.factures_ts || []).map((ts) => {
+        const situationTs = (lignesAvenantSource || []).find(
+          (l) => l.facture_ts === ts.id
+        );
+        const pourcentage = situationTs
+          ? parseFloat(situationTs.pourcentage_actuel)
+          : 0;
+        return {
+          ...ts,
+          pourcentage_precedent: pourcentage,
+          pourcentage_actuel: pourcentage,
+          montant_ht: parseFloat(ts.montant_ht || 0),
+        };
+      }),
+    }));
+  };
+
+  // Hydrate les % des avenants dès que les avenants sont disponibles
+  useEffect(() => {
+    if (
+      !pendingAvenantLignes ||
+      !Array.isArray(avenants) ||
+      avenants.length === 0
+    ) {
+      return;
+    }
+
+    setAvenants(applyAvenantPercentages(avenants, pendingAvenantLignes));
+    setPendingAvenantLignes(null);
+  }, [avenants, pendingAvenantLignes]);
+
   useEffect(() => {
     if (open && chantier?.id && mois && annee) {
       const fetchSituationData = async () => {
@@ -624,29 +659,7 @@ const CreationSituation = ({ open, onClose, devis, chantier, onSuccess }) => {
             }));
             setStructure(newStructure);
 
-            // Mettre à jour les avenants
-            if (avenants.length > 0) {
-              const newAvenants = avenants.map((avenant) => ({
-                ...avenant,
-                factures_ts: (avenant.factures_ts || []).map((ts) => {
-                  const situationTs = currentSituation?.lignes_avenant?.find(
-                    (l) => l.facture_ts === ts.id
-                  );
-                  return {
-                    ...ts,
-                    pourcentage_precedent: situationTs
-                      ? parseFloat(situationTs.pourcentage_actuel)
-                      : 0,
-                    pourcentage_actuel: situationTs
-                      ? parseFloat(situationTs.pourcentage_actuel)
-                      : 0,
-                    montant_ht: parseFloat(ts.montant_ht || 0),
-                  };
-                }),
-              }));
-
-              setAvenants(newAvenants);
-            }
+            setPendingAvenantLignes(currentSituation?.lignes_avenant || []);
 
             // Mettre à jour les lignes supplémentaires
             if (currentSituation.lignes_supplementaires?.length > 0) {
@@ -702,29 +715,7 @@ const CreationSituation = ({ open, onClose, devis, chantier, onSuccess }) => {
               setStructure(newStructure);
 
               // Réinitialiser les avenants avec les pourcentages précédents
-              if (avenants.length > 0) {
-                const newAvenants = avenants.map((avenant) => ({
-                  ...avenant,
-                  factures_ts: (avenant.factures_ts || []).map((ts) => {
-                    const avenantPrecedent =
-                      situationPrecedente.lignes_avenant?.find(
-                        (l) => l.facture_ts === ts.id
-                      );
-                    return {
-                      ...ts,
-                      pourcentage_precedent: avenantPrecedent
-                        ? parseFloat(avenantPrecedent.pourcentage_actuel)
-                        : 0,
-                      pourcentage_actuel: avenantPrecedent
-                        ? parseFloat(avenantPrecedent.pourcentage_actuel)
-                        : 0,
-                      montant_ht: parseFloat(ts.montant_ht || 0),
-                      // Ne pas copier le montant du mois
-                    };
-                  }),
-                }));
-                setAvenants(newAvenants);
-              }
+              setPendingAvenantLignes(situationPrecedente.lignes_avenant || []);
 
               // Réinitialiser les lignes supplémentaires avec montants à 0
               if (situationPrecedente.lignes_supplementaires?.length > 0) {
@@ -741,6 +732,7 @@ const CreationSituation = ({ open, onClose, devis, chantier, onSuccess }) => {
               setExistingSituation(null);
             } else {
               setLastSituation(null);
+              setPendingAvenantLignes([]);
               resetSituationData();
             }
           }

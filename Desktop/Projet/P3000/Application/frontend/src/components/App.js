@@ -9,7 +9,7 @@ import {
   BrowserRouter as Router,
   Routes,
 } from "react-router-dom";
-import { useAuth } from "../hooks/useAuth";
+import { useAuth, userHasAppAdminAccess } from "../hooks/useAuth";
 import { useIsMobile } from "../hooks/useIsMobile";
 import "./../../static/css/app.css";
 import AgencyExpenses from "./AgencyExpenses";
@@ -40,6 +40,7 @@ import GlobalConflictModal from "./GlobalConflictModal";
 import Layout from "./Layout";
 import ListeBonCommande from "./ListeBonCommande";
 import ListeChantier from "./ListeChantier";
+import ListeClient from "./ListeClient";
 import ListeDevis from "./ListeDevis";
 import ListeFactures from "./ListeFactures";
 import ListeSituation from "./ListeSituation";
@@ -54,12 +55,20 @@ import PaiementsSousTraitantPage from "./PaiementsSousTraitantPage";
 import PlanningContainer from "./PlanningContainer";
 import StockForm from "./StockForm";
 import TableauSuivi from "./TableauSuivi";
+import TableauPointagePage from "./Pointage/TableauPointagePage";
 import Test from "./Test";
 import TestDragDrop from "./TestDragDrop";
 import TestDragSimple from "./TestDragSimple";
 import ChantiersDrivePaths from "./ChantiersDrivePaths";
 import PageTitleManager from "./PageTitleManager";
 import UsersManagement from "./UsersManagement";
+import AdminAgences from "./AdminAgences";
+import RapportsPage from "./RapportIntervention/RapportsPage";
+import RapportForm from "./RapportIntervention/RapportForm";
+import RapportPreviewPage from "./RapportIntervention/RapportPreviewPage";
+import RapportMobileLayout from "./RapportIntervention/RapportMobileLayout";
+import MobileHomePage from "./MobileHomePage";
+import DriveMobileLayout from "./DriveV2/DriveMobileLayout";
 
 // Créer un thème par défaut
 const theme = createTheme({
@@ -84,11 +93,12 @@ const ProtectedRoute = ({ children, isAuthenticated, isMobile }) => {
   return children;
 };
 
-const SuperuserRoute = ({ children, isAuthenticated, user }) => {
+/** Accès aux écrans réservés (ex. gestion utilisateurs) : superuser ou staff (admin minimum requis). */
+const AdminAppRoute = ({ children, isAuthenticated, user }) => {
   if (!isAuthenticated) {
     return <Navigate to="/login" replace />;
   }
-  if (!user?.is_superuser) {
+  if (!userHasAppAdminAccess(user)) {
     return <Navigate to="/" replace />;
   }
   return children;
@@ -150,7 +160,7 @@ function App() {
             path="/login"
             element={
               isAuthenticated ? (
-                <Navigate to={isMobile ? "/distributeurs" : "/"} replace />
+                <Navigate to={isMobile ? "/mobile-home" : "/"} replace />
               ) : isMobile ? (
                 // Version mobile : LoginMobile (PWA)
                 <LoginMobile onLoginSuccess={handleLoginSuccess} />
@@ -169,6 +179,24 @@ function App() {
                 <Layout user={user} onLogout={handleLogout}>
                   <Dashboard />
                 </Layout>
+              </ProtectedRoute>
+            }
+          />
+
+          <Route
+            path="/mobile-home"
+            element={
+              <ProtectedRoute isAuthenticated={isAuthenticated}>
+                <MobileHomePage />
+              </ProtectedRoute>
+            }
+          />
+
+          <Route
+            path="/drive-mobile"
+            element={
+              <ProtectedRoute isAuthenticated={isAuthenticated}>
+                <DriveMobileLayout />
               </ProtectedRoute>
             }
           />
@@ -354,6 +382,17 @@ function App() {
           />
 
           <Route
+            path="/TableauPointage"
+            element={
+              <ProtectedRoute isAuthenticated={isAuthenticated}>
+                <Layout user={user} onLogout={handleLogout}>
+                  <TableauPointagePage />
+                </Layout>
+              </ProtectedRoute>
+            }
+          />
+
+          <Route
             path="/StockForm"
             element={
               <ProtectedRoute isAuthenticated={isAuthenticated}>
@@ -424,6 +463,17 @@ function App() {
               <ProtectedRoute isAuthenticated={isAuthenticated}>
                 <Layout user={user} onLogout={handleLogout}>
                   <ListeSituation />
+                </Layout>
+              </ProtectedRoute>
+            }
+          />
+
+          <Route
+            path="/ListeClient"
+            element={
+              <ProtectedRoute isAuthenticated={isAuthenticated}>
+                <Layout user={user} onLogout={handleLogout}>
+                  <ListeClient />
                 </Layout>
               </ProtectedRoute>
             }
@@ -517,14 +567,27 @@ function App() {
             }
           />
 
+          <Route path="/Usermanagement" element={<Navigate to="/UsersManagement" replace />} />
+
           <Route
             path="/UsersManagement"
             element={
-              <SuperuserRoute isAuthenticated={isAuthenticated} user={user}>
+              <AdminAppRoute isAuthenticated={isAuthenticated} user={user}>
                 <Layout user={user} onLogout={handleLogout}>
                   <UsersManagement />
                 </Layout>
-              </SuperuserRoute>
+              </AdminAppRoute>
+            }
+          />
+
+          <Route
+            path="/admin/agences"
+            element={
+              <AdminAppRoute isAuthenticated={isAuthenticated} user={user}>
+                <Layout user={user} onLogout={handleLogout}>
+                  <AdminAgences />
+                </Layout>
+              </AdminAppRoute>
             }
           />
 
@@ -588,7 +651,7 @@ function App() {
                 <OnlyOfficeEditor
                   filePath={new URLSearchParams(window.location.search).get('file_path')}
                   fileName={new URLSearchParams(window.location.search).get('file_name')}
-                  mode="edit"
+                  mode={new URLSearchParams(window.location.search).get('mode') || 'edit'}
                 />
               </ProtectedRoute>
             }
@@ -634,6 +697,59 @@ function App() {
                 <Layout user={user} onLogout={handleLogout}>
                   <TestDragSimple />
                 </Layout>
+              </ProtectedRoute>
+            }
+          />
+
+          <Route
+            path="/RapportsIntervention"
+            element={
+              <ProtectedRoute isAuthenticated={isAuthenticated}>
+                <Layout user={user} onLogout={handleLogout}>
+                  <RapportsPage />
+                </Layout>
+              </ProtectedRoute>
+            }
+          />
+
+          <Route
+            path="/RapportIntervention/nouveau"
+            element={
+              <ProtectedRoute isAuthenticated={isAuthenticated}>
+                <Layout user={user} onLogout={handleLogout}>
+                  <RapportForm />
+                </Layout>
+              </ProtectedRoute>
+            }
+          />
+
+          <Route
+            path="/RapportIntervention/:id/preview"
+            element={
+              <ProtectedRoute isAuthenticated={isAuthenticated}>
+                <Layout user={user} onLogout={handleLogout}>
+                  <RapportPreviewPage />
+                </Layout>
+              </ProtectedRoute>
+            }
+          />
+
+          <Route
+            path="/RapportIntervention/:id"
+            element={
+              <ProtectedRoute isAuthenticated={isAuthenticated}>
+                <Layout user={user} onLogout={handleLogout}>
+                  <RapportForm />
+                </Layout>
+              </ProtectedRoute>
+            }
+          />
+
+          <Route
+            path="/rapports-mobile"
+            element={
+              <ProtectedRoute isAuthenticated={isAuthenticated}>
+                <RapportMobileLayout />
               </ProtectedRoute>
             }
           />

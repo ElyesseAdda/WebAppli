@@ -3,11 +3,17 @@ from rest_framework.routers import DefaultRouter
 from .Devis_views import preview_saved_devis_v2, preview_devis_v2
 from .SituationViews import preview_situation_v2
 # Import des vues du dashboard depuis le module dédié
-from .dashboard.views import DashboardViewSet, get_pending_payments, get_late_payments, get_situations_monthly_evolution
+from .dashboard.views import (
+    DashboardViewSet,
+    dashboard_settings,
+    get_pending_payments,
+    get_late_payments,
+    get_situations_monthly_evolution,
+)
 from .views import (
     dashboard_data, SocieteViewSet, ChantierViewSet, DevisViewSet, PartieViewSet, 
     SousPartieViewSet, LigneDetailViewSet, preview_devis, ClientViewSet, 
-    generate_pdf_from_preview, StockViewSet, AgentViewSet, PresenceViewSet, 
+    generate_pdf_from_preview, StockViewSet, AgentViewSet, PresenceViewSet, PointageMensuelViewSet,
     historique_stock, get_latest_code_produit, EventViewSet, delete_events_by_agent_and_period, 
     get_agents_with_work_days, update_days_present, recalculate_monthly_hours, assign_chantier, get_schedule,copy_schedule, 
     delete_schedule, update_schedule_comment, save_labor_costs, get_labor_costs, create_chantier_from_devis, create_devis, get_next_devis_number, 
@@ -75,6 +81,7 @@ from .views import (
     recalculate_labor_costs,
     PaiementSousTraitantViewSet,
     RecapFinancierChantierAPIView,
+    RecapSyntheseMensuelleAPIView,
     PaiementFournisseurMaterielAPIView,
     RecapFournisseursAffichageAPIView,
     fournisseurs,
@@ -182,8 +189,10 @@ from .auth_views import (
     list_users_view,
     toggle_user_active_view,
     reset_user_password_view,
+    toggle_user_staff_view,
     manage_emetteurs_view,
     toggle_emetteur_active_view,
+    update_user_mobile_access_view,
 )
 
 # Import de la vue de version
@@ -213,6 +222,7 @@ router.register(r'stock-purchases', StockPurchaseViewSet, basename='stock-purcha
 router.register(r'stock-lots', StockLotViewSet, basename='stock-lots')
 router.register(r'agent', AgentViewSet, basename='agent')
 router.register(r'presence', PresenceViewSet, basename='presence')
+router.register(r'pointages-mensuels', PointageMensuelViewSet, basename='pointages-mensuels')
 router.register(r'events', EventViewSet, basename='event')
 router.register(r'facture', FactureViewSet, basename='facture')
 router.register(r'bons-commande', BonCommandeViewSet)
@@ -251,8 +261,10 @@ auth_urlpatterns = [
     path('auth/users/', list_users_view, name='list_users'),
     path('auth/users/<int:user_id>/toggle-active/', toggle_user_active_view, name='toggle_user_active'),
     path('auth/users/<int:user_id>/reset-password/', reset_user_password_view, name='reset_user_password'),
+    path('auth/users/<int:user_id>/toggle-staff/', toggle_user_staff_view, name='toggle_user_staff'),
     path('auth/emetteurs/', manage_emetteurs_view, name='manage_emetteurs'),
     path('auth/emetteurs/<int:emetteur_id>/toggle-active/', toggle_emetteur_active_view, name='toggle_emetteur_active'),
+    path('auth/users/<int:user_id>/mobile-access/', update_user_mobile_access_view, name='update_user_mobile_access'),
 ]
 
 urlpatterns = [
@@ -269,6 +281,7 @@ urlpatterns = [
     path('situations-monthly-evolution/', get_situations_monthly_evolution, name='get-situations-monthly-evolution'),
     path('', include(router.urls)),  # Routes générées par le routeur (y compris add_stock et remove_stock)
     path('dashboard/', DashboardViewSet.as_view({'get': 'list'})),
+    path('dashboard/settings/', dashboard_settings, name='dashboard-settings'),
     path('dashboard/resume/', DashboardViewSet.as_view({'get': 'resume'})),
     path('generate-pdf-from-preview/', generate_pdf_from_preview, name='generate_pdf_from_preview'),
     path('preview-devis/', preview_devis, name='preview_devis'),
@@ -374,6 +387,7 @@ urlpatterns = [
     path('preview-planning-hebdo/', preview_planning_hebdo, name='preview_planning_hebdo'),
     path('recalculate_labor_costs/', recalculate_labor_costs, name='recalculate_labor_costs'),
     path('chantier/<int:chantier_id>/recap-financier/', RecapFinancierChantierAPIView.as_view(), name='chantier-recap-financier'),
+    path('chantier/<int:chantier_id>/recap-synthese-mensuelle/', RecapSyntheseMensuelleAPIView.as_view(), name='chantier-recap-synthese-mensuelle'),
     path('chantier/<int:chantier_id>/paiements-materiel/', PaiementFournisseurMaterielAPIView.as_view(), name='paiements-materiel'),
     path('chantier/<int:chantier_id>/recap-fournisseurs-affichage/', RecapFournisseursAffichageAPIView.as_view(), name='recap-fournisseurs-affichage'),
     path('chantier/<int:chantier_id>/tableau-fournisseur/', tableau_fournisseur, name='tableau-fournisseur'),
@@ -624,4 +638,9 @@ urlpatterns += [
     path('download-pdf-from-s3/', download_pdf_from_s3, name='download_pdf_from_s3'),
     path('download-file-from-drive/', download_file_from_drive, name='download_file_from_drive'),
     path('list-pdfs-in-drive/', list_pdfs_in_drive, name='list_pdfs_in_drive'),
+]
+
+# --- URLs POUR LES RAPPORTS D'INTERVENTION / VIGIK+ ---
+urlpatterns += [
+    path('', include('api.urls_rapport')),
 ]

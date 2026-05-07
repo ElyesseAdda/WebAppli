@@ -165,11 +165,18 @@ const CreationFacture = ({ devis, onClose, onSubmit }) => {
       const dateEcheanceFormatted = dateEcheanceCalculee
         ? dateEcheanceCalculee.toISOString().split("T")[0]
         : null;
+      const dateEnvoiFormatted = formData.date_envoi
+        ? formData.date_envoi instanceof Date
+          ? formData.date_envoi.toISOString().split("T")[0]
+          : formData.date_envoi
+        : null;
 
       const factureData = {
         numero: formData.numero_facture,
         devis: devis.id,
+        date_envoi: dateEnvoiFormatted,
         date_echeance: dateEcheanceFormatted,
+        delai_paiement: formData.delai_paiement,
         mode_paiement: formData.mode_paiement,
       };
 

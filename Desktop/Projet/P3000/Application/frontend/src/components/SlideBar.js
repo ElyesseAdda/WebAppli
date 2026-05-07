@@ -81,6 +81,7 @@ const SlideBar = ({ toggleSidebar, isSidebarVisible, user }) => {
           { label: "Tableau Facturation", to: "/TableauFacturation" },
           { label: "Tableau Fournisseur", to: "/TableauFournisseur" },
           { label: "Tableau Sous-Traitant", to: "/TableauSousTraitant" },
+          { label: "Tableau de pointage", to: "/TableauPointage" },
         ],
       },
       {
@@ -104,6 +105,7 @@ const SlideBar = ({ toggleSidebar, isSidebarVisible, user }) => {
               { label: "Liste Situation", to: "/ListeSituation" },
               { label: "Liste facture", to: "/ListeFactures" },
               { label: "Liste Bon de Commande", to: "/ListeBonCommande" },
+              { label: "Rapports d'intervention", to: "/RapportsIntervention" },
             ],
           },
           {
@@ -122,12 +124,13 @@ const SlideBar = ({ toggleSidebar, isSidebarVisible, user }) => {
         label: "Collaborateur",
         icon: FaHandshake,
         children: [
+          { label: "Liste Clients", to: "/ListeClient" },
           { label: "Liste Fournisseurs", to: "/ListeFournisseurs" },
           { label: "Sous traitant", to: "/ListeSousTraitants" },
           { label: "Comparateur", to: "/ComparateurFournisseurs" },
         ],
       },
-      ...(user?.is_superuser
+      ...(user?.is_superuser || user?.is_staff
         ? [
             {
               key: "admin",
@@ -135,6 +138,7 @@ const SlideBar = ({ toggleSidebar, isSidebarVisible, user }) => {
               icon: MdAdminPanelSettings,
               children: [
                 { label: "Utilisateurs", to: "/UsersManagement", icon: MdManageAccounts },
+                { label: "Gestion agences", to: "/admin/agences", icon: MdBusiness },
                 { label: "Récupération Drive", to: "/drive-recovery", icon: MdRestorePage },
               ],
             },

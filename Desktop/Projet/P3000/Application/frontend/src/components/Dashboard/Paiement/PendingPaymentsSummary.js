@@ -392,7 +392,7 @@ const PendingPaymentsSummary = () => {
                     <TableRow>
                       <TableCell colSpan={6} align="center" sx={{ py: 3 }}>
                         <Typography variant="body2" color="text.secondary">
-                          Aucun paiement en attente pour l'année {selectedYear}
+                          Aucun paiement prevu dans les 15 prochains jours pour l'annee {selectedYear}
                         </Typography>
                       </TableCell>
                     </TableRow>

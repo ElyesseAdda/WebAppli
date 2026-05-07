@@ -40,7 +40,7 @@ const sectionConfigs = [
     key: "agent_planning",
     label: "Agent et planning",
     icon: MdEventAvailable,
-    prefixes: ["/Agent", "/PlanningContainer", "/CalendrierAgentContainer"],
+    prefixes: ["/Agent", "/PlanningContainer", "/CalendrierAgentContainer", "/TableauPointage"],
   },
   {
     key: "document",
@@ -92,6 +92,7 @@ const pageLabelByPrefix = [
   { prefix: "/Agent", label: "Gestion agent" },
   { prefix: "/CalendrierAgentContainer", label: "Gestion agent" },
   { prefix: "/PlanningContainer", label: "Planning hebdo" },
+  { prefix: "/TableauPointage", label: "Tableau de pointage" },
   { prefix: "/CreationDevis", label: "Devis (création)" },
   { prefix: "/BonCommande", label: "Liste BC" },
   { prefix: "/ListeBonCommande", label: "Liste Bon de Commande" },

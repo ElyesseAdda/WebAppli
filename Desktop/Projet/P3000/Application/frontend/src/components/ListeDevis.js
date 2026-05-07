@@ -54,19 +54,22 @@ const formatNumber = (number) => {
 };
 
 const buildClientName = (devis) => {
+  // Priorite a la societe liee au devis.
+  if (devis.societe_name) return devis.societe_name;
+  if (devis.nom_societe) return devis.nom_societe;
+  if (typeof devis.societe === "string") return devis.societe;
+  if (typeof devis.societe === "object" && devis.societe) {
+    if (devis.societe.nom_societe) return devis.societe.nom_societe;
+    if (devis.societe.name) return devis.societe.name;
+  }
+
+  // Fallback legacy (ancien affichage client) si la societe n'est pas disponible.
   if (devis.client_name) {
     return devis.client_name;
   }
-  const client =
-    devis.client ||
-    devis.client_info ||
-    (typeof devis.societe === "object" ? devis.societe?.client_name : null);
-  if (!client) {
-    return "";
-  }
-  if (typeof client === "string") {
-    return client;
-  }
+  const client = devis.client || devis.client_info;
+  if (!client) return "";
+  if (typeof client === "string") return client;
   const parts = [client.name, client.surname].filter(Boolean);
   return parts.join(" ").trim();
 };
@@ -1090,7 +1093,7 @@ const ListeDevis = () => {
                 </FilterCell>
                 <FilterCell>
                   <StyledTextField
-                    label="Client"
+                    label="Société"
                     variant="standard"
                     value={filters.client_name}
                     onChange={handleFilterChange("client_name")}

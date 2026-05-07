@@ -3,6 +3,7 @@ from rest_framework.response import Response
 from rest_framework import viewsets, status
 from rest_framework.decorators import action
 from rest_framework.permissions import IsAuthenticated, AllowAny
+from rest_framework.exceptions import ValidationError as DRFValidationError
 from rest_framework.decorators import permission_classes
 from rest_framework.response import Response
 from django.core.paginator import Paginator
@@ -36,11 +37,11 @@ import subprocess
 import os
 import json
 import calendar
-from .serializers import  DocumentSerializer, DocumentUploadSerializer, DocumentListSerializer, FolderItemSerializer,AppelOffresSerializer, BanqueSerializer,FournisseurSerializer, SousTraitantSerializer, ContactSousTraitantSerializer, ContactSocieteSerializer, ContratSousTraitanceSerializer, AvenantSousTraitanceSerializer,PaiementFournisseurMaterielSerializer, PaiementSousTraitantSerializer, PaiementGlobalSousTraitantSerializer, FactureSousTraitantSerializer, PaiementFactureSousTraitantSerializer, RecapFinancierSerializer, ChantierSerializer, SocieteSerializer, DevisSerializer, PartieSerializer, SousPartieSerializer,LigneDetailSerializer, ClientSerializer, StockSerializer, AgentSerializer, PresenceSerializer, StockMovementSerializer, StockHistorySerializer, EventSerializer, ScheduleSerializer, LaborCostSerializer, FactureSerializer, ChantierDetailSerializer, BonCommandeSerializer, AgentPrimeSerializer, AvenantSerializer, FactureTSSerializer, FactureTSCreateSerializer, SituationSerializer, SituationCreateSerializer, SituationLigneSerializer, SituationLigneUpdateSerializer, FactureTSListSerializer, SituationLigneAvenantSerializer, SituationLigneSupplementaireSerializer,ChantierLigneSupplementaireSerializer,AgencyExpenseSerializer, AgencyExpenseMonthSerializer, EmetteurSerializer, ColorSerializer, SuiviPaiementSousTraitantMensuelSerializer, FactureSuiviSousTraitantSerializer, DistributeurSerializer, DistributeurMouvementSerializer, DistributeurCellSerializer, DistributeurVenteSerializer, DistributeurReapproSessionSerializer, DistributeurReapproLigneSerializer, DistributeurFraisSerializer, StockProductSerializer, StockPurchaseSerializer, StockPurchaseCreateSerializer, StockLotSerializer, AgenceSerializer
+from .serializers import  DocumentSerializer, DocumentUploadSerializer, DocumentListSerializer, FolderItemSerializer,AppelOffresSerializer, BanqueSerializer,FournisseurSerializer, SousTraitantSerializer, ContactSousTraitantSerializer, ContactSocieteSerializer, ContratSousTraitanceSerializer, AvenantSousTraitanceSerializer,PaiementFournisseurMaterielSerializer, PaiementSousTraitantSerializer, PaiementGlobalSousTraitantSerializer, FactureSousTraitantSerializer, PaiementFactureSousTraitantSerializer, RecapFinancierSerializer, ChantierSerializer, SocieteSerializer, DevisSerializer, PartieSerializer, SousPartieSerializer,LigneDetailSerializer, ClientSerializer, StockSerializer, AgentSerializer, PresenceSerializer, StockMovementSerializer, StockHistorySerializer, EventSerializer, ScheduleSerializer, LaborCostSerializer, FactureSerializer, ChantierDetailSerializer, BonCommandeSerializer, AgentPrimeSerializer, AvenantSerializer, FactureTSSerializer, FactureTSCreateSerializer, SituationSerializer, SituationCreateSerializer, SituationLigneSerializer, SituationLigneUpdateSerializer, FactureTSListSerializer, SituationLigneAvenantSerializer, SituationLigneSupplementaireSerializer,ChantierLigneSupplementaireSerializer,AgencyExpenseSerializer, AgencyExpenseMonthSerializer, EmetteurSerializer, ColorSerializer, SuiviPaiementSousTraitantMensuelSerializer, FactureSuiviSousTraitantSerializer, DistributeurSerializer, DistributeurMouvementSerializer, DistributeurCellSerializer, DistributeurVenteSerializer, DistributeurReapproSessionSerializer, DistributeurReapproLigneSerializer, DistributeurFraisSerializer, StockProductSerializer, StockPurchaseSerializer, StockPurchaseCreateSerializer, StockLotSerializer, AgenceSerializer, PointageMensuelSerializer
 from .models import (
     AppelOffres, TauxFixe, update_chantier_cout_main_oeuvre, Chantier, PaiementSousTraitant, SousTraitant, ContactSousTraitant, ContactSociete, ContratSousTraitance, AvenantSousTraitance, Chantier, Devis, Facture, Quitus, Societe, Partie, SousPartie, 
     LigneDetail, Client, Stock, Agent, Presence, StockMovement, 
-    StockHistory, Event, MonthlyHours, MonthlyPresence, Schedule, 
+    StockHistory, Event, MonthlyHours, MonthlyPresence, Schedule, PointageMensuel,
     LaborCost, DevisLigne, FactureLigne, FacturePartie, 
     FactureSousPartie, FactureLigneDetail, BonCommande, 
     LigneBonCommande, Fournisseur, FournisseurMagasin, TauxFixe, Parametres, Avenant, FactureTS, Situation, SituationLigne, SituationLigneSupplementaire, SituationLigneSpeciale,
@@ -300,6 +301,53 @@ class SocieteViewSet(viewsets.ModelViewSet):
         if client_id:
             queryset = queryset.filter(client_name_id=client_id)
         return queryset
+
+    @action(detail=True, methods=['post'])
+    def upload_logo(self, request, pk=None):
+        societe = self.get_object()
+        file = request.FILES.get('logo')
+        if not file:
+            return Response({'error': 'Fichier logo requis'}, status=400)
+        try:
+            from .utils import get_s3_client, get_s3_bucket_name, is_s3_available, generate_presigned_url_for_display
+            if not is_s3_available():
+                return Response({'error': 'S3 non disponible'}, status=503)
+            import uuid as _uuid
+            ext = file.name.split('.')[-1] if '.' in file.name else 'png'
+            s3_key = f"societes/logos/{societe.id}_{_uuid.uuid4().hex[:8]}.{ext}"
+            s3_client = get_s3_client()
+            bucket_name = get_s3_bucket_name()
+            if societe.logo_s3_key:
+                try:
+                    s3_client.delete_object(Bucket=bucket_name, Key=societe.logo_s3_key)
+                except Exception:
+                    pass
+            s3_client.put_object(Bucket=bucket_name, Key=s3_key, Body=file.read(), ContentType=file.content_type or 'image/png')
+            societe.logo_s3_key = s3_key
+            societe.save()
+            logo_url = generate_presigned_url_for_display(s3_key, expires_in=3600)
+            return Response({'success': True, 'logo_s3_key': s3_key, 'logo_url': logo_url})
+        except Exception as e:
+            import traceback
+            traceback.print_exc()
+            return Response({'error': str(e)}, status=500)
+
+    @action(detail=True, methods=['delete'])
+    def delete_logo(self, request, pk=None):
+        societe = self.get_object()
+        if not societe.logo_s3_key:
+            return Response({'error': 'Aucun logo'}, status=400)
+        try:
+            from .utils import get_s3_client, get_s3_bucket_name, is_s3_available
+            if is_s3_available():
+                s3_client = get_s3_client()
+                bucket_name = get_s3_bucket_name()
+                s3_client.delete_object(Bucket=bucket_name, Key=societe.logo_s3_key)
+        except Exception:
+            pass
+        societe.logo_s3_key = None
+        societe.save()
+        return Response({'success': True})
 
 class FactureTSViewSet(viewsets.ModelViewSet):
     queryset = FactureTS.objects.all()
@@ -1161,18 +1209,6 @@ from datetime import datetime, timedelta
 
 
 
-class SocieteViewSet(viewsets.ModelViewSet):
-    queryset = Societe.objects.all().order_by('nom_societe')
-    serializer_class = SocieteSerializer
-    permission_classes = [AllowAny]
-
-    def get_queryset(self):
-        queryset = Societe.objects.all().order_by('nom_societe')
-        client_id = self.request.query_params.get('client')
-        if client_id:
-            queryset = queryset.filter(client_name_id=client_id)
-        return queryset
-
 class FactureTSViewSet(viewsets.ModelViewSet):
     queryset = FactureTS.objects.all()
     serializer_class = FactureTSListSerializer
@@ -1830,6 +1866,13 @@ class ClientViewSet(viewsets.ModelViewSet):
     serializer_class = ClientSerializer
     permission_classes = [AllowAny]
 
+    def get_queryset(self):
+        queryset = super().get_queryset()
+        # Pour les listes (action list), exclure les clients sans nom ET sans prénom
+        if self.action == 'list':
+            queryset = queryset.exclude(name='', surname='')
+        return queryset
+
 class AgentViewSet(viewsets.ModelViewSet):
     queryset = Agent.objects.all()
     serializer_class = AgentSerializer
@@ -1855,9 +1898,7 @@ class AgentViewSet(viewsets.ModelViewSet):
         
         # Si on a des paramètres de période, appliquer la logique temporelle
         if week and year:
-            from datetime import datetime
-            import calendar
-            
+            # datetime / timedelta : imports en tête du module (évite UnboundLocalError sur la branche month)
             # Convertir semaine/année en date de début de semaine
             try:
                 # Utiliser dayjs-like logic pour calculer le début de semaine
@@ -1871,10 +1912,10 @@ class AgentViewSet(viewsets.ModelViewSet):
                 # Calculer le début de la semaine demandée
                 week_start = first_monday + timedelta(weeks=week_int - 1)
                 
-                # Filtrer : agent actif OU désactivé après le début de la semaine
+                # Filtrer : agent actif OU encore présent sur la semaine (désactivation en fin de semaine incluse)
                 queryset = queryset.filter(
-                    Q(is_active=True) | 
-                    Q(date_desactivation__gt=week_start)
+                    Q(is_active=True) |
+                    Q(date_desactivation__gte=week_start)
                 )
             except (ValueError, TypeError):
                 # En cas d'erreur de conversion, retourner tous les agents actifs
@@ -1887,10 +1928,10 @@ class AgentViewSet(viewsets.ModelViewSet):
                 month_int = int(month)
                 month_start = datetime(year_int, month_int, 1)
                 
-                # Filtrer : agent actif OU désactivé après le début du mois
+                # Filtrer : agent actif OU encore en poste ce mois (désactivation le 1er du mois incluse)
                 queryset = queryset.filter(
-                    Q(is_active=True) | 
-                    Q(date_desactivation__gt=month_start)
+                    Q(is_active=True) |
+                    Q(date_desactivation__gte=month_start)
                 )
             except (ValueError, TypeError):
                 queryset = queryset.filter(is_active=True)
@@ -2205,6 +2246,66 @@ def update_days_present(request):
 
     except Exception as e:
         return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+class PointageMensuelViewSet(viewsets.ModelViewSet):
+    queryset = PointageMensuel.objects.select_related('agent').all()
+    serializer_class = PointageMensuelSerializer
+    permission_classes = [AllowAny]
+
+    def get_queryset(self):
+        queryset = super().get_queryset()
+        month_param = self.request.query_params.get('month')
+        agent_id = self.request.query_params.get('agent')
+        if month_param:
+            try:
+                month_date = datetime.strptime(f"{month_param}-01", "%Y-%m-%d").date()
+                queryset = queryset.filter(month=month_date)
+            except ValueError:
+                pass
+        if agent_id:
+            queryset = queryset.filter(agent_id=agent_id)
+        return queryset
+
+    def perform_create(self, serializer):
+        pointage = serializer.save()
+        self._apply_salary_inheritance(pointage, salary_was_explicit=pointage.salaire_overridden)
+
+    def perform_update(self, serializer):
+        previous = self.get_object()
+        old_salary = previous.salaire_net_initial_hors_prime
+        old_overridden = previous.salaire_overridden
+        pointage = serializer.save()
+        salary_changed = old_salary != pointage.salaire_net_initial_hors_prime
+        salary_was_explicit = pointage.salaire_overridden or (salary_changed and not old_overridden)
+        self._apply_salary_inheritance(pointage, salary_was_explicit=salary_was_explicit)
+
+    def _apply_salary_inheritance(self, pointage, salary_was_explicit=False):
+        if salary_was_explicit:
+            pointage.salaire_overridden = True
+            pointage.save(update_fields=['salaire_overridden'])
+            next_overridden = PointageMensuel.objects.filter(
+                agent=pointage.agent,
+                month__gt=pointage.month,
+                salaire_overridden=True,
+            ).order_by('month').first()
+            future_qs = PointageMensuel.objects.filter(
+                agent=pointage.agent,
+                month__gt=pointage.month,
+            )
+            if next_overridden:
+                future_qs = future_qs.filter(month__lt=next_overridden.month)
+            future_qs.update(salaire_net_initial_hors_prime=pointage.salaire_net_initial_hors_prime)
+            return
+
+        if pointage.salaire_net_initial_hors_prime in (None, 0):
+            previous_with_salary = PointageMensuel.objects.filter(
+                agent=pointage.agent,
+                month__lt=pointage.month,
+            ).exclude(salaire_net_initial_hors_prime=0).order_by('-month').first()
+            if previous_with_salary:
+                pointage.salaire_net_initial_hors_prime = previous_with_salary.salaire_net_initial_hors_prime
+                pointage.save(update_fields=['salaire_net_initial_hors_prime'])
 
 
 class PresenceViewSet(viewsets.ModelViewSet):
@@ -5381,6 +5482,7 @@ def preview_facture(request, facture_id):
                 self.id = facture_obj.id
                 self.numero = facture_obj.numero
                 self.date_creation = facture_obj.date_creation
+                self.date_envoi = facture_obj.date_envoi
                 self.date_echeance = facture_obj.date_echeance
                 self.date_paiement = facture_obj.date_paiement
                 self.state_facture = facture_obj.state_facture
@@ -5747,6 +5849,7 @@ def preview_facture_v2(request, facture_id):
                 self.id = facture_obj.id
                 self.numero = facture_obj.numero
                 self.date_creation = facture_obj.date_creation
+                self.date_envoi = facture_obj.date_envoi
                 self.date_echeance = facture_obj.date_echeance
                 self.date_paiement = facture_obj.date_paiement
                 self.state_facture = facture_obj.state_facture
@@ -7577,8 +7680,10 @@ def create_situation(request):
         montant_prorata = situation.montant_prorata
         retenue_cie = situation.retenue_cie
         
-        # Calculer le montant après retenues
-        montant_apres_retenues = montant_ht_mois - retenue_garantie - montant_prorata - retenue_cie
+        # Calculer le montant après retenues (la retenue CIE peut être une déduction ou un ajout)
+        type_retenue_cie = situation.type_retenue_cie or 'deduction'
+        retenue_cie_effective = retenue_cie if type_retenue_cie == 'deduction' else -retenue_cie
+        montant_apres_retenues = montant_ht_mois - retenue_garantie - montant_prorata - retenue_cie_effective
         
         # Ajouter l'impact des lignes supplémentaires
         for ligne_suppl in situation.lignes_supplementaires.all():
@@ -7633,12 +7738,21 @@ def update_situation(request, pk):
         if 'devis' in data:
             data['devis'] = Devis.objects.get(pk=data['devis'])
 
+        incoming_lignes_avenant = data.get('lignes_avenant', None)
+        should_replace_lignes_avenant = (
+            'lignes_avenant' in data and
+            (
+                bool(incoming_lignes_avenant) or
+                not situation.lignes_avenant.exists()
+            )
+        )
+
         # Supprimer les anciennes lignes SEULEMENT si de nouvelles sont fournies
         if 'lignes' in data:
             situation.lignes.all().delete()
         if 'lignes_supplementaires' in data:
             situation.lignes_supplementaires.all().delete()
-        if 'lignes_avenant' in data:
+        if should_replace_lignes_avenant:
             situation.lignes_avenant.all().delete()
         if 'lignes_speciales' in data:
             situation.lignes_speciales.all().delete()
@@ -7646,7 +7760,7 @@ def update_situation(request, pk):
         # Mise à jour des champs de base
         for field in ['mois', 'annee', 'numero_situation', 'date_creation', 'montant_ht_mois', 'cumul_precedent', 
                      'montant_total_cumul_ht', 'retenue_garantie', 'montant_prorata', 
-                     'retenue_cie', 'montant_apres_retenues', 'tva', 'montant_total_ttc', 
+                     'retenue_cie', 'type_retenue_cie', 'montant_apres_retenues', 'tva', 'montant_total_ttc', 
                      'pourcentage_avancement', 'taux_prorata', 'taux_retenue_garantie', 'statut']:
             if field in data:
                 setattr(situation, field, data[field])
@@ -7677,7 +7791,7 @@ def update_situation(request, pk):
                 )
 
         # Création des lignes d'avenant
-        if 'lignes_avenant' in data:
+        if should_replace_lignes_avenant:
             for ligne in data['lignes_avenant']:
                 SituationLigneAvenant.objects.create(
                     situation=situation,
@@ -7777,9 +7891,11 @@ def update_situation(request, pk):
         
         # Retenue CIE (montant fixe, déjà défini)
         retenue_cie_decimal = Decimal(str(situation.retenue_cie or '0'))
+        type_retenue_cie = situation.type_retenue_cie or 'deduction'
+        retenue_cie_effective = retenue_cie_decimal if type_retenue_cie == 'deduction' else -retenue_cie_decimal
         
         # Calculer le montant après retenues
-        montant_apres_retenues = montant_ht_mois - situation.retenue_garantie - situation.montant_prorata - retenue_cie_decimal
+        montant_apres_retenues = montant_ht_mois - situation.retenue_garantie - situation.montant_prorata - retenue_cie_effective
         
         # Ajouter l'impact des lignes supplémentaires
         for ligne_suppl in situation.lignes_supplementaires.all():
@@ -7877,9 +7993,15 @@ def update_situation(request, pk):
             
             # Retenue CIE (montant fixe, déjà défini)
             retenue_cie_suivante_decimal = Decimal(str(situation_suivante.retenue_cie or '0'))
+            type_retenue_cie_suivante = situation_suivante.type_retenue_cie or 'deduction'
+            retenue_cie_suivante_effective = (
+                retenue_cie_suivante_decimal
+                if type_retenue_cie_suivante == 'deduction'
+                else -retenue_cie_suivante_decimal
+            )
             
             # Calculer le montant après retenues
-            montant_apres_retenues_suivante = montant_ht_mois_suivante - situation_suivante.retenue_garantie - situation_suivante.montant_prorata - retenue_cie_suivante_decimal
+            montant_apres_retenues_suivante = montant_ht_mois_suivante - situation_suivante.retenue_garantie - situation_suivante.montant_prorata - retenue_cie_suivante_effective
             
             # Ajouter l'impact des lignes supplémentaires
             for ligne_suppl in situation_suivante.lignes_supplementaires.all():
@@ -8789,9 +8911,10 @@ def preview_situation(request, situation_id):
                 montant_avancement_avenant = Decimal('0')
                 nb_lignes_avenant = 0
 
-            # Utiliser numero_complet (numéro devis - désignation) pour éviter la duplication dans le template
+            # Utiliser uniquement le numéro du devis.
+            # Le numéro d'avenant est déjà affiché séparément dans le template.
             current_avenant_lines.append({
-                'devis_numero': facture_ts.numero_complet,
+                'devis_numero': facture_ts.devis.numero,
                 'designation': facture_ts.designation,
                 'montant_ht': ligne_avenant.montant_ht,
                 'pourcentage_actuel': ligne_avenant.pourcentage_actuel,
@@ -9239,6 +9362,12 @@ class AgenceViewSet(viewsets.ModelViewSet):
     serializer_class = AgenceSerializer
     permission_classes = [AllowAny]
 
+    def _get_delete_blockers(self, agence):
+        blockers = []
+        if (agence.nom or "").strip().lower() == 'agence':
+            blockers.append("Agence par défaut protégée")
+        return blockers
+
     def perform_create(self, serializer):
         agence = serializer.save()
         chantier = Chantier.objects.create(
@@ -9254,6 +9383,15 @@ class AgenceViewSet(viewsets.ModelViewSet):
         agence.save(update_fields=['chantier'])
 
     def perform_update(self, serializer):
+        instance = self.get_object()
+        old_nom = (instance.nom or '').strip().lower()
+        new_nom = (serializer.validated_data.get('nom', instance.nom) or '').strip().lower()
+
+        if old_nom == 'agence' and new_nom != old_nom:
+            raise DRFValidationError({
+                "detail": "Le renommage de l'agence par défaut est interdit.",
+            })
+
         agence = serializer.save()
         if agence.chantier:
             agence.chantier.chantier_name = agence.nom
@@ -9261,10 +9399,25 @@ class AgenceViewSet(viewsets.ModelViewSet):
             agence.chantier.save(update_fields=['chantier_name', 'description'])
 
     def perform_destroy(self, instance):
+        blockers = self._get_delete_blockers(instance)
+        if blockers:
+            raise DRFValidationError({
+                "detail": "Suppression refusée pour cette agence.",
+                "delete_blockers": blockers,
+            })
         chantier = instance.chantier
         instance.delete()
         if chantier:
             chantier.delete()
+
+    @action(detail=True, methods=['get'])
+    def delete_preview(self, request, pk=None):
+        agence = self.get_object()
+        blockers = self._get_delete_blockers(agence)
+        return Response({
+            "can_delete": len(blockers) == 0,
+            "delete_blockers": blockers,
+        })
 
 
 class AgencyExpenseViewSet(viewsets.ModelViewSet):
@@ -9516,18 +9669,24 @@ class AgencyExpenseMonthViewSet(viewsets.ModelViewSet):
         expenses = self.queryset.filter(
             month=int(month),
             year=int(year)
-        )
+        ).exclude(is_recurring_template=True)
         if agence_id:
             expenses = expenses.filter(agence_id=int(agence_id))
-        
-        total = sum(float(e.amount) for e in expenses)
+
+        def _line_amount(e):
+            paye = e.montant_paye
+            if paye is not None and float(paye) != 0:
+                return float(paye)
+            return float(e.amount or 0)
+
+        total = sum(_line_amount(e) for e in expenses)
         totals_by_category = {}
         
         for expense in expenses:
             cat = expense.category
             if cat not in totals_by_category:
                 totals_by_category[cat] = 0
-            totals_by_category[cat] += float(expense.amount)
+            totals_by_category[cat] += _line_amount(expense)
         
         return Response({
             'expenses': self.serializer_class(expenses, many=True).data,
@@ -9543,16 +9702,22 @@ class AgencyExpenseMonthViewSet(viewsets.ModelViewSet):
         if not year:
             return Response({"error": "year is required"}, status=status.HTTP_400_BAD_REQUEST)
         year = int(year)
-        expenses = self.queryset.filter(year=year)
+        expenses = self.queryset.filter(year=year).exclude(is_recurring_template=True)
         if agence_id:
             expenses = expenses.filter(agence_id=int(agence_id))
+
+        def _line_amount_y(exp):
+            paye = exp.montant_paye
+            if paye is not None and float(paye) != 0:
+                return float(paye)
+            return float(exp.amount or 0)
 
         months = {}
         for exp in expenses:
             m = exp.month
             if m not in months:
                 months[m] = {'total': 0, 'by_category': {}}
-            amt = float(exp.amount)
+            amt = _line_amount_y(exp)
             months[m]['total'] += amt
             cat = exp.category or 'Autres'
             months[m]['by_category'][cat] = months[m]['by_category'].get(cat, 0) + amt
@@ -10704,14 +10869,14 @@ def get_taux_facturation_data(request, chantier_id):
             'paye': (montant_paye / montant_total * 100) if montant_total > 0 else 0,
         }
 
-        # Montants des factures classiques du chantier (hors CIE)
+        # Montants des factures classiques du chantier (hors CIE) — HT pour cohérence avec montant_ht du marché
         factures_chantier = Facture.objects.filter(chantier=chantier, type_facture='classique')
-        montant_factures = factures_chantier.aggregate(total=Sum('price_ttc'))['total'] or 0
+        montant_factures = factures_chantier.aggregate(total=Sum('price_ht'))['total'] or 0
         montant_factures = float(montant_factures)
 
-        # Montants des avenants (FactureTS du chantier)
+        # Montants des avenants (FactureTS du chantier) — HT (montant_total des avenants est en HT)
         factures_ts = FactureTS.objects.filter(chantier=chantier)
-        montant_avenants = factures_ts.aggregate(total=Sum('montant_ttc'))['total'] or 0
+        montant_avenants = factures_ts.aggregate(total=Sum('montant_ht'))['total'] or 0
         montant_avenants = float(montant_avenants)
 
         return Response({
@@ -11433,21 +11598,44 @@ class RecapFinancierChantierAPIView(APIView):
         factures_qs = FactureSousTraitant.objects.filter(chantier=chantier).prefetch_related('paiements', 'sous_traitant')
         
         # Collecter les paiements effectués dans la période
+        # IMPORTANT : ventilation ST par mois/année de facture (champ métier),
+        # et non par date_reception.
         paiements_periode = []
         factures_reste_periode = []
         
         for facture in factures_qs:
+            try:
+                facture_mois = int(facture.mois) if facture.mois is not None else None
+                facture_annee = int(facture.annee) if facture.annee is not None else None
+            except (TypeError, ValueError):
+                facture_mois, facture_annee = None, None
+
+            in_selected_period = True
+            if mois and annee:
+                try:
+                    mois_int = int(mois)
+                    annee_int = int(annee)
+                    if facture_mois is not None and facture_annee is not None:
+                        in_selected_period = (facture_mois == mois_int and facture_annee == annee_int)
+                    elif facture.date_reception:
+                        in_selected_period = (
+                            facture.date_reception.month == mois_int
+                            and facture.date_reception.year == annee_int
+                        )
+                    else:
+                        in_selected_period = False
+                except (TypeError, ValueError):
+                    in_selected_period = True
+
             # Paiements effectués dans la période
-            # Filtrer par date de réception de la facture (pas la date de paiement réelle)
+            # Filtrer par mois/année de facture (pas la date de paiement réelle).
             for paiement in facture.paiements.all():
-                # Filtrer par date de réception de la facture
-                if not date_debut or not date_fin or (date_debut <= facture.date_reception <= date_fin):
+                if in_selected_period:
                     paiements_periode.append(paiement)
             
-            # Factures avec échéance dans la période et pas entièrement payées
-            if not facture.est_soldee and facture.date_paiement_prevue:
-                if not date_debut or not date_fin or (date_debut <= facture.date_paiement_prevue <= date_fin):
-                    factures_reste_periode.append(facture)
+            # Factures non soldées du mois/année sélectionné
+            if not facture.est_soldee and in_selected_period:
+                factures_reste_periode.append(facture)
 
         # 5. Main d'œuvre (Sorties) - NOUVELLE LOGIQUE AVEC SCHEDULE
         # Gestion des jours fériés pour toutes les années concernées
@@ -11732,6 +11920,98 @@ class RecapFinancierChantierAPIView(APIView):
             }
         }
 
+        # Encours client global (hors filtre mois du récap), montants HT :
+        # - situations : net HT après retenues (montant_apres_retenues), pas la TVA
+        # - factures classiques : price_ht
+        # Ventilation : situations non échues | factures non échues (« facturé ») | tout ce qui est en retard
+        aujourd_hui = date.today()
+        enc_total = 0.0
+        enc_situations_a_encaisser_ht = 0.0
+        enc_factures_a_encaisser_ht = 0.0
+        enc_en_retard_ht = 0.0
+
+        def date_echeance_situation(s):
+            if s.date_envoi and s.delai_paiement is not None:
+                try:
+                    return s.date_envoi + timedelta(days=int(s.delai_paiement))
+                except Exception:
+                    return None
+            return None
+
+        def date_echeance_facture(fac):
+            due = fac.date_echeance
+            if due is None and fac.date_envoi and fac.delai_paiement is not None:
+                try:
+                    return fac.date_envoi + timedelta(days=int(fac.delai_paiement))
+                except Exception:
+                    return None
+            return due
+
+        for s in Situation.objects.filter(chantier=chantier, date_paiement_reel__isnull=True):
+            m = float(s.montant_apres_retenues or 0)
+            if m == 0:
+                continue
+            enc_total += m
+            due = date_echeance_situation(s)
+            if due is None or due >= aujourd_hui:
+                enc_situations_a_encaisser_ht += m
+            else:
+                enc_en_retard_ht += m
+
+        for fac in Facture.objects.filter(
+            chantier=chantier, type_facture="classique", date_paiement__isnull=True
+        ):
+            m = float(fac.price_ht or 0)
+            if m == 0:
+                continue
+            enc_total += m
+            due = date_echeance_facture(fac)
+            if due is None or due >= aujourd_hui:
+                enc_factures_a_encaisser_ht += m
+            else:
+                enc_en_retard_ht += m
+
+        encours_paiements_clients = {
+            "total": round(enc_total, 2),
+            "situations_a_encaisser_ht": round(enc_situations_a_encaisser_ht, 2),
+            "factures_a_encaisser_ht": round(enc_factures_a_encaisser_ht, 2),
+            "en_retard_ht": round(enc_en_retard_ht, 2),
+        }
+
+        # Prévisionnel coûts chantier (découpage métier) :
+        # devis principal + factures classiques + avenants (FactureTS via leur devis)
+        # + sous-traitance (contrats ST + avenants ST enregistrés sur le chantier)
+        previsionnel_cout_mo = 0.0
+        previsionnel_cout_materiel = 0.0
+
+        devis_principal = Devis.objects.filter(
+            chantier=chantier, devis_chantier=True
+        ).first()
+        if devis_principal is not None:
+            previsionnel_cout_mo += float(devis_principal.cout_estime_main_oeuvre or 0)
+            previsionnel_cout_materiel += float(devis_principal.cout_estime_materiel or 0)
+
+        for fac in Facture.objects.filter(chantier=chantier):
+            previsionnel_cout_mo += float(fac.cout_estime_main_oeuvre or 0)
+            previsionnel_cout_materiel += float(fac.cout_estime_materiel or 0)
+
+        for fac_ts in FactureTS.objects.filter(chantier=chantier).select_related("devis"):
+            d = getattr(fac_ts, "devis", None)
+            if d is None:
+                continue
+            previsionnel_cout_mo += float(d.cout_estime_main_oeuvre or 0)
+            previsionnel_cout_materiel += float(d.cout_estime_materiel or 0)
+
+        previsionnel_cout_st = float(chantier.cout_sous_traitance or 0)
+        previsionnel_total = previsionnel_cout_mo + previsionnel_cout_materiel + previsionnel_cout_st
+
+        previsionnel_couts_chantier = {
+            "main_oeuvre": round(previsionnel_cout_mo, 2),
+            "materiel": round(previsionnel_cout_materiel, 2),
+            "sous_traitant": round(previsionnel_cout_st, 2),
+            "total": round(previsionnel_total, 2),
+        }
+
         # Montant marché : même règle que get_chantier_details — source de vérité = devis de chantier si présent
         montant_ht = float(chantier.montant_ht or 0)
         devis_marche = Devis.objects.filter(
@@ -11742,6 +12022,87 @@ class RecapFinancierChantierAPIView(APIView):
         taux_fixe = chantier.taux_fixe or 0
         montant_taux_fixe = montant_ht * taux_fixe / 100
 
+        # Coûts chantier cumulés jusqu'à la fin du mois affiché (bénéfice « tel qu'à cette date »)
+        cout_chantier_cumul_jusqua_fin_mois = None
+        if date_debut and date_fin:
+            yf, mf = int(annee), int(mois)
+
+            pm_cumul = PaiementFournisseurMateriel.objects.filter(chantier=chantier).filter(
+                Q(annee__lt=yf) | Q(annee=yf, mois__lte=mf)
+            )
+            c_mat = float(sum(
+                (float(pm.montant_a_payer) if pm.montant_a_payer is not None else float(pm.montant or 0))
+                for pm in pm_cumul
+            ))
+
+            c_st = float(sum(
+                float(p.montant_paye)
+                for p in PaiementFactureSousTraitant.objects.filter(
+                    facture__chantier=chantier,
+                    date_paiement_reel__lte=date_fin,
+                )
+            ))
+
+            sch_year_min = Schedule.objects.filter(chantier=chantier).aggregate(
+                mn=Min('year')
+            )['mn']
+            _ymin = int(sch_year_min) if sch_year_min is not None else date_fin.year
+            _ymax = int(date_fin.year)
+            fr_h_cumul = set()
+            for yy in range(_ymin, _ymax + 1):
+                fr_h_cumul.update(holidays.country_holidays('FR', years=[yy]))
+
+            days_of_week_c = [
+                "Lundi", "Mardi", "Mercredi", "Jeudi", "Vendredi", "Samedi", "Dimanche"
+            ]
+            c_mo = 0.0
+            for s in Schedule.objects.filter(chantier=chantier).select_related('agent'):
+                try:
+                    day_index = days_of_week_c.index(s.day)
+                except ValueError:
+                    continue
+                lundi = datetime.strptime(
+                    f'{s.year}-W{int(s.week):02d}-1', "%G-W%V-%u"
+                )
+                date_creneau = (lundi + timedelta(days=day_index)).date()
+                if date_creneau > date_fin:
+                    continue
+
+                is_journalier = s.agent.type_paiement == 'journalier'
+                if is_journalier:
+                    taux_horaire = (s.agent.taux_journalier or 0) / 8
+                    heures_increment = 4
+                else:
+                    taux_horaire = s.agent.taux_Horaire or 0
+                    heures_increment = 1
+
+                if is_journalier:
+                    c_mo += taux_horaire * heures_increment
+                else:
+                    if date_creneau in fr_h_cumul:
+                        c_mo += taux_horaire * heures_increment * 1.5
+                    elif s.day == "Samedi":
+                        c_mo += taux_horaire * heures_increment * 1.25
+                    elif s.day == "Dimanche":
+                        c_mo += taux_horaire * heures_increment * 1.5
+                    else:
+                        c_mo += taux_horaire * heures_increment
+
+            primes_cumul = AgentPrime.objects.filter(
+                chantier=chantier,
+                type_affectation='chantier',
+            ).filter(Q(annee__lt=yf) | Q(annee=yf, mois__lte=mf))
+            c_mo += float(sum(float(p.montant) for p in primes_cumul))
+
+            c_total = c_mat + c_st + c_mo
+            cout_chantier_cumul_jusqua_fin_mois = {
+                "materiel": c_mat,
+                "sous_traitant": c_st,
+                "main_oeuvre": c_mo,
+                "total": c_total,
+                "date_fin_incluse": date_fin.isoformat(),
+            }
+
         data = {
             "periode": periode,
             "sorties": sorties,
@@ -11749,10 +12110,201 @@ class RecapFinancierChantierAPIView(APIView):
             "montant_ht": montant_ht,
             "taux_fixe": taux_fixe,
             "montant_taux_fixe": montant_taux_fixe,
+            "cout_chantier_cumul_jusqua_fin_mois": cout_chantier_cumul_jusqua_fin_mois,
+            "encours_paiements_clients": encours_paiements_clients,
+            "previsionnel_couts_chantier": previsionnel_couts_chantier,
         }
 
         serializer = RecapFinancierSerializer(data)
         return Response(serializer.data)
+
+
+class RecapSyntheseMensuelleAPIView(APIView):
+    """
+    Séries mensuelles pour le graphique de synthèse (indépendant du filtre mois/année du récap).
+    Même logique de ventilation que le récap : matériel (paiements mensuels), ST (mois/année de facture),
+    main d'œuvre (créneaux + primes du mois).
+    """
+    permission_classes = []
+
+    def get(self, request, chantier_id):
+        from collections import defaultdict
+
+        chantier = Chantier.objects.get(pk=chantier_id)
+        buckets = defaultdict(lambda: {"materiel": 0.0, "main_oeuvre": 0.0, "sous_traitant": 0.0})
+
+        # Matériel : mois / année saisis
+        for pm in PaiementFournisseurMateriel.objects.filter(chantier=chantier):
+            try:
+                y, m = int(pm.annee), int(pm.mois)
+            except (TypeError, ValueError):
+                continue
+            amt = float(pm.montant_a_payer) if pm.montant_a_payer is not None else float(pm.montant or 0)
+            buckets[(y, m)]["materiel"] += amt
+
+        # Sous-traitant : comptabiliser sur le mois/année métier de la facture,
+        # sans attendre le paiement.
+        for facture in FactureSousTraitant.objects.filter(chantier=chantier):
+            try:
+                y, m = int(facture.annee), int(facture.mois)
+            except (TypeError, ValueError):
+                dr = facture.date_reception
+                if not dr:
+                    continue
+                y, m = int(dr.year), int(dr.month)
+            buckets[(y, m)]["sous_traitant"] += float(facture.montant_facture_ht or 0)
+
+        # Primes chantier
+        for pr in AgentPrime.objects.filter(chantier=chantier, type_affectation="chantier"):
+            try:
+                y, m = int(pr.annee), int(pr.mois)
+            except (TypeError, ValueError):
+                continue
+            buckets[(y, m)]["main_oeuvre"] += float(pr.montant)
+
+        # Planning (créneaux)
+        days_of_week = ["Lundi", "Mardi", "Mercredi", "Jeudi", "Vendredi", "Samedi", "Dimanche"]
+        years_in_schedules = list(
+            Schedule.objects.filter(chantier=chantier).values_list("year", flat=True).distinct()
+        )
+        fr_holidays = set()
+        for yy in years_in_schedules:
+            if yy is None:
+                continue
+            try:
+                fr_holidays.update(holidays.country_holidays("FR", years=[int(yy)]))
+            except (TypeError, ValueError):
+                continue
+
+        for s in Schedule.objects.filter(chantier=chantier).select_related("agent"):
+            try:
+                day_index = days_of_week.index(s.day)
+            except ValueError:
+                continue
+            try:
+                lundi = datetime.strptime(f"{s.year}-W{int(s.week):02d}-1", "%G-W%V-%u")
+            except ValueError:
+                continue
+            date_creneau = (lundi + timedelta(days=day_index)).date()
+            yb, mb = date_creneau.year, date_creneau.month
+
+            is_journalier = s.agent.type_paiement == "journalier"
+            if is_journalier:
+                taux_horaire = (s.agent.taux_journalier or 0) / 8
+                heures_increment = 4
+            else:
+                taux_horaire = s.agent.taux_Horaire or 0
+                heures_increment = 1
+
+            if is_journalier:
+                cost = taux_horaire * heures_increment
+            else:
+                if date_creneau in fr_holidays:
+                    cost = taux_horaire * heures_increment * 1.5
+                elif s.day == "Samedi":
+                    cost = taux_horaire * heures_increment * 1.25
+                elif s.day == "Dimanche":
+                    cost = taux_horaire * heures_increment * 1.5
+                else:
+                    cost = taux_horaire * heures_increment
+            buckets[(yb, mb)]["main_oeuvre"] += cost
+
+        # --- Facturation mensuelle et cumulative (situations + factures classiques) ---
+        factu_situation_buckets = defaultdict(float)
+        factu_classique_buckets = defaultdict(float)
+
+        for sit in Situation.objects.filter(chantier=chantier):
+            d = sit.date_envoi
+            if not d:
+                continue
+            montant = float(sit.montant_reel_ht) if sit.date_paiement_reel and sit.montant_reel_ht else float(sit.montant_apres_retenues or 0)
+            factu_situation_buckets[(d.year, d.month)] += montant
+
+        for fac in Facture.objects.filter(chantier=chantier, type_facture='classique'):
+            d = fac.date_envoi or (fac.date_creation.date() if fac.date_creation else None)
+            if not d:
+                continue
+            factu_classique_buckets[(d.year, d.month)] += float(fac.price_ht or 0)
+
+        factu_buckets = defaultdict(float)
+        for key, value in factu_situation_buckets.items():
+            factu_buckets[key] += value
+        for key, value in factu_classique_buckets.items():
+            factu_buckets[key] += value
+
+        # Inclure les mois de facturation dans la plage du graphique
+        for key in factu_buckets:
+            if key not in buckets:
+                buckets[key]  # crée l'entrée avec les valeurs par défaut
+
+        if not buckets:
+            return Response({"par_mois": []})
+
+        mois_labels = [
+            "janv.",
+            "févr.",
+            "mars",
+            "avr.",
+            "mai",
+            "juin",
+            "juil.",
+            "août",
+            "sept.",
+            "oct.",
+            "nov.",
+            "déc.",
+        ]
+
+        keys_sorted = sorted(buckets.keys())
+        y1, m1 = keys_sorted[0]
+        y2, m2 = keys_sorted[-1]
+
+        par_mois = []
+        cumul = 0.0
+        cumul_facture = 0.0
+        cumul_facture_situation = 0.0
+        cumul_facture_classique = 0.0
+        y, m = y1, m1
+        while True:
+            b = buckets[(y, m)]
+            mat = b["materiel"]
+            mo = b["main_oeuvre"]
+            st = b["sous_traitant"]
+            cout = mat + mo + st
+            cumul += cout
+            factu_mois = factu_buckets.get((y, m), 0.0)
+            factu_situation_mois = factu_situation_buckets.get((y, m), 0.0)
+            factu_classique_mois = factu_classique_buckets.get((y, m), 0.0)
+            cumul_facture += factu_mois
+            cumul_facture_situation += factu_situation_mois
+            cumul_facture_classique += factu_classique_mois
+            par_mois.append(
+                {
+                    "annee": y,
+                    "mois": m,
+                    "label": f"{mois_labels[m - 1]} {y}",
+                    "materiel": round(mat, 2),
+                    "main_oeuvre": round(mo, 2),
+                    "sous_traitant": round(st, 2),
+                    "cout_chantier": round(cout, 2),
+                    "cout_chantier_cumule": round(cumul, 2),
+                    "facture_mois": round(factu_mois, 2),
+                    "situation_mois": round(factu_situation_mois, 2),
+                    "facture_classique_mois": round(factu_classique_mois, 2),
+                    "facture_cumule": round(cumul_facture, 2),
+                    "situation_cumule": round(cumul_facture_situation, 2),
+                    "facture_classique_cumule": round(cumul_facture_classique, 2),
+                }
+            )
+            if (y, m) == (y2, m2):
+                break
+            m += 1
+            if m > 12:
+                m = 1
+                y += 1
+
+        return Response({"par_mois": par_mois})
+
 
 class PaiementFournisseurMaterielAPIView(APIView):
     permission_classes = [AllowAny]
@@ -13172,6 +13724,7 @@ def schedule_monthly_summary(request):
 
         agent_id = s.agent.id
         chantier_id = s.chantier.id
+        comment_norm = (s.comment or '').strip()
         
         # Gestion des agents journaliers vs horaires
         is_journalier = s.agent.type_paiement == 'journalier'
@@ -13184,13 +13737,15 @@ def schedule_monthly_summary(request):
             heures_increment = 1
             taux_horaire = s.agent.taux_Horaire or 0
 
-        key = (agent_id, chantier_id)
+        # Regroupement par commentaire : une ligne par (agent, chantier, commentaire)
+        key = (agent_id, chantier_id, comment_norm)
         if key not in result:
             result[key] = {
                 'agent_id': agent_id,
                 'agent_nom': f"{s.agent.name} {s.agent.surname}",
                 'chantier_id': chantier_id,
                 'chantier_nom': s.chantier.chantier_name,
+                'comment': comment_norm,
                 'type_paiement': s.agent.type_paiement,  # Ajout du type d'agent
                 'heures_normal': 0,
                 'heures_samedi': 0,
@@ -13268,7 +13823,7 @@ def schedule_monthly_summary(request):
 
     # Regrouper par chantier pour l'affichage
     chantier_map = {}
-    for (agent_id, chantier_id), data in result.items():
+    for (agent_id, chantier_id, _comment_key), data in result.items():
         if chantier_id not in chantier_map:
             chantier_map[chantier_id] = {
                 'chantier_id': chantier_id,
@@ -13302,15 +13857,21 @@ def schedule_monthly_summary(request):
     if agence_only:
         from .ecole_utils import get_agence_chantier_ids
         agence_ids = get_agence_chantier_ids()
-        merged_by_agent = {}
-        for (_agent_id, _chantier_id), data in result.items():
+        # Une ligne par (agent, commentaire) pour le tableau agence
+        # Clé (agent, commentaire, chantier) : en multi-agence, le même commentaire sur deux
+        # chantiers « agence » distincts ne doit pas être fusionné.
+        merged_by_agent_comment = {}
+        for (_agent_id, chantier_id_row, _comment), data in result.items():
             aid = data['agent_id']
-            if aid not in merged_by_agent:
-                merged_by_agent[aid] = {
+            cmt = data.get('comment') or ''
+            mkey = (aid, cmt, chantier_id_row)
+            if mkey not in merged_by_agent_comment:
+                merged_by_agent_comment[mkey] = {
                     'agent_id': data['agent_id'],
                     'agent_nom': data['agent_nom'],
-                    'chantier_id': agence_ids[0] if agence_ids else None,
+                    'chantier_id': data['chantier_id'],
                     'chantier_nom': data['chantier_nom'],
+                    'comment': cmt,
                     'type_paiement': data['type_paiement'],
                     'heures_normal': 0,
                     'heures_samedi': 0,
@@ -13324,7 +13885,7 @@ def schedule_monthly_summary(request):
                     'montant_overtime': 0,
                     'jours_majoration': [],
                 }
-            m = merged_by_agent[aid]
+            m = merged_by_agent_comment[mkey]
             for k in (
                 'heures_normal', 'heures_samedi', 'heures_dimanche', 'heures_ferie', 'heures_overtime',
                 'montant_normal', 'montant_samedi', 'montant_dimanche', 'montant_ferie', 'montant_overtime',
@@ -13332,15 +13893,27 @@ def schedule_monthly_summary(request):
                 m[k] += data[k]
             m['jours_majoration'].extend(data['jours_majoration'])
 
-        details = sorted(merged_by_agent.values(), key=lambda x: (x['agent_nom'] or '').lower())
+        details = sorted(
+            merged_by_agent_comment.values(),
+            key=lambda x: (
+                (x['agent_nom'] or '').lower(),
+                (x.get('chantier_nom') or '').lower(),
+                x.get('comment') or '',
+            ),
+        )
         tot_h = (
             sum(d['heures_normal'] + d['heures_samedi'] + d['heures_dimanche'] + d['heures_ferie'] + d['heures_overtime'] for d in details)
         )
         tot_m = (
             sum(d['montant_normal'] + d['montant_samedi'] + d['montant_dimanche'] + d['montant_ferie'] + d['montant_overtime'] for d in details)
         )
+        try:
+            cf = int(chantier_id_filter) if chantier_id_filter not in (None, '') else None
+        except (TypeError, ValueError):
+            cf = None
+        resolved_top_chantier_id = cf if cf is not None else (agence_ids[0] if agence_ids else None)
         return Response({
-            'chantier_id': agence_ids[0] if agence_ids else None,
+            'chantier_id': resolved_top_chantier_id,
             'chantier_nom': 'Agence (planning)',
             'details': details,
             'total_heures_normal': sum(d['heures_normal'] for d in details),
@@ -13410,7 +13983,8 @@ def schedule_yearly_summary(request):
     elif chantier_id_filter:
         schedules = schedules.filter(chantier_id=chantier_id_filter)
 
-    monthly_agents = {}  # {month: {agent_id: {...}}}
+    # {month: {agent_id: {...}}} ou, si agence_only, {month: {(agent_id, comment, chantier_id): {...}}}
+    monthly_agents = {}
     for s in schedules:
         if not s.chantier:
             continue
@@ -13422,6 +13996,12 @@ def schedule_yearly_summary(request):
             continue
         m = date_creneau.month
         agent_id = s.agent.id
+        comment_norm = (s.comment or '').strip()
+        chantier_id_row = s.chantier_id
+        if agence_only:
+            agent_subkey = (agent_id, comment_norm, chantier_id_row)
+        else:
+            agent_subkey = agent_id
 
         is_journalier = s.agent.type_paiement == 'journalier'
         if is_journalier:
@@ -13433,8 +14013,8 @@ def schedule_yearly_summary(request):
 
         if m not in monthly_agents:
             monthly_agents[m] = {}
-        if agent_id not in monthly_agents[m]:
-            monthly_agents[m][agent_id] = {
+        if agent_subkey not in monthly_agents[m]:
+            row = {
                 'agent_id': agent_id,
                 'agent_nom': f"{s.agent.name} {s.agent.surname}",
                 'type_paiement': s.agent.type_paiement,
@@ -13443,7 +14023,12 @@ def schedule_yearly_summary(request):
                 'montant_normal': 0, 'montant_samedi': 0, 'montant_dimanche': 0,
                 'montant_ferie': 0, 'montant_overtime': 0,
             }
-        data = monthly_agents[m][agent_id]
+            if agence_only:
+                row['comment'] = comment_norm
+                row['chantier_id'] = chantier_id_row
+                row['chantier_nom'] = s.chantier.chantier_name
+            monthly_agents[m][agent_subkey] = row
+        data = monthly_agents[m][agent_subkey]
         has_overtime = s.overtime_hours and s.overtime_hours > 0
 
         if is_journalier:
@@ -13473,7 +14058,17 @@ def schedule_yearly_summary(request):
     result_months = []
     for m in range(1, 13):
         agents = monthly_agents.get(m, {})
-        details = sorted(agents.values(), key=lambda x: (x['agent_nom'] or '').lower())
+        if agence_only:
+            details = sorted(
+                agents.values(),
+                key=lambda x: (
+                    (x['agent_nom'] or '').lower(),
+                    (x.get('chantier_nom') or '').lower(),
+                    x.get('comment') or '',
+                ),
+            )
+        else:
+            details = sorted(agents.values(), key=lambda x: (x['agent_nom'] or '').lower())
         keys = ('heures_normal', 'heures_samedi', 'heures_dimanche', 'heures_ferie', 'heures_overtime',
                 'montant_normal', 'montant_samedi', 'montant_dimanche', 'montant_ferie', 'montant_overtime')
         tot_h = sum(d['heures_normal'] + d['heures_samedi'] + d['heures_dimanche'] + d['heures_ferie'] + d['heures_overtime'] for d in details)
@@ -14189,14 +14784,16 @@ class AppelOffresViewSet(viewsets.ModelViewSet):
         return Response(serializer.data, status=status.HTTP_201_CREATED, headers=headers)
     
     def get_queryset(self):
-        """Filtrer selon les paramètres. Prefetch du devis de chantier pour les montants affichés."""
+        """Filtrer selon les paramètres. Prefetch des devis pour les montants affichés."""
         queryset = AppelOffres.objects.select_related('societe').prefetch_related(
             Prefetch(
                 'chantier_transformé',
                 Chantier.objects.prefetch_related(
                     Prefetch('devis', Devis.objects.filter(devis_chantier=True))
                 )
-            )
+            ),
+            # Devis liés directement à l'AO (non transformés)
+            Prefetch('devis', Devis.objects.order_by('-date_creation')),
         )
         # Filtre par statut
         statut = self.request.query_params.get('statut', None)

@@ -33,8 +33,8 @@ class Client(models.Model):
     ]
     
     civilite = models.CharField(max_length=10, choices=CIVILITE_CHOICES, blank=True, default='', verbose_name="Civilité")
-    name = models.CharField(max_length=100)
-    surname = models.CharField(max_length=25)
+    name = models.CharField(max_length=100, blank=True, default='')
+    surname = models.CharField(max_length=25, blank=True, default='')
     client_mail = models.EmailField(blank=True, null=True)
     phone_Number = models.IntegerField(blank=True, null=True)
     poste = models.CharField(max_length=100, blank=True, default='', verbose_name="Poste")
@@ -50,6 +50,7 @@ class Societe(models.Model):
     rue_societe = models.CharField(max_length=100,)
     rue_societe = models.CharField(max_length=100,)
     codepostal_societe = models.CharField(max_length=10,validators=[RegexValidator(regex=r'^\d{5}$',message='Le code postal doit être exactement 5 chiffres.',code='invalid_codepostal')],blank=True,null=True)
+    logo_s3_key = models.CharField(max_length=500, blank=True, null=True, verbose_name="Clé S3 du logo")
    #Change client_name to nom_contact
     client_name = models.ForeignKey(Client, on_delete=models.CASCADE)  # Association avec Client
     
@@ -540,6 +541,7 @@ class Agent(models.Model):
     
     name = models.CharField(max_length=25)
     surname = models.CharField(max_length=25)
+    email = models.EmailField(max_length=254, blank=True, null=True)
     address = models.CharField(max_length=100, blank=True, null=True)
     phone_Number = models.IntegerField()
     taux_Horaire = models.FloatField(null=True, blank=True)
@@ -599,6 +601,31 @@ class MonthlyHours(models.Model):
     
     class Meta:
         unique_together = ('agent', 'month')
+
+
+class PointageMensuel(models.Model):
+    agent = models.ForeignKey(Agent, on_delete=models.CASCADE, related_name='pointages_mensuels')
+    month = models.DateField(help_text="Premier jour du mois (YYYY-MM-01)")
+    salaire_net_initial_hors_prime = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    agence = models.BooleanField(default=False)
+    # Répartition du montant_charge entre agences et main d'œuvre chantier (null = chantier classique).
+    repartition_montant_charge = models.JSONField(
+        default=list,
+        blank=True,
+        help_text='[{"agence_id": <int ou null>, "montant": <nombre>}, ...] ; somme = montant_charge.',
+    )
+    montant_charge = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    montant_brut = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    accompte = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    paiement = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    date_paiement = models.DateField(null=True, blank=True)
+    commentaire = models.TextField(blank=True, default="")
+    # Permet de distinguer un salaire explicitement saisi d'une valeur héritée automatiquement.
+    salaire_overridden = models.BooleanField(default=False)
+
+    class Meta:
+        unique_together = ('agent', 'month')
+        ordering = ['month', 'agent_id']
 
 class Presence(models.Model):
     agent = models.ForeignKey(Agent, on_delete=models.CASCADE, related_name='presences')
@@ -1552,7 +1579,7 @@ class LigneDetail(models.Model):
     taux_fixe = models.DecimalField(
         max_digits=5, decimal_places=2, null=True, blank=True
     )  # en pourcentage
-    marge = models.DecimalField(max_digits=5, decimal_places=2, default=0)  # en pourcentage
+    marge = models.DecimalField(max_digits=8, decimal_places=2, default=0)  # en pourcentage, illimité
     prix = models.DecimalField(max_digits=10, decimal_places=2)
     is_deleted = models.BooleanField(default=False, null=True, blank=True)
     
@@ -3594,6 +3621,56 @@ class Document(models.Model):
         return f"/api/drive/download/{self.id}/"
 
 
+class DashboardSettings(models.Model):
+    """
+    Préférences du tableau de bord (ligne logique unique via singleton_key).
+    Stocke notamment la sélection des agences pour la carte « Dépenses agence »
+    et un JSON libre pour d'autres besoins futurs du dashboard.
+    """
+
+    singleton_key = models.CharField(
+        max_length=40,
+        unique=True,
+        default="default",
+        editable=False,
+        help_text="Clé fixe pour une seule configuration applicative.",
+    )
+    depenses_agence_use_default = models.BooleanField(
+        default=True,
+        help_text="Si vrai, la carte applique la règle « première agence » (id minimal).",
+    )
+    depenses_agence_included_agence_ids = models.JSONField(
+        default=list,
+        blank=True,
+        help_text="Ids d'agence et/ou null pour « Non rattaché » ; utilisé si use_default est faux.",
+    )
+    extra = models.JSONField(
+        default=dict,
+        blank=True,
+        help_text="Champs futurs (filtres, options d'affichage, etc.).",
+    )
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = "Paramètres dashboard"
+        verbose_name_plural = "Paramètres dashboard"
+
+    @classmethod
+    def get_singleton(cls):
+        obj, _ = cls.objects.get_or_create(
+            singleton_key="default",
+            defaults={
+                "depenses_agence_use_default": True,
+                "depenses_agence_included_agence_ids": [],
+                "extra": {},
+            },
+        )
+        return obj
+
+    def __str__(self):
+        return "Paramètres dashboard"
+
+
 # Signal pour créer automatiquement les émetteurs après les migrations
 @receiver(post_migrate)
 def create_default_emetteurs(sender, **kwargs):
@@ -3606,3 +3683,42 @@ def create_default_emetteurs(sender, **kwargs):
                 print(f"✅ {created_count} émetteur(s) créé(s) automatiquement")
         except Exception as e:
             print(f"❌ Erreur lors de la création des émetteurs : {e}")
+
+
+# --- Rapport d'intervention / Vigik+ -------------------------------------
+# Modèles dédiés à la fonctionnalité « Rapport d'intervention / Vigik+ ».
+# Ils sont définis dans ``api/models_rapport.py`` et réexportés ici afin
+# de rester accessibles via ``from api.models import RapportIntervention``.
+from .models_rapport import (  # noqa: E402  (import après signaux/post_migrate)
+    TitreRapport,
+    Residence,
+    RapportIntervention,
+    RapportInterventionNumeroCompteur,
+    RapportInterventionBrouillon,
+    PrestationRapport,
+    PhotoRapport,
+    assign_numero_rapport_si_absent,
+    default_dates_intervention_list,
+)
+
+
+class UserMobileAccess(models.Model):
+    """Droits d'accès aux sections mobiles (PWA) par utilisateur."""
+    user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='mobile_access')
+    can_access_rapports = models.BooleanField(default=False, verbose_name="Accès Rapports")
+    can_access_distributeur = models.BooleanField(default=False, verbose_name="Accès Distributeur")
+    can_access_drive = models.BooleanField(default=False, verbose_name="Accès Drive")
+
+    class Meta:
+        verbose_name = "Accès mobile utilisateur"
+        verbose_name_plural = "Accès mobiles utilisateurs"
+
+    def __str__(self):
+        return f"Accès mobile de {self.user.username}"
+
+
+@receiver(post_save, sender=User)
+def create_user_mobile_access(sender, instance, created, **kwargs):
+    """Crée automatiquement un profil d'accès mobile à la création de chaque utilisateur."""
+    if created:
+        UserMobileAccess.objects.get_or_create(user=instance)
