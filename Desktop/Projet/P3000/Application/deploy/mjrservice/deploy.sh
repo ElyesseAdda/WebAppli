@@ -109,6 +109,12 @@ manage_django() {
     python manage.py migrate --noinput
     python manage.py collectstatic --noinput --clear
 
+    # Copier les fichiers hors STATICFILES_DIRS (frontend/static/ root non inclus dans les settings)
+    for f in manifest.json manifest_rapports.json; do
+        [ -f "frontend/static/$f" ] && cp -f "frontend/static/$f" "staticfiles/$f" || true
+    done
+    [ -d "frontend/static/css" ] && { mkdir -p staticfiles/css; cp -rf frontend/static/css/. staticfiles/css/; } || true
+
     sudo chown -R www-data:www-data staticfiles/
     chmod -R 755 staticfiles/
     log_ok "Django configuré"

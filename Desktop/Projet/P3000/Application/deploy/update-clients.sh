@@ -258,12 +258,20 @@ GIT_ROOT=$(git rev-parse --show-toplevel 2>/dev/null) || log_error "Ce répertoi
 cd "$GIT_ROOT"
 log_info "Racine git : $GIT_ROOT"
 
+# Vérifier qu'on est bien sur main (protection contre exécution depuis un serveur client)
+CURRENT_BRANCH=$(git branch --show-current)
+if [ "$CURRENT_BRANCH" != "main" ]; then
+    log_warn "Branche courante : '$CURRENT_BRANCH' (attendu : 'main')"
+    log_warn "Ce script doit être lancé depuis la branche main (machine de développement)."
+    log_warn "Retour automatique sur main..."
+    git checkout main 2>/dev/null || log_error "Impossible de basculer sur main. Vérifiez votre dépôt."
+fi
+
 # S'assurer que main est à jour
 log_info "Fetch des dernières modifications..."
 git fetch origin main:main 2>/dev/null || log_warn "Impossible de fetch origin/main"
 
 check_git_clean
-ORIGINAL_BRANCH=$(git branch --show-current)
 
 run_client() {
     local branch="$1"
@@ -287,9 +295,9 @@ case "$TARGET" in
         ;;
 esac
 
-# Revenir à la branche d'origine
-git checkout "$ORIGINAL_BRANCH" 2>/dev/null || true
-log_ok "Retour sur la branche : $ORIGINAL_BRANCH"
+# Revenir sur main (toujours, quelle que soit la branche de départ)
+git checkout main 2>/dev/null || true
+log_ok "Retour sur la branche : main"
 
 # Restaurer les modifications locales si elles avaient été stashées
 restore_stash
