@@ -3133,7 +3133,13 @@ class DistributeurReapproSessionViewSet(viewsets.ModelViewSet):
         ligne, created = DistributeurReapproLigne.objects.update_or_create(
             session=session,
             cell=cell,
-            defaults={'quantite': quantite, 'prix_vente': prix_vente, 'cout_unitaire': cout_unitaire},
+            defaults={
+                'quantite': quantite,
+                'prix_vente': prix_vente,
+                'cout_unitaire': cout_unitaire,
+                # La consommation effective des lots n'existe qu'après validation (terminer)
+                'consommation_lots': [],
+            },
         )
         logger.info(
             "[add_ligne] APRÈS save: ligne.id=%s, ligne.cout_unitaire=%s (created=%s)",
@@ -3201,6 +3207,7 @@ class DistributeurReapproSessionViewSet(viewsets.ModelViewSet):
                     continue
                 product = lig.cell.stock_product
                 quantite = lig.quantite
+                consommation_lots = []
                 lots = list(
                     StockLot.objects.filter(produit=product, quantite_restante__gt=0)
                     .order_by('date_achat', 'created_at')
@@ -3213,11 +3220,119 @@ class DistributeurReapproSessionViewSet(viewsets.ModelViewSet):
                     prise = min(restant_a_retirer, lot.quantite_restante)
                     lot.quantite_restante -= prise
                     lot.save(update_fields=['quantite_restante'])
+                    consommation_lots.append({'lot_id': lot.id, 'quantite': int(prise)})
                     restant_a_retirer -= prise
+                lig.consommation_lots = consommation_lots
+                lig.save(update_fields=['consommation_lots'])
                 StockProduct.objects.filter(pk=product.pk).update(quantite=F('quantite') - quantite)
             session.statut = 'termine'
             session.date_fin = date_fin_value
             session.save()
+        serializer = DistributeurReapproSessionSerializer(session)
+        return Response(serializer.data, status=status.HTTP_200_OK)
+
+    @action(detail=True, methods=['post'], url_path='annuler')
+    def annuler(self, request, pk=None):
+        """
+        Annule une session de mouvement :
+        - si session terminée : restaure les quantités consommées par lot (FIFO inversé exact via trace)
+        - retire l'impact bénéfice en passant le statut à 'annule'
+        """
+        session = self.get_object()
+        if session.statut == 'annule':
+            return Response(
+                {'error': 'Cette session est déjà annulée'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        with transaction.atomic():
+            session = DistributeurReapproSession.objects.select_for_update().get(pk=session.pk)
+            lignes = list(
+                session.lignes.select_related('cell', 'cell__stock_product')
+                .all()
+            )
+
+            if session.statut == 'termine':
+                for lig in lignes:
+                    product = getattr(lig.cell, 'stock_product', None)
+                    if not product:
+                        continue
+
+                    consommation_lots = lig.consommation_lots or []
+                    if not consommation_lots:
+                        # Compatibilité legacy (anciennes sessions sans trace des lots):
+                        # on recrée un lot d'ajustement pour remettre les unités dans le FIFO.
+                        quantite_legacy = int(lig.quantite or 0)
+                        if quantite_legacy <= 0:
+                            continue
+                        cout_unitaire_legacy = lig.cout_unitaire if lig.cout_unitaire is not None else Decimal('0')
+                        achat = StockPurchase.objects.create(
+                            lieu_achat=f"Annulation mouvement distributeur #{session.id}",
+                            date_achat=timezone.now(),
+                            total=Decimal('0'),
+                        )
+                        item = StockPurchaseItem.objects.create(
+                            achat=achat,
+                            produit=product,
+                            nom_produit=product.nom or product.nom_produit or f"Produit #{product.id}",
+                            quantite=quantite_legacy,
+                            prix_unitaire=cout_unitaire_legacy,
+                            unite="pièce",
+                            creer_produit=False,
+                        )
+                        StockLot.objects.create(
+                            produit=product,
+                            purchase_item=item,
+                            quantite_restante=quantite_legacy,
+                            prix_achat_unitaire=cout_unitaire_legacy,
+                            date_achat=timezone.now(),
+                        )
+                        StockProduct.objects.filter(pk=product.pk).update(
+                            quantite=F('quantite') + quantite_legacy
+                        )
+                        continue
+
+                    quantite_restauree = 0
+                    for item in consommation_lots:
+                        lot_id = item.get('lot_id')
+                        try:
+                            quantite = int(item.get('quantite') or 0)
+                        except (TypeError, ValueError):
+                            quantite = 0
+                        if not lot_id or quantite <= 0:
+                            continue
+
+                        lot = StockLot.objects.select_for_update().filter(
+                            pk=lot_id,
+                            produit_id=product.id,
+                        ).first()
+                        if not lot:
+                            return Response(
+                                {
+                                    'error': (
+                                        "Impossible d'annuler ce mouvement automatiquement : "
+                                        "un lot de stock d'origine est introuvable."
+                                    ),
+                                    'session_id': session.id,
+                                    'ligne_id': lig.id,
+                                    'lot_id': lot_id,
+                                },
+                                status=status.HTTP_400_BAD_REQUEST,
+                            )
+
+                        lot.quantite_restante = (lot.quantite_restante or 0) + quantite
+                        lot.save(update_fields=['quantite_restante'])
+                        quantite_restauree += quantite
+
+                    if quantite_restauree > 0:
+                        StockProduct.objects.filter(pk=product.pk).update(
+                            quantite=F('quantite') + quantite_restauree
+                        )
+
+            session.statut = 'annule'
+            session.date_fin = timezone.now()
+            session.save(update_fields=['statut', 'date_fin', 'updated_at'])
+
         serializer = DistributeurReapproSessionSerializer(session)
         return Response(serializer.data, status=status.HTTP_200_OK)
 
