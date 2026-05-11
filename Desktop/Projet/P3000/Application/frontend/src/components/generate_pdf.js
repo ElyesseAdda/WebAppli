@@ -5,7 +5,7 @@ const puppeteer = require("puppeteer");
 async function generatePDF() {
   const args = process.argv.slice(2);
   const previewUrl = args[0]; // L'URL de prévisualisation du devis
-  const pdfPath = args[1] || path.resolve(__dirname, "devis.pdf"); // Par défaut devis.pdf
+  const pdfPath = args[1] || path.join(require("os").tmpdir(), `devis-${Date.now()}.pdf`);
 
   // Détecter l'environnement : production (Linux) ou local (Windows/autre)
   const isProduction = process.platform === "linux" && fs.existsSync("/usr/bin/chromium-browser");
@@ -118,7 +118,7 @@ async function generatePDF() {
       process.exit(0); // Sortie réussie
     } catch (pageError) {
       console.error("Erreur lors du traitement de la page:", pageError);
-      await page.screenshot({ path: "error-screenshot.png" });
+      await page.screenshot({ path: require("os").tmpdir() + "/error-screenshot.png" }).catch(() => {});
       throw pageError;
     }
   } catch (err) {

@@ -850,6 +850,7 @@ def preview_devis(request):
         return JsonResponse({'error': 'Aucune donnée de devis trouvée'}, status=400)
 
 def generate_pdf_from_preview(request):
+    pdf_fd, pdf_path = None, None
     try:
         data = json.loads(request.body)
         devis_id = data.get('devis_id')
@@ -867,42 +868,41 @@ def generate_pdf_from_preview(request):
         else:
             preview_url = request.build_absolute_uri(f"/api/preview-saved-devis/{devis_id}/")
 
-        # Chemin vers le script Puppeteer
         node_script_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'frontend', 'src', 'components', 'generate_pdf.js')
 
-        # Commande pour exécuter Puppeteer avec Node.js
-        command = ['node', node_script_path, preview_url]
+        pdf_fd, pdf_path = tempfile.mkstemp(suffix='.pdf', dir='/tmp')
+        os.close(pdf_fd)
+        pdf_fd = None
 
-        # Exécuter Puppeteer avec capture de la sortie
-        result = subprocess.run(
-            command, 
+        subprocess.run(
+            ['node', node_script_path, preview_url, pdf_path],
             check=True,
             capture_output=True,
             text=True
         )
 
-        # Lire le fichier PDF généré
-        pdf_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'frontend', 'src', 'components', 'devis.pdf')
-
         if os.path.exists(pdf_path):
             with open(pdf_path, 'rb') as pdf_file:
-                response = HttpResponse(pdf_file.read(), content_type='application/pdf')
+                pdf_data = pdf_file.read()
             download_filename = custom_filename or f'devis_{devis_id}.pdf'
+            response = HttpResponse(pdf_data, content_type='application/pdf')
             response['Content-Disposition'] = f'attachment; filename="{download_filename}"'
             return response
         else:
-            error_msg = 'Le fichier PDF n\'a pas été généré.'
-            return JsonResponse({'error': error_msg}, status=500)
+            return JsonResponse({'error': 'Le fichier PDF n\'a pas été généré.'}, status=500)
 
     except json.JSONDecodeError as e:
-        error_msg = f'Données JSON invalides: {str(e)}'
-        return JsonResponse({'error': error_msg}, status=400)
+        return JsonResponse({'error': f'Données JSON invalides: {str(e)}'}, status=400)
     except subprocess.CalledProcessError as e:
-        error_msg = f'Erreur lors de la génération du PDF: {str(e)}'
-        return JsonResponse({'error': error_msg}, status=500)
+        return JsonResponse({'error': f'Erreur lors de la génération du PDF: {e.stderr}'}, status=500)
     except Exception as e:
-        error_msg = f'Erreur inattendue: {str(e)}'
-        return JsonResponse({'error': error_msg}, status=500)
+        return JsonResponse({'error': f'Erreur inattendue: {str(e)}'}, status=500)
+    finally:
+        if pdf_path and os.path.exists(pdf_path):
+            try:
+                os.unlink(pdf_path)
+            except OSError:
+                pass
 
 
 def check_nom_devis_existe(request):
@@ -1637,6 +1637,7 @@ def preview_devis(request):
         return JsonResponse({'error': 'Aucune donnée de devis trouvée'}, status=400)
 
 def generate_pdf_from_preview(request):
+    pdf_fd, pdf_path = None, None
     try:
         data = json.loads(request.body)
         devis_id = data.get('devis_id')
@@ -1654,42 +1655,41 @@ def generate_pdf_from_preview(request):
         else:
             preview_url = request.build_absolute_uri(f"/api/preview-saved-devis/{devis_id}/")
 
-        # Chemin vers le script Puppeteer
         node_script_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'frontend', 'src', 'components', 'generate_pdf.js')
 
-        # Commande pour exécuter Puppeteer avec Node.js
-        command = ['node', node_script_path, preview_url]
+        pdf_fd, pdf_path = tempfile.mkstemp(suffix='.pdf', dir='/tmp')
+        os.close(pdf_fd)
+        pdf_fd = None
 
-        # Exécuter Puppeteer avec capture de la sortie
-        result = subprocess.run(
-            command, 
+        subprocess.run(
+            ['node', node_script_path, preview_url, pdf_path],
             check=True,
             capture_output=True,
             text=True
         )
 
-        # Lire le fichier PDF généré
-        pdf_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'frontend', 'src', 'components', 'devis.pdf')
-
         if os.path.exists(pdf_path):
             with open(pdf_path, 'rb') as pdf_file:
-                response = HttpResponse(pdf_file.read(), content_type='application/pdf')
+                pdf_data = pdf_file.read()
             download_filename = custom_filename or f'devis_{devis_id}.pdf'
+            response = HttpResponse(pdf_data, content_type='application/pdf')
             response['Content-Disposition'] = f'attachment; filename="{download_filename}"'
             return response
         else:
-            error_msg = 'Le fichier PDF n\'a pas été généré.'
-            return JsonResponse({'error': error_msg}, status=500)
+            return JsonResponse({'error': 'Le fichier PDF n\'a pas été généré.'}, status=500)
 
     except json.JSONDecodeError as e:
-        error_msg = f'Données JSON invalides: {str(e)}'
-        return JsonResponse({'error': error_msg}, status=400)
+        return JsonResponse({'error': f'Données JSON invalides: {str(e)}'}, status=400)
     except subprocess.CalledProcessError as e:
-        error_msg = f'Erreur lors de la génération du PDF: {str(e)}'
-        return JsonResponse({'error': error_msg}, status=500)
+        return JsonResponse({'error': f'Erreur lors de la génération du PDF: {e.stderr}'}, status=500)
     except Exception as e:
-        error_msg = f'Erreur inattendue: {str(e)}'
-        return JsonResponse({'error': error_msg}, status=500)
+        return JsonResponse({'error': f'Erreur inattendue: {str(e)}'}, status=500)
+    finally:
+        if pdf_path and os.path.exists(pdf_path):
+            try:
+                os.unlink(pdf_path)
+            except OSError:
+                pass
 
 
 def check_nom_devis_existe(request):
@@ -6044,42 +6044,36 @@ def generate_facture_pdf_from_preview(request):
     """
     Génère un PDF de facture à partir de l'URL de prévisualisation
     """
+    pdf_fd, pdf_path = None, None
     try:
         data = json.loads(request.body)
         facture_id = data.get('facture_id')
-        
+
         if not facture_id:
             return JsonResponse({'error': 'ID de la facture manquant'}, status=400)
 
-        # URL de la page de prévisualisation pour une facture sauvegardée
         preview_url = request.build_absolute_uri(f"/api/preview-facture/{facture_id}/")
 
-        # Chemin vers le script Puppeteer
         node_script_path = os.path.join(
-            os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 
+            os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
             'frontend', 'src', 'components', 'generate_pdf.js'
         )
 
-        # Commande pour exécuter Puppeteer avec Node.js
-        command = ['node', node_script_path, preview_url]
+        pdf_fd, pdf_path = tempfile.mkstemp(suffix='.pdf', dir='/tmp')
+        os.close(pdf_fd)
+        pdf_fd = None
 
-        # Exécuter Puppeteer avec capture de la sortie
-        result = subprocess.run(
-            command, 
+        subprocess.run(
+            ['node', node_script_path, preview_url, pdf_path],
             check=True,
             capture_output=True,
             text=True
         )
 
-        # Lire le fichier PDF généré
-        pdf_path = os.path.join(
-            os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 
-            'frontend', 'src', 'components', 'devis.pdf'
-        )
-
         if os.path.exists(pdf_path):
             with open(pdf_path, 'rb') as pdf_file:
-                response = HttpResponse(pdf_file.read(), content_type='application/pdf')
+                pdf_data = pdf_file.read()
+            response = HttpResponse(pdf_data, content_type='application/pdf')
             response['Content-Disposition'] = f'attachment; filename="facture_{facture_id}.pdf"'
             return response
         else:
@@ -6088,11 +6082,15 @@ def generate_facture_pdf_from_preview(request):
     except json.JSONDecodeError as e:
         return JsonResponse({'error': f'Erreur de décodage JSON: {str(e)}'}, status=400)
     except subprocess.CalledProcessError as e:
-        return JsonResponse({
-            'error': f'Erreur lors de l\'exécution du script: {e.stderr}'
-        }, status=500)
+        return JsonResponse({'error': f'Erreur lors de l\'exécution du script: {e.stderr}'}, status=500)
     except Exception as e:
         return JsonResponse({'error': str(e)}, status=500)
+    finally:
+        if pdf_path and os.path.exists(pdf_path):
+            try:
+                os.unlink(pdf_path)
+            except OSError:
+                pass
 
 @api_view(['GET'])
 def get_next_facture_number(request):
