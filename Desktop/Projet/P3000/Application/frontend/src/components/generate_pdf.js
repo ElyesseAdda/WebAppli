@@ -85,7 +85,7 @@ async function generatePDF() {
       }
 
       const response = await page.goto(previewUrl, {
-        waitUntil: ["load", "networkidle0"],
+        waitUntil: ["load", "networkidle2"],
         timeout: 60000,
       });
 
