@@ -160,12 +160,13 @@ const PaymentsDetailModal = ({ open, onClose, title, items = [], loading = false
                       align={col.align}
                       sortDirection={orderBy === col.id ? order : false}
                       sx={{
-                        fontWeight: 700,
-                        fontSize: "0.73rem",
+                        fontWeight: 600,
+                        fontSize: "0.62rem",
                         color: "#6b7280",
                         bgcolor: "#f8fafc",
                         borderBottom: "1px solid #e5e7eb",
-                        py: 0.8,
+                        py: 0.5,
+                        px: 1,
                         whiteSpace: "nowrap",
                       }}
                     >
@@ -174,7 +175,9 @@ const PaymentsDetailModal = ({ open, onClose, title, items = [], loading = false
                         direction={orderBy === col.id ? order : "asc"}
                         onClick={() => handleSort(col.id)}
                         sx={{
+                          fontSize: "0.62rem",
                           "& .MuiTableSortLabel-icon": {
+                            fontSize: "0.85rem",
                             opacity: orderBy === col.id ? 1 : 0.35,
                           },
                         }}
