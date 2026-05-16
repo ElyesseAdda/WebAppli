@@ -29,6 +29,13 @@ export const displayPath = (normalizedPath) => {
   const segments = normalizedPath.split('/');
   return segments.map(segment => displayFilename(segment)).join('/');
 };
+
+/** Sélection initiale au renommage : nom sans extension pour les fichiers */
+export const getRenameSelectionEnd = (displayName, isFolder) => {
+  if (!displayName || isFolder) return displayName?.length ?? 0;
+  const lastDot = displayName.lastIndexOf('.');
+  return lastDot > 0 ? lastDot : displayName.length;
+};
 import {
   Box,
   List,
@@ -197,6 +204,8 @@ const DriveExplorer = ({
   const [renameDialogOpen, setRenameDialogOpen] = useState(false);
   const [newName, setNewName] = useState('');
   const [renameConflict, setRenameConflict] = useState(null);
+  const renameInputRef = useRef(null);
+  const renameInitialSelectionDoneRef = useRef(false);
   const [isSelecting, setIsSelecting] = useState(false);
   const [selectionStart, setSelectionStart] = useState(null);
   const [selectionBox, setSelectionBox] = useState(null);
@@ -1467,6 +1476,29 @@ const DriveExplorer = ({
     await pasteItems(currentPath);
   };
 
+  const applyRenameInputSelection = useCallback(() => {
+    const input = renameInputRef.current;
+    if (!input) return;
+    const value = input.value;
+    const end = getRenameSelectionEnd(value, selectedItem?.type === 'folder');
+    input.focus();
+    input.setSelectionRange(0, end);
+  }, [selectedItem]);
+
+  useEffect(() => {
+    if (!renameDialogOpen) {
+      renameInitialSelectionDoneRef.current = false;
+      return;
+    }
+    const timer = window.setTimeout(() => {
+      if (!renameInitialSelectionDoneRef.current) {
+        applyRenameInputSelection();
+        renameInitialSelectionDoneRef.current = true;
+      }
+    }, 0);
+    return () => window.clearTimeout(timer);
+  }, [renameDialogOpen, newName, applyRenameInputSelection]);
+
   // Ouvrir le dialog de renommage
   const handleRename = () => {
     if (!selectedItem) return;
@@ -1474,6 +1506,7 @@ const DriveExplorer = ({
     // Initialiser le nom avec le nom d'affichage (avec espaces)
     setNewName(displayFilename(selectedItem.name));
     setRenameConflict(null);
+    renameInitialSelectionDoneRef.current = false;
     setRenameDialogOpen(true);
     handleCloseContextMenu();
   };
@@ -2191,10 +2224,10 @@ const DriveExplorer = ({
             </ListItemText>
           </MenuItem>
         )}
-        {/* Renommer - seulement si un seul élément est sélectionné */}
+        {/* Renommer - seulement si un seul élément est ciblé */}
         <MenuItem 
           onClick={handleRename}
-          disabled={!selectedItem || selectedFiles.size > 0}
+          disabled={!selectedItem || selectedFiles.size > 1 || (selectedItem && isProtectedFolder(selectedItem))}
         >
           <ListItemIcon>
             <EditIcon fontSize="small" />
@@ -2262,6 +2295,7 @@ const DriveExplorer = ({
             </Alert>
           )}
           <TextField
+            inputRef={renameInputRef}
             autoFocus
             margin="dense"
             label="Nouveau nom"
@@ -2271,6 +2305,13 @@ const DriveExplorer = ({
             onChange={(e) => {
               setNewName(e.target.value);
               setRenameConflict(null);
+            }}
+            onFocus={(e) => {
+              if (renameInitialSelectionDoneRef.current) return;
+              const value = e.target.value;
+              const end = getRenameSelectionEnd(value, selectedItem?.type === 'folder');
+              e.target.setSelectionRange(0, end);
+              renameInitialSelectionDoneRef.current = true;
             }}
             onKeyPress={(e) => {
               if (e.key === 'Enter' && !renameConflict) {

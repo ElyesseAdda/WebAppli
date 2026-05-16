@@ -64,18 +64,26 @@ export function usePaymentsDetail(selectedYear) {
       const chantier = s.chantier_name || s.chantier || "";
 
       if (s.date_paiement_reel) {
+        const d = new Date(s.date_paiement_reel);
         encaissementsRecus.push({
           id: s.id, label, chantier, montant,
           date: fmtDate(s.date_paiement_reel),
+          dateSort: d.getTime(),
           type: "Situation",
         });
       } else {
         const prevue = calcDatePrevue(s.date_envoi, s.delai_paiement);
         if (prevue) {
+          const row = {
+            id: s.id, label, chantier, montant,
+            date: fmtDate(prevue),
+            dateSort: prevue.getTime(),
+            type: "Situation",
+          };
           if (prevue >= today && prevue <= in15) {
-            paiementsAVenir.push({ id: s.id, label, chantier, montant, date: fmtDate(prevue), type: "Situation" });
+            paiementsAVenir.push(row);
           } else if (prevue < today) {
-            paiementsEnRetard.push({ id: s.id, label, chantier, montant, date: fmtDate(prevue), type: "Situation" });
+            paiementsEnRetard.push(row);
           }
         }
       }
@@ -88,28 +96,35 @@ export function usePaymentsDetail(selectedYear) {
       const chantier = f.chantier_name || f.chantier || "";
 
       if (f.date_paiement) {
+        const d = new Date(f.date_paiement);
         encaissementsRecus.push({
           id: f.id, label, chantier, montant,
           date: fmtDate(f.date_paiement),
+          dateSort: d.getTime(),
           type: "Facture",
         });
       } else {
         const prevue = calcDatePrevue(f.date_envoi || f.date_creation, f.delai_paiement);
         if (prevue) {
+          const row = {
+            id: f.id, label, chantier, montant,
+            date: fmtDate(prevue),
+            dateSort: prevue.getTime(),
+            type: "Facture",
+          };
           if (prevue >= today && prevue <= in15) {
-            paiementsAVenir.push({ id: f.id, label, chantier, montant, date: fmtDate(prevue), type: "Facture" });
+            paiementsAVenir.push(row);
           } else if (prevue < today) {
-            paiementsEnRetard.push({ id: f.id, label, chantier, montant, date: fmtDate(prevue), type: "Facture" });
+            paiementsEnRetard.push(row);
           }
         }
       }
     });
 
-    // Tri par montant décroissant
-    const byMontant = (a, b) => b.montant - a.montant;
-    encaissementsRecus.sort(byMontant);
-    paiementsAVenir.sort(byMontant);
-    paiementsEnRetard.sort(byMontant);
+    const byDateAsc = (a, b) => (a.dateSort || 0) - (b.dateSort || 0);
+    encaissementsRecus.sort(byDateAsc);
+    paiementsAVenir.sort(byDateAsc);
+    paiementsEnRetard.sort(byDateAsc);
 
     return { encaissementsRecus, paiementsAVenir, paiementsEnRetard };
   }, [situations, factures]);

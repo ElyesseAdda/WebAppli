@@ -905,6 +905,7 @@ class DistributeurReapproSession(models.Model):
     STATUT_CHOICES = [
         ('en_cours', 'En cours'),
         ('termine', 'Terminé'),
+        ('annule', 'Annulé'),
     ]
     distributeur = models.ForeignKey(
         Distributeur,
@@ -963,6 +964,11 @@ class DistributeurReapproLigne(models.Model):
         blank=True,
         null=True,
         help_text="Coût unitaire (€) issu des StockLot — pour calcul bénéfice"
+    )
+    consommation_lots = models.JSONField(
+        default=list,
+        blank=True,
+        help_text="Trace des lots consommés lors de la validation: [{lot_id, quantite}]",
     )
     created_at = models.DateTimeField(auto_now_add=True)
 

@@ -12,17 +12,26 @@ import {
   TableContainer,
   TableHead,
   TableRow,
+  TableSortLabel,
   Tooltip,
   Typography,
 } from "@mui/material";
 import CloseIcon from "@mui/icons-material/Close";
 import OpenInNewIcon from "@mui/icons-material/OpenInNew";
-import React from "react";
+import React, { useEffect, useMemo, useState } from "react";
 
 const PREVIEW_URL = {
   Situation: (id) => `/api/preview-situation/${id}/`,
   Facture: (id) => `/api/preview-facture/${id}/`,
 };
+
+const COLUMNS = [
+  { id: "type", label: "Type" },
+  { id: "label", label: "Document" },
+  { id: "chantier", label: "Chantier" },
+  { id: "montant", label: "Montant HT", align: "right" },
+  { id: "date", label: "Date" },
+];
 
 const fmt = (v) =>
   new Intl.NumberFormat("fr-FR", {
@@ -33,8 +42,46 @@ const fmt = (v) =>
 
 const TYPE_COLOR = { Situation: "#1B78BC", Facture: "#7c3aed" };
 
+const compareRows = (a, b, orderBy) => {
+  switch (orderBy) {
+    case "type":
+      return (a.type || "").localeCompare(b.type || "", "fr", { sensitivity: "base" });
+    case "label":
+      return (a.label || "").localeCompare(b.label || "", "fr", { sensitivity: "base" });
+    case "chantier":
+      return (a.chantier || "").localeCompare(b.chantier || "", "fr", { sensitivity: "base" });
+    case "montant":
+      return (a.montant || 0) - (b.montant || 0);
+    case "date":
+      return (a.dateSort || 0) - (b.dateSort || 0);
+    default:
+      return 0;
+  }
+};
+
 const PaymentsDetailModal = ({ open, onClose, title, items = [], loading = false, accentColor = "#1B78BC" }) => {
-  const total = items.reduce((s, i) => s + (i.montant || 0), 0);
+  const [orderBy, setOrderBy] = useState("date");
+  const [order, setOrder] = useState("asc");
+
+  useEffect(() => {
+    if (open) {
+      setOrderBy("date");
+      setOrder(title?.toLowerCase().includes("encaissement") ? "desc" : "asc");
+    }
+  }, [open, title]);
+
+  const handleSort = (columnId) => {
+    const isAsc = orderBy === columnId && order === "asc";
+    setOrder(isAsc ? "desc" : "asc");
+    setOrderBy(columnId);
+  };
+
+  const sortedItems = useMemo(() => {
+    const dir = order === "asc" ? 1 : -1;
+    return [...items].sort((a, b) => compareRows(a, b, orderBy) * dir);
+  }, [items, orderBy, order]);
+
+  const total = sortedItems.reduce((s, i) => s + (i.montant || 0), 0);
 
   return (
     <Dialog
@@ -107,27 +154,43 @@ const PaymentsDetailModal = ({ open, onClose, title, items = [], loading = false
             <Table size="small" stickyHeader>
               <TableHead>
                 <TableRow>
-                  {["Type", "Document", "Chantier", "Montant HT", "Date"].map((h) => (
+                  {COLUMNS.map((col) => (
                     <TableCell
-                      key={h}
+                      key={col.id}
+                      align={col.align}
+                      sortDirection={orderBy === col.id ? order : false}
                       sx={{
-                        fontWeight: 700,
-                        fontSize: "0.73rem",
+                        fontWeight: 600,
+                        fontSize: "0.62rem",
                         color: "#6b7280",
                         bgcolor: "#f8fafc",
                         borderBottom: "1px solid #e5e7eb",
-                        py: 0.8,
+                        py: 0.5,
+                        px: 1,
                         whiteSpace: "nowrap",
                       }}
                     >
-                      {h}
+                      <TableSortLabel
+                        active={orderBy === col.id}
+                        direction={orderBy === col.id ? order : "asc"}
+                        onClick={() => handleSort(col.id)}
+                        sx={{
+                          fontSize: "0.62rem",
+                          "& .MuiTableSortLabel-icon": {
+                            fontSize: "0.85rem",
+                            opacity: orderBy === col.id ? 1 : 0.35,
+                          },
+                        }}
+                      >
+                        {col.label}
+                      </TableSortLabel>
                     </TableCell>
                   ))}
                 </TableRow>
               </TableHead>
               <TableBody>
-                {items.map((item, idx) => (
-                  <TableRow key={idx} sx={{ "&:hover": { bgcolor: "#f8fafc" } }}>
+                {sortedItems.map((item, idx) => (
+                  <TableRow key={`${item.type}-${item.id}-${idx}`} sx={{ "&:hover": { bgcolor: "#f8fafc" } }}>
                     <TableCell sx={{ py: 0.9 }}>
                       <Typography
                         sx={{
@@ -179,7 +242,10 @@ const PaymentsDetailModal = ({ open, onClose, title, items = [], loading = false
                     >
                       {item.chantier || "—"}
                     </TableCell>
-                    <TableCell sx={{ fontSize: "0.82rem", fontWeight: 700, color: accentColor, py: 0.9 }}>
+                    <TableCell
+                      align="right"
+                      sx={{ fontSize: "0.82rem", fontWeight: 700, color: accentColor, py: 0.9 }}
+                    >
                       {fmt(item.montant)}
                     </TableCell>
                     <TableCell sx={{ fontSize: "0.78rem", color: "#6b7280", py: 0.9, whiteSpace: "nowrap" }}>

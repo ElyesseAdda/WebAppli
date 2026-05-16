@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import {
   Accordion,
   AccordionDetails,
@@ -48,6 +48,24 @@ const PrimeModal = ({ isOpen, onClose, month, year }) => {
     "Janvier", "Février", "Mars", "Avril", "Mai", "Juin",
     "Juillet", "Août", "Septembre", "Octobre", "Novembre", "Décembre",
   ];
+
+  const sortedChantiers = useMemo(
+    () =>
+      [...chantiers].sort((a, b) =>
+        (a.chantier_name || "").localeCompare(b.chantier_name || "", "fr", {
+          sensitivity: "base",
+        })
+      ),
+    [chantiers]
+  );
+
+  const sortedAgences = useMemo(
+    () =>
+      [...agences].sort((a, b) =>
+        (a.nom || "").localeCompare(b.nom || "", "fr", { sensitivity: "base" })
+      ),
+    [agences]
+  );
 
   useEffect(() => {
     if (isOpen) {
@@ -444,7 +462,7 @@ const PrimeModal = ({ isOpen, onClose, month, year }) => {
                                   <MenuItem value="" disabled>
                                     Sélectionner une agence
                                   </MenuItem>
-                                  {agences.map((agence) => (
+                                  {sortedAgences.map((agence) => (
                                     <MenuItem key={agence.id} value={agence.id}>
                                       {agence.nom}
                                     </MenuItem>
@@ -472,7 +490,7 @@ const PrimeModal = ({ isOpen, onClose, month, year }) => {
                                   <MenuItem value="" disabled>
                                     Sélectionner un chantier
                                   </MenuItem>
-                                  {chantiers.map((chantier) => (
+                                  {sortedChantiers.map((chantier) => (
                                     <MenuItem key={chantier.id} value={chantier.id}>
                                       {chantier.chantier_name}
                                     </MenuItem>
