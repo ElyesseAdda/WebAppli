@@ -11016,7 +11016,12 @@ def get_taux_facturation_data(request, chantier_id):
         }
 
         # Montants des factures classiques du chantier (hors CIE) — HT pour cohérence avec montant_ht du marché
-        factures_chantier = Facture.objects.filter(chantier=chantier, type_facture='classique')
+        # On exclut les factures issues du devis de marché (devis_chantier=True) car leur montant
+        # est déjà comptabilisé dans montant_ht (= devis_marche.price_ht), ce qui évite le double comptage.
+        factures_chantier = Facture.objects.filter(
+            chantier=chantier,
+            type_facture='classique'
+        ).exclude(devis__devis_chantier=True)
         montant_factures = factures_chantier.aggregate(total=Sum('price_ht'))['total'] or 0
         montant_factures = float(montant_factures)
 
