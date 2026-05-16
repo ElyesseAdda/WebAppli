@@ -15,7 +15,6 @@ const LigneDetailEditModal = ({ isOpen, onClose, ligneDetail, onSuccess }) => {
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
-  const [isMouseDown, setIsMouseDown] = useState(false);
   // 'couts' = prix calculé depuis les coûts | 'prix' = marge calculée depuis le prix
   const calcDirectionRef = useRef('couts');
 
@@ -140,13 +139,10 @@ const LigneDetailEditModal = ({ isOpen, onClose, ligneDetail, onSuccess }) => {
 
   if (!isOpen) return null;
 
-  const handleBackdropClick = () => {
-    if (!isMouseDown) onClose();
-    setIsMouseDown(false);
-  };
-
   const modal = (
     <div
+      role="dialog"
+      aria-modal="true"
       style={{
         position: 'fixed',
         top: 0,
@@ -159,9 +155,6 @@ const LigneDetailEditModal = ({ isOpen, onClose, ligneDetail, onSuccess }) => {
         justifyContent: 'center',
         zIndex: 100000
       }}
-      onClick={handleBackdropClick}
-      onMouseDown={() => setIsMouseDown(true)}
-      onMouseUp={() => setIsMouseDown(false)}
     >
       <div
         style={{
@@ -173,9 +166,6 @@ const LigneDetailEditModal = ({ isOpen, onClose, ligneDetail, onSuccess }) => {
           maxHeight: '90vh',
           overflow: 'auto'
         }}
-        onClick={(e) => e.stopPropagation()}
-        onMouseDown={(e) => e.stopPropagation()}
-        onMouseUp={(e) => e.stopPropagation()}
       >
         <h2 style={{ marginTop: 0, marginBottom: '20px', fontSize: '20px', fontWeight: 'bold', color: '#1976d2' }}>
           ✏️ Modifier la ligne de détail
