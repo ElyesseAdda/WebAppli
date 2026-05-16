@@ -849,6 +849,61 @@ def preview_devis(request):
     else:
         return JsonResponse({'error': 'Aucune donnée de devis trouvée'}, status=400)
 
+def generate_pdf_from_preview(request):
+    pdf_fd, pdf_path = None, None
+    try:
+        data = json.loads(request.body)
+        devis_id = data.get('devis_id')
+        preview_url_param = data.get('preview_url')
+        custom_filename = data.get('filename')
+
+        if not devis_id and not preview_url_param:
+            return JsonResponse({'error': 'ID du devis ou preview_url manquant'}, status=400)
+
+        if preview_url_param:
+            if preview_url_param.startswith('/'):
+                preview_url = request.build_absolute_uri(preview_url_param)
+            else:
+                preview_url = preview_url_param
+        else:
+            preview_url = request.build_absolute_uri(f"/api/preview-saved-devis/{devis_id}/")
+
+        node_script_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'frontend', 'src', 'components', 'generate_pdf.js')
+
+        pdf_fd, pdf_path = tempfile.mkstemp(suffix='.pdf', dir='/tmp')
+        os.close(pdf_fd)
+        pdf_fd = None
+
+        subprocess.run(
+            ['node', node_script_path, preview_url, pdf_path],
+            check=True,
+            capture_output=True,
+            text=True
+        )
+
+        if os.path.exists(pdf_path):
+            with open(pdf_path, 'rb') as pdf_file:
+                pdf_data = pdf_file.read()
+            download_filename = custom_filename or f'devis_{devis_id}.pdf'
+            response = HttpResponse(pdf_data, content_type='application/pdf')
+            response['Content-Disposition'] = f'attachment; filename="{download_filename}"'
+            return response
+        else:
+            return JsonResponse({'error': 'Le fichier PDF n\'a pas été généré.'}, status=500)
+
+    except json.JSONDecodeError as e:
+        return JsonResponse({'error': f'Données JSON invalides: {str(e)}'}, status=400)
+    except subprocess.CalledProcessError as e:
+        return JsonResponse({'error': f'Erreur lors de la génération du PDF: {e.stderr}'}, status=500)
+    except Exception as e:
+        return JsonResponse({'error': f'Erreur inattendue: {str(e)}'}, status=500)
+    finally:
+        if pdf_path and os.path.exists(pdf_path):
+            try:
+                os.unlink(pdf_path)
+            except OSError:
+                pass
+
 
 def check_nom_devis_existe(request):
     nom_devis = request.GET.get('nom_devis', None)
@@ -1582,8 +1637,7 @@ def preview_devis(request):
         return JsonResponse({'error': 'Aucune donnée de devis trouvée'}, status=400)
 
 def generate_pdf_from_preview(request):
-    import tempfile
-    temp_pdf_path = None
+    pdf_fd, pdf_path = None, None
     try:
         data = json.loads(request.body)
         devis_id = data.get('devis_id')
@@ -1601,60 +1655,39 @@ def generate_pdf_from_preview(request):
         else:
             preview_url = request.build_absolute_uri(f"/api/preview-saved-devis/{devis_id}/")
 
-        base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-        node_script_path = os.path.join(base_dir, 'frontend', 'src', 'components', 'generate_pdf.js')
+        node_script_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'frontend', 'src', 'components', 'generate_pdf.js')
 
-        if not os.path.exists(node_script_path):
-            return JsonResponse({'error': f'Script Puppeteer introuvable: {node_script_path}'}, status=500)
+        pdf_fd, pdf_path = tempfile.mkstemp(suffix='.pdf', dir='/tmp')
+        os.close(pdf_fd)
+        pdf_fd = None
 
-        fd, temp_pdf_path = tempfile.mkstemp(suffix='.pdf')
-        os.close(fd)
-
-        command = ['node', node_script_path, preview_url, temp_pdf_path]
-
-        result = subprocess.run(
-            command,
+        subprocess.run(
+            ['node', node_script_path, preview_url, pdf_path],
             check=True,
             capture_output=True,
-            text=True,
-            timeout=90
+            text=True
         )
 
-        if os.path.exists(temp_pdf_path) and os.path.getsize(temp_pdf_path) > 0:
-            with open(temp_pdf_path, 'rb') as pdf_file:
-                pdf_content = pdf_file.read()
-
-            try:
-                os.remove(temp_pdf_path)
-            except OSError:
-                pass
-
-            response = HttpResponse(pdf_content, content_type='application/pdf')
+        if os.path.exists(pdf_path):
+            with open(pdf_path, 'rb') as pdf_file:
+                pdf_data = pdf_file.read()
             download_filename = custom_filename or f'devis_{devis_id}.pdf'
+            response = HttpResponse(pdf_data, content_type='application/pdf')
             response['Content-Disposition'] = f'attachment; filename="{download_filename}"'
             return response
         else:
-            return JsonResponse({'error': 'Le fichier PDF n\'a pas été généré (fichier vide ou absent).'}, status=500)
+            return JsonResponse({'error': 'Le fichier PDF n\'a pas été généré.'}, status=500)
 
     except json.JSONDecodeError as e:
         return JsonResponse({'error': f'Données JSON invalides: {str(e)}'}, status=400)
-    except subprocess.TimeoutExpired:
-        return JsonResponse({'error': 'Timeout lors de la génération du PDF (90 secondes)'}, status=500)
     except subprocess.CalledProcessError as e:
-        stderr_output = (e.stderr or '')[:1000]
-        stdout_output = (e.stdout or '')[:500]
-        error_msg = f'Erreur Puppeteer (exit code {e.returncode}): {stderr_output}'
-        if stdout_output:
-            error_msg += f' | stdout: {stdout_output}'
-        print(f"[generate_pdf_from_preview] {error_msg}")
-        return JsonResponse({'error': error_msg}, status=500)
+        return JsonResponse({'error': f'Erreur lors de la génération du PDF: {e.stderr}'}, status=500)
     except Exception as e:
-        print(f"[generate_pdf_from_preview] Erreur inattendue: {str(e)}")
         return JsonResponse({'error': f'Erreur inattendue: {str(e)}'}, status=500)
     finally:
-        if temp_pdf_path and os.path.exists(temp_pdf_path):
+        if pdf_path and os.path.exists(pdf_path):
             try:
-                os.remove(temp_pdf_path)
+                os.unlink(pdf_path)
             except OSError:
                 pass
 
@@ -3100,7 +3133,13 @@ class DistributeurReapproSessionViewSet(viewsets.ModelViewSet):
         ligne, created = DistributeurReapproLigne.objects.update_or_create(
             session=session,
             cell=cell,
-            defaults={'quantite': quantite, 'prix_vente': prix_vente, 'cout_unitaire': cout_unitaire},
+            defaults={
+                'quantite': quantite,
+                'prix_vente': prix_vente,
+                'cout_unitaire': cout_unitaire,
+                # La consommation effective des lots n'existe qu'après validation (terminer)
+                'consommation_lots': [],
+            },
         )
         logger.info(
             "[add_ligne] APRÈS save: ligne.id=%s, ligne.cout_unitaire=%s (created=%s)",
@@ -3168,6 +3207,7 @@ class DistributeurReapproSessionViewSet(viewsets.ModelViewSet):
                     continue
                 product = lig.cell.stock_product
                 quantite = lig.quantite
+                consommation_lots = []
                 lots = list(
                     StockLot.objects.filter(produit=product, quantite_restante__gt=0)
                     .order_by('date_achat', 'created_at')
@@ -3180,11 +3220,119 @@ class DistributeurReapproSessionViewSet(viewsets.ModelViewSet):
                     prise = min(restant_a_retirer, lot.quantite_restante)
                     lot.quantite_restante -= prise
                     lot.save(update_fields=['quantite_restante'])
+                    consommation_lots.append({'lot_id': lot.id, 'quantite': int(prise)})
                     restant_a_retirer -= prise
+                lig.consommation_lots = consommation_lots
+                lig.save(update_fields=['consommation_lots'])
                 StockProduct.objects.filter(pk=product.pk).update(quantite=F('quantite') - quantite)
             session.statut = 'termine'
             session.date_fin = date_fin_value
             session.save()
+        serializer = DistributeurReapproSessionSerializer(session)
+        return Response(serializer.data, status=status.HTTP_200_OK)
+
+    @action(detail=True, methods=['post'], url_path='annuler')
+    def annuler(self, request, pk=None):
+        """
+        Annule une session de mouvement :
+        - si session terminée : restaure les quantités consommées par lot (FIFO inversé exact via trace)
+        - retire l'impact bénéfice en passant le statut à 'annule'
+        """
+        session = self.get_object()
+        if session.statut == 'annule':
+            return Response(
+                {'error': 'Cette session est déjà annulée'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        with transaction.atomic():
+            session = DistributeurReapproSession.objects.select_for_update().get(pk=session.pk)
+            lignes = list(
+                session.lignes.select_related('cell', 'cell__stock_product')
+                .all()
+            )
+
+            if session.statut == 'termine':
+                for lig in lignes:
+                    product = getattr(lig.cell, 'stock_product', None)
+                    if not product:
+                        continue
+
+                    consommation_lots = lig.consommation_lots or []
+                    if not consommation_lots:
+                        # Compatibilité legacy (anciennes sessions sans trace des lots):
+                        # on recrée un lot d'ajustement pour remettre les unités dans le FIFO.
+                        quantite_legacy = int(lig.quantite or 0)
+                        if quantite_legacy <= 0:
+                            continue
+                        cout_unitaire_legacy = lig.cout_unitaire if lig.cout_unitaire is not None else Decimal('0')
+                        achat = StockPurchase.objects.create(
+                            lieu_achat=f"Annulation mouvement distributeur #{session.id}",
+                            date_achat=timezone.now(),
+                            total=Decimal('0'),
+                        )
+                        item = StockPurchaseItem.objects.create(
+                            achat=achat,
+                            produit=product,
+                            nom_produit=product.nom or product.nom_produit or f"Produit #{product.id}",
+                            quantite=quantite_legacy,
+                            prix_unitaire=cout_unitaire_legacy,
+                            unite="pièce",
+                            creer_produit=False,
+                        )
+                        StockLot.objects.create(
+                            produit=product,
+                            purchase_item=item,
+                            quantite_restante=quantite_legacy,
+                            prix_achat_unitaire=cout_unitaire_legacy,
+                            date_achat=timezone.now(),
+                        )
+                        StockProduct.objects.filter(pk=product.pk).update(
+                            quantite=F('quantite') + quantite_legacy
+                        )
+                        continue
+
+                    quantite_restauree = 0
+                    for item in consommation_lots:
+                        lot_id = item.get('lot_id')
+                        try:
+                            quantite = int(item.get('quantite') or 0)
+                        except (TypeError, ValueError):
+                            quantite = 0
+                        if not lot_id or quantite <= 0:
+                            continue
+
+                        lot = StockLot.objects.select_for_update().filter(
+                            pk=lot_id,
+                            produit_id=product.id,
+                        ).first()
+                        if not lot:
+                            return Response(
+                                {
+                                    'error': (
+                                        "Impossible d'annuler ce mouvement automatiquement : "
+                                        "un lot de stock d'origine est introuvable."
+                                    ),
+                                    'session_id': session.id,
+                                    'ligne_id': lig.id,
+                                    'lot_id': lot_id,
+                                },
+                                status=status.HTTP_400_BAD_REQUEST,
+                            )
+
+                        lot.quantite_restante = (lot.quantite_restante or 0) + quantite
+                        lot.save(update_fields=['quantite_restante'])
+                        quantite_restauree += quantite
+
+                    if quantite_restauree > 0:
+                        StockProduct.objects.filter(pk=product.pk).update(
+                            quantite=F('quantite') + quantite_restauree
+                        )
+
+            session.statut = 'annule'
+            session.date_fin = timezone.now()
+            session.save(update_fields=['statut', 'date_fin', 'updated_at'])
+
         serializer = DistributeurReapproSessionSerializer(session)
         return Response(serializer.data, status=status.HTTP_200_OK)
 
@@ -5896,42 +6044,36 @@ def generate_facture_pdf_from_preview(request):
     """
     Génère un PDF de facture à partir de l'URL de prévisualisation
     """
+    pdf_fd, pdf_path = None, None
     try:
         data = json.loads(request.body)
         facture_id = data.get('facture_id')
-        
+
         if not facture_id:
             return JsonResponse({'error': 'ID de la facture manquant'}, status=400)
 
-        # URL de la page de prévisualisation pour une facture sauvegardée
         preview_url = request.build_absolute_uri(f"/api/preview-facture/{facture_id}/")
 
-        # Chemin vers le script Puppeteer
         node_script_path = os.path.join(
-            os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 
+            os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
             'frontend', 'src', 'components', 'generate_pdf.js'
         )
 
-        # Commande pour exécuter Puppeteer avec Node.js
-        command = ['node', node_script_path, preview_url]
+        pdf_fd, pdf_path = tempfile.mkstemp(suffix='.pdf', dir='/tmp')
+        os.close(pdf_fd)
+        pdf_fd = None
 
-        # Exécuter Puppeteer avec capture de la sortie
-        result = subprocess.run(
-            command, 
+        subprocess.run(
+            ['node', node_script_path, preview_url, pdf_path],
             check=True,
             capture_output=True,
             text=True
         )
 
-        # Lire le fichier PDF généré
-        pdf_path = os.path.join(
-            os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 
-            'frontend', 'src', 'components', 'devis.pdf'
-        )
-
         if os.path.exists(pdf_path):
             with open(pdf_path, 'rb') as pdf_file:
-                response = HttpResponse(pdf_file.read(), content_type='application/pdf')
+                pdf_data = pdf_file.read()
+            response = HttpResponse(pdf_data, content_type='application/pdf')
             response['Content-Disposition'] = f'attachment; filename="facture_{facture_id}.pdf"'
             return response
         else:
@@ -5940,11 +6082,15 @@ def generate_facture_pdf_from_preview(request):
     except json.JSONDecodeError as e:
         return JsonResponse({'error': f'Erreur de décodage JSON: {str(e)}'}, status=400)
     except subprocess.CalledProcessError as e:
-        return JsonResponse({
-            'error': f'Erreur lors de l\'exécution du script: {e.stderr}'
-        }, status=500)
+        return JsonResponse({'error': f'Erreur lors de l\'exécution du script: {e.stderr}'}, status=500)
     except Exception as e:
         return JsonResponse({'error': str(e)}, status=500)
+    finally:
+        if pdf_path and os.path.exists(pdf_path):
+            try:
+                os.unlink(pdf_path)
+            except OSError:
+                pass
 
 @api_view(['GET'])
 def get_next_facture_number(request):
@@ -10870,7 +11016,12 @@ def get_taux_facturation_data(request, chantier_id):
         }
 
         # Montants des factures classiques du chantier (hors CIE) — HT pour cohérence avec montant_ht du marché
-        factures_chantier = Facture.objects.filter(chantier=chantier, type_facture='classique')
+        # On exclut les factures issues du devis de marché (devis_chantier=True) car leur montant
+        # est déjà comptabilisé dans montant_ht (= devis_marche.price_ht), ce qui évite le double comptage.
+        factures_chantier = Facture.objects.filter(
+            chantier=chantier,
+            type_facture='classique'
+        ).exclude(devis__devis_chantier=True)
         montant_factures = factures_chantier.aggregate(total=Sum('price_ht'))['total'] or 0
         montant_factures = float(montant_factures)
 

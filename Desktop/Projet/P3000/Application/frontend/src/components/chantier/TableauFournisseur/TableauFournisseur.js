@@ -1666,7 +1666,8 @@ const TableauFournisseur = () => {
   // Formater un montant avec couleur (style TableauFacturation)
   const formatMontant = (montant, isNegatif = false) => {
     const valeur = parseFloat(montant) || 0;
-    const couleur = isNegatif ? "error.main" : "rgb(0, 168, 42)";
+    const negatif = isNegatif || valeur < 0;
+    const couleur = negatif ? "error.main" : "rgb(0, 168, 42)";
 
     return (
       <Typography
@@ -1678,7 +1679,7 @@ const TableauFournisseur = () => {
           whiteSpace: "nowrap",
         }}
       >
-        {isNegatif ? "-" : ""}
+        {negatif ? "-" : ""}
         {Math.abs(valeur).toFixed(2)} €
       </Typography>
     );
@@ -1700,11 +1701,10 @@ const TableauFournisseur = () => {
     return isNaN(n) ? fallback : n;
   };
 
-  // Couleur pour les montants (rouge si négatif pour "à payer", rouge/vert pour écart)
-  const colorForAmount = (value, isEcart = false) => {
+  const colorForAmount = (value) => {
     const n = Number(value ?? 0);
-    if (isEcart) return n > 0 ? "#d32f2f" : "#2e7d32";
-    return n < 0 ? "#d32f2f" : "rgba(27, 120, 188, 1)";
+    if (Math.abs(n) < 0.01) return "text.primary";
+    return n < 0 ? "rgba(211, 47, 47, 1)" : "rgba(46, 125, 50, 1)";
   };
 
   // Calculer les totaux pour un mois
@@ -2063,7 +2063,7 @@ const TableauFournisseur = () => {
                               sx={{
                                 fontWeight: "bold",
                                 fontSize: "0.9rem",
-                                color: colorForAmount(row.totaux.totalEcart, true),
+                                color: colorForAmount(row.totaux.totalEcart),
                               }}
                             >
                               {formatNumber(row.totaux.totalEcart)} €
@@ -2425,7 +2425,7 @@ const TableauFournisseur = () => {
                             <Typography
                               sx={{
                                 fontSize: "0.75rem",
-                                color: colorForAmount(item.ecart, true),
+                                color: colorForAmount(item.ecart),
                                 fontWeight: item.ecart !== 0 ? "bold" : "normal",
                               }}
                             >
@@ -2692,9 +2692,7 @@ const TableauFournisseur = () => {
                                   sx={{
                                     fontSize: "0.85rem",
                                     fontWeight: "bold",
-                                    color: isPayeComplet 
-                                      ? "rgba(46, 125, 50, 1)"
-                                      : colorForAmount(totalFournisseur.totalAPayer),
+                                    color: colorForAmount(totalFournisseur.totalAPayer),
                                   }}
                                 >
                                   {formatNumber(totalFournisseur.totalAPayer)} €

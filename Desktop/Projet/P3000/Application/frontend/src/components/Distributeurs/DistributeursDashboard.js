@@ -61,6 +61,7 @@ import {
   MdReceipt,
   MdCreditCard,
   MdBuild,
+  MdUndo,
 } from "react-icons/md";
 import { useIsMobile } from "../../hooks/useIsMobile";
 import DistributeurGrid from "./DistributeurGrid";
@@ -130,6 +131,7 @@ const DistributeursDashboard = ({ initialDistributeurId = null, onDistributeurId
   const [savingLigne, setSavingLigne] = useState(false);
   const [editReapproDate, setEditReapproDate] = useState("");
   const [savingReapproDate, setSavingReapproDate] = useState(false);
+  const [annulatingSessionId, setAnnulatingSessionId] = useState(null);
   const [editingMouvement, setEditingMouvement] = useState(null);
   const [openMouvementEditModal, setOpenMouvementEditModal] = useState(false);
   const [savedReappro, setSavedReappro] = useState(null);
@@ -502,6 +504,45 @@ const DistributeursDashboard = ({ initialDistributeurId = null, onDistributeurId
       showSnackbar(error.response?.data?.detail || "Erreur lors de la mise à jour de la date", "error");
     } finally {
       setSavingReapproDate(false);
+    }
+  };
+
+  const handleAnnulerReapproSession = async (sessionId) => {
+    if (!sessionId) return;
+    if (
+      !window.confirm(
+        "Annuler ce mouvement ? Le stock sera restauré et le bénéfice de cette session sera retiré."
+      )
+    ) {
+      return;
+    }
+    setAnnulatingSessionId(sessionId);
+    try {
+      await axios.post(`/api/distributeur-reappro-sessions/${sessionId}/annuler/`);
+      showSnackbar("Mouvement annulé et stock restauré");
+      if (selectedReapproSession?.id === sessionId) {
+        handleCloseReapproDetail();
+      }
+      fetchReapproSessions(selectedId);
+      fetchMeilleurMois(selectedId);
+      if (benefitViewMode === "mois") {
+        fetchResume(selectedId, benefitYear, benefitMonth);
+        fetchResumeProduits(selectedId, benefitYear, benefitMonth);
+      } else if (benefitViewMode === "annuel") {
+        fetchResume(selectedId, benefitYear, null);
+        fetchResumeProduits(selectedId, benefitYear, null);
+      } else {
+        fetchResume(selectedId);
+        fetchResumeProduits(selectedId);
+      }
+    } catch (error) {
+      console.error("Erreur annulation mouvement:", error);
+      showSnackbar(
+        error.response?.data?.error || "Erreur lors de l'annulation du mouvement",
+        "error"
+      );
+    } finally {
+      setAnnulatingSessionId(null);
     }
   };
 
@@ -1719,7 +1760,20 @@ const DistributeursDashboard = ({ initialDistributeurId = null, onDistributeurId
                         +{Number(s.total_benefice).toFixed(2)} €
                       </Typography>
                     )}
-                    <MdChevronRight size={20} color="#ccc" />
+                    <Box sx={{ display: "flex", alignItems: "center", justifyContent: "flex-end", gap: 0.5 }}>
+                      <IconButton
+                        size="small"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleAnnulerReapproSession(s.id);
+                        }}
+                        disabled={annulatingSessionId === s.id}
+                        sx={{ color: "error.main", bgcolor: "error.50", p: 0.5 }}
+                      >
+                        <MdUndo size={14} />
+                      </IconButton>
+                      <MdChevronRight size={20} color="#ccc" />
+                    </Box>
                   </Box>
                 </Box>
               </Card>
@@ -2311,6 +2365,20 @@ const DistributeursDashboard = ({ initialDistributeurId = null, onDistributeurId
           ) : null}
         </DialogContent>
         <DialogActions sx={{ px: 2, pb: 2 }}>
+          {selectedReapproSession?.id && (
+            <Button
+              onClick={() => handleAnnulerReapproSession(selectedReapproSession.id)}
+              color="error"
+              variant="outlined"
+              startIcon={<MdUndo size={16} />}
+              disabled={annulatingSessionId === selectedReapproSession.id}
+              sx={{ borderRadius: "12px", mr: "auto" }}
+            >
+              {annulatingSessionId === selectedReapproSession.id
+                ? "Annulation..."
+                : "Annuler ce mouvement"}
+            </Button>
+          )}
           <Button onClick={handleCloseReapproDetail} variant="contained" sx={{ borderRadius: "12px" }}>
             Fermer
           </Button>

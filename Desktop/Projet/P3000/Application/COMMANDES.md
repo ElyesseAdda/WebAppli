@@ -4,26 +4,35 @@
 
 ## Workflow complet : nouvelle fonctionnalité → tous les clients
 
+### Étape 1 — Machine de développement (Windows)
+
 ```bash
-# 1. Développer et committer sur main (machine de dev)
+# Committer les changements sur main
 git add . && git commit -m "ma nouvelle fonctionnalité"
 git push origin main
 
-# 2. Merger main → branches clients (machine de dev UNIQUEMENT)
-bash Desktop/Projet/P3000/Application/deploy/update-clients.sh
-
-# 3. Déployer sur P3000 — sur le serveur myp3000app.com
-p3000-deploy
-
-# 4. Déployer sur chaque serveur client
-#    → Sur le serveur elekable.fr :
-elekable-deploy
-
-#    → Sur le serveur mjrserviceapp.com :
-mjrservice-deploy
+# Merger main → client/elekable et client/mjrservice + push automatique
+# ⚠️ À lancer UNIQUEMENT depuis la machine de dev — jamais depuis un serveur
+& "C:\Program Files\Git\bin\bash.exe" "Desktop/Projet/P3000/Application/deploy/update-clients.sh"
 ```
 
-> ⚠️ **Important** : `update-clients.sh` doit toujours être lancé depuis la **machine de développement** (pas depuis un serveur de production). Le script bascule temporairement les branches git — sur un serveur, cela mettrait l'application en production dans un état incorrect.
+> Ce script incorpore les nouveautés de `main` dans chaque branche client (`client/elekable`, `client/mjrservice`) en préservant leur identité (couleurs, logo, templates), puis push vers GitHub.
+
+### Étape 2 — Serveur P3000 (déploie les 3 apps d'un coup)
+
+```bash
+# Déploie P3000 + Elekable + MJRService en une seule commande
+all-deploy
+```
+
+> Ou individuellement si besoin :
+> ```bash
+> p3000-deploy       # P3000 uniquement    — branche main
+> elekable-deploy    # Elekable uniquement — branche client/elekable
+> mjrservice-deploy  # MJRService uniquement — branche client/mjrservice
+> ```
+
+> ⚠️ **Important** : `elekable-deploy` et `mjrservice-deploy` déploient depuis leur propre branche, **pas depuis `main`**. Il faut toujours exécuter `update-clients.sh` en premier pour que ces branches contiennent les dernières fonctionnalités de `main`.
 
 ---
 
@@ -35,11 +44,11 @@ mjrservice-deploy
 
 ```bash
 # Mettre à jour tous les clients + push automatique
-bash Desktop/Projet/P3000/Application/deploy/update-clients.sh
+& "C:\Program Files\Git\bin\bash.exe" "Desktop/Projet/P3000/Application/deploy/update-clients.sh"
 
 # Ou individuellement
-bash Desktop/Projet/P3000/Application/deploy/update-clients.sh elekable
-bash Desktop/Projet/P3000/Application/deploy/update-clients.sh mjrservice
+& "C:\Program Files\Git\bin\bash.exe" "Desktop/Projet/P3000/Application/deploy/update-clients.sh" elekable
+& "C:\Program Files\Git\bin\bash.exe" "Desktop/Projet/P3000/Application/deploy/update-clients.sh" mjrservice
 ```
 
 ---
@@ -49,6 +58,7 @@ bash Desktop/Projet/P3000/Application/deploy/update-clients.sh mjrservice
 ### Installation des alias (une seule fois)
 
 ```bash
+cd /var/www/p3000
 bash Desktop/Projet/P3000/Application/setup_aliases.sh
 source ~/.bashrc
 ```
@@ -57,12 +67,13 @@ source ~/.bashrc
 
 ```bash
 p3000-go           # cd dans le projet + activer le venv
-p3000-deploy       # déploiement complet (git pull + build + migrate + restart)
+p3000-deploy       # déploiement complet P3000 (git pull + build + migrate + restart)
 p3000-restart      # redémarrage rapide (sans git pull ni build)
 p3000-logs         # logs Gunicorn en direct
 p3000-logs-tail    # 50 derniers logs
 p3000-status       # statut du service Gunicorn
 p3000-manage <cmd> # python manage.py <cmd>
+all-deploy         # déploiement des 3 apps (P3000 + Elekable + MJRService)
 ```
 
 ---
@@ -72,7 +83,8 @@ p3000-manage <cmd> # python manage.py <cmd>
 ### Installation des alias (une seule fois)
 
 ```bash
-bash deploy/elekable/setup-aliases.sh
+cd /var/www/elekable
+bash Desktop/Projet/P3000/Application/deploy/elekable/setup-aliases.sh
 source ~/.bashrc
 ```
 
@@ -95,7 +107,8 @@ elekable-manage <cmd> # python manage.py <cmd>
 ### Installation des alias (une seule fois)
 
 ```bash
-bash deploy/mjrservice/setup-aliases.sh
+cd /var/www/mjrservice
+bash Desktop/Projet/P3000/Application/deploy/mjrservice/setup-aliases.sh
 source ~/.bashrc
 ```
 
@@ -118,6 +131,7 @@ mjrservice-manage <cmd> # python manage.py <cmd>
 | Script | Rôle | Où l'exécuter |
 |--------|------|---------------|
 | `deploy/update-clients.sh` | Merge main → clients + push | **Machine de dev uniquement** |
+| `deploy/deploy-all.sh` | Déploie les 3 apps d'un coup | Serveur P3000 (alias `all-deploy`) |
 | `deploy_production.sh` | Déploiement complet P3000 | Serveur P3000 |
 | `restart_app.sh` | Redémarrage rapide P3000 | Serveur P3000 |
 | `setup_aliases.sh` | Installe les alias P3000 | Serveur P3000 |

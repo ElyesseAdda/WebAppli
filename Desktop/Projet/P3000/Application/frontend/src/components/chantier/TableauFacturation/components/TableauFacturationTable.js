@@ -69,10 +69,10 @@ const TableauFacturationTable = ({
   const formatNum = (num) =>
     Number(num ?? 0).toLocaleString("fr-FR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
-  const colorForAmount = (value, isEcart = false) => {
+  const colorForAmount = (value) => {
     const n = Number(value ?? 0);
-    if (isEcart) return n > 0 ? "rgba(211, 47, 47, 1)" : "rgba(46, 125, 50, 1)";
-    return n < 0 ? "rgba(211, 47, 47, 1)" : "rgba(27, 120, 188, 1)";
+    if (Math.abs(n) < 0.01) return "text.primary";
+    return n < 0 ? "rgba(211, 47, 47, 1)" : "rgba(46, 125, 50, 1)";
   };
 
   const recapParChantier = useMemo(() => {
@@ -265,7 +265,7 @@ const TableauFacturationTable = ({
                   <TableCell sx={commonBodyCellStyle}>-</TableCell>
                   <TableCell sx={commonBodyCellStyle}>-</TableCell>
                   <TableCell sx={commonBodyCellStyle}>
-                    <Typography sx={{ color: "rgba(27, 120, 188, 1)", fontWeight: "bold", fontSize: "0.85rem" }}>
+                    <Typography sx={{ color: colorForAmount(item.montantHTSituation ?? item.sousTotal), fontWeight: "bold", fontSize: "0.85rem" }}>
                       {(parseFloat(item.montantHTSituation ?? item.sousTotal) || 0).toLocaleString("fr-FR", {
                         minimumFractionDigits: 2,
                         maximumFractionDigits: 2,
@@ -287,7 +287,7 @@ const TableauFacturationTable = ({
                   </TableCell>
                   <TableCell sx={commonBodyCellStyle}>-</TableCell>
                   <TableCell colSpan={2} sx={commonBodyCellStyle}>
-                    <Typography sx={{ color: "#ff6b6b", fontWeight: "bold", fontSize: "0.85rem" }}>
+                    <Typography sx={{ color: colorForAmount(item.ecartMois), fontWeight: "bold", fontSize: "0.85rem" }}>
                       {(parseFloat(item.ecartMois) || 0).toLocaleString("fr-FR", {
                         minimumFractionDigits: 2,
                         maximumFractionDigits: 2,
@@ -742,7 +742,7 @@ const TableauFacturationTable = ({
             <TableCell sx={commonBodyCellStyle}>-</TableCell>
             <TableCell sx={commonBodyCellStyle}>-</TableCell>
             <TableCell sx={commonBodyCellStyle}>
-              <Typography sx={{ color: "rgba(27, 120, 188, 1)", fontWeight: "bold", fontSize: "0.75rem" }}>
+              <Typography sx={{ color: colorForAmount(totaux.montantHTSituation), fontWeight: "bold", fontSize: "0.75rem" }}>
                 {(parseFloat(totaux.montantHTSituation) || 0).toLocaleString("fr-FR", {
                   minimumFractionDigits: 2,
                   maximumFractionDigits: 2,
@@ -764,7 +764,7 @@ const TableauFacturationTable = ({
             </TableCell>
             <TableCell sx={commonBodyCellStyle}>-</TableCell>
             <TableCell colSpan={2} sx={commonBodyCellStyle}>
-              <Typography sx={{ color: "#ff6b6b", fontWeight: "bold", fontSize: "0.85rem" }}>
+              <Typography sx={{ color: colorForAmount(totaux.ecartMois), fontWeight: "bold", fontSize: "0.85rem" }}>
                 {(parseFloat(totaux.ecartMois) || 0).toLocaleString("fr-FR", {
                   minimumFractionDigits: 2,
                   maximumFractionDigits: 2,
@@ -807,13 +807,13 @@ const TableauFacturationTable = ({
             </Box>
             <Box>
               <Typography sx={{ fontSize: "0.85rem", color: "text.secondary" }}>Montant reçu HT</Typography>
-              <Typography sx={{ fontSize: "1.1rem", fontWeight: "bold", color: "rgba(46, 125, 50, 1)" }}>
+              <Typography sx={{ fontSize: "1.1rem", fontWeight: "bold", color: colorForAmount(totaux.montantRecuHT) }}>
                 {formatNum(totaux.montantRecuHT)} €
               </Typography>
             </Box>
             <Box>
               <Typography sx={{ fontSize: "0.85rem", color: "text.secondary" }}>Écart</Typography>
-              <Typography sx={{ fontSize: "1.1rem", fontWeight: "bold", color: colorForAmount(totaux.ecartMois, true) }}>
+              <Typography sx={{ fontSize: "1.1rem", fontWeight: "bold", color: colorForAmount(totaux.ecartMois) }}>
                 {formatNum(totaux.ecartMois)} €
               </Typography>
             </Box>
@@ -901,7 +901,7 @@ const TableauFacturationTable = ({
                         </Box>
                         <Box sx={{ textAlign: "right" }}>
                           <Typography sx={{ fontSize: "0.75rem", color: "text.secondary" }}>Écart</Typography>
-                          <Typography sx={{ fontSize: "0.9rem", fontWeight: "bold", color: colorForAmount(ch.ecart, true) }}>
+                          <Typography sx={{ fontSize: "0.9rem", fontWeight: "bold", color: colorForAmount(ch.ecart) }}>
                             {formatNum(ch.ecart)} €
                           </Typography>
                         </Box>
@@ -938,7 +938,7 @@ const TableauFacturationTable = ({
                     </Box>
                     <Box>
                       <Typography sx={{ fontSize: "0.8rem", color: "text.secondary" }}>Écart</Typography>
-                      <Typography sx={{ fontWeight: "bold", color: colorForAmount(ch.ecart, true) }}>
+                      <Typography sx={{ fontWeight: "bold", color: colorForAmount(ch.ecart) }}>
                         {formatNum(ch.ecart)} €
                       </Typography>
                     </Box>
