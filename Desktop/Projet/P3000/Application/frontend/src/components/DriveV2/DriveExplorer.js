@@ -1943,7 +1943,7 @@ const DriveExplorer = ({
               onContextMenu={(e) => handleContextMenu(e, folderItem)}
             >
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, minWidth: 0, overflow: 'hidden' }}>
-                <FolderIcon color="primary" sx={{ flexShrink: 0 }} />
+                <FolderIcon sx={{ flexShrink: 0, color: '#46acc2' }} />
                 <Typography variant="body2" sx={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                   {displayFilename(folder.name)}
                 </Typography>

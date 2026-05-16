@@ -1161,6 +1161,7 @@ const ChantierInfoTab = ({ chantierData, onUpdate, state, setState }) => {
           disabled={!canPerformAction(chantierData?.statut, "canCreateSituation")}
           sx={{
             backgroundColor: "#388e3c",
+            color: "white",
             boxShadow: 3,
             "&:hover": {
               backgroundColor: "#2e7d32",

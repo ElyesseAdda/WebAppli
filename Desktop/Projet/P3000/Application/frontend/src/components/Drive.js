@@ -1440,7 +1440,7 @@ const Drive = () => {
                         <Box
                           sx={{ display: "flex", alignItems: "center", gap: 1 }}
                         >
-                          <FolderIcon color="primary" />
+                          <FolderIcon sx={{ color: '#46acc2' }} />
                           <Typography variant="body2" noWrap>
                             {formatFileName(folder.name)}
                           </Typography>

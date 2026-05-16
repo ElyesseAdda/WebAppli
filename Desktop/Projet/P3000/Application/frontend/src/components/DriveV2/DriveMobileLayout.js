@@ -287,7 +287,7 @@ const DriveMobileLayout = () => {
               sx={{ py: 1.5, px: 2 }}
             >
               <ListItemIcon sx={{ minWidth: 40 }}>
-                <FolderIcon sx={{ color: '#f9a825' }} />
+                <FolderIcon sx={{ color: '#46acc2' }} />
               </ListItemIcon>
               <ListItemText
                 primary={displayFilename(folder.name)}

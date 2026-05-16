@@ -1,6 +1,7 @@
 import { Box, CircularProgress } from "@mui/material";
 import CssBaseline from "@mui/material/CssBaseline";
-import { ThemeProvider, createTheme } from "@mui/material/styles";
+import { ThemeProvider } from "@mui/material/styles";
+import theme from "./theme";
 import React from "react";
 import ReactDOM from "react-dom/client";
 import {
@@ -71,19 +72,6 @@ import MobileHomePage from "./MobileHomePage";
 import DriveMobileLayout from "./DriveV2/DriveMobileLayout";
 
 // Créer un thème par défaut
-const theme = createTheme({
-  palette: {
-    primary: {
-      main: "#1976d2",
-    },
-    secondary: {
-      main: "#dc004e",
-    },
-  },
-  typography: {
-    fontFamily: ["Roboto", "Arial", "sans-serif"].join(","),
-  },
-});
 
 // Composant pour protéger les routes - redirige vers /login si non connecté
 const ProtectedRoute = ({ children, isAuthenticated, isMobile }) => {

@@ -472,11 +472,11 @@ const GestionAppelsOffres = () => {
         {/* ── Cards statuts ── */}
         <Box sx={{ display: "flex", flexWrap: "wrap", gap: 1.5, mb: 3, alignItems: "stretch" }}>
           {[
-            { key: null, label: "Tous", color: "#6366f1", lightBg: "#eef2ff", stats: statsByStatut.tous },
-            { key: "valide", label: "Validé", color: "#10b981", lightBg: "#ecfdf5", stats: statsByStatut.valide },
-            { key: "en_attente", label: "En attente", color: "#f59e0b", lightBg: "#fffbeb", stats: statsByStatut.en_attente },
-            { key: "refuse", label: "Refusé", color: "#ef4444", lightBg: "#fef2f2", stats: statsByStatut.refuse },
-          ].map(({ key, label, color, lightBg, stats }) => {
+            { key: null, label: "Tous", color: "#6366f1", stats: statsByStatut.tous },
+            { key: "valide", label: "Validé", color: "#10b981", stats: statsByStatut.valide },
+            { key: "en_attente", label: "En attente", color: "#f59e0b", stats: statsByStatut.en_attente },
+            { key: "refuse", label: "Refusé", color: "#ef4444", stats: statsByStatut.refuse },
+          ].map(({ key, label, color, stats }) => {
             const isActive = filterStatut === key;
             return (
               <Box
@@ -490,27 +490,25 @@ const GestionAppelsOffres = () => {
                   px: 2,
                   py: 1,
                   borderRadius: "12px",
-                  border: `1.5px solid ${isActive ? color : "transparent"}`,
-                  bgcolor: isActive ? lightBg : "rgba(255,255,255,0.06)",
-                  backdropFilter: "blur(8px)",
-                  boxShadow: isActive ? `0 0 0 1px ${color}22, 0 4px 12px ${color}18` : "0 1px 3px rgba(0,0,0,0.08)",
+                  border: `1.5px solid ${isActive ? color : `${color}55`}`,
+                  bgcolor: isActive ? color : `${color}cc`,
+                  boxShadow: isActive ? `0 4px 12px ${color}40` : `0 1px 3px ${color}25`,
                   transition: "all 0.25s cubic-bezier(.4,0,.2,1)",
                   minWidth: 140,
                   position: "relative",
                   overflow: "hidden",
-                  "&:hover": { border: `1.5px solid ${color}88`, boxShadow: `0 4px 16px ${color}20`, transform: "translateY(-1px)" },
-                  "&::before": isActive ? { content: '""', position: "absolute", top: 0, left: 0, right: 0, height: "3px", background: `linear-gradient(90deg, ${color}, ${color}99)`, borderRadius: "12px 12px 0 0" } : {},
+                  "&:hover": { border: `1.5px solid ${color}`, boxShadow: `0 4px 16px ${color}40`, transform: "translateY(-1px)" },
                 }}
               >
-                <Box sx={{ width: 10, height: 10, borderRadius: "50%", bgcolor: color, flexShrink: 0, boxShadow: isActive ? `0 0 8px ${color}66` : "none", transition: "box-shadow 0.25s ease" }} />
+                <Box sx={{ width: 10, height: 10, borderRadius: "50%", bgcolor: "#fff", flexShrink: 0, opacity: isActive ? 1 : 0.85, transition: "opacity 0.25s ease" }} />
                 <Box sx={{ display: "flex", flexDirection: "column", minWidth: 0 }}>
-                  <Typography sx={{ fontSize: "0.68rem", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.05em", color: isActive ? color : "text.secondary", lineHeight: 1.2, transition: "color 0.25s ease" }}>
+                  <Typography sx={{ fontSize: "0.68rem", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.05em", color: "#fff", lineHeight: 1.2 }}>
                     {label}
-                    <Box component="span" sx={{ ml: 0.5, fontSize: "0.62rem", fontWeight: 700, bgcolor: isActive ? color : "rgba(0,0,0,0.1)", color: isActive ? "#fff" : "text.secondary", px: 0.7, py: 0.1, borderRadius: "6px", transition: "all 0.25s ease" }}>
+                    <Box component="span" sx={{ ml: 0.5, fontSize: "0.62rem", fontWeight: 700, bgcolor: "rgba(255,255,255,0.25)", color: "#fff", px: 0.7, py: 0.1, borderRadius: "6px" }}>
                       {stats.count}
                     </Box>
                   </Typography>
-                  <Typography sx={{ fontSize: "0.82rem", fontWeight: 700, color: isActive ? color : "text.primary", lineHeight: 1.3, whiteSpace: "nowrap", transition: "color 0.25s ease" }}>
+                  <Typography sx={{ fontSize: "0.82rem", fontWeight: 700, color: "#fff", lineHeight: 1.3, whiteSpace: "nowrap" }}>
                     {formatMontant(stats.sum)}
                   </Typography>
                 </Box>

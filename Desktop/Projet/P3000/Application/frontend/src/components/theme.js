@@ -34,6 +34,9 @@ const theme = createTheme({
       light: COLORS.infoLight,
     },
   },
+  typography: {
+    fontFamily: ["Roboto", "Arial", "sans-serif"].join(","),
+  },
 });
 
 export default theme;
