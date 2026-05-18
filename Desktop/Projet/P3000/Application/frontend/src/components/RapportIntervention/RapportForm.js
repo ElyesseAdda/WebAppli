@@ -2613,7 +2613,7 @@ const RapportForm = ({
                   multiple
                   style={{ display: "none" }}
                   onChange={(e) => {
-                    const fl = e.target.files;
+                    const fl = Array.from(e.target.files);
                     e.target.value = "";
                     void appendVigikPlatineFiles(fl);
                   }}
@@ -2625,7 +2625,7 @@ const RapportForm = ({
                   capture="environment"
                   style={{ display: "none" }}
                   onChange={(e) => {
-                    const fl = e.target.files;
+                    const fl = Array.from(e.target.files);
                     e.target.value = "";
                     void appendVigikPlatineFiles(fl);
                   }}
@@ -2776,7 +2776,7 @@ const RapportForm = ({
                   multiple
                   style={{ display: "none" }}
                   onChange={(e) => {
-                    const fl = e.target.files;
+                    const fl = Array.from(e.target.files);
                     e.target.value = "";
                     void appendVigikPortailFiles(fl);
                   }}
@@ -2788,7 +2788,7 @@ const RapportForm = ({
                   capture="environment"
                   style={{ display: "none" }}
                   onChange={(e) => {
-                    const fl = e.target.files;
+                    const fl = Array.from(e.target.files);
                     e.target.value = "";
                     void appendVigikPortailFiles(fl);
                   }}
