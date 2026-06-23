@@ -2454,38 +2454,39 @@ const RapportForm = ({
             ListboxProps={autocompleteListboxProps}
           />
 
+          <Box sx={{ gridColumn: { md: "1 / -1" } }}>
+            <FormControlLabel
+              control={(
+                <Checkbox
+                  checked={!!formData.devis_a_faire}
+                  onChange={(e) => {
+                    const checked = e.target.checked;
+                    setFormData((prev) => ({
+                      ...prev,
+                      devis_a_faire: checked,
+                      devis_fait: checked ? prev.devis_fait : false,
+                      devis_lie: checked ? prev.devis_lie : null,
+                    }));
+                    scheduleDraftPersistence();
+                  }}
+                  disabled={isDisabled}
+                />
+              )}
+              label="Devis à faire"
+              sx={{
+                m: 0,
+                px: 1,
+                py: 0.5,
+                borderRadius: 1,
+                border: `1px solid ${COLORS.border || "#e0e0e0"}`,
+                minHeight: isMobile ? 48 : 40,
+                width: "fit-content",
+              }}
+            />
+          </Box>
+
           {!isVigikPlus && (
             <>
-              <Box sx={{ gridColumn: { md: "1 / -1" } }}>
-                <FormControlLabel
-                  control={(
-                    <Checkbox
-                      checked={!!formData.devis_a_faire}
-                      onChange={(e) => {
-                        const checked = e.target.checked;
-                        setFormData((prev) => ({
-                          ...prev,
-                          devis_a_faire: checked,
-                          devis_fait: checked ? prev.devis_fait : false,
-                          devis_lie: checked ? prev.devis_lie : null,
-                        }));
-                        scheduleDraftPersistence();
-                      }}
-                      disabled={isDisabled}
-                    />
-                  )}
-                  label="Devis à faire"
-                  sx={{
-                    m: 0,
-                    px: 1,
-                    py: 0.5,
-                    borderRadius: 1,
-                    border: `1px solid ${COLORS.border || "#e0e0e0"}`,
-                    minHeight: isMobile ? 48 : 40,
-                    width: "fit-content",
-                  }}
-                />
-              </Box>
               <TextField
                 label="Temps de trajet"
                 type="time"
