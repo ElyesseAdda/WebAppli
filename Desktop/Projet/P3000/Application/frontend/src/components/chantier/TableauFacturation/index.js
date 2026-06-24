@@ -109,13 +109,19 @@ const TableauFacturation = () => {
 
       <DateEnvoiModal
         open={openDateModal}
-        onClose={() => setOpenDateModal(false)}
+        onClose={() => {
+          setOpenDateModal(false);
+          setSelectedSituation(null);
+        }}
         situation={selectedSituation}
         onSubmit={handleDateModalSubmit}
       />
       <PaiementModal
         open={openPaiementModal}
-        onClose={() => setOpenPaiementModal(false)}
+        onClose={() => {
+          setOpenPaiementModal(false);
+          setSelectedSituation(null);
+        }}
         situation={selectedSituation}
         onSubmit={handlePaiementModalSubmit}
       />
