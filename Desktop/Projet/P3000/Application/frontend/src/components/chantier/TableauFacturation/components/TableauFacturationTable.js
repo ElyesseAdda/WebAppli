@@ -31,6 +31,7 @@ import {
   calculateRetard,
   calculerEcartMois,
 } from "../utils/calculations";
+import DocumentCellActions from "./DocumentCellActions";
 
 const commonBodyCellStyle = {
   padding: "6px 8px",
@@ -60,6 +61,8 @@ const TableauFacturationTable = ({
   onOpenPaiementModal,
   onOpenBanqueModal,
   onNumeroCPChange,
+  onDownloadSituationPdf,
+  onDownloadFacturePdf,
 }) => {
   const [showCumulColumn, setShowCumulColumn] = useState(false);
 
@@ -393,26 +396,13 @@ const TableauFacturationTable = ({
                   <TableCell sx={commonBodyCellStyle}>-</TableCell>
                   <TableCell sx={commonBodyCellStyle}>
                     {facture.numero ? (
-                      <Button
-                        size="small"
-                        onClick={() => {
-                          const previewUrl = `/api/preview-facture/${facture.id}/`;
-                          window.open(previewUrl, "_blank");
+                      <DocumentCellActions
+                        label={formatFactureNumero(facture.numero)}
+                        onPreview={() => {
+                          window.open(`/api/preview-facture/${facture.id}/`, "_blank");
                         }}
-                        sx={{
-                          color: "rgba(27, 120, 188, 1)",
-                          fontWeight: "bold",
-                          fontSize: "0.75rem",
-                          textTransform: "none",
-                          minWidth: "auto",
-                          padding: "2px 8px",
-                          "&:hover": {
-                            backgroundColor: "rgba(27, 120, 188, 0.1)",
-                          },
-                        }}
-                      >
-                        {formatFactureNumero(facture.numero)}
-                      </Button>
+                        onDownload={() => onDownloadFacturePdf(facture)}
+                      />
                     ) : (
                       "-"
                     )}
@@ -573,26 +563,13 @@ const TableauFacturationTable = ({
                     </Button>
                   </TableCell>
                   <TableCell sx={commonBodyCellStyle}>
-                    <Button
-                      size="small"
-                      onClick={() => {
-                        const previewUrl = `/api/preview-situation/${situation.id}/`;
-                        window.open(previewUrl, "_blank");
+                    <DocumentCellActions
+                      label={extractSituationNumber(situation.numero_situation)}
+                      onPreview={() => {
+                        window.open(`/api/preview-situation/${situation.id}/`, "_blank");
                       }}
-                      sx={{
-                        color: "rgba(27, 120, 188, 1)",
-                        fontWeight: "bold",
-                        fontSize: "0.75rem",
-                        textTransform: "none",
-                        minWidth: "auto",
-                        padding: "2px 8px",
-                        "&:hover": {
-                          backgroundColor: "rgba(27, 120, 188, 0.1)",
-                        },
-                      }}
-                    >
-                      {extractSituationNumber(situation.numero_situation)}
-                    </Button>
+                      onDownload={() => onDownloadSituationPdf(situation)}
+                    />
                   </TableCell>
                   <TableCell sx={commonBodyCellStyle}>
                     <TextField
@@ -616,26 +593,13 @@ const TableauFacturationTable = ({
                   </TableCell>
                   <TableCell sx={commonBodyCellStyle}>
                     {situation.numero_situation ? (
-                      <Button
-                        size="small"
-                        onClick={() => {
-                          const previewUrl = `/api/preview-situation/${situation.id}/`;
-                          window.open(previewUrl, "_blank");
+                      <DocumentCellActions
+                        label={formatFactureNumero(situation.numero_situation)}
+                        onPreview={() => {
+                          window.open(`/api/preview-situation/${situation.id}/`, "_blank");
                         }}
-                        sx={{
-                          color: "rgba(27, 120, 188, 1)",
-                          fontWeight: "bold",
-                          fontSize: "0.75rem",
-                          textTransform: "none",
-                          minWidth: "auto",
-                          padding: "2px 8px",
-                          "&:hover": {
-                            backgroundColor: "rgba(27, 120, 188, 0.1)",
-                          },
-                        }}
-                      >
-                        {formatFactureNumero(situation.numero_situation)}
-                      </Button>
+                        onDownload={() => onDownloadSituationPdf(situation)}
+                      />
                     ) : (
                       "-"
                     )}

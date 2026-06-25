@@ -1,10 +1,11 @@
-import { Box, CircularProgress, MenuItem, Select, Typography } from "@mui/material";
-import React, { useState } from "react";
+import { Alert, Box, CircularProgress, MenuItem, Select, Snackbar, Typography } from "@mui/material";
+import React, { useCallback, useState } from "react";
 import { useTableauFacturation } from "./hooks/useTableauFacturation";
 import TableauFacturationTable from "./components/TableauFacturationTable";
 import DateEnvoiModal from "./components/DateEnvoiModal";
 import PaiementModal from "./components/PaiementModal";
 import BanqueModal from "./components/BanqueModal";
+import { downloadDocumentPdf } from "./utils/downloadDocumentPdf";
 
 const TableauFacturation = () => {
   const [openDateModal, setOpenDateModal] = useState(false);
@@ -13,6 +14,11 @@ const TableauFacturation = () => {
   const [openBanqueModal, setOpenBanqueModal] = useState(false);
   const [selectedSituationForBanque, setSelectedSituationForBanque] =
     useState(null);
+  const [snackbar, setSnackbar] = useState({
+    open: false,
+    message: "",
+    severity: "info",
+  });
 
   const {
     selectedAnnee,
@@ -43,6 +49,34 @@ const TableauFacturation = () => {
     setSelectedSituationForBanque(situation);
     setOpenBanqueModal(true);
   };
+
+  const handleDownloadStatus = useCallback((status) => {
+    setSnackbar({ open: true, ...status });
+  }, []);
+
+  const handleDownloadSituationPdf = useCallback(
+    (situation) => {
+      downloadDocumentPdf({
+        url: "/api/generate-situation-pdf/",
+        payload: { situation_id: situation.id },
+        filename: situation.numero_situation || `situation-${situation.id}`,
+        onStatus: handleDownloadStatus,
+      });
+    },
+    [handleDownloadStatus]
+  );
+
+  const handleDownloadFacturePdf = useCallback(
+    (facture) => {
+      downloadDocumentPdf({
+        url: "/api/generate-facture-pdf-from-preview/",
+        payload: { facture_id: facture.id },
+        filename: facture.numero || `facture-${facture.id}`,
+        onStatus: handleDownloadStatus,
+      });
+    },
+    [handleDownloadStatus]
+  );
 
   return (
     <Box sx={{ width: "100%", p: 2 }}>
@@ -104,8 +138,26 @@ const TableauFacturation = () => {
           onOpenPaiementModal={handleOpenPaiementModal}
           onOpenBanqueModal={handleOpenBanqueModal}
           onNumeroCPChange={handleNumeroCPChange}
+          onDownloadSituationPdf={handleDownloadSituationPdf}
+          onDownloadFacturePdf={handleDownloadFacturePdf}
         />
       )}
+
+      <Snackbar
+        open={snackbar.open}
+        autoHideDuration={4000}
+        onClose={() => setSnackbar((prev) => ({ ...prev, open: false }))}
+        anchorOrigin={{ vertical: "bottom", horizontal: "center" }}
+      >
+        <Alert
+          onClose={() => setSnackbar((prev) => ({ ...prev, open: false }))}
+          severity={snackbar.severity}
+          variant="filled"
+          sx={{ width: "100%" }}
+        >
+          {snackbar.message}
+        </Alert>
+      </Snackbar>
 
       <DateEnvoiModal
         open={openDateModal}

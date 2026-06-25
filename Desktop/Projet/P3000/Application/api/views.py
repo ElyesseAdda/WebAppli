@@ -870,7 +870,7 @@ def generate_pdf_from_preview(request):
 
         node_script_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'frontend', 'src', 'components', 'generate_pdf.js')
 
-        pdf_fd, pdf_path = tempfile.mkstemp(suffix='.pdf', dir='/tmp')
+        pdf_fd, pdf_path = tempfile.mkstemp(suffix='.pdf')
         os.close(pdf_fd)
         pdf_fd = None
 
@@ -1657,7 +1657,7 @@ def generate_pdf_from_preview(request):
 
         node_script_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'frontend', 'src', 'components', 'generate_pdf.js')
 
-        pdf_fd, pdf_path = tempfile.mkstemp(suffix='.pdf', dir='/tmp')
+        pdf_fd, pdf_path = tempfile.mkstemp(suffix='.pdf')
         os.close(pdf_fd)
         pdf_fd = None
 
@@ -6059,7 +6059,7 @@ def generate_facture_pdf_from_preview(request):
             'frontend', 'src', 'components', 'generate_pdf.js'
         )
 
-        pdf_fd, pdf_path = tempfile.mkstemp(suffix='.pdf', dir='/tmp')
+        pdf_fd, pdf_path = tempfile.mkstemp(suffix='.pdf')
         os.close(pdf_fd)
         pdf_fd = None
 
