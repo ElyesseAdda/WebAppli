@@ -492,6 +492,7 @@ const CreationSituation = ({ open, onClose, devis, chantier, onSuccess }) => {
   const [lignesSupplementaires, setLignesSupplementaires] = useState([]);
   const [tauxRetenueGarantie, setTauxRetenueGarantie] = useState(5.0);
   const [retenueCIE, setRetenueCIE] = useState(0);
+  const [tvaRate, setTvaRate] = useState(20);
   const [facturesCIE, setFacturesCIE] = useState([]);
   const [calculatedValues, setCalculatedValues] = useState(null);
   const [existingSituation, setExistingSituation] = useState(null);
@@ -523,6 +524,9 @@ const CreationSituation = ({ open, onClose, devis, chantier, onSuccess }) => {
 
       // Utiliser price_ht au lieu de montant_ht
       setTotalHT(devis.price_ht || 0);
+      if (devis.tva_rate !== undefined && devis.tva_rate !== null) {
+        setTvaRate(parseFloat(devis.tva_rate));
+      }
     }
   }, [devis]);
 
@@ -1022,7 +1026,7 @@ const CreationSituation = ({ open, onClose, devis, chantier, onSuccess }) => {
       retenueGarantie -
       montantProrata -
       parseFloat(retenueCIE || 0);
-    const tva = montantApresRetenues * 0.2;
+    const tva = montantApresRetenues * (tvaRate / 100);
     const montantTotal = montantHtMois + parseFloat(cumulPrecedent);
     const pourcentageAvancement =
       totalHT > 0 ? (montantTotal / totalHT) * 100 : 0;
@@ -1044,7 +1048,7 @@ const CreationSituation = ({ open, onClose, devis, chantier, onSuccess }) => {
   // Utiliser useEffect pour recalculer quand les données changent
   useEffect(() => {
     calculateMontants();
-  }, [structure, avenants, tauxProrata, tauxRetenueGarantie, retenueCIE, lignesSupplementaires]);
+  }, [structure, avenants, tauxProrata, tauxRetenueGarantie, retenueCIE, lignesSupplementaires, tvaRate]);
 
   // Fonction pour calculer le cumul des mois précédents
   const calculerCumulPrecedent = () => {
@@ -1157,8 +1161,9 @@ const CreationSituation = ({ open, onClose, devis, chantier, onSuccess }) => {
         ),
         retenue_cie: formatNumber(retenueCIE),
         montant_apres_retenues: formatNumber(calculerTotalNet()),
-        tva: formatNumber(calculerTotalNet() * 0.2),
-        montant_total_ttc: formatNumber(calculerTotalNet() * 1.2),
+        tva: formatNumber(calculerTotalNet() * (tvaRate / 100)),
+        tva_rate: formatNumber(tvaRate),
+        montant_total_ttc: formatNumber(calculerTotalNet() * (1 + tvaRate / 100)),
         pourcentage_avancement: formatNumber(
           (calculerMontantTotalCumul() / (totalHT + montantTotalAvenants)) * 100
         ),
@@ -1282,7 +1287,7 @@ const CreationSituation = ({ open, onClose, devis, chantier, onSuccess }) => {
         montantApresRetenues += parseFloat(ligne.montant);
       }
     });
-    const tva = montantApresRetenues * 0.2;
+    const tva = montantApresRetenues * (tvaRate / 100);
     const pourcentageAvancement =
       montantTotalTravaux > 0
         ? (montantTotalCumul / montantTotalTravaux) * 100
@@ -1304,7 +1309,7 @@ const CreationSituation = ({ open, onClose, devis, chantier, onSuccess }) => {
   // Utiliser useEffect pour recalculer quand les données changent
   useEffect(() => {
     updateCalculs();
-  }, [structure, avenants, tauxProrata, tauxRetenueGarantie, retenueCIE, lignesSupplementaires]);
+  }, [structure, avenants, tauxProrata, tauxRetenueGarantie, retenueCIE, lignesSupplementaires, tvaRate]);
 
   const renderCalculs = () => {
     if (!calculatedValues) return null;
@@ -1670,7 +1675,7 @@ const CreationSituation = ({ open, onClose, devis, chantier, onSuccess }) => {
 
               {/* TVA */}
               <TableRow>
-                <TableCell>TVA (20%)</TableCell>
+                <TableCell>TVA ({tvaRate}%)</TableCell>
                 <TableCell align="right">
                   {(() => {
                     let montantBase =
@@ -1688,7 +1693,7 @@ const CreationSituation = ({ open, onClose, devis, chantier, onSuccess }) => {
                       }
                     });
 
-                    return (montantBase * 0.2)
+                    return (montantBase * (tvaRate / 100))
                       .toFixed(2)
                       .replace(/\B(?=(\d{3})+(?!\d))/g, " ");
                   })()}{" "}
@@ -1716,7 +1721,7 @@ const CreationSituation = ({ open, onClose, devis, chantier, onSuccess }) => {
                       }
                     });
 
-                    return (montantBase * 1.2)
+                    return (montantBase * (1 + tvaRate / 100))
                       .toFixed(2)
                       .replace(/\B(?=(\d{3})+(?!\d))/g, " ");
                   })()}{" "}

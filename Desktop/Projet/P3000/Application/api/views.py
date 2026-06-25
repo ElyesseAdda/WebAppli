@@ -519,6 +519,24 @@ def build_situation_title_label(numero_situation):
     return f"Situation {raw}"
 
 
+def get_situation_tva_rate(situation):
+    """Taux de TVA effectif : situation.tva_rate > devis.tva_rate > 20 %."""
+    if situation.tva_rate is not None:
+        return Decimal(str(situation.tva_rate))
+    if situation.devis_id:
+        devis_rate = getattr(situation.devis, 'tva_rate', None)
+        if devis_rate is not None:
+            return Decimal(str(devis_rate))
+    return Decimal('20.00')
+
+
+def calculate_situation_tva(montant_apres_retenues, tva_rate):
+    rate = Decimal(str(tva_rate if tva_rate is not None else '20.00'))
+    return (Decimal(str(montant_apres_retenues)) * rate / Decimal('100')).quantize(
+        Decimal('0.01'), rounding=ROUND_HALF_UP
+    )
+
+
 def dashboard_data(request):
     # Récupérer les paramètres de filtrage
     month = request.GET.get('month', datetime.now().month)
@@ -7838,8 +7856,11 @@ def create_situation(request):
             else:
                 montant_apres_retenues += ligne_suppl.montant
         
-        # Mettre à jour le montant_apres_retenues en base de données
+        # Mettre à jour le montant_apres_retenues et recalculer TVA / TTC avec le bon taux
         situation.montant_apres_retenues = montant_apres_retenues
+        tva_rate = get_situation_tva_rate(situation)
+        situation.tva = calculate_situation_tva(montant_apres_retenues, tva_rate)
+        situation.montant_total_ttc = montant_apres_retenues + situation.tva
         situation.save()
 
         response_data = SituationSerializer(situation).data
@@ -7907,7 +7928,7 @@ def update_situation(request, pk):
         for field in ['mois', 'annee', 'numero_situation', 'date_creation', 'montant_ht_mois', 'cumul_precedent', 
                      'montant_total_cumul_ht', 'retenue_garantie', 'montant_prorata', 
                      'retenue_cie', 'type_retenue_cie', 'montant_apres_retenues', 'tva', 'montant_total_ttc', 
-                     'pourcentage_avancement', 'taux_prorata', 'taux_retenue_garantie', 'statut']:
+                     'pourcentage_avancement', 'taux_prorata', 'taux_retenue_garantie', 'tva_rate', 'statut']:
             if field in data:
                 setattr(situation, field, data[field])
         situation.save()
@@ -8052,10 +8073,8 @@ def update_situation(request, pk):
                 
         situation.montant_apres_retenues = montant_apres_retenues
         
-        # Calculer la TVA (20%)
-        situation.tva = (montant_apres_retenues * Decimal('20')) / Decimal('100')
-        
-        # Calculer le montant TTC
+        tva_rate = get_situation_tva_rate(situation)
+        situation.tva = calculate_situation_tva(montant_apres_retenues, tva_rate)
         situation.montant_total_ttc = montant_apres_retenues + situation.tva
         
         # Recalculer le montant_precedent à partir de la situation précédente
@@ -8158,11 +8177,13 @@ def update_situation(request, pk):
                     
             situation_suivante.montant_apres_retenues = montant_apres_retenues_suivante
             
-            # Calculer la TVA (20%)
-            situation_suivante.tva = (montant_apres_retenues_suivante * Decimal('20')) / Decimal('100')
-            
-            # Calculer le montant TTC
-            situation_suivante.montant_total_ttc = montant_apres_retenues_suivante + situation_suivante.tva
+            tva_rate_suivante = get_situation_tva_rate(situation_suivante)
+            situation_suivante.tva = calculate_situation_tva(
+                montant_apres_retenues_suivante, tva_rate_suivante
+            )
+            situation_suivante.montant_total_ttc = (
+                montant_apres_retenues_suivante + situation_suivante.tva
+            )
             
             # Recalculer le montant_precedent et montant_total
             if situation_precedente_suivante:
@@ -9299,8 +9320,8 @@ def preview_situation(request, situation_id):
             else:
                 montant_apres_retenues += ligne_suppl['montant']
         
-        # Calculer la TVA
-        tva = (montant_apres_retenues * Decimal('0.20')).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
+        tva_rate = get_situation_tva_rate(situation)
+        tva = calculate_situation_tva(montant_apres_retenues, tva_rate)
 
         # Calculer le montant total des travaux HT (comme dans SituationViews.py)
         # = somme des montants d'avancement des parties + lignes spéciales (hors display) + avenants
