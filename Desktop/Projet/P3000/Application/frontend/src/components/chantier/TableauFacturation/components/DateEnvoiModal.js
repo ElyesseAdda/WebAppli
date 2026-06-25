@@ -11,21 +11,33 @@ import {
 } from "@mui/material";
 import React, { useEffect, useState } from "react";
 
+const isFactureItem = (item) =>
+  item && (item.price_ht !== undefined || item.isFacture);
+
 const DateEnvoiModal = ({ open, onClose, situation, onSubmit }) => {
   const [dateEnvoi, setDateEnvoi] = useState("");
   const [delaiPaiement, setDelaiPaiement] = useState(45);
 
+  const isFacture = isFactureItem(situation);
+
   useEffect(() => {
-    if (situation) {
-      setDateEnvoi(situation.date_envoi || "");
+    if (open && situation) {
+      const dateInitiale = isFacture
+        ? situation.date_envoi ||
+          (situation.date_creation
+            ? String(situation.date_creation).split("T")[0]
+            : "")
+        : situation.date_envoi || "";
+      setDateEnvoi(dateInitiale);
       setDelaiPaiement(situation.delai_paiement || 45);
     }
-  }, [situation]);
+  }, [situation, open, isFacture]);
 
   const handleSubmit = () => {
     onSubmit(situation.id, {
       dateEnvoi,
       delaiPaiement,
+      isFacture,
     });
     onClose();
   };

@@ -201,11 +201,8 @@ export const useTableauFacturation = () => {
 
   // Handlers pour les mises à jour
   const handleDateModalSubmit = useCallback(
-    async (itemId, { dateEnvoi, delaiPaiement }) => {
+    async (itemId, { dateEnvoi, delaiPaiement, isFacture }) => {
       try {
-        // Détecter si c'est une facture (a price_ht ou isFacture) ou une situation
-        const isFacture = allFactures.some(f => f.id === itemId);
-        
         if (isFacture) {
           // Mise à jour d'une facture
           await axios.patch(`/api/facture/${itemId}/`, {
@@ -239,15 +236,12 @@ export const useTableauFacturation = () => {
         alert("Erreur lors de la mise à jour des données");
       }
     },
-    [allFactures]
+    []
   );
 
   const handlePaiementModalSubmit = useCallback(
-    async (itemId, { montantRecu, datePaiementReel }) => {
+    async (itemId, { montantRecu, datePaiementReel, isFacture }) => {
       try {
-        // Détecter si c'est une facture (a price_ht ou isFacture) ou une situation
-        const isFacture = allFactures.some(f => f.id === itemId);
-        
         if (isFacture) {
           // Mise à jour d'une facture
           const facture = allFactures.find(f => f.id === itemId);

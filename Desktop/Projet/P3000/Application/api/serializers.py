@@ -2096,6 +2096,7 @@ class AppelOffresSerializer(serializers.ModelSerializer):
         """Affiche les montants du devis de chantier quand l'appel d'offres a été transformé."""
         data = super().to_representation(instance)
         devis = self._get_devis_chantier(instance)
+        data['devis_id'] = devis.id if devis is not None else None
         if devis is not None:
             if devis.price_ht is not None:
                 data['montant_ht'] = float(devis.price_ht)

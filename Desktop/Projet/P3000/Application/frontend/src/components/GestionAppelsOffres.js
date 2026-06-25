@@ -162,6 +162,14 @@ const GestionAppelsOffres = () => {
     setTimeout(() => setAlertMessage(""), 5000);
   };
 
+  const handlePreviewDevisChantier = (appelOffres) => {
+    if (!appelOffres.devis_id) {
+      showAlert("Aucun devis de chantier trouvé pour cet appel d'offres", "warning");
+      return;
+    }
+    window.open(`/api/preview-saved-devis/${appelOffres.devis_id}/`, "_blank");
+  };
+
   const handleRafraichirMontants = async () => {
     try {
       setSyncingMontants(true);
@@ -718,7 +726,18 @@ const GestionAppelsOffres = () => {
                     >
                       <TableCell>
                         <Box sx={{ display: "flex", alignItems: "center", gap: 1, flexWrap: "wrap" }}>
-                          <Typography variant="subtitle2" fontWeight="bold">
+                          <Typography
+                            variant="subtitle2"
+                            fontWeight="bold"
+                            onClick={() => handlePreviewDevisChantier(appelOffres)}
+                            sx={{
+                              cursor: appelOffres.devis_id ? "pointer" : "default",
+                              color: appelOffres.devis_id ? "#4f46e5" : "inherit",
+                              "&:hover": appelOffres.devis_id
+                                ? { textDecoration: "underline", color: "#6366f1" }
+                                : {},
+                            }}
+                          >
                             {appelOffres.chantier_name}
                           </Typography>
                           {appelOffres.deja_transforme && (
