@@ -50,6 +50,7 @@ const PaiementModal = ({ open, onClose, situation, onSubmit }) => {
     onSubmit(situation.id, {
       montantRecu: isFacture ? null : montantRecu, // Pas de montant pour les factures
       datePaiementReel,
+      isFacture,
     });
     onClose();
   };
