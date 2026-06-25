@@ -568,7 +568,6 @@ const TableauFacturationTable = ({
                       onPreview={() => {
                         window.open(`/api/preview-situation/${situation.id}/`, "_blank");
                       }}
-                      onDownload={() => onDownloadSituationPdf(situation)}
                     />
                   </TableCell>
                   <TableCell sx={commonBodyCellStyle}>
