@@ -26,25 +26,27 @@ const DocumentCellActions = ({ label, onPreview, onDownload }) => (
     <Button size="small" onClick={onPreview} sx={previewButtonSx}>
       {label}
     </Button>
-    <Tooltip title="Télécharger le PDF">
-      <IconButton
-        size="small"
-        onClick={(e) => {
-          e.stopPropagation();
-          onDownload();
-        }}
-        sx={{
-          padding: "2px",
-          color: "rgba(27, 120, 188, 0.65)",
-          "&:hover": {
-            color: "rgba(27, 120, 188, 1)",
-            backgroundColor: "rgba(27, 120, 188, 0.08)",
-          },
-        }}
-      >
-        <DownloadIcon sx={{ fontSize: "0.95rem" }} />
-      </IconButton>
-    </Tooltip>
+    {onDownload && (
+      <Tooltip title="Télécharger le PDF">
+        <IconButton
+          size="small"
+          onClick={(e) => {
+            e.stopPropagation();
+            onDownload();
+          }}
+          sx={{
+            padding: "2px",
+            color: "rgba(27, 120, 188, 0.65)",
+            "&:hover": {
+              color: "rgba(27, 120, 188, 1)",
+              backgroundColor: "rgba(27, 120, 188, 0.08)",
+            },
+          }}
+        >
+          <DownloadIcon sx={{ fontSize: "0.95rem" }} />
+        </IconButton>
+      </Tooltip>
+    )}
   </Box>
 );
 
