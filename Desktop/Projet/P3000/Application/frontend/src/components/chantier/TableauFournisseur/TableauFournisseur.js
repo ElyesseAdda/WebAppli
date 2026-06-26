@@ -1704,8 +1704,10 @@ const TableauFournisseur = () => {
   const colorForAmount = (value) => {
     const n = Number(value ?? 0);
     if (Math.abs(n) < 0.01) return "text.primary";
-    return n < 0 ? "rgba(211, 47, 47, 1)" : "rgba(46, 125, 50, 1)";
+    return n < 0 ? "rgba(211, 47, 47, 1)" : "rgba(27, 120, 188, 1)";
   };
+
+  const colorForEcart = () => "rgba(211, 47, 47, 1)";
 
   // Calculer les totaux pour un mois
   const calculerTotauxMois = (mois) => {
@@ -2049,7 +2051,9 @@ const TableauFournisseur = () => {
                               sx={{
                                 fontWeight: "bold",
                                 fontSize: "0.9rem",
-                                color: "#ffffff",
+                                color: row.totaux.totalPaye !== 0
+                                  ? colorForAmount(row.totaux.totalPaye)
+                                  : "#ffffff",
                               }}
                             >
                               {formatNumber(row.totaux.totalPaye)} €
@@ -2063,7 +2067,7 @@ const TableauFournisseur = () => {
                               sx={{
                                 fontWeight: "bold",
                                 fontSize: "0.9rem",
-                                color: colorForAmount(row.totaux.totalEcart),
+                                color: colorForEcart(),
                               }}
                             >
                               {formatNumber(row.totaux.totalEcart)} €
@@ -2224,6 +2228,8 @@ const TableauFournisseur = () => {
                                   fontSize: "0.75rem",
                                   padding: "4px 8px",
                                   cursor: "pointer",
+                                  color: colorForAmount(item.paye),
+                                  fontWeight: 500,
                                 },
                               }}
                               sx={{
@@ -2425,7 +2431,7 @@ const TableauFournisseur = () => {
                             <Typography
                               sx={{
                                 fontSize: "0.75rem",
-                                color: colorForAmount(item.ecart),
+                                color: colorForEcart(),
                                 fontWeight: item.ecart !== 0 ? "bold" : "normal",
                               }}
                             >
@@ -2692,7 +2698,9 @@ const TableauFournisseur = () => {
                                   sx={{
                                     fontSize: "0.85rem",
                                     fontWeight: "bold",
-                                    color: colorForAmount(totalFournisseur.totalAPayer),
+                                    color: isPayeComplet
+                                      ? "rgba(46, 125, 50, 1)"
+                                      : "rgba(211, 47, 47, 1)",
                                   }}
                                 >
                                   {formatNumber(totalFournisseur.totalAPayer)} €
@@ -2712,7 +2720,6 @@ const TableauFournisseur = () => {
           {/* Récapitulatif par fournisseur */}
           {tableRows.length > 0 && (
             <RecapFournisseur
-              data={data}
               selectedAnnee={selectedAnnee}
               organized={organized}
               moisSorted={moisSorted}
