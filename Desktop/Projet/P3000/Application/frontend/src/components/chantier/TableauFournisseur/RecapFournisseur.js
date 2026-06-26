@@ -47,8 +47,10 @@ const RecapFournisseur = ({ data, selectedAnnee, organized, moisSorted }) => {
   const colorForAmount = (value) => {
     const n = Number(value ?? 0);
     if (Math.abs(n) < 0.01) return "text.primary";
-    return n < 0 ? "rgba(211, 47, 47, 1)" : "rgba(46, 125, 50, 1)";
+    return n < 0 ? "rgba(211, 47, 47, 1)" : "rgba(27, 120, 188, 1)";
   };
+
+  const colorForEcart = () => "rgba(211, 47, 47, 1)";
 
   // Calculer les totaux globaux pour l'année
   const calculerTotauxGlobaux = () => {
@@ -201,7 +203,7 @@ const RecapFournisseur = ({ data, selectedAnnee, organized, moisSorted }) => {
               sx={{
                 fontSize: "1.1rem",
                 fontWeight: "bold",
-                color: "rgba(46, 125, 50, 1)",
+                color: colorForAmount(totauxGlobaux.totalPaye),
               }}
             >
               {formatNumber(totauxGlobaux.totalPaye)} €
@@ -215,7 +217,7 @@ const RecapFournisseur = ({ data, selectedAnnee, organized, moisSorted }) => {
               sx={{
                 fontSize: "1.1rem",
                 fontWeight: "bold",
-                color: colorForAmount(totauxGlobaux.totalEcart),
+                color: colorForEcart(),
               }}
             >
               {formatNumber(totauxGlobaux.totalEcart)} €
@@ -352,9 +354,7 @@ const RecapFournisseur = ({ data, selectedAnnee, organized, moisSorted }) => {
                           sx={{
                             fontSize: "0.9rem",
                             fontWeight: "bold",
-                            color: isPayeComplet
-                              ? "rgba(46, 125, 50, 1)"
-                              : "rgba(27, 120, 188, 1)",
+                            color: colorForAmount(totaux.totalPaye),
                           }}
                         >
                           {formatNumber(totaux.totalPaye)} €
@@ -373,7 +373,7 @@ const RecapFournisseur = ({ data, selectedAnnee, organized, moisSorted }) => {
                           sx={{
                             fontSize: "0.9rem",
                             fontWeight: "bold",
-                            color: colorForAmount(totaux.totalEcart),
+                            color: colorForEcart(),
                           }}
                         >
                           {formatNumber(totaux.totalEcart)} €
@@ -509,7 +509,7 @@ const RecapFournisseur = ({ data, selectedAnnee, organized, moisSorted }) => {
                             <TableCell align="right">
                               <Typography
                                 sx={{
-                                  color: "rgba(46, 125, 50, 1)",
+                                  color: colorForAmount(totauxMois.totalPaye),
                                   fontWeight: 500,
                                 }}
                               >
@@ -519,7 +519,7 @@ const RecapFournisseur = ({ data, selectedAnnee, organized, moisSorted }) => {
                             <TableCell align="right">
                               <Typography
                                 sx={{
-                                  color: colorForAmount(totauxMois.totalEcart),
+                                  color: colorForEcart(),
                                   fontWeight: 500,
                                 }}
                               >
@@ -570,9 +570,7 @@ const RecapFournisseur = ({ data, selectedAnnee, organized, moisSorted }) => {
                           <Typography
                             sx={{
                               fontWeight: "bold",
-                              color: isPayeComplet
-                                ? "rgba(46, 125, 50, 1)"
-                                : "rgba(27, 120, 188, 1)",
+                              color: colorForAmount(totaux.totalPaye),
                             }}
                           >
                             {formatNumber(totaux.totalPaye)} €
@@ -582,7 +580,7 @@ const RecapFournisseur = ({ data, selectedAnnee, organized, moisSorted }) => {
                           <Typography
                             sx={{
                               fontWeight: "bold",
-                              color: colorForAmount(totaux.totalEcart),
+                              color: colorForEcart(),
                             }}
                           >
                             {formatNumber(totaux.totalEcart)} €

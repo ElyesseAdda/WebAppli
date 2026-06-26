@@ -2103,8 +2103,10 @@ const TableauSousTraitant = () => {
   const colorForAmount = (value) => {
     const n = Number(value ?? 0);
     if (Math.abs(n) < 0.01) return "text.primary";
-    return n < 0 ? "rgba(211, 47, 47, 1)" : "rgba(46, 125, 50, 1)";
+    return n < 0 ? "rgba(211, 47, 47, 1)" : "rgba(27, 120, 188, 1)";
   };
+
+  const colorForEcart = () => "rgba(211, 47, 47, 1)";
 
   const trierMoisRecap = (moisArray) => {
     return [...moisArray].sort((a, b) => {
@@ -2346,7 +2348,9 @@ const TableauSousTraitant = () => {
                               sx={{
                                 fontWeight: "bold",
                                 fontSize: "0.9rem",
-                                color: "#ffffff",
+                                color: row.totaux.totalPaye !== 0
+                                  ? colorForAmount(row.totaux.totalPaye)
+                                  : "#ffffff",
                               }}
                             >
                               {formatNumber(row.totaux.totalPaye)} €
@@ -2360,7 +2364,7 @@ const TableauSousTraitant = () => {
                               sx={{
                                 fontWeight: "bold",
                                 fontSize: "0.9rem",
-                                color: colorForAmount(row.totaux.totalEcart),
+                                color: colorForEcart(),
                               }}
                             >
                               {formatNumber(row.totaux.totalEcart)} €
@@ -2636,6 +2640,8 @@ const TableauSousTraitant = () => {
                                     textAlign: "center",
                                     fontSize: "0.75rem",
                                     padding: "4px 8px",
+                                    color: colorForAmount(item.paye),
+                                    fontWeight: 500,
                                   },
                                 }}
                                 sx={{
@@ -2676,6 +2682,8 @@ const TableauSousTraitant = () => {
                                     padding: "4px 8px",
                                     cursor: "pointer",
                                     textDecoration: "none",
+                                    color: colorForAmount(item.paye),
+                                    fontWeight: 500,
                                   },
                                 }}
                                 sx={{
@@ -2881,7 +2889,7 @@ const TableauSousTraitant = () => {
                             <Typography
                               sx={{
                                 fontSize: "0.75rem",
-                                color: colorForAmount(item.ecart),
+                                color: colorForEcart(),
                                 fontWeight: item.ecart !== 0 ? "bold" : "normal",
                               }}
                             >
@@ -3124,7 +3132,9 @@ const TableauSousTraitant = () => {
                                   sx={{
                                     fontSize: "0.85rem",
                                     fontWeight: "bold",
-                                    color: colorForAmount(totalSousTraitant.totalAPayer),
+                                    color: isPayeComplet
+                                      ? "rgba(46, 125, 50, 1)"
+                                      : "rgba(211, 47, 47, 1)",
                                   }}
                                 >
                                   {formatNumber(totalSousTraitant.totalAPayer)} €
@@ -3204,7 +3214,7 @@ const TableauSousTraitant = () => {
                       Montant payé
                     </Typography>
                     <Typography
-                      sx={{ fontSize: "1.1rem", fontWeight: "bold", color: "rgba(46, 125, 50, 1)" }}
+                      sx={{ fontSize: "1.1rem", fontWeight: "bold", color: colorForAmount(recapTotaux.global.totalPaye) }}
                     >
                       {formatNumber(recapTotaux.global.totalPaye)} €
                     </Typography>
@@ -3217,7 +3227,7 @@ const TableauSousTraitant = () => {
                       sx={{
                         fontSize: "1.1rem",
                         fontWeight: "bold",
-                        color: colorForAmount(recapTotaux.global.totalEcart),
+                        color: colorForEcart(),
                       }}
                     >
                       {formatNumber(recapTotaux.global.totalEcart)} €
@@ -3310,7 +3320,7 @@ const TableauSousTraitant = () => {
                                   sx={{
                                     fontSize: "0.9rem",
                                     fontWeight: "bold",
-                                    color: isPayeComplet ? "rgba(46, 125, 50, 1)" : "rgba(27, 120, 188, 1)",
+                                    color: colorForAmount(totaux.totalPaye),
                                   }}
                                 >
                                   {formatNumber(totaux.totalPaye)} €
@@ -3318,7 +3328,7 @@ const TableauSousTraitant = () => {
                               </Box>
                               <Box sx={{ textAlign: "right" }}>
                                 <Typography sx={{ fontSize: "0.75rem", color: "text.secondary" }}>Écart</Typography>
-                                <Typography sx={{ fontSize: "0.9rem", fontWeight: "bold", color: colorForAmount(totaux.totalEcart) }}>
+                                <Typography sx={{ fontSize: "0.9rem", fontWeight: "bold", color: colorForEcart() }}>
                                   {formatNumber(totaux.totalEcart)} €
                                 </Typography>
                               </Box>
@@ -3375,12 +3385,12 @@ const TableauSousTraitant = () => {
                                       </Typography>
                                     </TableCell>
                                     <TableCell align="right">
-                                      <Typography sx={{ color: "rgba(46, 125, 50, 1)", fontWeight: 500 }}>
+                                      <Typography sx={{ color: colorForAmount(tm.totalPaye), fontWeight: 500 }}>
                                         {formatNumber(tm.totalPaye)} €
                                       </Typography>
                                     </TableCell>
                                     <TableCell align="right">
-                                      <Typography sx={{ color: colorForAmount(tm.totalEcart), fontWeight: 500 }}>
+                                      <Typography sx={{ color: colorForEcart(), fontWeight: 500 }}>
                                         {formatNumber(tm.totalEcart)} €
                                       </Typography>
                                     </TableCell>
@@ -3391,8 +3401,8 @@ const TableauSousTraitant = () => {
                                 <TableCell><Typography sx={{ fontWeight: "bold", color: "rgba(27, 120, 188, 1)" }}>TOTAL</Typography></TableCell>
                                 <TableCell align="right"><Typography sx={{ fontWeight: "bold", color: colorForAmount(totaux.totalAPayer) }}>{formatNumber(totaux.totalAPayer)} €</Typography></TableCell>
                                 <TableCell align="right"><Typography sx={{ fontWeight: "bold", color: colorForAmount(totaux.totalAPayerTTC) }}>{formatNumber(totaux.totalAPayerTTC)} €</Typography></TableCell>
-                                <TableCell align="right"><Typography sx={{ fontWeight: "bold", color: isPayeComplet ? "rgba(46, 125, 50, 1)" : "rgba(27, 120, 188, 1)" }}>{formatNumber(totaux.totalPaye)} €</Typography></TableCell>
-                                <TableCell align="right"><Typography sx={{ fontWeight: "bold", color: colorForAmount(totaux.totalEcart) }}>{formatNumber(totaux.totalEcart)} €</Typography></TableCell>
+                                <TableCell align="right"><Typography sx={{ fontWeight: "bold", color: colorForAmount(totaux.totalPaye) }}>{formatNumber(totaux.totalPaye)} €</Typography></TableCell>
+                                <TableCell align="right"><Typography sx={{ fontWeight: "bold", color: colorForEcart() }}>{formatNumber(totaux.totalEcart)} €</Typography></TableCell>
                               </TableRow>
                             </TableBody>
                           </Table>
