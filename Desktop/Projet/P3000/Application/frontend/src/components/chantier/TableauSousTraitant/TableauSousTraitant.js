@@ -26,15 +26,24 @@ import {
   AccordionSummary,
   AccordionDetails,
   LinearProgress,
+  InputAdornment,
+  ToggleButton,
+  ToggleButtonGroup,
 } from "@mui/material";
 import FactureModal from "./FactureModal";
 import DatePaiementModal from "./DatePaiementModal";
 import DateEnvoiModal from "./DateEnvoiModal";
 import DatePaiementFactureModal from "./DatePaiementFactureModal";
-import { Add as AddIcon, Close as CloseIcon, CheckCircle as CheckCircleIcon, AddCircleOutline as AddCircleOutlineIcon, ExpandMore as ExpandMoreIcon } from "@mui/icons-material";
+import { Add as AddIcon, Close as CloseIcon, CheckCircle as CheckCircleIcon, AddCircleOutline as AddCircleOutlineIcon, ExpandMore as ExpandMoreIcon, Search as SearchIcon } from "@mui/icons-material";
 import axios from "axios";
 import React, { useEffect, useState, useRef, useCallback, useMemo } from "react";
 import { FaSync } from "react-icons/fa";
+
+/** Clé de regroupement : "CAP PEINTURE - 0233322" → "CAP PEINTURE" */
+const getSousTraitantGroupKey = (name) => {
+  const idx = name.indexOf(" - ");
+  return idx === -1 ? name.trim() : name.slice(0, idx).trim();
+};
 
 const TableauSousTraitant = () => {
   const [data, setData] = useState([]);
@@ -45,6 +54,9 @@ const TableauSousTraitant = () => {
   const [editedValuesPaye, setEditedValuesPaye] = useState({}); // {mois_sous_traitant_chantierId: value} - seul champ éditable (montant payé)
   const [editedFactures, setEditedFactures] = useState({}); // {mois_sous_traitant_chantierId: [{id, numero_facture, montant_facture}, ...]}
   const [selectedAnnee, setSelectedAnnee] = useState("");
+  const [recapSearch, setRecapSearch] = useState("");
+  const [recapSort, setRecapSort] = useState("montant");
+  const [recapSortDir, setRecapSortDir] = useState("desc");
   
   // État pour le modal de facture
   const [factureModalOpen, setFactureModalOpen] = useState(false);
@@ -2117,6 +2129,161 @@ const TableauSousTraitant = () => {
     });
   };
 
+  const getDefaultRecapSortDir = (sort) => (sort === "alphabetique" ? "asc" : "desc");
+
+  const handleRecapSortChange = (_, value) => {
+    if (value === null) {
+      setRecapSortDir((dir) => (dir === "desc" ? "asc" : "desc"));
+      return;
+    }
+    setRecapSort(value);
+    setRecapSortDir(getDefaultRecapSortDir(value));
+  };
+
+  const getRecapSortLabel = (sort) => {
+    if (recapSort !== sort) {
+      if (sort === "montant") return "Plus gros montants";
+      if (sort === "avancement") return "% d'avancement";
+      return "Ordre alphabétique";
+    }
+    if (sort === "montant") {
+      return recapSortDir === "desc" ? "Plus gros montants" : "Plus petits montants";
+    }
+    if (sort === "avancement") {
+      return recapSortDir === "desc" ? "% avancement ↓" : "% avancement ↑";
+    }
+    return recapSortDir === "asc" ? "A → Z" : "Z → A";
+  };
+
+  const recapSousTraitantsSorted = useMemo(() => {
+    const { parSousTraitant, sorted } = recapTotaux;
+
+    // Regrouper par nom de base (ex. CAP PEINTURE + CAP PEINTURE - 0233322)
+    const groupsMap = {};
+    sorted.forEach((st) => {
+      const groupKey = getSousTraitantGroupKey(st);
+      if (!groupsMap[groupKey]) {
+        groupsMap[groupKey] = {
+          groupKey,
+          displayName: groupKey,
+          variants: [],
+          totalAPayer: 0,
+          totalPaye: 0,
+          totalEcart: 0,
+          totalAPayerTTC: 0,
+        };
+      }
+      const totaux = parSousTraitant[st];
+      groupsMap[groupKey].variants.push({ name: st, totaux });
+      groupsMap[groupKey].totalAPayer += totaux.totalAPayer || 0;
+      groupsMap[groupKey].totalPaye += totaux.totalPaye || 0;
+      groupsMap[groupKey].totalEcart += totaux.totalEcart || 0;
+      groupsMap[groupKey].totalAPayerTTC += totaux.totalAPayerTTC || 0;
+    });
+
+    let list = Object.values(groupsMap).map((g) => ({
+      ...g,
+      isGrouped: g.variants.length > 1,
+      variants: [...g.variants].sort((a, b) => a.name.localeCompare(b.name, "fr")),
+    }));
+
+    const q = recapSearch.trim().toLowerCase();
+    if (q) {
+      list = list
+        .filter((g) => {
+          const groupMatch = g.displayName.toLowerCase().includes(q);
+          const variantMatch = g.variants.some((v) => v.name.toLowerCase().includes(q));
+          return groupMatch || variantMatch;
+        })
+        .map((g) => {
+          const groupMatch = g.displayName.toLowerCase().includes(q);
+          const filteredVariants = groupMatch
+            ? g.variants
+            : g.variants.filter((v) => v.name.toLowerCase().includes(q));
+          return { ...g, filteredVariants };
+        });
+    } else {
+      list = list.map((g) => ({ ...g, filteredVariants: g.variants }));
+    }
+
+    return [...list].sort((a, b) => {
+      let cmp = 0;
+      if (recapSort === "alphabetique") {
+        cmp = a.displayName.localeCompare(b.displayName, "fr");
+      } else if (recapSort === "montant") {
+        cmp = (a.totalAPayer || 0) - (b.totalAPayer || 0);
+      } else if (recapSort === "avancement") {
+        const pctA = a.totalAPayer ? (a.totalPaye / a.totalAPayer) * 100 : 0;
+        const pctB = b.totalAPayer ? (b.totalPaye / b.totalAPayer) * 100 : 0;
+        cmp = pctA - pctB;
+      }
+      return recapSortDir === "asc" ? cmp : -cmp;
+    });
+  }, [recapTotaux, recapSearch, recapSort, recapSortDir]);
+
+  const renderRecapVariantTable = (totaux) => {
+    const moisST = trierMoisRecap(Object.keys(totaux.mois));
+    return (
+      <TableContainer component={Paper} variant="outlined">
+        <Table size="small">
+          <TableHead>
+            <TableRow sx={{ backgroundColor: "rgba(27, 120, 188, 0.1)" }}>
+              <TableCell sx={{ fontWeight: "bold", color: "rgba(27, 120, 188, 1)" }}>Mois</TableCell>
+              <TableCell align="right" sx={{ fontWeight: "bold", color: "rgba(27, 120, 188, 1)" }}>Montant à payer HT</TableCell>
+              <TableCell align="right" sx={{ fontWeight: "bold", color: "rgba(27, 120, 188, 1)" }}>Montant à payer TTC</TableCell>
+              <TableCell align="right" sx={{ fontWeight: "bold", color: "rgba(27, 120, 188, 1)" }}>Montant payé</TableCell>
+              <TableCell align="right" sx={{ fontWeight: "bold", color: "rgba(27, 120, 188, 1)" }}>Écart</TableCell>
+            </TableRow>
+          </TableHead>
+          <TableBody>
+            {moisST.map((mois) => {
+              const [moisNum, annee2d] = mois.split("/").map(Number);
+              const moisName = getMoisName(moisNum);
+              const anneeComplete = annee2d < 50 ? 2000 + annee2d : 1900 + annee2d;
+              const tm = totaux.mois[mois];
+              return (
+                <TableRow key={mois} hover>
+                  <TableCell>
+                    <Typography sx={{ fontWeight: 500, color: "text.primary" }}>
+                      {moisName} {anneeComplete}
+                    </Typography>
+                  </TableCell>
+                  <TableCell align="right">
+                    <Typography sx={{ color: colorForAmount(tm.totalAPayer), fontWeight: 500 }}>
+                      {formatNumber(tm.totalAPayer)} €
+                    </Typography>
+                  </TableCell>
+                  <TableCell align="right">
+                    <Typography sx={{ color: colorForAmount(tm.totalAPayerTTC), fontWeight: 500 }}>
+                      {formatNumber(tm.totalAPayerTTC)} €
+                    </Typography>
+                  </TableCell>
+                  <TableCell align="right">
+                    <Typography sx={{ color: colorForAmount(tm.totalPaye), fontWeight: 500 }}>
+                      {formatNumber(tm.totalPaye)} €
+                    </Typography>
+                  </TableCell>
+                  <TableCell align="right">
+                    <Typography sx={{ color: colorForEcart(), fontWeight: 500 }}>
+                      {formatNumber(tm.totalEcart)} €
+                    </Typography>
+                  </TableCell>
+                </TableRow>
+              );
+            })}
+            <TableRow sx={{ backgroundColor: "rgba(27, 120, 188, 0.05)", borderTop: "2px solid rgba(27, 120, 188, 0.3)" }}>
+              <TableCell><Typography sx={{ fontWeight: "bold", color: "rgba(27, 120, 188, 1)" }}>TOTAL</Typography></TableCell>
+              <TableCell align="right"><Typography sx={{ fontWeight: "bold", color: colorForAmount(totaux.totalAPayer) }}>{formatNumber(totaux.totalAPayer)} €</Typography></TableCell>
+              <TableCell align="right"><Typography sx={{ fontWeight: "bold", color: colorForAmount(totaux.totalAPayerTTC) }}>{formatNumber(totaux.totalAPayerTTC)} €</Typography></TableCell>
+              <TableCell align="right"><Typography sx={{ fontWeight: "bold", color: colorForAmount(totaux.totalPaye) }}>{formatNumber(totaux.totalPaye)} €</Typography></TableCell>
+              <TableCell align="right"><Typography sx={{ fontWeight: "bold", color: colorForEcart() }}>{formatNumber(totaux.totalEcart)} €</Typography></TableCell>
+            </TableRow>
+          </TableBody>
+        </Table>
+      </TableContainer>
+    );
+  };
+
   return (
     <Box sx={{ width: "100%", p: 2 }}>
       <Box sx={{ mb: 2 }}>
@@ -3236,10 +3403,93 @@ const TableauSousTraitant = () => {
                 </Box>
               </Paper>
 
+              <Paper
+                sx={{
+                  p: 2,
+                  mb: 2,
+                  backgroundColor: "white",
+                  border: "1px solid rgba(27, 120, 188, 0.25)",
+                }}
+              >
+                <Box
+                  sx={{
+                    display: "flex",
+                    flexWrap: "wrap",
+                    gap: 2,
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                  }}
+                >
+                  <TextField
+                    placeholder="Rechercher par nom ou client (ex. CAP PEINTURE, 0233322)…"
+                    value={recapSearch}
+                    onChange={(e) => setRecapSearch(e.target.value)}
+                    size="small"
+                    InputProps={{
+                      startAdornment: (
+                        <InputAdornment position="start">
+                          <SearchIcon sx={{ color: "rgba(27, 120, 188, 0.7)" }} />
+                        </InputAdornment>
+                      ),
+                    }}
+                    sx={{
+                      flex: 1,
+                      minWidth: 240,
+                      "& .MuiOutlinedInput-root": {
+                        backgroundColor: "#fafafa",
+                      },
+                    }}
+                  />
+                  <ToggleButtonGroup
+                    value={recapSort}
+                    exclusive
+                    onChange={handleRecapSortChange}
+                    size="small"
+                    sx={{
+                      flexWrap: "wrap",
+                      "& .MuiToggleButton-root": {
+                        textTransform: "none",
+                        fontSize: "0.8rem",
+                        px: 1.5,
+                        borderColor: "rgba(27, 120, 188, 0.4)",
+                        color: "rgba(27, 120, 188, 1)",
+                        "&.Mui-selected": {
+                          backgroundColor: "rgba(27, 120, 188, 1)",
+                          color: "white",
+                          "&:hover": {
+                            backgroundColor: "rgba(27, 120, 188, 0.85)",
+                          },
+                        },
+                      },
+                    }}
+                  >
+                    <ToggleButton value="montant">{getRecapSortLabel("montant")}</ToggleButton>
+                    <ToggleButton value="avancement">{getRecapSortLabel("avancement")}</ToggleButton>
+                    <ToggleButton value="alphabetique">{getRecapSortLabel("alphabetique")}</ToggleButton>
+                  </ToggleButtonGroup>
+                </Box>
+                {recapSearch.trim() && (
+                  <Typography
+                    sx={{ fontSize: "0.75rem", color: "text.secondary", mt: 1.5 }}
+                  >
+                    {recapSousTraitantsSorted.length} groupe
+                    {recapSousTraitantsSorted.length > 1 ? "s" : ""} affiché
+                    {recapSousTraitantsSorted.length > 1 ? "s" : ""}
+                    {` pour « ${recapSearch.trim()} »`}
+                  </Typography>
+                )}
+              </Paper>
+
               <Box sx={{ display: "flex", flexDirection: "column", gap: 1 }}>
-                {recapTotaux.sorted.map((st) => {
-                  const totaux = recapTotaux.parSousTraitant[st];
-                  const moisST = trierMoisRecap(Object.keys(totaux.mois));
+                {recapSousTraitantsSorted.length === 0 ? (
+                  <Paper sx={{ p: 3, textAlign: "center" }}>
+                    <Typography color="text.secondary">
+                      Aucun sous-traitant ne correspond à votre recherche.
+                    </Typography>
+                  </Paper>
+                ) : (
+                recapSousTraitantsSorted.map((groupe) => {
+                  const totaux = groupe;
                   const isPayeComplet = Math.abs(totaux.totalAPayer - totaux.totalPaye) < 0.01;
                   const pctCA = recapTotaux.global.totalAPayer
                     ? ((totaux.totalAPayer / recapTotaux.global.totalAPayer) * 100).toFixed(1)
@@ -3247,10 +3497,12 @@ const TableauSousTraitant = () => {
                   const pctPaye = totaux.totalAPayer
                     ? Math.min((totaux.totalPaye / totaux.totalAPayer) * 100, 100)
                     : 0;
+                  const searchActive = !!recapSearch.trim();
 
                   return (
                     <Accordion
-                      key={st}
+                      key={groupe.groupKey}
+                      defaultExpanded={searchActive}
                       sx={{
                         backgroundColor: "white",
                         "&:before": { display: "none" },
@@ -3272,7 +3524,7 @@ const TableauSousTraitant = () => {
                       >
                         <Box sx={{ display: "flex", flexDirection: "column", width: "100%", pr: 2, gap: 0.5 }}>
                           <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", width: "100%" }}>
-                            <Box sx={{ display: "flex", alignItems: "center", gap: 1.5 }}>
+                            <Box sx={{ display: "flex", alignItems: "center", gap: 1.5, flexWrap: "wrap" }}>
                               <Typography
                                 sx={{
                                   fontWeight: "bold",
@@ -3280,8 +3532,32 @@ const TableauSousTraitant = () => {
                                   color: isPayeComplet ? "rgba(46, 125, 50, 1)" : "rgba(27, 120, 188, 1)",
                                 }}
                               >
-                                {st}
+                                {groupe.displayName}
                               </Typography>
+                              {groupe.isGrouped && (
+                                <Box
+                                  sx={{
+                                    display: "inline-flex",
+                                    alignItems: "center",
+                                    backgroundColor: "rgba(27, 120, 188, 0.12)",
+                                    borderRadius: "12px",
+                                    px: 1.2,
+                                    py: 0.2,
+                                    border: "1px solid rgba(27, 120, 188, 0.3)",
+                                  }}
+                                >
+                                  <Typography
+                                    sx={{
+                                      fontSize: "0.75rem",
+                                      fontWeight: 600,
+                                      color: "rgba(27, 120, 188, 1)",
+                                      lineHeight: 1.4,
+                                    }}
+                                  >
+                                    {groupe.variants.length} ligne{groupe.variants.length > 1 ? "s" : ""}
+                                  </Typography>
+                                </Box>
+                              )}
                               <Box
                                 sx={{
                                   display: "inline-flex",
@@ -3350,67 +3626,69 @@ const TableauSousTraitant = () => {
                         </Box>
                       </AccordionSummary>
                       <AccordionDetails>
-                        <TableContainer component={Paper} variant="outlined">
-                          <Table size="small">
-                            <TableHead>
-                              <TableRow sx={{ backgroundColor: "rgba(27, 120, 188, 0.1)" }}>
-                                <TableCell sx={{ fontWeight: "bold", color: "rgba(27, 120, 188, 1)" }}>Mois</TableCell>
-                                <TableCell align="right" sx={{ fontWeight: "bold", color: "rgba(27, 120, 188, 1)" }}>Montant à payer HT</TableCell>
-                                <TableCell align="right" sx={{ fontWeight: "bold", color: "rgba(27, 120, 188, 1)" }}>Montant à payer TTC</TableCell>
-                                <TableCell align="right" sx={{ fontWeight: "bold", color: "rgba(27, 120, 188, 1)" }}>Montant payé</TableCell>
-                                <TableCell align="right" sx={{ fontWeight: "bold", color: "rgba(27, 120, 188, 1)" }}>Écart</TableCell>
-                              </TableRow>
-                            </TableHead>
-                            <TableBody>
-                              {moisST.map((mois) => {
-                                const [moisNum, annee2d] = mois.split("/").map(Number);
-                                const moisName = getMoisName(moisNum);
-                                const anneeComplete = annee2d < 50 ? 2000 + annee2d : 1900 + annee2d;
-                                const tm = totaux.mois[mois];
-                                return (
-                                  <TableRow key={mois} hover>
-                                    <TableCell>
-                                      <Typography sx={{ fontWeight: 500, color: "text.primary" }}>
-                                        {moisName} {anneeComplete}
+                        {groupe.isGrouped ? (
+                          <Box sx={{ display: "flex", flexDirection: "column", gap: 1, width: "100%" }}>
+                            {groupe.filteredVariants.map((variant) => {
+                              const vTotaux = variant.totaux;
+                              const vPayeComplet = Math.abs(vTotaux.totalAPayer - vTotaux.totalPaye) < 0.01;
+                              const vPctPaye = vTotaux.totalAPayer
+                                ? Math.min((vTotaux.totalPaye / vTotaux.totalAPayer) * 100, 100)
+                                : 0;
+                              return (
+                                <Accordion
+                                  key={variant.name}
+                                  defaultExpanded={searchActive && groupe.filteredVariants.length === 1}
+                                  sx={{
+                                    backgroundColor: "#fafafa",
+                                    "&:before": { display: "none" },
+                                    boxShadow: 1,
+                                  }}
+                                >
+                                  <AccordionSummary
+                                    expandIcon={<ExpandMoreIcon />}
+                                    sx={{
+                                      backgroundColor: vPayeComplet
+                                        ? "rgba(46, 125, 50, 0.08)"
+                                        : "rgba(27, 120, 188, 0.06)",
+                                      minHeight: 48,
+                                      "& .MuiAccordionSummary-content": { my: 1 },
+                                    }}
+                                  >
+                                    <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", width: "100%", pr: 2, gap: 2, flexWrap: "wrap" }}>
+                                      <Typography
+                                        sx={{
+                                          fontWeight: 600,
+                                          fontSize: "0.9rem",
+                                          color: vPayeComplet ? "rgba(46, 125, 50, 1)" : "rgba(27, 120, 188, 1)",
+                                        }}
+                                      >
+                                        {variant.name}
                                       </Typography>
-                                    </TableCell>
-                                    <TableCell align="right">
-                                      <Typography sx={{ color: colorForAmount(tm.totalAPayer), fontWeight: 500 }}>
-                                        {formatNumber(tm.totalAPayer)} €
-                                      </Typography>
-                                    </TableCell>
-                                    <TableCell align="right">
-                                      <Typography sx={{ color: colorForAmount(tm.totalAPayerTTC), fontWeight: 500 }}>
-                                        {formatNumber(tm.totalAPayerTTC)} €
-                                      </Typography>
-                                    </TableCell>
-                                    <TableCell align="right">
-                                      <Typography sx={{ color: colorForAmount(tm.totalPaye), fontWeight: 500 }}>
-                                        {formatNumber(tm.totalPaye)} €
-                                      </Typography>
-                                    </TableCell>
-                                    <TableCell align="right">
-                                      <Typography sx={{ color: colorForEcart(), fontWeight: 500 }}>
-                                        {formatNumber(tm.totalEcart)} €
-                                      </Typography>
-                                    </TableCell>
-                                  </TableRow>
-                                );
-                              })}
-                              <TableRow sx={{ backgroundColor: "rgba(27, 120, 188, 0.05)", borderTop: "2px solid rgba(27, 120, 188, 0.3)" }}>
-                                <TableCell><Typography sx={{ fontWeight: "bold", color: "rgba(27, 120, 188, 1)" }}>TOTAL</Typography></TableCell>
-                                <TableCell align="right"><Typography sx={{ fontWeight: "bold", color: colorForAmount(totaux.totalAPayer) }}>{formatNumber(totaux.totalAPayer)} €</Typography></TableCell>
-                                <TableCell align="right"><Typography sx={{ fontWeight: "bold", color: colorForAmount(totaux.totalAPayerTTC) }}>{formatNumber(totaux.totalAPayerTTC)} €</Typography></TableCell>
-                                <TableCell align="right"><Typography sx={{ fontWeight: "bold", color: colorForAmount(totaux.totalPaye) }}>{formatNumber(totaux.totalPaye)} €</Typography></TableCell>
-                                <TableCell align="right"><Typography sx={{ fontWeight: "bold", color: colorForEcart() }}>{formatNumber(totaux.totalEcart)} €</Typography></TableCell>
-                              </TableRow>
-                            </TableBody>
-                          </Table>
-                        </TableContainer>
+                                      <Box sx={{ display: "flex", gap: 2 }}>
+                                        <Typography sx={{ fontSize: "0.8rem", fontWeight: 600, color: colorForAmount(vTotaux.totalAPayer) }}>
+                                          {formatNumber(vTotaux.totalAPayer)} €
+                                        </Typography>
+                                        <Typography sx={{ fontSize: "0.8rem", color: "text.secondary" }}>
+                                          {vPctPaye.toFixed(0)}% payé
+                                        </Typography>
+                                      </Box>
+                                    </Box>
+                                  </AccordionSummary>
+                                  <AccordionDetails sx={{ pt: 0 }}>
+                                    {renderRecapVariantTable(vTotaux)}
+                                  </AccordionDetails>
+                                </Accordion>
+                              );
+                            })}
+                          </Box>
+                        ) : (
+                          renderRecapVariantTable(groupe.filteredVariants[0].totaux)
+                        )}
                       </AccordionDetails>
                     </Accordion>
                   );
-                })}
+                })
+                )}
               </Box>
             </Box>
           )}

@@ -2720,7 +2720,6 @@ const TableauFournisseur = () => {
           {/* Récapitulatif par fournisseur */}
           {tableRows.length > 0 && (
             <RecapFournisseur
-              data={data}
               selectedAnnee={selectedAnnee}
               organized={organized}
               moisSorted={moisSorted}
