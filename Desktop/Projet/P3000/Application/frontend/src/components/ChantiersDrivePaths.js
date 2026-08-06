@@ -305,6 +305,19 @@ const ChantiersDrivePaths = () => {
           placeholder="Rechercher par nom de chantier, société ou chemin de drive..."
           value={searchTerm}
           onChange={(e) => setSearchTerm(e.target.value)}
+          sx={{
+            backgroundColor: "white",
+            borderRadius: 1,
+            "& .MuiOutlinedInput-root": {
+              backgroundColor: "white",
+            },
+            "& .MuiInputBase-input": {
+              color: "rgba(0, 0, 0, 0.87)",
+            },
+            "& .MuiInputAdornment-root": {
+              color: "rgba(0, 0, 0, 0.54)",
+            },
+          }}
           InputProps={{
             startAdornment: (
               <InputAdornment position="start">
