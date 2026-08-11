@@ -85,12 +85,19 @@ const CalendrierAgentContainer = () => {
     setIsReactivateModalOpen(false);
   };
 
-  // Séparer les agents filtrés par type de paiement
-  const agentsJournaliers = filteredAgents.filter(
-    (agent) => agent.type_paiement === "journalier"
+  // Séparer les agents filtrés par type de paiement, triés alphabétiquement
+  const sortAgentsAlphabetically = (list) =>
+    [...list].sort((a, b) => {
+      const nameA = `${a.surname || ""} ${a.name || ""}`.toLowerCase();
+      const nameB = `${b.surname || ""} ${b.name || ""}`.toLowerCase();
+      return nameA.localeCompare(nameB, "fr");
+    });
+
+  const agentsJournaliers = sortAgentsAlphabetically(
+    filteredAgents.filter((agent) => agent.type_paiement === "journalier")
   );
-  const agentsHoraires = filteredAgents.filter(
-    (agent) => agent.type_paiement === "horaire"
+  const agentsHoraires = sortAgentsAlphabetically(
+    filteredAgents.filter((agent) => agent.type_paiement === "horaire")
   );
 
   return (
