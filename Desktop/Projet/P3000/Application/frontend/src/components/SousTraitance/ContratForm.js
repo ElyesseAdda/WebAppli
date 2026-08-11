@@ -281,7 +281,7 @@ const ContratForm = ({
                   <em>Sélectionner un type</em>
                 </MenuItem>
                 <MenuItem value="BTP">BTP</MenuItem>
-                <MenuItem value="NETTOYAGE">Nettoyage</MenuItem>
+                <MenuItem value="NETTOYAGE">Prestation de services</MenuItem>
               </Select>
               {typeContratError && (
                 <Typography
