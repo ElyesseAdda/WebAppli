@@ -12185,12 +12185,19 @@ class RecapFinancierChantierAPIView(APIView):
         }
 
         # Montant marché : même règle que get_chantier_details — source de vérité = devis de chantier si présent
+        # Règle métier ajoutée : si le devis marché est refusé, le montant marché affiché doit être 0.
         montant_ht = float(chantier.montant_ht or 0)
         devis_marche = Devis.objects.filter(
             chantier=chantier, devis_chantier=True
         ).first()
-        if devis_marche is not None and devis_marche.price_ht is not None:
-            montant_ht = float(devis_marche.price_ht)
+        if devis_marche is not None:
+            devis_status = str(getattr(devis_marche, "status", "") or "").strip().lower()
+            is_devis_refuse = devis_status in {"refuse", "refusé"}
+
+            if is_devis_refuse:
+                montant_ht = 0.0
+            elif devis_marche.price_ht is not None:
+                montant_ht = float(devis_marche.price_ht)
         taux_fixe = chantier.taux_fixe or 0
         montant_taux_fixe = montant_ht * taux_fixe / 100
 
