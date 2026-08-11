@@ -1413,6 +1413,12 @@ class FactureTSCreateSerializer(serializers.Serializer):
                     f"Une facture existe déjà pour le devis {devis.numero}"
                 )
 
+            # Vérifier si un avenant/TS existe déjà pour ce devis
+            if FactureTS.objects.filter(devis=devis).exists():
+                raise serializers.ValidationError(
+                    f"Un avenant existe déjà pour le devis {devis.numero}"
+                )
+
             # Vérifier si le numéro de facture existe déjà
             potential_numero = f"{devis.numero} / {data.get('numero_ts', '')}"
             if Facture.objects.filter(numero=potential_numero).exists():
@@ -1445,6 +1451,12 @@ class FactureCIECreateSerializer(serializers.Serializer):
             if Facture.objects.filter(devis=devis).exists():
                 raise serializers.ValidationError(
                     f"Une facture existe déjà pour le devis {devis.numero}"
+                )
+
+            # Vérifier si un avenant/TS existe déjà pour ce devis
+            if FactureTS.objects.filter(devis=devis).exists():
+                raise serializers.ValidationError(
+                    f"Un avenant existe déjà pour le devis {devis.numero}"
                 )
 
             # Vérifier si le numéro de facture existe déjà
