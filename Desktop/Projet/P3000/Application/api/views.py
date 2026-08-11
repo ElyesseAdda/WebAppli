@@ -7929,8 +7929,20 @@ def update_situation(request, pk):
                      'montant_total_cumul_ht', 'retenue_garantie', 'montant_prorata', 
                      'retenue_cie', 'type_retenue_cie', 'montant_apres_retenues', 'tva', 'montant_total_ttc', 
                      'pourcentage_avancement', 'taux_prorata', 'taux_retenue_garantie', 'tva_rate', 'statut']:
-            if field in data:
-                setattr(situation, field, data[field])
+            if field not in data:
+                continue
+
+            value = data[field]
+
+            # Garde-fous : ne pas effacer ces champs critiques sur valeur vide.
+            if field == 'numero_situation' and (value is None or str(value).strip() == ''):
+                continue
+            if field == 'retenue_cie' and (value is None or str(value).strip() == ''):
+                continue
+            if field == 'type_retenue_cie' and (value is None or str(value).strip() == ''):
+                continue
+
+            setattr(situation, field, value)
         situation.save()
 
         # Création des nouvelles lignes
