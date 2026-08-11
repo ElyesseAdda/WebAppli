@@ -827,7 +827,7 @@ const SousTraitanceModal = ({ open, onClose, chantierId, onUpdate }) => {
                               >
                                 Contrat initial
                               </TableCell>
-                              <TableCell>
+                              <TableCell sx={{ whiteSpace: "pre-line" }}>
                                 {sousTraitant.contrat.description_prestation}
                               </TableCell>
                               <TableCell>
@@ -1002,7 +1002,9 @@ const SousTraitanceModal = ({ open, onClose, chantierId, onUpdate }) => {
                                     >
                                       Avenant n°{avenant.numero}
                                     </TableCell>
-                                    <TableCell>{avenant.description}</TableCell>
+                                    <TableCell sx={{ whiteSpace: "pre-line" }}>
+                                      {avenant.description}
+                                    </TableCell>
                                     <TableCell>
                                       {sousTraitant.contrat.sans_contrat ? (
                                         <Typography variant="body2" sx={{ fontStyle: 'italic', color: 'text.secondary' }}>
