@@ -185,9 +185,17 @@ const SousTraitanceModal = ({ open, onClose, chantierId, onUpdate }) => {
     setShowContratSansDocumentForm(true);
   };
 
-  // Retirer un sous-traitant associé (sans contrat)
+  // Retirer un sous-traitant associé (sans contrat / sans document)
   const handleRetirerSousTraitant = async (contratId) => {
-    if (!window.confirm("Êtes-vous sûr de vouloir retirer ce sous-traitant du chantier ?")) {
+    const contrat = sousTraitantsAvecContrat.find(
+      (st) => st.contrat?.id === contratId
+    )?.contrat;
+    const hasAvenants = Boolean(contrat?.avenants?.length);
+    const confirmMessage = hasAvenants
+      ? "Êtes-vous sûr de vouloir supprimer cette association ? Tous les avenants associés seront également supprimés."
+      : "Êtes-vous sûr de vouloir supprimer cette association (sans document) ?";
+
+    if (!window.confirm(confirmMessage)) {
       return;
     }
 
@@ -198,7 +206,6 @@ const SousTraitanceModal = ({ open, onClose, chantierId, onUpdate }) => {
 
       if (response.ok) {
         setHasChanges(true);
-        // Rafraîchir la liste
         setTimeout(() => {
           fetchSousTraitants();
         }, 300);
@@ -697,7 +704,25 @@ const SousTraitanceModal = ({ open, onClose, chantierId, onUpdate }) => {
                           </Tooltip>
                           {sousTraitant.contrat.sans_contrat && (
                             <>
-                              <Tooltip title="Créer un contrat" arrow>
+                              <Tooltip title="Modifier l'association" arrow>
+                                <IconButton
+                                  edge="end"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleEditContrat(sousTraitant);
+                                  }}
+                                  sx={{
+                                    mr: 1,
+                                    color: "#2e7d32",
+                                    "&:hover": {
+                                      backgroundColor: "rgba(46, 125, 50, 0.1)",
+                                    },
+                                  }}
+                                >
+                                  <FaEdit />
+                                </IconButton>
+                              </Tooltip>
+                              <Tooltip title="Créer un contrat documenté" arrow>
                                 <IconButton
                                   edge="end"
                                   onClick={(e) => {
@@ -715,7 +740,7 @@ const SousTraitanceModal = ({ open, onClose, chantierId, onUpdate }) => {
                                   <FaPlus />
                                 </IconButton>
                               </Tooltip>
-                              <Tooltip title="Retirer ce sous-traitant du chantier" arrow>
+                              <Tooltip title="Supprimer l'association (sans document)" arrow>
                                 <IconButton
                                   edge="end"
                                   onClick={(e) => {
@@ -935,9 +960,25 @@ const SousTraitanceModal = ({ open, onClose, chantierId, onUpdate }) => {
                                         <FaEdit />
                                       </IconButton>
                                     </Tooltip>
-                                    <Typography variant="caption" color="text.secondary">
-                                      Aucun document
-                                    </Typography>
+                                    <Tooltip title="Supprimer l'association" arrow>
+                                      <IconButton
+                                        size="small"
+                                        onClick={() =>
+                                          handleRetirerSousTraitant(
+                                            sousTraitant.contrat.id
+                                          )
+                                        }
+                                        sx={{
+                                          color: "#d32f2f",
+                                          "&:hover": {
+                                            backgroundColor:
+                                              "rgba(211, 47, 47, 0.1)",
+                                          },
+                                        }}
+                                      >
+                                        <FaTrash />
+                                      </IconButton>
+                                    </Tooltip>
                                   </Box>
                                 )}
                               </TableCell>
