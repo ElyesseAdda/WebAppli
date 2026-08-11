@@ -21,81 +21,91 @@ import frLocale from "date-fns/locale/fr";
 import React, { useEffect, useState } from "react";
 import { generatePDFDrive } from "../../utils/universalDriveGenerator";
 
-const ContratForm = ({ open, onClose, sousTraitant, chantier, onSave }) => {
-  const [formData, setFormData] = useState({
-    description_prestation: "",
-    date_debut: new Date(),
-    date_creation: new Date(),
-    duree: "Jusqu'à livraison du chantier",
-    adresse_prestation: "",
-    nom_operation: "",
-    montant_operation: "",
-    type_contrat: "",
-    nom_maitre_ouvrage: "",
-    nom_maitre_oeuvre: "",
-  });
+const parseDateValue = (value) => {
+  if (!value) return new Date();
+  if (value instanceof Date) return value;
+  const d = new Date(value);
+  return Number.isNaN(d.getTime()) ? new Date() : d;
+};
+
+const emptyForm = {
+  description_prestation: "",
+  date_debut: new Date(),
+  date_creation: new Date(),
+  duree: "Jusqu'à livraison du chantier",
+  adresse_prestation: "",
+  nom_operation: "",
+  montant_operation: "",
+  type_contrat: "",
+  nom_maitre_ouvrage: "",
+  nom_maitre_oeuvre: "",
+};
+
+const ContratForm = ({
+  open,
+  onClose,
+  sousTraitant,
+  chantier,
+  onSave,
+  mode = "create",
+  contrat = null,
+}) => {
+  const isEdit = mode === "edit" && contrat?.id;
+  const [formData, setFormData] = useState(emptyForm);
   const [typeContratError, setTypeContratError] = useState(false);
 
-  // Réinitialiser l'erreur quand le modal s'ouvre
   useEffect(() => {
-    if (open) {
-      setTypeContratError(false);
-    }
-  }, [open]);
+    if (!open) return;
 
-  useEffect(() => {
-    if (chantier) {
-      // Construction de l'adresse complète du chantier
-      const adresseComplete = [
-        chantier.rue || "",
-        chantier.code_postal || "",
-        chantier.ville || "",
-      ]
-        .filter((part) => part.trim() !== "")
-        .join(", ");
+    setTypeContratError(false);
 
-      setFormData((prev) => ({
-        ...prev,
-        adresse_prestation: adresseComplete,
-        nom_operation: chantier.chantier_name || "",
-        // Préremplir le nom du maître d'ouvrage si disponible
-        nom_maitre_ouvrage: chantier.maitre_ouvrage_nom_societe || prev.nom_maitre_ouvrage || "",
-        // Préremplir le nom du maître d'œuvre si disponible
-        nom_maitre_oeuvre: chantier.maitre_oeuvre_nom_societe || prev.nom_maitre_oeuvre || "",
-      }));
+    if (isEdit) {
+      setFormData({
+        description_prestation: contrat.description_prestation || "",
+        date_debut: parseDateValue(contrat.date_debut),
+        date_creation: parseDateValue(contrat.date_creation),
+        duree: contrat.duree || "Jusqu'à livraison du chantier",
+        adresse_prestation: contrat.adresse_prestation || "",
+        nom_operation: contrat.nom_operation || "",
+        montant_operation:
+          contrat.montant_operation != null
+            ? String(contrat.montant_operation)
+            : "",
+        type_contrat: contrat.type_contrat || "",
+        nom_maitre_ouvrage: contrat.nom_maitre_ouvrage || "",
+        nom_maitre_oeuvre: contrat.nom_maitre_oeuvre || "",
+      });
+      setTypeContratError(!contrat.type_contrat);
+      return;
     }
-  }, [chantier]);
 
-  // Effet pour préremplir le type de contrat selon le type du sous-traitant
-  useEffect(() => {
-    if (sousTraitant?.type) {
-      // Mapper le type du sous-traitant vers le type de contrat
-      // Les types possibles sont : NETTOYAGE, BTP, TCE, AUTRE
-      // Le formulaire n'accepte que BTP et NETTOYAGE
-      // Pour TCE et AUTRE, on laisse vide pour que l'utilisateur choisisse
-      
-      if (sousTraitant.type === "BTP") {
-        setFormData((prev) => ({
-          ...prev,
-          type_contrat: "BTP",
-        }));
-        setTypeContratError(false);
-      } else if (sousTraitant.type === "NETTOYAGE") {
-        setFormData((prev) => ({
-          ...prev,
-          type_contrat: "NETTOYAGE",
-        }));
-        setTypeContratError(false);
-      } else {
-        // Pour TCE ou AUTRE, on laisse vide et on marque visuellement en rouge
-        setFormData((prev) => ({
-          ...prev,
-          type_contrat: "",
-        }));
-        setTypeContratError(true); // Marquer visuellement en rouge dès l'ouverture
-      }
+    // Création : valeurs par défaut chantier + type ST
+    const adresseComplete = chantier
+      ? [chantier.rue || "", chantier.code_postal || "", chantier.ville || ""]
+          .filter((part) => part.trim() !== "")
+          .join(", ")
+      : "";
+
+    let type_contrat = "";
+    let typeError = false;
+    if (sousTraitant?.type === "BTP") {
+      type_contrat = "BTP";
+    } else if (sousTraitant?.type === "NETTOYAGE") {
+      type_contrat = "NETTOYAGE";
+    } else if (sousTraitant?.type) {
+      typeError = true;
     }
-  }, [sousTraitant]);
+
+    setFormData({
+      ...emptyForm,
+      adresse_prestation: adresseComplete,
+      nom_operation: chantier?.chantier_name || "",
+      nom_maitre_ouvrage: chantier?.maitre_ouvrage_nom_societe || "",
+      nom_maitre_oeuvre: chantier?.maitre_oeuvre_nom_societe || "",
+      type_contrat,
+    });
+    setTypeContratError(typeError);
+  }, [open, isEdit, contrat, chantier, sousTraitant]);
 
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -103,7 +113,6 @@ const ContratForm = ({ open, onClose, sousTraitant, chantier, onSave }) => {
       ...prev,
       [name]: value,
     }));
-    // Réinitialiser l'erreur visuelle quand l'utilisateur sélectionne un type
     if (name === "type_contrat" && value) {
       setTypeContratError(false);
     }
@@ -126,7 +135,6 @@ const ContratForm = ({ open, onClose, sousTraitant, chantier, onSave }) => {
   const handleSubmit = async (e) => {
     e.preventDefault();
 
-    // Vérification des données requises
     if (!sousTraitant?.id) {
       alert("Erreur: Sous-traitant non sélectionné");
       return;
@@ -143,7 +151,7 @@ const ContratForm = ({ open, onClose, sousTraitant, chantier, onSave }) => {
       return;
     }
 
-    if (!formData.montant_operation) {
+    if (!formData.montant_operation && formData.montant_operation !== 0) {
       alert("Erreur: Le montant de l'opération est requis");
       return;
     }
@@ -160,9 +168,7 @@ const ContratForm = ({ open, onClose, sousTraitant, chantier, onSave }) => {
 
     try {
       const contratData = {
-        ...formData,
-        sous_traitant: sousTraitant.id,
-        chantier: chantier.id,
+        type_contrat: formData.type_contrat,
         date_debut: formData.date_debut.toISOString().split("T")[0],
         date_creation: formData.date_creation.toISOString().split("T")[0],
         montant_operation: parseFloat(formData.montant_operation).toFixed(2),
@@ -174,10 +180,18 @@ const ContratForm = ({ open, onClose, sousTraitant, chantier, onSave }) => {
         nom_maitre_oeuvre: formData.nom_maitre_oeuvre.trim(),
       };
 
-      console.log("Données envoyées:", contratData);
+      if (!isEdit) {
+        contratData.sous_traitant = sousTraitant.id;
+        contratData.chantier = chantier.id;
+      }
 
-      const response = await fetch("/api/contrats-sous-traitance/", {
-        method: "POST",
+      const url = isEdit
+        ? `/api/contrats-sous-traitance/${contrat.id}/`
+        : "/api/contrats-sous-traitance/";
+      const method = isEdit ? "PATCH" : "POST";
+
+      const response = await fetch(url, {
+        method,
         headers: {
           "Content-Type": "application/json",
           Accept: "application/json",
@@ -193,37 +207,48 @@ const ContratForm = ({ open, onClose, sousTraitant, chantier, onSave }) => {
 
       const responseData = await response.json();
 
-      // Téléchargement automatique vers le Drive après création du contrat
-      try {
-        console.log(
-          "🚀 Lancement du téléchargement automatique du contrat vers le Drive..."
-        );
+      // PDF Drive uniquement à la création
+      if (!isEdit) {
+        try {
+          const driveData = {
+            contratId: responseData.id,
+            chantierId: chantier.id,
+            chantierName: chantier.chantier_name || chantier.nom,
+            societeName:
+              chantier.societe?.nom_societe ||
+              chantier.societe?.nom ||
+              "Société",
+            sousTraitantName: sousTraitant.entreprise,
+          };
 
-        const driveData = {
-          contratId: responseData.id,
-          chantierId: chantier.id,
-          chantierName: chantier.chantier_name || chantier.nom,
-          societeName:
-            chantier.societe?.nom_societe || chantier.societe?.nom || "Société",
-          sousTraitantName: sousTraitant.entreprise,
-        };
-
-        await generatePDFDrive("contrat_sous_traitance", driveData);
-        console.log("✅ Contrat téléchargé avec succès vers le Drive");
-      } catch (driveError) {
-        console.error(
-          "❌ Erreur lors du téléchargement vers le Drive:",
-          driveError
-        );
-        // Ne pas bloquer la création du contrat si le Drive échoue
+          await generatePDFDrive("contrat_sous_traitance", driveData);
+        } catch (driveError) {
+          console.error(
+            "Erreur lors du téléchargement vers le Drive:",
+            driveError
+          );
+        }
       }
 
-      onSave(responseData);
+      const previousMontant = isEdit
+        ? parseFloat(contrat.montant_operation) || 0
+        : null;
+      const newMontant = parseFloat(responseData.montant_operation) || 0;
+      const montantChanged =
+        isEdit && Math.abs(previousMontant - newMontant) > 0.001;
+
+      onSave(responseData, {
+        isEdit,
+        montantChanged,
+        hasAvenants: Boolean(contrat?.avenants?.length),
+      });
       onClose();
     } catch (error) {
       console.error("Erreur complète:", error);
       alert(
-        `Une erreur est survenue lors de la création du contrat: ${error.message}`
+        `Une erreur est survenue lors de la ${
+          isEdit ? "modification" : "création"
+        } du contrat: ${error.message}`
       );
     }
   };
@@ -231,7 +256,11 @@ const ContratForm = ({ open, onClose, sousTraitant, chantier, onSave }) => {
   return (
     <Dialog open={open} onClose={onClose} maxWidth="md" fullWidth>
       <form onSubmit={handleSubmit}>
-        <DialogTitle>Nouveau contrat de sous-traitance</DialogTitle>
+        <DialogTitle>
+          {isEdit
+            ? "Modifier le contrat de sous-traitance"
+            : "Nouveau contrat de sous-traitance"}
+        </DialogTitle>
         <DialogContent>
           <Box sx={{ display: "flex", flexDirection: "column", gap: 2, mt: 2 }}>
             <FormControl fullWidth error={typeContratError} required>
@@ -255,7 +284,11 @@ const ContratForm = ({ open, onClose, sousTraitant, chantier, onSave }) => {
                 <MenuItem value="NETTOYAGE">Nettoyage</MenuItem>
               </Select>
               {typeContratError && (
-                <Typography variant="caption" color="error" sx={{ mt: 0.5, ml: 1.75 }}>
+                <Typography
+                  variant="caption"
+                  color="error"
+                  sx={{ mt: 0.5, ml: 1.75 }}
+                >
                   Veuillez sélectionner un type de contrat
                 </Typography>
               )}
@@ -365,7 +398,7 @@ const ContratForm = ({ open, onClose, sousTraitant, chantier, onSave }) => {
         <DialogActions>
           <Button onClick={onClose}>Annuler</Button>
           <Button type="submit" variant="contained" color="primary">
-            Créer
+            {isEdit ? "Enregistrer" : "Créer"}
           </Button>
         </DialogActions>
       </form>

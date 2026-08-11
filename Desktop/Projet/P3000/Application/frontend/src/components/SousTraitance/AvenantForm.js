@@ -22,7 +22,23 @@ import frLocale from "date-fns/locale/fr";
 import React, { useEffect, useState } from "react";
 import { generatePDFDrive } from "../../utils/universalDriveGenerator";
 
-const AvenantForm = ({ open, onClose, contrat, chantier, onSave }) => {
+const parseDateValue = (value) => {
+  if (!value) return new Date();
+  if (value instanceof Date) return value;
+  const d = new Date(value);
+  return Number.isNaN(d.getTime()) ? new Date() : d;
+};
+
+const AvenantForm = ({
+  open,
+  onClose,
+  contrat,
+  chantier,
+  onSave,
+  mode = "create",
+  avenant = null,
+}) => {
+  const isEdit = mode === "edit" && avenant?.id;
   const [formData, setFormData] = useState({
     description: "",
     montant: "",
@@ -33,10 +49,31 @@ const AvenantForm = ({ open, onClose, contrat, chantier, onSave }) => {
   const [avenants, setAvenants] = useState([]);
 
   useEffect(() => {
-    if (contrat) {
+    if (contrat?.id && open && !isEdit) {
       fetchAvenants();
     }
-  }, [contrat]);
+  }, [contrat, open, isEdit]);
+
+  useEffect(() => {
+    if (!open) return;
+
+    if (isEdit) {
+      setFormData({
+        description: avenant.description || "",
+        montant: avenant.montant != null ? String(avenant.montant) : "",
+        type_travaux: avenant.type_travaux || "LOT PEINTURE",
+        date_creation: parseDateValue(avenant.date_creation),
+      });
+      return;
+    }
+
+    setFormData({
+      description: "",
+      montant: "",
+      type_travaux: "LOT PEINTURE",
+      date_creation: new Date(),
+    });
+  }, [open, isEdit, avenant]);
 
   const fetchAvenants = async () => {
     try {
@@ -68,8 +105,53 @@ const AvenantForm = ({ open, onClose, contrat, chantier, onSave }) => {
   const handleSubmit = async (e) => {
     e.preventDefault();
     try {
-      console.log("Création d'un avenant pour le contrat:", contrat);
-      console.log("Données du formulaire:", formData);
+      if (isEdit) {
+        const response = await fetch(
+          `/api/avenants-sous-traitance/${avenant.id}/`,
+          {
+            method: "PATCH",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+              description: formData.description,
+              montant: formData.montant,
+              type_travaux: formData.type_travaux,
+              date_creation: formData.date_creation
+                .toISOString()
+                .split("T")[0],
+            }),
+          }
+        );
+
+        if (!response.ok) {
+          const errorText = await response.text();
+          console.error("Erreur lors de la modification de l'avenant:", errorText);
+          alert(
+            "Erreur lors de la modification de l'avenant. Vérifiez la console pour plus de détails."
+          );
+          return;
+        }
+
+        const data = await response.json();
+        const previousMontant = parseFloat(avenant.montant) || 0;
+        const newMontant = parseFloat(data.montant) || 0;
+        const montantChanged = Math.abs(previousMontant - newMontant) > 0.001;
+        const knownAvenants = contrat?.avenants?.length
+          ? contrat.avenants
+          : avenants;
+        const hasLaterAvenants = knownAvenants.some(
+          (a) => a.numero > avenant.numero
+        );
+
+        onSave(data, {
+          isEdit: true,
+          montantChanged,
+          hasLaterAvenants,
+        });
+        onClose();
+        return;
+      }
 
       const response = await fetch(
         `/api/contrats-sous-traitance/${contrat.id}/avenants/`,
@@ -89,16 +171,9 @@ const AvenantForm = ({ open, onClose, contrat, chantier, onSave }) => {
 
       if (response.ok) {
         const data = await response.json();
-        console.log("Avenant créé avec succès:", data);
 
-        // Téléchargement automatique vers le Drive après création de l'avenant
-        // Seulement si le contrat n'est pas "sans contrat documenté"
         if (!contrat.sans_contrat) {
           try {
-            console.log(
-              "🚀 Lancement du téléchargement automatique de l'avenant vers le Drive..."
-            );
-
             const driveData = {
               avenantId: data.id,
               contratId: contrat.id,
@@ -117,22 +192,16 @@ const AvenantForm = ({ open, onClose, contrat, chantier, onSave }) => {
               numeroAvenant: data.numero,
             };
 
-            console.log("🔍 DEBUG AvenantForm - driveData:", driveData);
-
             await generatePDFDrive("avenant_sous_traitance", driveData);
-            console.log("✅ Avenant téléchargé avec succès vers le Drive");
           } catch (driveError) {
             console.error(
-              "❌ Erreur lors du téléchargement vers le Drive:",
+              "Erreur lors du téléchargement vers le Drive:",
               driveError
             );
-            // Ne pas bloquer la création de l'avenant si le Drive échoue
           }
-        } else {
-          console.log("ℹ️ Avenant créé pour un contrat sans document - pas de génération PDF");
         }
 
-        onSave(data);
+        onSave(data, { isEdit: false });
         onClose();
       } else {
         const errorText = await response.text();
@@ -143,15 +212,21 @@ const AvenantForm = ({ open, onClose, contrat, chantier, onSave }) => {
       }
     } catch (error) {
       console.error("Erreur complète:", error);
-      alert("Une erreur est survenue lors de la création de l'avenant.");
+      alert(
+        `Une erreur est survenue lors de la ${
+          isEdit ? "modification" : "création"
+        } de l'avenant.`
+      );
     }
   };
 
   return (
     <Dialog open={open} onClose={onClose} maxWidth="md" fullWidth>
-      <DialogTitle>Nouvel avenant</DialogTitle>
+      <DialogTitle>
+        {isEdit ? `Modifier l'avenant n°${avenant.numero}` : "Nouvel avenant"}
+      </DialogTitle>
       <DialogContent>
-        {avenants.length > 0 && (
+        {!isEdit && avenants.length > 0 && (
           <>
             <Typography variant="h6" gutterBottom>
               Historique des avenants
@@ -168,21 +243,27 @@ const AvenantForm = ({ open, onClose, contrat, chantier, onSave }) => {
                   </TableRow>
                 </TableHead>
                 <TableBody>
-                  {avenants.map((avenant) => (
-                    <TableRow key={avenant.id}>
-                      <TableCell>{avenant.numero}</TableCell>
+                  {avenants.map((av) => (
+                    <TableRow key={av.id}>
+                      <TableCell>{av.numero}</TableCell>
                       <TableCell>
-                        {new Date(avenant.date_creation).toLocaleDateString()}
+                        {new Date(av.date_creation).toLocaleDateString()}
                       </TableCell>
-                      <TableCell>{avenant.description}</TableCell>
-                      <TableCell>{avenant.montant} €</TableCell>
-                      <TableCell>{avenant.type_travaux}</TableCell>
+                      <TableCell>{av.description}</TableCell>
+                      <TableCell>{av.montant} €</TableCell>
+                      <TableCell>{av.type_travaux}</TableCell>
                     </TableRow>
                   ))}
                 </TableBody>
               </Table>
             </TableContainer>
           </>
+        )}
+
+        {isEdit && (
+          <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+            Numéro d&apos;avenant : {avenant.numero} (non modifiable)
+          </Typography>
         )}
 
         <form onSubmit={handleSubmit}>
@@ -241,7 +322,7 @@ const AvenantForm = ({ open, onClose, contrat, chantier, onSave }) => {
       <DialogActions>
         <Button onClick={onClose}>Annuler</Button>
         <Button onClick={handleSubmit} variant="contained" color="primary">
-          Créer
+          {isEdit ? "Enregistrer" : "Créer"}
         </Button>
       </DialogActions>
     </Dialog>

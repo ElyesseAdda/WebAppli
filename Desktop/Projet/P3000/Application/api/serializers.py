@@ -1838,6 +1838,12 @@ class AvenantSousTraitanceSerializer(serializers.ModelSerializer):
         fields = ['id', 'contrat', 'description', 'montant', 'date_creation', 'date_modification', 'numero', 'type_travaux', 'montant_total_contrat_et_avenants']
         read_only_fields = ['date_modification']
 
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        # Empêcher la modification du numéro une fois l'avenant créé
+        if self.instance is not None:
+            self.fields['numero'].read_only = True
+
 class ContratSousTraitanceSerializer(serializers.ModelSerializer):
     avenants = AvenantSousTraitanceSerializer(many=True, read_only=True)
     sous_traitant_details = SousTraitantSerializer(source='sous_traitant', read_only=True)
