@@ -39,6 +39,7 @@ import { styled } from '@mui/material/styles';
 import { useUpload } from './hooks/useUpload';
 import { displayFilename } from './DriveExplorer';
 import { normalizeFilename } from './services/pathNormalizationService';
+import { isSystemJunkFileName, isSystemJunkFolderName, shouldSkipUploadFile } from './utils/systemJunkFiles';
 
 // Helper pour construire l'arborescence
 const buildFileTree = (files) => {
@@ -315,9 +316,10 @@ const DriveUploader = ({ currentPath, onClose, onUploadComplete, initialFiles = 
   // Mettre à jour les fichiers sélectionnés si initialFiles change
   useEffect(() => {
     if (initialFiles && initialFiles.length > 0) {
-      setSelectedFiles(initialFiles);
+      const cleaned = initialFiles.filter((f) => !shouldSkipUploadFile(f));
+      setSelectedFiles(cleaned);
       // Déterminer automatiquement le mode en fonction des fichiers
-      const hasRelativePath = initialFiles.some(f => f.webkitRelativePath && f.webkitRelativePath !== '');
+      const hasRelativePath = cleaned.some(f => f.webkitRelativePath && f.webkitRelativePath !== '');
       if (hasRelativePath) {
         setUploadMode('folder');
       } else {
@@ -332,13 +334,13 @@ const DriveUploader = ({ currentPath, onClose, onUploadComplete, initialFiles = 
 
   // Sélection de fichiers
   const handleFileSelect = (event) => {
-    const files = Array.from(event.target.files);
+    const files = Array.from(event.target.files).filter((f) => !shouldSkipUploadFile(f));
     setSelectedFiles(files);
   };
 
   // Sélection de dossier
   const handleFolderSelect = (event) => {
-    const files = Array.from(event.target.files);
+    const files = Array.from(event.target.files).filter((f) => !shouldSkipUploadFile(f));
     setSelectedFiles(files);
   };
 
@@ -358,6 +360,10 @@ const DriveUploader = ({ currentPath, onClose, onUploadComplete, initialFiles = 
   const traverseFileTree = useCallback((item, path = '', allFiles = []) => {
     return new Promise((resolve) => {
       if (item.isFile) {
+        if (isSystemJunkFileName(item.name)) {
+          resolve();
+          return;
+        }
         // C'est un fichier
         item.file((file) => {
           // Créer un objet File avec webkitRelativePath pour préserver la structure
@@ -378,6 +384,10 @@ const DriveUploader = ({ currentPath, onClose, onUploadComplete, initialFiles = 
           resolve();
         });
       } else if (item.isDirectory) {
+        if (isSystemJunkFolderName(item.name)) {
+          resolve();
+          return;
+        }
         // C'est un dossier, parcourir récursivement
         const dirReader = item.createReader();
         const currentPath = path + item.name + '/';
@@ -431,7 +441,7 @@ const DriveUploader = ({ currentPath, onClose, onUploadComplete, initialFiles = 
     
     if (!items || items.length === 0) {
       // Fallback : utiliser les fichiers si items n'est pas disponible
-      const files = Array.from(event.dataTransfer.files);
+      const files = Array.from(event.dataTransfer.files).filter((f) => !shouldSkipUploadFile(f));
       setSelectedFiles(files);
       return;
     }
@@ -457,14 +467,14 @@ const DriveUploader = ({ currentPath, onClose, onUploadComplete, initialFiles = 
         } else {
           // Fallback : utiliser getAsFile
           const file = item.getAsFile();
-          if (file) {
+          if (file && !shouldSkipUploadFile(file)) {
             allFiles.push(file);
           }
         }
       } else {
         // Fallback : utiliser getAsFile
         const file = item.getAsFile();
-        if (file) {
+        if (file && !shouldSkipUploadFile(file)) {
           allFiles.push(file);
         }
       }
@@ -474,10 +484,10 @@ const DriveUploader = ({ currentPath, onClose, onUploadComplete, initialFiles = 
     await Promise.all(promises);
     
     if (allFiles.length > 0) {
-      setSelectedFiles(allFiles);
+      setSelectedFiles(allFiles.filter((f) => !shouldSkipUploadFile(f)));
     } else {
       // Fallback final : utiliser dataTransfer.files
-      const files = Array.from(event.dataTransfer.files);
+      const files = Array.from(event.dataTransfer.files).filter((f) => !shouldSkipUploadFile(f));
       setSelectedFiles(files);
     }
   }, [traverseFileTree]);

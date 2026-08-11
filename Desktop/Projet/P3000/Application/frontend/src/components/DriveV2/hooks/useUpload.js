@@ -11,6 +11,7 @@ import {
   buildFilePath,
   collectFolderPaths,
 } from '../services/pathNormalizationService';
+import { shouldSkipUploadFile } from '../utils/systemJunkFiles';
 
 const API_BASE_URL = '/api/drive-v2';
 
@@ -305,6 +306,9 @@ export const useUpload = () => {
     const conflicts = [];
 
     for (const file of files) {
+      if (shouldSkipUploadFile(file)) {
+        continue;
+      }
       const fileDestinationPath = calculateNormalizedFilePath(file, currentPath, rootFolderName);
       const exists = await checkFileExists(file.name, fileDestinationPath);
       
@@ -336,6 +340,11 @@ export const useUpload = () => {
     const validFiles = files.filter((file) => {
       if (!file || !file.name) {
         console.warn('Fichier rejeté : pas de nom', file);
+        return false;
+      }
+
+      // Ignorer les fichiers système (.DS_Store, __MACOSX, Thumbs.db, etc.)
+      if (shouldSkipUploadFile(file)) {
         return false;
       }
       
