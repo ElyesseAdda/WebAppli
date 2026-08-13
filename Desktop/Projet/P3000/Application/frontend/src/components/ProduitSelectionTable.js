@@ -146,6 +146,8 @@ function ProduitSelectionTable({
           }
         }, 1000);
 
+        window.dispatchEvent(new CustomEvent("bonCommandeCreated"));
+
         // Valider et fermer
         if (onValidate) {
           onValidate(bonCommande);
@@ -403,6 +405,8 @@ function ProduitSelectionTable({
 
       // Attendre que la création soit terminée avant de mettre à jour le coût
       await updateChantierMaterialCost(selectedData.chantier);
+
+      window.dispatchEvent(new CustomEvent("bonCommandeCreated"));
 
       // Fermer le modal mais ne pas recharger la page pour pouvoir analyser les logs
       onClose();

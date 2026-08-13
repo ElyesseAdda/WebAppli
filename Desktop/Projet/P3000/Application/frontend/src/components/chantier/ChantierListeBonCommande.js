@@ -214,6 +214,13 @@ const ChantierListeBonCommande = ({
   }, [chantierId]);
 
   useEffect(() => {
+    const handler = () => fetchBonsCommande();
+    window.addEventListener("bonCommandeCreated", handler);
+    return () => window.removeEventListener("bonCommandeCreated", handler);
+    // eslint-disable-next-line
+  }, [chantierId]);
+
+  useEffect(() => {
     if (!bonsCommande.length) {
       fetchBonsCommande();
     }
