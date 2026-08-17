@@ -1413,6 +1413,12 @@ class FactureTSCreateSerializer(serializers.Serializer):
                     f"Une facture existe déjà pour le devis {devis.numero}"
                 )
 
+            # Vérifier si un avenant/TS existe déjà pour ce devis
+            if FactureTS.objects.filter(devis=devis).exists():
+                raise serializers.ValidationError(
+                    f"Un avenant existe déjà pour le devis {devis.numero}"
+                )
+
             # Vérifier si le numéro de facture existe déjà
             potential_numero = f"{devis.numero} / {data.get('numero_ts', '')}"
             if Facture.objects.filter(numero=potential_numero).exists():
@@ -1445,6 +1451,12 @@ class FactureCIECreateSerializer(serializers.Serializer):
             if Facture.objects.filter(devis=devis).exists():
                 raise serializers.ValidationError(
                     f"Une facture existe déjà pour le devis {devis.numero}"
+                )
+
+            # Vérifier si un avenant/TS existe déjà pour ce devis
+            if FactureTS.objects.filter(devis=devis).exists():
+                raise serializers.ValidationError(
+                    f"Un avenant existe déjà pour le devis {devis.numero}"
                 )
 
             # Vérifier si le numéro de facture existe déjà
@@ -1837,6 +1849,12 @@ class AvenantSousTraitanceSerializer(serializers.ModelSerializer):
         model = AvenantSousTraitance
         fields = ['id', 'contrat', 'description', 'montant', 'date_creation', 'date_modification', 'numero', 'type_travaux', 'montant_total_contrat_et_avenants']
         read_only_fields = ['date_modification']
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        # Empêcher la modification du numéro une fois l'avenant créé
+        if self.instance is not None:
+            self.fields['numero'].read_only = True
 
 class ContratSousTraitanceSerializer(serializers.ModelSerializer):
     avenants = AvenantSousTraitanceSerializer(many=True, read_only=True)

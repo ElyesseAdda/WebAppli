@@ -6,6 +6,7 @@ import {
   DialogContent,
   DialogTitle,
   IconButton,
+  Link,
   Menu,
   MenuItem,
   Paper,
@@ -109,6 +110,9 @@ const ChantierListeDevis = ({
   const [editNumeroDialogOpen, setEditNumeroDialogOpen] = useState(false);
   const [devisToEditNumero, setDevisToEditNumero] = useState(null);
   const [newNumeroValue, setNewNumeroValue] = useState("");
+  const [existingFacturesWarningOpen, setExistingFacturesWarningOpen] =
+    useState(false);
+  const [existingDocuments, setExistingDocuments] = useState([]);
 
   // Fonction pour obtenir les styles de statut (mêmes que le dashboard)
   const getStatusStyles = (status) => {
@@ -354,13 +358,95 @@ const ChantierListeDevis = ({
     handleClose();
   };
 
-  const handleEditFacture = () => {
-    setFactureModalOpen(true);
+  const buildExistingDocuments = (data) => {
+    const documents = [];
+    const factures = Array.isArray(data)
+      ? data
+      : Array.isArray(data?.factures)
+        ? data.factures
+        : [];
+    const factureTs = Array.isArray(data) ? null : data?.facture_ts;
+
+    factures.forEach((facture) => {
+      const isCie = facture.type_facture === "cie";
+      documents.push({
+        key: `facture-${facture.id}`,
+        kind: isCie ? "cie" : "facture",
+        label: isCie ? "CIE" : "Facture",
+        numero: facture.numero,
+        previewUrl: `/api/preview-facture/${facture.id}/`,
+      });
+    });
+
+    if (factureTs) {
+      const tsLabel = String(factureTs.numero_ts ?? "").padStart(3, "0");
+      const avenantLabel = factureTs.avenant_numero
+        ? `Avenant n°${factureTs.avenant_numero}`
+        : "Avenant";
+      const designation = factureTs.designation
+        ? ` - ${factureTs.designation}`
+        : "";
+      documents.push({
+        key: `avenant-${factureTs.id}`,
+        kind: "avenant",
+        label: "Avenant",
+        numero: `${avenantLabel} (TS n°${tsLabel})${designation}`,
+        previewUrl: factureTs.avenant
+          ? `/api/preview-avenant/${factureTs.avenant}/`
+          : `/api/preview-saved-devis-v2/${factureTs.devis}/`,
+      });
+    }
+
+    return documents;
+  };
+
+  const checkExistingTransformations = async (devisId) => {
+    const response = await axios.get(`/api/list-devis/${devisId}/factures/`);
+    return buildExistingDocuments(response.data);
+  };
+
+  const showExistingDocumentsWarning = (documents) => {
+    setExistingDocuments(documents);
+    setExistingFacturesWarningOpen(true);
+  };
+
+  const handleEditFacture = async () => {
     handleClose();
+    if (!selectedDevis?.id) return;
+    try {
+      const documents = await checkExistingTransformations(selectedDevis.id);
+      if (documents.length > 0) {
+        showExistingDocumentsWarning(documents);
+        return;
+      }
+      setFactureModalOpen(true);
+    } catch (error) {
+      console.error("Erreur lors de la vérification des documents:", error);
+      alert(
+        "Erreur lors de la vérification des documents existants. Veuillez réessayer."
+      );
+    }
+  };
+
+  const handlePreviewExistingDocument = (previewUrl) => {
+    if (!previewUrl) return;
+    window.open(previewUrl, "_blank");
+  };
+
+  const handleCloseExistingFacturesWarning = () => {
+    setExistingFacturesWarningOpen(false);
+    setExistingDocuments([]);
   };
 
   const handleEditTS = async () => {
+    handleClose();
+    if (!selectedDevis?.id) return;
     try {
+      const documents = await checkExistingTransformations(selectedDevis.id);
+      if (documents.length > 0) {
+        showExistingDocumentsWarning(documents);
+        return;
+      }
       const devisResponse = await axios.get(`/api/devisa/${selectedDevis.id}/`);
       setSelectedDevisForTS(devisResponse.data);
       const chantierResponse = await axios.get(
@@ -371,11 +457,17 @@ const ChantierListeDevis = ({
     } catch (error) {
       alert("Erreur lors de la récupération des données pour TS");
     }
-    handleClose();
   };
 
   const handleEditCIE = async () => {
+    handleClose();
+    if (!selectedDevis?.id) return;
     try {
+      const documents = await checkExistingTransformations(selectedDevis.id);
+      if (documents.length > 0) {
+        showExistingDocumentsWarning(documents);
+        return;
+      }
       const devisResponse = await axios.get(`/api/devisa/${selectedDevis.id}/`);
       setSelectedDevisForCIE(devisResponse.data);
       const chantierResponse = await axios.get(
@@ -386,7 +478,6 @@ const ChantierListeDevis = ({
     } catch (error) {
       alert("Erreur lors de la récupération des données pour CIE");
     }
-    handleClose();
   };
 
   const handleConvertToBonCommande = async () => {
@@ -837,6 +928,57 @@ const ChantierListeDevis = ({
           </Button>
           <Button onClick={handleEditNumeroSave} variant="contained">
             Enregistrer
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      <Dialog
+        open={existingFacturesWarningOpen}
+        onClose={handleCloseExistingFacturesWarning}
+        PaperProps={{
+          sx: { borderRadius: 2, padding: 1, minWidth: 420 },
+        }}
+      >
+        <DialogTitle>Document déjà existant</DialogTitle>
+        <DialogContent>
+          <Typography sx={{ mb: 2 }}>
+            Ce devis a déjà été transformé. Vous ne pouvez pas créer un nouveau
+            document à partir de celui-ci.
+          </Typography>
+          <Typography variant="subtitle2" sx={{ mb: 1, fontWeight: 600 }}>
+            {existingDocuments.length > 1
+              ? "Documents concernés :"
+              : "Document concerné :"}
+          </Typography>
+          {existingDocuments.map((doc) => (
+            <Typography key={doc.key} sx={{ mb: 0.5 }}>
+              • {doc.label} :{" "}
+              <Link
+                component="button"
+                type="button"
+                underline="hover"
+                onClick={() => handlePreviewExistingDocument(doc.previewUrl)}
+                sx={{
+                  cursor: "pointer",
+                  fontWeight: 600,
+                  fontSize: "1rem",
+                  verticalAlign: "baseline",
+                }}
+              >
+                {doc.numero}
+              </Link>
+            </Typography>
+          ))}
+          <Typography variant="body2" color="text.secondary" sx={{ mt: 2 }}>
+            Cliquez sur le numéro pour ouvrir le document dans un nouvel onglet.
+          </Typography>
+        </DialogContent>
+        <DialogActions sx={{ padding: 2 }}>
+          <Button
+            onClick={handleCloseExistingFacturesWarning}
+            variant="contained"
+          >
+            Fermer
           </Button>
         </DialogActions>
       </Dialog>

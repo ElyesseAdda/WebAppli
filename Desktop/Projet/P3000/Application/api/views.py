@@ -6388,8 +6388,29 @@ def get_devis_special_lines(request, devis_id):
 def get_devis_factures(request, devis_id):
     try:
         factures = Facture.objects.filter(devis_id=devis_id)
-        serializer = FactureSerializer(factures, many=True)
-        return Response(serializer.data)
+        factures_data = FactureSerializer(factures, many=True).data
+
+        facture_ts_data = None
+        try:
+            facture_ts = FactureTS.objects.select_related('avenant', 'devis').get(devis_id=devis_id)
+            facture_ts_data = {
+                'id': facture_ts.id,
+                'numero_ts': facture_ts.numero_ts,
+                'designation': facture_ts.designation,
+                'devis': facture_ts.devis_id,
+                'devis_numero': facture_ts.devis.numero if facture_ts.devis else None,
+                'avenant': facture_ts.avenant_id,
+                'avenant_numero': facture_ts.avenant.numero if facture_ts.avenant else None,
+                'montant_ht': facture_ts.montant_ht,
+                'montant_ttc': facture_ts.montant_ttc,
+            }
+        except FactureTS.DoesNotExist:
+            pass
+
+        return Response({
+            'factures': factures_data,
+            'facture_ts': facture_ts_data,
+        })
     except Exception as e:
         return Response({"error": str(e)}, status=400)
     
@@ -7367,6 +7388,16 @@ def get_next_ts_number(request, chantier_id):
 def create_facture_ts(request):
     try:
         devis = Devis.objects.get(id=request.data['devis_id'])
+        if Facture.objects.filter(devis=devis).exists():
+            return Response(
+                {"error": f"Une facture existe déjà pour le devis {devis.numero}"},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        if FactureTS.objects.filter(devis=devis).exists():
+            return Response(
+                {"error": f"Un avenant existe déjà pour le devis {devis.numero}"},
+                status=status.HTTP_400_BAD_REQUEST
+            )
         chantier_id = request.data['chantier_id']
         # Utiliser en priorité le champ 'designation' envoyé par le frontend,
         # sinon retomber sur 'numero_ts' pour compat rétro si présent
@@ -7439,6 +7470,17 @@ def create_facture_cie(request):
         if devis.devis_chantier:
             return Response(
                 {"error": "Les devis de chantier ne peuvent pas être transformés en facture CIE"},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        if Facture.objects.filter(devis=devis).exists():
+            return Response(
+                {"error": f"Une facture existe déjà pour le devis {devis.numero}"},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        if FactureTS.objects.filter(devis=devis).exists():
+            return Response(
+                {"error": f"Un avenant existe déjà pour le devis {devis.numero}"},
                 status=status.HTTP_400_BAD_REQUEST
             )
             
@@ -7929,8 +7971,20 @@ def update_situation(request, pk):
                      'montant_total_cumul_ht', 'retenue_garantie', 'montant_prorata', 
                      'retenue_cie', 'type_retenue_cie', 'montant_apres_retenues', 'tva', 'montant_total_ttc', 
                      'pourcentage_avancement', 'taux_prorata', 'taux_retenue_garantie', 'tva_rate', 'statut']:
-            if field in data:
-                setattr(situation, field, data[field])
+            if field not in data:
+                continue
+
+            value = data[field]
+
+            # Garde-fous : ne pas effacer ces champs critiques sur valeur vide.
+            if field == 'numero_situation' and (value is None or str(value).strip() == ''):
+                continue
+            if field == 'retenue_cie' and (value is None or str(value).strip() == ''):
+                continue
+            if field == 'type_retenue_cie' and (value is None or str(value).strip() == ''):
+                continue
+
+            setattr(situation, field, value)
         situation.save()
 
         # Création des nouvelles lignes
@@ -12185,12 +12239,19 @@ class RecapFinancierChantierAPIView(APIView):
         }
 
         # Montant marché : même règle que get_chantier_details — source de vérité = devis de chantier si présent
+        # Règle métier ajoutée : si le devis marché est refusé, le montant marché affiché doit être 0.
         montant_ht = float(chantier.montant_ht or 0)
         devis_marche = Devis.objects.filter(
             chantier=chantier, devis_chantier=True
         ).first()
-        if devis_marche is not None and devis_marche.price_ht is not None:
-            montant_ht = float(devis_marche.price_ht)
+        if devis_marche is not None:
+            devis_status = str(getattr(devis_marche, "status", "") or "").strip().lower()
+            is_devis_refuse = devis_status in {"refuse", "refusé"}
+
+            if is_devis_refuse:
+                montant_ht = 0.0
+            elif devis_marche.price_ht is not None:
+                montant_ht = float(devis_marche.price_ht)
         taux_fixe = chantier.taux_fixe or 0
         montant_taux_fixe = montant_ht * taux_fixe / 100
 

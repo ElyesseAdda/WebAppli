@@ -81,11 +81,15 @@ function ProduitSelectionTable({
           .map((product) => ({
             produit: product.id,
             designation: product.designation,
-            unite: product.unite,
+            unite: editedProducts[product.id]?.unite ?? product.unite,
             quantite: parseInt(quantities[product.id]) || 0,
-            prix_unitaire: parseFloat(product.prix_unitaire),
+            prix_unitaire: parseFloat(
+              editedProducts[product.id]?.prix_unitaire ?? product.prix_unitaire
+            ),
             total: parseFloat(
-              (quantities[product.id] || 0) * product.prix_unitaire
+              (quantities[product.id] || 0) *
+                (editedProducts[product.id]?.prix_unitaire ??
+                  product.prix_unitaire)
             ),
           }))
           .filter((item) => item.quantite > 0);
@@ -142,6 +146,8 @@ function ProduitSelectionTable({
             console.error("❌ Erreur lors du téléchargement automatique:", driveError);
           }
         }, 1000);
+
+        window.dispatchEvent(new CustomEvent("bonCommandeCreated"));
 
         // Valider et fermer
         if (onValidate) {
@@ -218,7 +224,7 @@ function ProduitSelectionTable({
     const edited = editedProducts[productId];
     if (
       edited &&
-      ["code_produit", "designation", "prix_unitaire"].includes(field)
+      ["code_produit", "designation", "prix_unitaire", "unite"].includes(field)
     ) {
       try {
         await axios.patch(`/api/stock/${productId}/`, {
@@ -280,10 +286,13 @@ function ProduitSelectionTable({
       .map((product) => ({
         produit: product.id,
         designation: product.designation,
-        unite: product.unite,
+        unite: editedProducts[product.id]?.unite ?? product.unite,
         quantite: quantities[product.id] || 0,
-        prix_unitaire: product.prix_unitaire,
-        total: (quantities[product.id] || 0) * product.prix_unitaire,
+        prix_unitaire:
+          editedProducts[product.id]?.prix_unitaire ?? product.prix_unitaire,
+        total:
+          (quantities[product.id] || 0) *
+          (editedProducts[product.id]?.prix_unitaire ?? product.prix_unitaire),
       }))
       .filter((item) => item.quantite > 0);
 
@@ -310,11 +319,15 @@ function ProduitSelectionTable({
         .map((product) => ({
           produit: product.id,
           designation: product.designation,
-          unite: product.unite,
+          unite: editedProducts[product.id]?.unite ?? product.unite,
           quantite: parseInt(quantities[product.id]) || 0,
-          prix_unitaire: parseFloat(product.prix_unitaire),
+          prix_unitaire: parseFloat(
+            editedProducts[product.id]?.prix_unitaire ?? product.prix_unitaire
+          ),
           total: parseFloat(
-            (quantities[product.id] || 0) * product.prix_unitaire
+            (quantities[product.id] || 0) *
+              (editedProducts[product.id]?.prix_unitaire ??
+                product.prix_unitaire)
           ),
         }))
         .filter((item) => item.quantite > 0);
@@ -393,6 +406,8 @@ function ProduitSelectionTable({
 
       // Attendre que la création soit terminée avant de mettre à jour le coût
       await updateChantierMaterialCost(selectedData.chantier);
+
+      window.dispatchEvent(new CustomEvent("bonCommandeCreated"));
 
       // Fermer le modal mais ne pas recharger la page pour pouvoir analyser les logs
       onClose();
@@ -730,7 +745,34 @@ function ProduitSelectionTable({
                         ) + " €"
                       )}
                     </TableCell>
-                    <TableCell>{product.unite}</TableCell>
+                    <TableCell
+                      onDoubleClick={() =>
+                        handleCellDoubleClick(product.id, "unite")
+                      }
+                      sx={{ cursor: "pointer" }}
+                    >
+                      {editingCell.productId === product.id &&
+                      editingCell.field === "unite" ? (
+                        <TextField
+                          value={edited.unite ?? product.unite}
+                          onChange={(e) =>
+                            handleEditChange(
+                              product.id,
+                              "unite",
+                              e.target.value
+                            )
+                          }
+                          onBlur={() => handleEditBlur(product.id, "unite")}
+                          onKeyDown={(e) =>
+                            handleEditKeyDown(e, product.id, "unite")
+                          }
+                          size="small"
+                          autoFocus
+                        />
+                      ) : (
+                        edited.unite ?? product.unite
+                      )}
+                    </TableCell>
                     <TableCell>
                       <TextField
                         id={`quantity-${product.id}`}

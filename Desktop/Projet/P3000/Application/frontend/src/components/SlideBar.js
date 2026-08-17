@@ -21,7 +21,7 @@ import axios from "axios";
 import logo from "../img/logo.png";
 import "./../../static/css/slideBar.css";
 
-const SlideBar = ({ toggleSidebar, isSidebarVisible, user }) => {
+const SlideBar = ({ toggleSidebar, isSidebarVisible, user, onOpenBonCommande }) => {
   const location = useLocation();
   const [expandedCategories, setExpandedCategories] = useState({});
   const [agences, setAgences] = useState([]);
@@ -112,7 +112,7 @@ const SlideBar = ({ toggleSidebar, isSidebarVisible, user }) => {
             label: "Créer document",
             children: [
               { label: "Devis", to: "/DevisAvance" },
-              { label: "Bon de commande", to: "/BonCommande" },
+              { label: "Bon de commande", action: "openBonCommande" },
             ],
             icon: MdCreateNewFolder,
           },
@@ -346,16 +346,30 @@ const SlideBar = ({ toggleSidebar, isSidebarVisible, user }) => {
                             <ul className="submenu-group-links">
                               {child.children.map((link) => (
                                 <li
-                                  key={`${item.key}-${child.label}-${link.to}`}
+                                  key={`${item.key}-${child.label}-${link.to || link.action}`}
                                 >
-                                  <NavLink
-                                    to={link.to}
-                                    className={({ isActive }) =>
-                                      isActive ? "active" : ""
-                                    }
-                                  >
-                                    {link.label}
-                                  </NavLink>
+                                  {link.action === "openBonCommande" ? (
+                                    <a
+                                      href="#nouveau-bon-commande"
+                                      onClick={(e) => {
+                                        e.preventDefault();
+                                        if (onOpenBonCommande) {
+                                          onOpenBonCommande();
+                                        }
+                                      }}
+                                    >
+                                      {link.label}
+                                    </a>
+                                  ) : (
+                                    <NavLink
+                                      to={link.to}
+                                      className={({ isActive }) =>
+                                        isActive ? "active" : ""
+                                      }
+                                    >
+                                      {link.label}
+                                    </NavLink>
+                                  )}
                                 </li>
                               ))}
                             </ul>

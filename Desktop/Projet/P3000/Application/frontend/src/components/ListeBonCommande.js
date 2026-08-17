@@ -113,6 +113,12 @@ const ListeBonCommande = () => {
     fetchBonsCommande();
   }, []);
 
+  useEffect(() => {
+    const handler = () => fetchBonsCommande();
+    window.addEventListener("bonCommandeCreated", handler);
+    return () => window.removeEventListener("bonCommandeCreated", handler);
+  }, []);
+
   const handleFilterChange = (field) => (event) => {
     const newFilters = {
       ...filters,

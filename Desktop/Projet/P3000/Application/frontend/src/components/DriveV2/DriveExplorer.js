@@ -86,6 +86,7 @@ import { usePreload } from './hooks/usePreload';
 import MoveDialog from './MoveDialog';
 import { useUpload } from './hooks/useUpload';
 import { normalizeFilename } from './services/pathNormalizationService';
+import { isSystemJunkFileName, isSystemJunkFolderName } from './utils/systemJunkFiles';
 
 const ExplorerContainer = styled(Box)(({ theme, isDragOver }) => ({
   flex: 1,
@@ -743,6 +744,10 @@ const DriveExplorer = ({
   const traverseFileTree = useCallback((item, path = '', allFiles = []) => {
     return new Promise((resolve) => {
       if (item.isFile) {
+        if (isSystemJunkFileName(item.name)) {
+          resolve();
+          return;
+        }
         // C'est un fichier
         item.file((file) => {
           // Si le path est vide, c'est un fichier simple (pas dans un dossier)
@@ -768,6 +773,10 @@ const DriveExplorer = ({
           resolve();
         });
       } else if (item.isDirectory) {
+        if (isSystemJunkFolderName(item.name)) {
+          resolve();
+          return;
+        }
         // C'est un dossier, parcourir récursivement
         const dirReader = item.createReader();
         const currentPath = path + item.name + '/';

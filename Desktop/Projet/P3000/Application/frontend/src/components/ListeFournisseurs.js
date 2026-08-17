@@ -1,13 +1,17 @@
 import React, { useEffect, useState } from "react";
 import {
+  Alert,
   Box,
   Button,
+  CircularProgress,
   Dialog,
   DialogActions,
   DialogContent,
   DialogTitle,
   IconButton,
+  InputAdornment,
   Paper,
+  Snackbar,
   Table,
   TableBody,
   TableCell,
@@ -15,18 +19,21 @@ import {
   TableHead,
   TableRow,
   TextField,
+  Tooltip,
   Typography,
-  Alert,
-  Snackbar,
 } from "@mui/material";
 import {
   MdAdd,
-  MdEdit,
-  MdDelete,
   MdBusiness,
+  MdDelete,
+  MdEdit,
+  MdInventory2,
   MdStore,
 } from "react-icons/md";
+import { FiSearch } from "react-icons/fi";
 import axios from "axios";
+import { bonCommandeService } from "../services/bonCommandeService";
+import NewProductForm from "./NewProductForm";
 
 const ListeFournisseurs = () => {
   const [fournisseurs, setFournisseurs] = useState([]);
@@ -46,6 +53,17 @@ const ListeFournisseurs = () => {
     message: "",
     severity: "success",
   });
+  const [productsModalOpen, setProductsModalOpen] = useState(false);
+  const [selectedFournisseur, setSelectedFournisseur] = useState(null);
+  const [products, setProducts] = useState([]);
+  const [productsLoading, setProductsLoading] = useState(false);
+  const [productSearch, setProductSearch] = useState("");
+  const [openNewProductModal, setOpenNewProductModal] = useState(false);
+  const [editingCell, setEditingCell] = useState({
+    productId: null,
+    field: null,
+  });
+  const [editedProducts, setEditedProducts] = useState({});
 
   // Charger les fournisseurs
   const fetchFournisseurs = async () => {
@@ -177,6 +195,93 @@ const ListeFournisseurs = () => {
     }
   };
 
+  const loadFournisseurProducts = async (fournisseurName) => {
+    try {
+      setProductsLoading(true);
+      const data = await bonCommandeService.getProductsByFournisseur(
+        fournisseurName
+      );
+      setProducts(data);
+    } catch (error) {
+      console.error("Erreur lors du chargement des produits:", error);
+      showSnackbar("Erreur lors du chargement des produits", "error");
+      setProducts([]);
+    } finally {
+      setProductsLoading(false);
+    }
+  };
+
+  const handleOpenProductsModal = (fournisseur) => {
+    setSelectedFournisseur(fournisseur);
+    setProductSearch("");
+    setEditedProducts({});
+    setEditingCell({ productId: null, field: null });
+    setProductsModalOpen(true);
+    loadFournisseurProducts(fournisseur.name);
+  };
+
+  const handleCloseProductsModal = () => {
+    setProductsModalOpen(false);
+    setOpenNewProductModal(false);
+    setSelectedFournisseur(null);
+    setProducts([]);
+    setProductSearch("");
+    setEditedProducts({});
+    setEditingCell({ productId: null, field: null });
+  };
+
+  const handleCellDoubleClick = (productId, field) => {
+    setEditingCell({ productId, field });
+  };
+
+  const handleEditChange = (productId, field, value) => {
+    setEditedProducts((prev) => ({
+      ...prev,
+      [productId]: {
+        ...prev[productId],
+        [field]: field === "prix_unitaire" ? parseFloat(value) : value,
+      },
+    }));
+  };
+
+  const handleEditBlur = async (productId, field) => {
+    setEditingCell({ productId: null, field: null });
+    const edited = editedProducts[productId];
+    if (
+      edited &&
+      ["code_produit", "designation", "prix_unitaire", "unite"].includes(field)
+    ) {
+      try {
+        await axios.patch(`/api/stock/${productId}/`, {
+          [field]: edited[field],
+        });
+        if (selectedFournisseur) {
+          loadFournisseurProducts(selectedFournisseur.name);
+        }
+      } catch (error) {
+        console.error("Erreur lors de la mise à jour du produit:", error);
+        showSnackbar("Erreur lors de la mise à jour du produit", "error");
+      }
+    }
+  };
+
+  const handleEditKeyDown = (e, productId, field) => {
+    if (e.key === "Enter") {
+      handleEditBlur(productId, field);
+    }
+  };
+
+  const filteredProducts = products.filter((product) => {
+    const search = productSearch.toLowerCase();
+    if (!search) return true;
+    return (
+      product.code_produit?.toLowerCase().includes(search) ||
+      product.designation?.toLowerCase().includes(search) ||
+      product.unite?.toLowerCase().includes(search) ||
+      product.prix_unitaire?.toString().includes(search)
+    );
+  });
+
   const handleDelete = async (id) => {
     if (window.confirm("Êtes-vous sûr de vouloir supprimer ce fournisseur ?")) {
       try {
@@ -284,6 +389,16 @@ const ListeFournisseurs = () => {
                       : "-"}
                   </TableCell>
                   <TableCell sx={{ textAlign: "center" }}>
+                    <Tooltip title="Voir les produits">
+                      <IconButton
+                        color="primary"
+                        onClick={() => handleOpenProductsModal(fournisseur)}
+                        size="small"
+                        sx={{ mr: 1 }}
+                      >
+                        <MdInventory2 />
+                      </IconButton>
+                    </Tooltip>
                     <IconButton
                       color="primary"
                       onClick={() => handleOpenModal(fournisseur)}
@@ -436,6 +551,253 @@ const ListeFournisseurs = () => {
           </DialogActions>
         </form>
       </Dialog>
+
+      {/* Modal liste des produits du fournisseur */}
+      <Dialog
+        open={productsModalOpen}
+        onClose={handleCloseProductsModal}
+        maxWidth="lg"
+        fullWidth
+      >
+        <DialogTitle
+          sx={{
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
+            gap: 2,
+            pb: 1,
+          }}
+        >
+          <Typography variant="h6">
+            Produits — {selectedFournisseur?.name || ""}
+          </Typography>
+          <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+            <TextField
+              size="small"
+              placeholder="Rechercher..."
+              value={productSearch}
+              onChange={(e) => setProductSearch(e.target.value)}
+              InputProps={{
+                startAdornment: (
+                  <InputAdornment position="start">
+                    <FiSearch />
+                  </InputAdornment>
+                ),
+              }}
+              sx={{ width: 250 }}
+            />
+            <Button
+              variant="outlined"
+              startIcon={<MdAdd />}
+              onClick={() => setOpenNewProductModal(true)}
+            >
+              Nouveau produit
+            </Button>
+          </Box>
+        </DialogTitle>
+        <DialogContent>
+          {productsLoading ? (
+            <Box sx={{ display: "flex", justifyContent: "center", py: 6 }}>
+              <CircularProgress />
+            </Box>
+          ) : (
+            <TableContainer sx={{ maxHeight: 480 }}>
+              <Table stickyHeader size="small">
+                <TableHead>
+                  <TableRow>
+                    <TableCell>Code</TableCell>
+                    <TableCell>Désignation</TableCell>
+                    <TableCell>Prix unitaire</TableCell>
+                    <TableCell>Unité</TableCell>
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  {filteredProducts.length === 0 ? (
+                    <TableRow>
+                      <TableCell colSpan={4} sx={{ textAlign: "center", py: 4 }}>
+                        <Typography color="text.secondary">
+                          Aucun produit pour ce fournisseur
+                        </Typography>
+                      </TableCell>
+                    </TableRow>
+                  ) : (
+                    filteredProducts.map((product) => {
+                      const edited = editedProducts[product.id] || {};
+                      return (
+                        <TableRow key={product.id} hover>
+                          <TableCell
+                            onDoubleClick={() =>
+                              handleCellDoubleClick(product.id, "code_produit")
+                            }
+                            sx={{ cursor: "pointer" }}
+                          >
+                            {editingCell.productId === product.id &&
+                            editingCell.field === "code_produit" ? (
+                              <TextField
+                                value={
+                                  edited.code_produit ?? product.code_produit
+                                }
+                                onChange={(e) =>
+                                  handleEditChange(
+                                    product.id,
+                                    "code_produit",
+                                    e.target.value
+                                  )
+                                }
+                                onBlur={() =>
+                                  handleEditBlur(product.id, "code_produit")
+                                }
+                                onKeyDown={(e) =>
+                                  handleEditKeyDown(
+                                    e,
+                                    product.id,
+                                    "code_produit"
+                                  )
+                                }
+                                size="small"
+                                autoFocus
+                              />
+                            ) : (
+                              edited.code_produit ?? product.code_produit
+                            )}
+                          </TableCell>
+                          <TableCell
+                            onDoubleClick={() =>
+                              handleCellDoubleClick(product.id, "designation")
+                            }
+                            sx={{ cursor: "pointer" }}
+                          >
+                            {editingCell.productId === product.id &&
+                            editingCell.field === "designation" ? (
+                              <TextField
+                                value={
+                                  edited.designation ?? product.designation
+                                }
+                                onChange={(e) =>
+                                  handleEditChange(
+                                    product.id,
+                                    "designation",
+                                    e.target.value
+                                  )
+                                }
+                                onBlur={() =>
+                                  handleEditBlur(product.id, "designation")
+                                }
+                                onKeyDown={(e) =>
+                                  handleEditKeyDown(
+                                    e,
+                                    product.id,
+                                    "designation"
+                                  )
+                                }
+                                size="small"
+                                autoFocus
+                                fullWidth
+                              />
+                            ) : (
+                              edited.designation ?? product.designation
+                            )}
+                          </TableCell>
+                          <TableCell
+                            onDoubleClick={() =>
+                              handleCellDoubleClick(product.id, "prix_unitaire")
+                            }
+                            sx={{ cursor: "pointer" }}
+                          >
+                            {editingCell.productId === product.id &&
+                            editingCell.field === "prix_unitaire" ? (
+                              <TextField
+                                type="number"
+                                value={
+                                  edited.prix_unitaire ?? product.prix_unitaire
+                                }
+                                onChange={(e) =>
+                                  handleEditChange(
+                                    product.id,
+                                    "prix_unitaire",
+                                    e.target.value
+                                  )
+                                }
+                                onBlur={() =>
+                                  handleEditBlur(product.id, "prix_unitaire")
+                                }
+                                onKeyDown={(e) =>
+                                  handleEditKeyDown(
+                                    e,
+                                    product.id,
+                                    "prix_unitaire"
+                                  )
+                                }
+                                size="small"
+                                autoFocus
+                                inputProps={{ min: 0, step: "0.01" }}
+                              />
+                            ) : (
+                              `${Number(
+                                edited.prix_unitaire ?? product.prix_unitaire
+                              ).toFixed(2)} €`
+                            )}
+                          </TableCell>
+                          <TableCell
+                            onDoubleClick={() =>
+                              handleCellDoubleClick(product.id, "unite")
+                            }
+                            sx={{ cursor: "pointer" }}
+                          >
+                            {editingCell.productId === product.id &&
+                            editingCell.field === "unite" ? (
+                              <TextField
+                                value={edited.unite ?? product.unite}
+                                onChange={(e) =>
+                                  handleEditChange(
+                                    product.id,
+                                    "unite",
+                                    e.target.value
+                                  )
+                                }
+                                onBlur={() =>
+                                  handleEditBlur(product.id, "unite")
+                                }
+                                onKeyDown={(e) =>
+                                  handleEditKeyDown(e, product.id, "unite")
+                                }
+                                size="small"
+                                autoFocus
+                              />
+                            ) : (
+                              edited.unite ?? product.unite
+                            )}
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })
+                  )}
+                </TableBody>
+              </Table>
+            </TableContainer>
+          )}
+        </DialogContent>
+        <DialogActions sx={{ px: 3, pb: 2, justifyContent: "space-between" }}>
+          <Typography variant="body2" color="text.secondary">
+            {filteredProducts.length} produit
+            {filteredProducts.length > 1 ? "s" : ""}
+            {" — double-clic pour modifier"}
+          </Typography>
+          <Button onClick={handleCloseProductsModal}>Fermer</Button>
+        </DialogActions>
+      </Dialog>
+
+      <NewProductForm
+        open={openNewProductModal}
+        handleClose={() => setOpenNewProductModal(false)}
+        onAddProduct={() => {
+          setOpenNewProductModal(false);
+          if (selectedFournisseur) {
+            loadFournisseurProducts(selectedFournisseur.name);
+          }
+        }}
+        fournisseur={selectedFournisseur?.id}
+      />
 
       {/* Snackbar pour les notifications */}
       <Snackbar

@@ -44,16 +44,53 @@ const DashboardCardsGrid = ({
   periodStart,
   periodEnd,
 }) => {
-  const { encaissementsRecus, paiementsAVenir, paiementsEnRetard, loading: detailLoading } =
-    usePaymentsDetail(selectedYear);
+  const {
+    encaissementsRecus,
+    paiementsAVenir,
+    paiementsEnRetard,
+    loadingEncaissements,
+    loadingAVenir,
+    loadingRetard,
+  } = usePaymentsDetail(selectedYear);
 
-  const [modalConfig, setModalConfig] = useState(null); // { title, items, accentColor }
+  const [modalConfig, setModalConfig] = useState(null); // { title, kind, accentColor }
 
-  const makeDetailBtn = (title, items, accentColor, iconColor) => (
+  const modalLists = {
+    encaissements: { items: encaissementsRecus, loading: loadingEncaissements },
+    avenir: { items: paiementsAVenir, loading: loadingAVenir },
+    retard: { items: paiementsEnRetard, loading: loadingRetard },
+  };
+
+  const latePaymentsFromDetail = paiementsEnRetard.reduce(
+    (sum, item) => sum + (item.montant || 0),
+    0
+  );
+  const encaissementsFromDetail = encaissementsRecus.reduce(
+    (sum, item) => sum + (item.montant || 0),
+    0
+  );
+  const avenirFromDetail = paiementsAVenir.reduce(
+    (sum, item) => sum + (item.montant || 0),
+    0
+  );
+
+  const latePaymentsDisplay = loadingRetard
+    ? latePaymentsHt
+    : latePaymentsFromDetail || latePaymentsHt;
+  const encaissementsDisplay = loadingEncaissements
+    ? montantFacturePayeHt
+    : encaissementsFromDetail || montantFacturePayeHt;
+  const avenirDisplay = loadingAVenir ? burn15JHt : avenirFromDetail || burn15JHt;
+
+  const latePaymentsCardLoading = loadingRetard && totalCALoading;
+  const encaissementsCardLoading = loadingEncaissements && totalCALoading;
+  const avenirCardLoading = loadingAVenir && totalCALoading;
+
+  const makeDetailBtn = (title, kind, accentColor, iconColor) => (
     <Tooltip title={`Voir le détail : ${title}`}>
       <IconButton
         size="small"
-        onClick={() => setModalConfig({ title, items, accentColor })}
+        onClick={() => setModalConfig({ title, kind, accentColor })}
         sx={{
           p: 0.35,
           color: iconColor || accentColor,
@@ -153,21 +190,21 @@ const DashboardCardsGrid = ({
         />
         <DashboardCardAnnualGrowth
           totalCA={totalCA}
-          montantEncaisseReel={montantFacturePayeHt}
-          loading={totalCALoading}
-          toolbarPrefix={makeDetailBtn("Encaissements reçus", encaissementsRecus, "#22c55e", "#15803d")}
+          montantEncaisseReel={encaissementsDisplay}
+          loading={encaissementsCardLoading}
+          toolbarPrefix={makeDetailBtn("Encaissements reçus", "encaissements", "#22c55e", "#15803d")}
         />
         <DashboardCardAnnualBurn
           totalCA={totalCA}
-          burnMontant={burn15JHt}
-          loading={totalCALoading}
-          toolbarPrefix={makeDetailBtn("Paiements à venir (15 j.)", paiementsAVenir, "#f97316", "#c2410c")}
+          burnMontant={avenirDisplay}
+          loading={avenirCardLoading}
+          toolbarPrefix={makeDetailBtn("Paiements à venir (15 j.)", "avenir", "#f97316", "#c2410c")}
         />
         <DashboardCardLatePayments
           totalCA={totalCA}
-          montantRetard={latePaymentsHt}
-          loading={totalCALoading}
-          toolbarPrefix={makeDetailBtn("Paiements en retard", paiementsEnRetard, "#dc2626", "#b91c1c")}
+          montantRetard={latePaymentsDisplay}
+          loading={latePaymentsCardLoading}
+          toolbarPrefix={makeDetailBtn("Paiements en retard", "retard", "#dc2626", "#b91c1c")}
         />
       </Box>
 
@@ -186,9 +223,9 @@ const DashboardCardsGrid = ({
         open={!!modalConfig}
         onClose={() => setModalConfig(null)}
         title={modalConfig?.title || ""}
-        items={modalConfig?.items || []}
+        items={modalLists[modalConfig?.kind]?.items || []}
         accentColor={modalConfig?.accentColor || "#1B78BC"}
-        loading={detailLoading}
+        loading={modalLists[modalConfig?.kind]?.loading || false}
       />
     </Box>
   );
