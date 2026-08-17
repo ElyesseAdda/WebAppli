@@ -15,34 +15,64 @@ import { LocalizationProvider } from "@mui/x-date-pickers/LocalizationProvider";
 import frLocale from "date-fns/locale/fr";
 import React, { useEffect, useState } from "react";
 
-const ContratSansDocumentForm = ({ open, onClose, sousTraitant, chantier, onSave }) => {
-  const [formData, setFormData] = useState({
-    description_prestation: "",
-    date_debut: new Date(),
-    duree: "Jusqu'à livraison du chantier",
-    adresse_prestation: "",
-    nom_operation: "",
-    montant_operation: "",
-  });
+const parseDateValue = (value) => {
+  if (!value) return new Date();
+  if (value instanceof Date) return value;
+  const d = new Date(value);
+  return Number.isNaN(d.getTime()) ? new Date() : d;
+};
+
+const emptyForm = {
+  description_prestation: "",
+  date_debut: new Date(),
+  duree: "Jusqu'à livraison du chantier",
+  adresse_prestation: "",
+  nom_operation: "",
+  montant_operation: "",
+};
+
+const ContratSansDocumentForm = ({
+  open,
+  onClose,
+  sousTraitant,
+  chantier,
+  onSave,
+  mode = "create",
+  contrat = null,
+}) => {
+  const isEdit = mode === "edit" && contrat?.id;
+  const [formData, setFormData] = useState(emptyForm);
 
   useEffect(() => {
-    if (chantier) {
-      // Construction de l'adresse complète du chantier
-      const adresseComplete = [
-        chantier.rue || "",
-        chantier.code_postal || "",
-        chantier.ville || "",
-      ]
-        .filter((part) => part.trim() !== "")
-        .join(", ");
+    if (!open) return;
 
-      setFormData((prev) => ({
-        ...prev,
-        adresse_prestation: adresseComplete,
-        nom_operation: chantier.chantier_name || "",
-      }));
+    if (isEdit) {
+      setFormData({
+        description_prestation: contrat.description_prestation || "",
+        date_debut: parseDateValue(contrat.date_debut),
+        duree: contrat.duree || "Jusqu'à livraison du chantier",
+        adresse_prestation: contrat.adresse_prestation || "",
+        nom_operation: contrat.nom_operation || "",
+        montant_operation:
+          contrat.montant_operation != null
+            ? String(contrat.montant_operation)
+            : "",
+      });
+      return;
     }
-  }, [chantier]);
+
+    const adresseComplete = chantier
+      ? [chantier.rue || "", chantier.code_postal || "", chantier.ville || ""]
+          .filter((part) => part.trim() !== "")
+          .join(", ")
+      : "";
+
+    setFormData({
+      ...emptyForm,
+      adresse_prestation: adresseComplete,
+      nom_operation: chantier?.chantier_name || "",
+    });
+  }, [open, isEdit, contrat, chantier]);
 
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -62,7 +92,6 @@ const ContratSansDocumentForm = ({ open, onClose, sousTraitant, chantier, onSave
   const handleSubmit = async (e) => {
     e.preventDefault();
 
-    // Vérification des données requises
     if (!sousTraitant?.id) {
       alert("Erreur: Sous-traitant non sélectionné");
       return;
@@ -73,7 +102,6 @@ const ContratSansDocumentForm = ({ open, onClose, sousTraitant, chantier, onSave
       return;
     }
 
-    // Validation des champs obligatoires
     if (!formData.description_prestation || !formData.description_prestation.trim()) {
       alert("Erreur: La description de la prestation est requise");
       return;
@@ -99,32 +127,37 @@ const ContratSansDocumentForm = ({ open, onClose, sousTraitant, chantier, onSave
       return;
     }
 
-    if (!formData.montant_operation) {
+    if (!formData.montant_operation && formData.montant_operation !== 0) {
       alert("Erreur: Le montant de l'opération est requis");
       return;
     }
 
     try {
       const contratData = {
-        ...formData,
-        sous_traitant: sousTraitant.id,
-        chantier: chantier.id,
-        sans_contrat: true, // Marquer comme association sans contrat documenté
         date_debut: formData.date_debut.toISOString().split("T")[0],
         montant_operation: parseFloat(formData.montant_operation).toFixed(2),
         description_prestation: formData.description_prestation.trim(),
         adresse_prestation: formData.adresse_prestation.trim(),
         nom_operation: formData.nom_operation.trim(),
         duree: formData.duree.trim(),
-        nom_maitre_ouvrage: null, // Non requis pour les associations sans contrat
-        nom_maitre_oeuvre: null, // Non requis pour les associations sans contrat
-        type_contrat: "SANS_CONTRAT", // Catégorie spéciale pour les associations sans contrat documenté
       };
 
-      console.log("Données envoyées (sans contrat):", contratData);
+      if (!isEdit) {
+        contratData.sous_traitant = sousTraitant.id;
+        contratData.chantier = chantier.id;
+        contratData.sans_contrat = true;
+        contratData.nom_maitre_ouvrage = null;
+        contratData.nom_maitre_oeuvre = null;
+        contratData.type_contrat = "SANS_CONTRAT";
+      }
 
-      const response = await fetch("/api/contrats-sous-traitance/", {
-        method: "POST",
+      const url = isEdit
+        ? `/api/contrats-sous-traitance/${contrat.id}/`
+        : "/api/contrats-sous-traitance/";
+      const method = isEdit ? "PATCH" : "POST";
+
+      const response = await fetch(url, {
+        method,
         headers: {
           "Content-Type": "application/json",
           Accept: "application/json",
@@ -140,12 +173,25 @@ const ContratSansDocumentForm = ({ open, onClose, sousTraitant, chantier, onSave
 
       const responseData = await response.json();
 
-      onSave(responseData);
+      const previousMontant = isEdit
+        ? parseFloat(contrat.montant_operation) || 0
+        : null;
+      const newMontant = parseFloat(responseData.montant_operation) || 0;
+      const montantChanged =
+        isEdit && Math.abs(previousMontant - newMontant) > 0.001;
+
+      onSave(responseData, {
+        isEdit,
+        montantChanged,
+        hasAvenants: Boolean(contrat?.avenants?.length),
+      });
       onClose();
     } catch (error) {
       console.error("Erreur complète:", error);
       alert(
-        `Une erreur est survenue lors de la création de l'association: ${error.message}`
+        `Une erreur est survenue lors de la ${
+          isEdit ? "modification" : "création"
+        } de l'association: ${error.message}`
       );
     }
   };
@@ -153,7 +199,11 @@ const ContratSansDocumentForm = ({ open, onClose, sousTraitant, chantier, onSave
   return (
     <Dialog open={open} onClose={onClose} maxWidth="md" fullWidth>
       <form onSubmit={handleSubmit}>
-        <DialogTitle>Associer un sous-traitant (sans contrat documenté)</DialogTitle>
+        <DialogTitle>
+          {isEdit
+            ? "Modifier l'association (sans contrat documenté)"
+            : "Associer un sous-traitant (sans contrat documenté)"}
+        </DialogTitle>
         <DialogContent>
           <Box sx={{ display: "flex", flexDirection: "column", gap: 2, mt: 2 }}>
             <TextField
@@ -230,7 +280,7 @@ const ContratSansDocumentForm = ({ open, onClose, sousTraitant, chantier, onSave
         <DialogActions>
           <Button onClick={onClose}>Annuler</Button>
           <Button type="submit" variant="contained" color="primary">
-            Associer
+            {isEdit ? "Enregistrer" : "Associer"}
           </Button>
         </DialogActions>
       </form>
@@ -239,4 +289,3 @@ const ContratSansDocumentForm = ({ open, onClose, sousTraitant, chantier, onSave
 };
 
 export default ContratSansDocumentForm;
-

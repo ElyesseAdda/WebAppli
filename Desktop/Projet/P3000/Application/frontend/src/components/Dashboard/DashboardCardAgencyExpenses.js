@@ -4,6 +4,7 @@ import {
   Box,
   Button,
   Checkbox,
+  CircularProgress,
   Divider,
   FormControlLabel,
   FormGroup,
@@ -135,52 +136,63 @@ const DashboardCardAgencyExpenses = ({
         <Typography variant="caption" sx={{ fontWeight: 700, color: "#64748b", display: "block", mb: 1 }}>
           Agences
         </Typography>
-        {!breakdown.length ? (
+        {loading ? (
+          <Box sx={{ display: "flex", alignItems: "center", gap: 1, py: 1.5 }}>
+            <CircularProgress size={16} sx={{ color: "#d97706" }} />
+            <Typography variant="body2" sx={{ fontSize: "0.8rem", color: "#94a3b8" }}>
+              Chargement…
+            </Typography>
+          </Box>
+        ) : !breakdown.length ? (
           <Typography variant="body2" sx={{ fontSize: "0.8rem", color: "#94a3b8" }}>
             Aucune ligne sur cette période.
           </Typography>
         ) : null}
-        <FormGroup sx={{ gap: 0.25 }}>
-          {breakdown.map((row) => {
-            const checked = effectiveIncludedIds.includes(row.agence_id);
-            return (
-              <FormControlLabel
-                key={row.agence_id === null ? "nr" : row.agence_id}
-                control={
-                  <Checkbox
-                    size="small"
-                    checked={checked}
-                    disabled={loading}
-                    onChange={() => toggleId(row.agence_id)}
+        {!loading && (
+          <>
+            <FormGroup sx={{ gap: 0.25 }}>
+              {breakdown.map((row) => {
+                const checked = effectiveIncludedIds.includes(row.agence_id);
+                return (
+                  <FormControlLabel
+                    key={row.agence_id === null ? "nr" : row.agence_id}
+                    control={
+                      <Checkbox
+                        size="small"
+                        checked={checked}
+                        disabled={loading}
+                        onChange={() => toggleId(row.agence_id)}
+                      />
+                    }
+                    label={
+                      <Box sx={{ display: "flex", justifyContent: "space-between", gap: 1, width: "100%", pr: 0.5 }}>
+                        <Typography variant="body2" sx={{ fontSize: "0.8rem" }}>
+                          {row.nom}
+                        </Typography>
+                        <Typography variant="body2" sx={{ fontSize: "0.8rem", fontWeight: 700, color: "#92400e" }}>
+                          {formatDashboardCurrency(row.total_ht)}
+                        </Typography>
+                      </Box>
+                    }
+                    sx={{ m: 0, alignItems: "flex-start" }}
                   />
-                }
-                label={
-                  <Box sx={{ display: "flex", justifyContent: "space-between", gap: 1, width: "100%", pr: 0.5 }}>
-                    <Typography variant="body2" sx={{ fontSize: "0.8rem" }}>
-                      {row.nom}
-                    </Typography>
-                    <Typography variant="body2" sx={{ fontSize: "0.8rem", fontWeight: 700, color: "#92400e" }}>
-                      {formatDashboardCurrency(row.total_ht)}
-                    </Typography>
-                  </Box>
-                }
-                sx={{ m: 0, alignItems: "flex-start" }}
-              />
-            );
-          })}
-        </FormGroup>
-        <Divider sx={{ my: 1 }} />
-        <Button
-          size="small"
-          variant="text"
-          onClick={() => {
-            setDepensesAgenceIncludedAgenceIds(null);
-            void persistDashboardDepensesAgence(true, []);
-          }}
-          sx={{ fontSize: "0.7rem", textTransform: "none", color: "#64748b" }}
-        >
-          Réinitialiser
-        </Button>
+                );
+              })}
+            </FormGroup>
+            <Divider sx={{ my: 1 }} />
+            <Button
+              size="small"
+              variant="text"
+              onClick={() => {
+                setDepensesAgenceIncludedAgenceIds(null);
+                void persistDashboardDepensesAgence(true, []);
+              }}
+              sx={{ fontSize: "0.7rem", textTransform: "none", color: "#64748b" }}
+            >
+              Réinitialiser
+            </Button>
+          </>
+        )}
       </Popover>
     </>
   );
@@ -214,7 +226,7 @@ const DashboardCardAgencyExpenses = ({
       subtitlePercentSplit
       percentValue={hidePercent ? null : montantSelection}
       percentBase={hidePercent ? null : totalCA}
-      toolbarPrefix={loading ? null : toolbarPrefix}
+      toolbarPrefix={toolbarPrefix}
       footerItems={[]}
     />
   );

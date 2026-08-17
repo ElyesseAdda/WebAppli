@@ -1,133 +1,122 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import axios from "axios";
-
-function calcDatePrevue(dateEnvoi, delai) {
-  if (!dateEnvoi) return null;
-  const d = new Date(dateEnvoi);
-  if (isNaN(d.getTime())) return null;
-  const n = parseInt(delai, 10);
-  if (!n || n <= 0) return null;
-  d.setDate(d.getDate() + n);
-  return d;
-}
 
 function fmtDate(d) {
   if (!d) return null;
   try {
-    return new Date(d).toLocaleDateString("fr-FR", { day: "2-digit", month: "2-digit", year: "2-digit" });
+    return new Date(d).toLocaleDateString("fr-FR", {
+      day: "2-digit",
+      month: "2-digit",
+      year: "2-digit",
+    });
   } catch {
     return String(d);
   }
 }
 
+function mapApiPayment(payment, dateKey) {
+  const rawDate = payment[dateKey];
+  return {
+    id: payment.id,
+    type: payment.type === "situation" ? "Situation" : "Facture",
+    label: payment.numero || `#${payment.id}`,
+    chantier: payment.chantier_name || "",
+    montant: parseFloat(payment.montant_ht) || 0,
+    date: fmtDate(rawDate),
+    dateSort: rawDate ? new Date(rawDate).getTime() : 0,
+  };
+}
+
 /**
- * Calcule les 3 listes de paiements à partir des situations et factures de l'année.
- * Retourne { encaissementsRecus, paiementsAVenir, paiementsEnRetard, loading }
+ * Listes de paiements pour les modales du dashboard.
+ * Endpoints légers dédiés (pas de situations/by-year).
  */
 export function usePaymentsDetail(selectedYear) {
-  const [situations, setSituations] = useState([]);
-  const [factures, setFactures] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [encaissementsRecus, setEncaissementsRecus] = useState([]);
+  const [paiementsAVenir, setPaiementsAVenir] = useState([]);
+  const [paiementsEnRetard, setPaiementsEnRetard] = useState([]);
+  const [loadingEncaissements, setLoadingEncaissements] = useState(true);
+  const [loadingAVenir, setLoadingAVenir] = useState(true);
+  const [loadingRetard, setLoadingRetard] = useState(true);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    setLoadingRetard(true);
+    axios
+      .get("/api/late-payments/")
+      .then((res) => {
+        if (cancelled) return;
+        const rows = (res.data || []).map((p) =>
+          mapApiPayment(p, "date_paiement_attendue")
+        );
+        rows.sort((a, b) => (a.dateSort || 0) - (b.dateSort || 0));
+        setPaiementsEnRetard(rows);
+      })
+      .catch(() => {
+        if (!cancelled) setPaiementsEnRetard([]);
+      })
+      .finally(() => {
+        if (!cancelled) setLoadingRetard(false);
+      });
+
+    setLoadingAVenir(true);
+    axios
+      .get("/api/pending-payments/")
+      .then((res) => {
+        if (cancelled) return;
+        const rows = (res.data || []).map((p) =>
+          mapApiPayment(p, "date_paiement_attendue")
+        );
+        rows.sort((a, b) => (a.dateSort || 0) - (b.dateSort || 0));
+        setPaiementsAVenir(rows);
+      })
+      .catch(() => {
+        if (!cancelled) setPaiementsAVenir([]);
+      })
+      .finally(() => {
+        if (!cancelled) setLoadingAVenir(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   useEffect(() => {
     if (!selectedYear) return;
-    setLoading(true);
-    const year = parseInt(selectedYear, 10);
-    Promise.all([
-      axios.get(`/api/situations/by-year/?annee=${year}`).catch(() => ({ data: [] })),
-      axios.get(`/api/facture/?date_envoi__year=${year}`).catch(() => ({ data: [] })),
-      axios.get(`/api/facture/?date_creation__year=${year}`).catch(() => ({ data: [] })),
-    ]).then(([sitRes, factEnvRes, factCreRes]) => {
-      setSituations(sitRes.data || []);
-      const seen = new Set();
-      const merged = [];
-      (factEnvRes.data || []).forEach((f) => { if (!seen.has(f.id)) { seen.add(f.id); merged.push(f); } });
-      (factCreRes.data || []).forEach((f) => { if (!seen.has(f.id) && !f.date_envoi) { seen.add(f.id); merged.push(f); } });
-      setFactures(merged);
-    }).finally(() => setLoading(false));
+    let cancelled = false;
+
+    setLoadingEncaissements(true);
+    axios
+      .get("/api/received-payments/", { params: { annee: selectedYear } })
+      .then((res) => {
+        if (cancelled) return;
+        const rows = (res.data || []).map((p) =>
+          mapApiPayment(p, "date_paiement")
+        );
+        rows.sort((a, b) => (a.dateSort || 0) - (b.dateSort || 0));
+        setEncaissementsRecus(rows);
+      })
+      .catch(() => {
+        if (!cancelled) setEncaissementsRecus([]);
+      })
+      .finally(() => {
+        if (!cancelled) setLoadingEncaissements(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
   }, [selectedYear]);
 
-  const { encaissementsRecus, paiementsAVenir, paiementsEnRetard } = useMemo(() => {
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    const in15 = new Date(today);
-    in15.setDate(today.getDate() + 15);
-
-    const encaissementsRecus = [];
-    const paiementsAVenir = [];
-    const paiementsEnRetard = [];
-
-    // --- Situations ---
-    situations.forEach((s) => {
-      const montant = parseFloat(s.montant_apres_retenues) || parseFloat(s.montant_reel_ht) || 0;
-      const label = s.numero_situation || s.numero || `#${s.id}`;
-      const chantier = s.chantier_name || s.chantier || "";
-
-      if (s.date_paiement_reel) {
-        const d = new Date(s.date_paiement_reel);
-        encaissementsRecus.push({
-          id: s.id, label, chantier, montant,
-          date: fmtDate(s.date_paiement_reel),
-          dateSort: d.getTime(),
-          type: "Situation",
-        });
-      } else {
-        const prevue = calcDatePrevue(s.date_envoi, s.delai_paiement);
-        if (prevue) {
-          const row = {
-            id: s.id, label, chantier, montant,
-            date: fmtDate(prevue),
-            dateSort: prevue.getTime(),
-            type: "Situation",
-          };
-          if (prevue >= today && prevue <= in15) {
-            paiementsAVenir.push(row);
-          } else if (prevue < today) {
-            paiementsEnRetard.push(row);
-          }
-        }
-      }
-    });
-
-    // --- Factures ---
-    factures.forEach((f) => {
-      const montant = parseFloat(f.montant_ht) || parseFloat(f.price_ht) || 0;
-      const label = f.numero || `#${f.id}`;
-      const chantier = f.chantier_name || f.chantier || "";
-
-      if (f.date_paiement) {
-        const d = new Date(f.date_paiement);
-        encaissementsRecus.push({
-          id: f.id, label, chantier, montant,
-          date: fmtDate(f.date_paiement),
-          dateSort: d.getTime(),
-          type: "Facture",
-        });
-      } else {
-        const prevue = calcDatePrevue(f.date_envoi || f.date_creation, f.delai_paiement);
-        if (prevue) {
-          const row = {
-            id: f.id, label, chantier, montant,
-            date: fmtDate(prevue),
-            dateSort: prevue.getTime(),
-            type: "Facture",
-          };
-          if (prevue >= today && prevue <= in15) {
-            paiementsAVenir.push(row);
-          } else if (prevue < today) {
-            paiementsEnRetard.push(row);
-          }
-        }
-      }
-    });
-
-    const byDateAsc = (a, b) => (a.dateSort || 0) - (b.dateSort || 0);
-    encaissementsRecus.sort(byDateAsc);
-    paiementsAVenir.sort(byDateAsc);
-    paiementsEnRetard.sort(byDateAsc);
-
-    return { encaissementsRecus, paiementsAVenir, paiementsEnRetard };
-  }, [situations, factures]);
-
-  return { encaissementsRecus, paiementsAVenir, paiementsEnRetard, loading };
+  return {
+    encaissementsRecus,
+    paiementsAVenir,
+    paiementsEnRetard,
+    loading: loadingEncaissements || loadingAVenir || loadingRetard,
+    loadingEncaissements,
+    loadingAVenir,
+    loadingRetard,
+  };
 }

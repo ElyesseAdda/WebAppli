@@ -979,6 +979,9 @@ const SituationCreationModal = ({
   const [numeroSituation, setNumeroSituation] = useState("");
   const [dateCreation, setDateCreation] = useState("");
   const [tvaRate, setTvaRate] = useState(20); // Taux de TVA par défaut à 20%
+  const [isNumeroSituationTouched, setIsNumeroSituationTouched] = useState(false);
+  const [isRetenueCIETouched, setIsRetenueCIETouched] = useState(false);
+  const [isTypeRetenueCIETouched, setIsTypeRetenueCIETouched] = useState(false);
 
   // ✅ Détecter si le devis vient de DevisAvance.js via parties_metadata
   const isFromDevisAvance = devis?.parties_metadata && 
@@ -1728,6 +1731,9 @@ const SituationCreationModal = ({
             setTauxRetenueGarantie(currentSituation.taux_retenue_garantie !== null && currentSituation.taux_retenue_garantie !== undefined ? currentSituation.taux_retenue_garantie : 5.0);
             setRetenueCIE(currentSituation.retenue_cie || 0);
             setTypeRetenueCIE(currentSituation.type_retenue_cie || 'deduction');
+            setIsNumeroSituationTouched(false);
+            setIsRetenueCIETouched(false);
+            setIsTypeRetenueCIETouched(false);
             
             // Charger la date de création
             if (currentSituation.date_creation) {
@@ -1949,10 +1955,16 @@ const SituationCreationModal = ({
               
               // Réinitialiser le numéro pour qu'il soit régénéré automatiquement
               setNumeroSituation("");
+              setIsNumeroSituationTouched(false);
+              setIsRetenueCIETouched(false);
+              setIsTypeRetenueCIETouched(false);
             } else {
               setLastSituation(null);
               setExistingSituation(null);
               setNumeroSituation("");
+              setIsNumeroSituationTouched(false);
+              setIsRetenueCIETouched(false);
+              setIsTypeRetenueCIETouched(false);
               resetSituationData();
             }
           }
@@ -2486,6 +2498,16 @@ const SituationCreationModal = ({
       
       let response;
       if (existingSituation) {
+        if (!isNumeroSituationTouched) {
+          delete situationData.numero_situation;
+        }
+        if (!isRetenueCIETouched) {
+          delete situationData.retenue_cie;
+        }
+        if (!isTypeRetenueCIETouched) {
+          delete situationData.type_retenue_cie;
+        }
+
         // Mise à jour d'une situation existante
         response = await axios.patch(
           `/api/situations/${existingSituation.id}/update/`,
@@ -2857,7 +2879,10 @@ const SituationCreationModal = ({
           <TextField
             label="Numéro de situation"
             value={numeroSituation}
-            onChange={(e) => setNumeroSituation(e.target.value)}
+            onChange={(e) => {
+              setNumeroSituation(e.target.value);
+              setIsNumeroSituationTouched(true);
+            }}
             helperText="Vous pouvez personnaliser le numéro de la situation"
             sx={{ flex: 1, maxWidth: 400 }}
             required
@@ -3162,7 +3187,10 @@ const SituationCreationModal = ({
                       <InputLabel>Type</InputLabel>
                       <Select
                         value={typeRetenueCIE}
-                        onChange={(e) => setTypeRetenueCIE(e.target.value)}
+                        onChange={(e) => {
+                          setTypeRetenueCIE(e.target.value);
+                          setIsTypeRetenueCIETouched(true);
+                        }}
                         label="Type"
                       >
                         <MenuItem value="deduction">Déduction</MenuItem>
@@ -3172,7 +3200,10 @@ const SituationCreationModal = ({
                     <TextField
                       type="number"
                       value={retenueCIE}
-                      onChange={(e) => setRetenueCIE(e.target.value)}
+                      onChange={(e) => {
+                        setRetenueCIE(e.target.value);
+                        setIsRetenueCIETouched(true);
+                      }}
                       inputProps={{ step: "0.01", min: "0" }}
                       size="small"
                       sx={{ width: 150 }}

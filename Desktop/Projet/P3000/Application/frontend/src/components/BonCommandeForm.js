@@ -5,9 +5,16 @@ import { bonCommandeService } from "../services/bonCommandeService";
 import ProduitSelectionTable from "./ProduitSelectionTable";
 import SelectionFournisseurModal from "./SelectionFournisseurModal";
 
-function BonCommandeForm({ onBonCommandeCreated, modal, chantierId }) {
+function BonCommandeForm({
+  onBonCommandeCreated,
+  modal,
+  chantierId,
+  hideButton = false,
+  defaultOpen = false,
+  onClose,
+}) {
   const [step, setStep] = useState(1);
-  const [openModal, setOpenModal] = useState(false);
+  const [openModal, setOpenModal] = useState(!!defaultOpen);
   const [selectedData, setSelectedData] = useState(null);
   const [selectedProducts, setSelectedProducts] = useState([]);
   const [numeroBC, setNumeroBC] = useState("");
@@ -24,6 +31,15 @@ function BonCommandeForm({ onBonCommandeCreated, modal, chantierId }) {
   const handleCloseModal = () => {
     setOpenModal(false);
     if (step !== 1) setStep(1);
+  };
+
+  const handleCancelCreation = () => {
+    setOpenModal(false);
+    setStep(1);
+    setIsModalOpen(false);
+    if (onClose) {
+      onClose();
+    }
   };
 
   const handleInitialSelection = (data) => {
@@ -46,8 +62,8 @@ function BonCommandeForm({ onBonCommandeCreated, modal, chantierId }) {
     });
     setStep(2);
     setIsModalOpen(true);
-    handleCloseModal();
-    if (onBonCommandeCreated) {
+    setOpenModal(false);
+    if (onBonCommandeCreated && !hideButton) {
       onBonCommandeCreated();
     }
   };
@@ -165,6 +181,45 @@ function BonCommandeForm({ onBonCommandeCreated, modal, chantierId }) {
     );
   }
 
+  const handleCloseProductTable = () => {
+    setStep(1);
+    setIsModalOpen(false);
+    if (hideButton) {
+      handleCancelCreation();
+    }
+  };
+
+  const productSelectionTable =
+    step === 2 ? (
+      <ProduitSelectionTable
+        open={true}
+        onClose={handleCloseProductTable}
+        fournisseur={selectedData?.fournisseurName}
+        onValidate={handleValidate}
+        numeroBC={selectedData.numero_bon_commande || numeroBC}
+        selectedData={selectedData}
+      />
+    ) : null;
+
+  const fournisseurModal = (
+    <SelectionFournisseurModal
+      open={openModal}
+      onClose={hideButton ? handleCancelCreation : handleCloseModal}
+      onSubmit={handleInitialSelection}
+      numeroBC={numeroBC}
+      initialChantierId={chantierId}
+    />
+  );
+
+  if (hideButton) {
+    return (
+      <>
+        {productSelectionTable}
+        {fournisseurModal}
+      </>
+    );
+  }
+
   // --- Affichage standard (autonome) ---
   const renderStep = () => {
     switch (step) {
@@ -186,19 +241,7 @@ function BonCommandeForm({ onBonCommandeCreated, modal, chantierId }) {
           </Button>
         );
       case 2:
-        return (
-          <ProduitSelectionTable
-            open={true}
-            onClose={() => {
-              setStep(1);
-              setIsModalOpen(false);
-            }}
-            fournisseur={selectedData?.fournisseurName}
-            onValidate={handleValidate}
-            numeroBC={selectedData.numero_bon_commande || numeroBC}
-            selectedData={selectedData}
-          />
-        );
+        return productSelectionTable;
       default:
         return null;
     }
@@ -216,13 +259,7 @@ function BonCommandeForm({ onBonCommandeCreated, modal, chantierId }) {
       }}
     >
       {renderStep()}
-      <SelectionFournisseurModal
-        open={openModal}
-        onClose={handleCloseModal}
-        onSubmit={handleInitialSelection}
-        numeroBC={numeroBC}
-        initialChantierId={chantierId}
-      />
+      {fournisseurModal}
     </Box>
   );
 }

@@ -147,7 +147,13 @@ const PaymentsDetailModal = ({ open, onClose, title, items = [], loading = false
           </Box>
         ) : !items.length ? (
           <Typography sx={{ color: "#9ca3af", fontSize: "0.85rem", py: 3, textAlign: "center" }}>
-            Aucun élément.
+            {title?.toLowerCase().includes("retard")
+              ? "Aucun paiement en retard."
+              : title?.toLowerCase().includes("venir")
+              ? "Aucun paiement à venir sous 15 jours."
+              : title?.toLowerCase().includes("encaissement")
+              ? "Aucun encaissement reçu."
+              : "Aucun élément."}
           </Typography>
         ) : (
           <TableContainer sx={{ maxHeight: 420, overflowY: "auto" }}>

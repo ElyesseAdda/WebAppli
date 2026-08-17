@@ -176,6 +176,7 @@ const TableauSuivi = () => {
     const number = parseFloat(value) || 0;
     const compare = parseFloat(compareValue) || 0;
     const isDifferent = Math.abs(number - compare) > 0.01;
+    const isNegative = number < 0;
 
     let color = "text.primary"; // noir par défaut
     if (number === 0) {
@@ -198,6 +199,7 @@ const TableauSuivi = () => {
           whiteSpace: "nowrap",
         }}
       >
+        {isNegative ? "-" : ""}
         {formatNumberWithSpaces(number)} €
       </Typography>
     );

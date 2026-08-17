@@ -1371,6 +1371,80 @@ def get_late_payments(request):
 
 
 @api_view(['GET'])
+def get_received_payments(request):
+    """
+    Récupère les situations et factures déjà encaissées (payées).
+    Paramètre : annee (défaut = année courante).
+    Endpoint léger — sans lignes de situation.
+    """
+    try:
+        annee_param = request.query_params.get('annee')
+        annee = int(annee_param) if annee_param else date.today().year
+        result = []
+
+        situations_query = (
+            Situation.objects.filter(date_paiement_reel__isnull=False)
+            .select_related('chantier')
+            .order_by('date_paiement_reel')
+        )
+        if annee:
+            situations_query = situations_query.filter(date_paiement_reel__year=annee)
+
+        for situation in situations_query:
+            montant = float(situation.montant_reel_ht or situation.montant_apres_retenues or 0)
+            result.append({
+                'id': situation.id,
+                'type': 'situation',
+                'numero': situation.numero_situation,
+                'chantier_id': situation.chantier_id,
+                'chantier_name': situation.chantier.chantier_name if situation.chantier else '',
+                'montant_ht': montant,
+                'date_paiement': situation.date_paiement_reel.isoformat() if situation.date_paiement_reel else None,
+            })
+
+        factures_query = (
+            Facture.objects.filter(
+                type_facture='classique',
+            )
+            .filter(Q(state_facture='Payée') | Q(date_paiement__isnull=False))
+            .select_related('chantier')
+            .order_by('date_paiement', 'date_creation')
+        )
+        if annee:
+            factures_query = factures_query.filter(
+                Q(date_paiement__year=annee)
+                | Q(date_paiement__isnull=True, date_envoi__year=annee)
+                | Q(date_paiement__isnull=True, date_envoi__isnull=True, date_creation__year=annee)
+            )
+
+        for facture in factures_query:
+            montant = float(facture.price_ht or 0)
+            pay_date = facture.date_paiement
+            result.append({
+                'id': facture.id,
+                'type': 'facture',
+                'numero': facture.numero,
+                'chantier_id': facture.chantier_id,
+                'chantier_name': facture.chantier.chantier_name if facture.chantier else '',
+                'montant_ht': montant,
+                'date_paiement': pay_date.isoformat() if pay_date else (
+                    facture.date_envoi.isoformat() if facture.date_envoi else None
+                ),
+            })
+
+        result.sort(key=lambda x: (
+            x['date_paiement'] if x['date_paiement'] else '9999-12-31',
+            x['chantier_name'] or '',
+            x['numero'] or '',
+        ))
+        return Response(result)
+    except ValueError:
+        return Response({'error': 'Format invalide pour l\'année'}, status=400)
+    except Exception as e:
+        return Response({'error': str(e)}, status=400)
+
+
+@api_view(['GET'])
 def get_situations_monthly_evolution(request):
     """
     Récupère l'évolution mensuelle des situations émises.

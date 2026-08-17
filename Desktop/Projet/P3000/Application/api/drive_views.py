@@ -8,6 +8,18 @@ import os
 from .models import Societe, Chantier
 from .utils import custom_slugify
 
+# Fichiers système à refuser à l'upload (macOS / Windows)
+SYSTEM_JUNK_FILENAMES = {'.ds_store', 'thumbs.db', 'desktop.ini'}
+
+
+def _is_system_junk_filename(filename: str) -> bool:
+    if not filename:
+        return False
+    lower = filename.lower()
+    if lower.startswith('._'):
+        return True
+    return lower in SYSTEM_JUNK_FILENAMES
+
 
 class DriveCompleteViewSet(viewsets.ViewSet):
     """
@@ -148,6 +160,19 @@ class DriveCompleteViewSet(viewsets.ViewSet):
             
             if not file_name:
                 return Response({'error': 'Nom du fichier requis'}, status=status.HTTP_400_BAD_REQUEST)
+
+            # Ignorer les fichiers système (.DS_Store, Thumbs.db, etc.)
+            if _is_system_junk_filename(file_name):
+                return Response(
+                    {'error': 'Fichier système ignoré', 'skipped': True},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            path_parts = (file_path or '').replace('\\', '/').split('/')
+            if any(part.lower() == '__macosx' for part in path_parts if part):
+                return Response(
+                    {'error': 'Fichier système ignoré', 'skipped': True},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
 
             # Construire le chemin complet
             if file_path:

@@ -8,6 +8,7 @@ from .dashboard.views import (
     dashboard_settings,
     get_pending_payments,
     get_late_payments,
+    get_received_payments,
     get_situations_monthly_evolution,
 )
 from .views import (
@@ -278,6 +279,7 @@ urlpatterns = [
     path('situations/by-year/', get_all_situations_by_year, name='get-all-situations-by-year'),
     path('pending-payments/', get_pending_payments, name='get-pending-payments'),
     path('late-payments/', get_late_payments, name='get-late-payments'),
+    path('received-payments/', get_received_payments, name='get-received-payments'),
     path('situations-monthly-evolution/', get_situations_monthly_evolution, name='get-situations-monthly-evolution'),
     path('', include(router.urls)),  # Routes générées par le routeur (y compris add_stock et remove_stock)
     path('dashboard/', DashboardViewSet.as_view({'get': 'list'})),

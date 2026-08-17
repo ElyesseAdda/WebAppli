@@ -2,6 +2,7 @@ import {
   Box,
   Button,
   ButtonGroup,
+  Link,
   Menu,
   MenuItem,
   Modal,
@@ -141,6 +142,9 @@ const ListeDevis = () => {
   const [deleteFacturesModalOpen, setDeleteFacturesModalOpen] = useState(false);
   const [facturesToDelete, setFacturesToDelete] = useState([]);
   const [newStatus, setNewStatus] = useState(null);
+  const [existingFacturesWarningOpen, setExistingFacturesWarningOpen] =
+    useState(false);
+  const [existingDocuments, setExistingDocuments] = useState([]);
   const [tsModalOpen, setTsModalOpen] = useState(false);
   const [selectedDevisForTS, setSelectedDevisForTS] = useState(null);
   const [selectedChantier, setSelectedChantier] = useState(null);
@@ -636,7 +640,9 @@ const ListeDevis = () => {
         const response = await axios.get(
           `/api/list-devis/${devisToUpdate.id}/factures/`
         );
-        const factures = response.data;
+        const factures = Array.isArray(response.data)
+          ? response.data
+          : response.data?.factures || [];
 
         if (factures.length > 0) {
           // Stocker l'ID du devis dans facturesToDelete
@@ -774,8 +780,66 @@ const ListeDevis = () => {
     setSelectedDevis(null);
   };
 
+  const buildExistingDocuments = (data) => {
+    const documents = [];
+    const factures = Array.isArray(data)
+      ? data
+      : Array.isArray(data?.factures)
+        ? data.factures
+        : [];
+    const factureTs = Array.isArray(data) ? null : data?.facture_ts;
+
+    factures.forEach((facture) => {
+      const isCie = facture.type_facture === "cie";
+      documents.push({
+        key: `facture-${facture.id}`,
+        kind: isCie ? "cie" : "facture",
+        label: isCie ? "CIE" : "Facture",
+        numero: facture.numero,
+        previewUrl: `/api/preview-facture/${facture.id}/`,
+      });
+    });
+
+    if (factureTs) {
+      const tsLabel = String(factureTs.numero_ts ?? "").padStart(3, "0");
+      const avenantLabel = factureTs.avenant_numero
+        ? `Avenant n°${factureTs.avenant_numero}`
+        : "Avenant";
+      const designation = factureTs.designation
+        ? ` - ${factureTs.designation}`
+        : "";
+      documents.push({
+        key: `avenant-${factureTs.id}`,
+        kind: "avenant",
+        label: "Avenant",
+        numero: `${avenantLabel} (TS n°${tsLabel})${designation}`,
+        previewUrl: factureTs.avenant
+          ? `/api/preview-avenant/${factureTs.avenant}/`
+          : `/api/preview-saved-devis-v2/${factureTs.devis}/`,
+      });
+    }
+
+    return documents;
+  };
+
+  const checkExistingTransformations = async (devisId) => {
+    const response = await axios.get(`/api/list-devis/${devisId}/factures/`);
+    return buildExistingDocuments(response.data);
+  };
+
+  const showExistingDocumentsWarning = (documents) => {
+    setExistingDocuments(documents);
+    setExistingFacturesWarningOpen(true);
+  };
+
   const handleTransformDevis = async (devis, type) => {
     try {
+      const documents = await checkExistingTransformations(devis.id);
+      if (documents.length > 0) {
+        showExistingDocumentsWarning(documents);
+        return;
+      }
+
       if (type === "TS") {
         const devisResponse = await axios.get(`/api/devisa/${devis.id}/`);
         const devisComplet = devisResponse.data;
@@ -783,12 +847,6 @@ const ListeDevis = () => {
         // Vérifier que ce n'est PAS un devis de chantier
         if (devisComplet.devis_chantier === true) {
           alert("Les devis de chantier ne peuvent pas être transformés en TS");
-          return;
-        }
-
-        // Vérifier si une facture existe déjà
-        if (devisComplet.factures && devisComplet.factures.length > 0) {
-          alert(`Une facture existe déjà pour le devis ${devisComplet.numero}`);
           return;
         }
 
@@ -801,12 +859,6 @@ const ListeDevis = () => {
       } else if (type === "CIE") {
         const devisResponse = await axios.get(`/api/devisa/${devis.id}/`);
         const devisComplet = devisResponse.data;
-
-        // Vérifier si une facture existe déjà
-        if (devisComplet.factures && devisComplet.factures.length > 0) {
-          alert(`Une facture existe déjà pour le devis ${devisComplet.numero}`);
-          return;
-        }
 
         const response = await axios.get(
           `/api/chantier/${devisComplet.chantier}/`
@@ -1656,6 +1708,76 @@ const ListeDevis = () => {
               onClick={handleConfirmDeleteFactures}
             >
               Confirmer
+            </Button>
+          </Box>
+        </Box>
+      </Modal>
+
+      <Modal
+        open={existingFacturesWarningOpen}
+        onClose={() => {
+          setExistingFacturesWarningOpen(false);
+          setExistingDocuments([]);
+        }}
+      >
+        <Box
+          sx={{
+            position: "absolute",
+            top: "50%",
+            left: "50%",
+            transform: "translate(-50%, -50%)",
+            width: 420,
+            bgcolor: "background.paper",
+            boxShadow: 24,
+            p: 4,
+            borderRadius: 2,
+          }}
+        >
+          <Typography variant="h6" component="h2" gutterBottom>
+            Document déjà existant
+          </Typography>
+          <Typography sx={{ mt: 1, mb: 2 }}>
+            Ce devis a déjà été transformé. Vous ne pouvez pas créer un nouveau
+            document à partir de celui-ci.
+          </Typography>
+          <Typography variant="subtitle2" sx={{ mb: 1, fontWeight: 600 }}>
+            {existingDocuments.length > 1
+              ? "Documents concernés :"
+              : "Document concerné :"}
+          </Typography>
+          <Box sx={{ mb: 2 }}>
+            {existingDocuments.map((doc) => (
+              <Typography key={doc.key} sx={{ mb: 0.5 }}>
+                • {doc.label} :{" "}
+                <Link
+                  component="button"
+                  type="button"
+                  underline="hover"
+                  onClick={() => window.open(doc.previewUrl, "_blank")}
+                  sx={{
+                    cursor: "pointer",
+                    fontWeight: 600,
+                    fontSize: "1rem",
+                    verticalAlign: "baseline",
+                  }}
+                >
+                  {doc.numero}
+                </Link>
+              </Typography>
+            ))}
+          </Box>
+          <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
+            Cliquez sur le numéro pour ouvrir le document dans un nouvel onglet.
+          </Typography>
+          <Box sx={{ display: "flex", justifyContent: "flex-end" }}>
+            <Button
+              variant="contained"
+              onClick={() => {
+                setExistingFacturesWarningOpen(false);
+                setExistingDocuments([]);
+              }}
+            >
+              Fermer
             </Button>
           </Box>
         </Box>

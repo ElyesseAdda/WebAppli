@@ -497,6 +497,7 @@ const CreationSituation = ({ open, onClose, devis, chantier, onSuccess }) => {
   const [calculatedValues, setCalculatedValues] = useState(null);
   const [existingSituation, setExistingSituation] = useState(null);
   const [pendingAvenantLignes, setPendingAvenantLignes] = useState(null);
+  const [isRetenueCIETouched, setIsRetenueCIETouched] = useState(false);
 
   useEffect(() => {
     if (devis?.id) {
@@ -529,6 +530,12 @@ const CreationSituation = ({ open, onClose, devis, chantier, onSuccess }) => {
       }
     }
   }, [devis]);
+
+  useEffect(() => {
+    if (!open) {
+      setIsRetenueCIETouched(false);
+    }
+  }, [open]);
 
   // Charger les avenants
   useEffect(() => {
@@ -1127,8 +1134,8 @@ const CreationSituation = ({ open, onClose, devis, chantier, onSuccess }) => {
         if (num === null || num === undefined) return "0.00";
         return parseFloat(num).toFixed(2);
       };
-      // Récupérer le prochain numéro de situation
-      const situationNumero = await getNextSituationNumber();
+      // En modification, conserver le numéro existant sauf changement explicite ailleurs.
+      const situationNumero = existingSituation?.numero_situation || await getNextSituationNumber();
 
       const situationData = {
         chantier: chantier.id,
@@ -1160,6 +1167,7 @@ const CreationSituation = ({ open, onClose, devis, chantier, onSuccess }) => {
           calculerMontantHTMois() * (tauxProrata / 100)
         ),
         retenue_cie: formatNumber(retenueCIE),
+        type_retenue_cie: existingSituation?.type_retenue_cie || "deduction",
         montant_apres_retenues: formatNumber(calculerTotalNet()),
         tva: formatNumber(calculerTotalNet() * (tvaRate / 100)),
         tva_rate: formatNumber(tvaRate),
@@ -1190,6 +1198,9 @@ const CreationSituation = ({ open, onClose, devis, chantier, onSuccess }) => {
       };
 
       if (existingSituation) {
+        if (!isRetenueCIETouched) {
+          delete situationData.retenue_cie;
+        }
         // Mise à jour d'une situation existante
         await axios.put(
           `/api/situations/${existingSituation.id}/update/`,
@@ -1565,7 +1576,10 @@ const CreationSituation = ({ open, onClose, devis, chantier, onSuccess }) => {
                     <TextField
                       type="number"
                       value={retenueCIE}
-                      onChange={(e) => setRetenueCIE(e.target.value)}
+                      onChange={(e) => {
+                        setRetenueCIE(e.target.value);
+                        setIsRetenueCIETouched(true);
+                      }}
                       inputProps={{ step: "0.01" }}
                       size="small"
                     />
