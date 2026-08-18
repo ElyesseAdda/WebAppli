@@ -422,7 +422,6 @@ const LigneDetailCreateModal = ({ isOpen, onClose, description, sousPartieId, pa
                 <input
                   type="number"
                   step="0.01"
-                  min="0"
                   name="marge"
                   value={formData.marge}
                   onChange={handleChange}

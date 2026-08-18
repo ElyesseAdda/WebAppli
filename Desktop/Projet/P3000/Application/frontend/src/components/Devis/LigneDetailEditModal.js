@@ -317,7 +317,6 @@ const LigneDetailEditModal = ({ isOpen, onClose, ligneDetail, onSuccess }) => {
                   <input
                     type="number"
                     step="0.01"
-                    min="0"
                     name="marge"
                     value={formData.marge}
                     onChange={handleChange}
