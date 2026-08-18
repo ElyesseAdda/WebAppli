@@ -156,9 +156,16 @@ export const useDevisSaver = (devisId) => {
       const response = await axios.put(`/api/devisa/${devisId}/`, legacyDevis);
 
       if (response.data) {
-        // Recalculer les coûts du devis
+        // Recalculer les coûts du devis puis, si besoin, les agrégats du chantier.
         try {
           await axios.post(`/api/devis/${devisId}/recalculer-couts/`);
+
+          const isChantierDevis = Boolean(response.data.devis_chantier);
+          if (isChantierDevis && selectedChantierId) {
+            await axios.post(
+              `/api/chantier/${selectedChantierId}/recalculer-couts-estimes/`
+            );
+          }
         } catch (recalcError) {
           console.warn('Erreur lors du recalcul des coûts:', recalcError);
         }

@@ -1417,23 +1417,29 @@ const ChantierInfoTab = ({ chantierData, onUpdate, state, setState }) => {
                   }}
                 >
                   <CardContent>
-                    <Typography
-                      align="center"
+                    <Box
                       sx={{
-                        fontWeight: 700,
-                        color: "#1976d2",
-                        fontFamily: "Roboto, Arial, sans-serif",
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        gap: 1,
                       }}
                     >
-                      Total:{" "}
-                      {formatMontant(
-                        (chantierData?.cout_estime_main_oeuvre || 0) +
-                          (chantierData?.cout_estime_materiel || 0) +
-                          (chantierData?.cout_sous_traitance || 0)
-                      )}
-                    </Typography>
-                    {/* Icône discrète pour la décomposition */}
-                    <Box sx={{ display: "flex", justifyContent: "center", mt: 1 }}>
+                      <Typography
+                        align="center"
+                        sx={{
+                          fontWeight: 700,
+                          color: "#1976d2",
+                          fontFamily: "Roboto, Arial, sans-serif",
+                        }}
+                      >
+                        Total:{" "}
+                        {formatMontant(
+                          (chantierData?.cout_estime_main_oeuvre || 0) +
+                            (chantierData?.cout_estime_materiel || 0) +
+                            (chantierData?.cout_sous_traitance || 0)
+                        )}
+                      </Typography>
                       <Tooltip title={state.showDecomposition ? "Masquer décomposition" : "Voir décomposition"}>
                         <Box
                           onClick={() => setState({ ...state, showDecomposition: !state.showDecomposition })}
@@ -1444,6 +1450,9 @@ const ChantierInfoTab = ({ chantierData, onUpdate, state, setState }) => {
                             padding: "4px",
                             borderRadius: "50%",
                             transition: "all 0.2s ease",
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "center",
                             "&:hover": {
                               color: "#1976d2",
                               backgroundColor: "rgba(25, 118, 210, 0.1)",
