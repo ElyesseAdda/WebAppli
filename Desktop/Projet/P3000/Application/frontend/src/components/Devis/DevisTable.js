@@ -1927,8 +1927,7 @@ const DevisTable = ({
                             <input
                               type="number"
                               step="0.01"
-                              min="0"
-                              max="100"
+                              min="-100"
                               value={ligne.marge_devis !== null && ligne.marge_devis !== undefined ? ligne.marge_devis : ligne.marge}
                               onChange={(e) => {
                                 // Trouver les IDs parents en cherchant dans devisItems
@@ -1954,7 +1953,7 @@ const DevisTable = ({
                             <div style={{ fontSize: '12px', color: COLORS.textMuted, fontWeight: '600' }}>%</div>
                             <input
                               type="range"
-                              min="0"
+                              min="-100"
                               max="100"
                               step="0.01"
                               value={ligne.marge_devis !== null && ligne.marge_devis !== undefined ? ligne.marge_devis : ligne.marge}
