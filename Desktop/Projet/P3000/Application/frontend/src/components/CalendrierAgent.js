@@ -576,12 +576,23 @@ const CalendrierAgent = ({ agents }) => {
         locale={frLocale}
         resources={
           agents.length > 0
-            ? agents.map((agent) => ({
-                id: agent.id.toString(),
-                title: `${agent.name} ${agent.surname}`,
-              }))
+            ? [...agents]
+                .sort((a, b) => {
+                  const surnameA = (a.surname || "").toLowerCase();
+                  const surnameB = (b.surname || "").toLowerCase();
+                  const bySurname = surnameA.localeCompare(surnameB, "fr");
+                  if (bySurname !== 0) return bySurname;
+                  const nameA = (a.name || "").toLowerCase();
+                  const nameB = (b.name || "").toLowerCase();
+                  return nameA.localeCompare(nameB, "fr");
+                })
+                .map((agent) => ({
+                  id: agent.id.toString(),
+                  title: `${agent.surname || ""} ${agent.name || ""}`.trim(),
+                }))
             : []
         }
+        resourceOrder="title"
         events={events}
         editable={true}
         selectable={true}
