@@ -21,6 +21,7 @@ import { NavLink, useLocation } from "react-router-dom";
 import axios from "axios";
 import logo from "../img/logo.png";
 import SISTER_APPS from "../config/sisterApps";
+import DISTRIBUTEURS_NAV from "../config/distributeursNav";
 import "./../../static/css/slideBar.css";
 
 const SlideBar = ({ toggleSidebar, isSidebarVisible, user, onOpenBonCommande }) => {
@@ -158,13 +159,25 @@ const SlideBar = ({ toggleSidebar, isSidebarVisible, user, onOpenBonCommande }) 
         icon: MdFolderShared,
         to: "/ChantiersDrivePaths",
       },
-      // Distributeurs en bas de la sidebar
-      {
-        key: "distributeurs",
-        label: "Distributeurs",
-        icon: MdBusiness,
-        to: "/distributeurs",
-      },
+      // Distributeurs : uniquement si activé dans distributeursNav.js (MJR Services)
+      ...(DISTRIBUTEURS_NAV?.showInSidebar
+        ? [
+            DISTRIBUTEURS_NAV.external && DISTRIBUTEURS_NAV.href
+              ? {
+                  key: "distributeurs",
+                  label: DISTRIBUTEURS_NAV.label || "Distributeurs",
+                  icon: MdBusiness,
+                  href: DISTRIBUTEURS_NAV.href,
+                  external: true,
+                }
+              : {
+                  key: "distributeurs",
+                  label: DISTRIBUTEURS_NAV.label || "Distributeurs",
+                  icon: MdBusiness,
+                  to: DISTRIBUTEURS_NAV.to || "/distributeurs",
+                },
+          ]
+        : []),
       ...(Array.isArray(SISTER_APPS) && SISTER_APPS.length > 0
         ? [
             {
