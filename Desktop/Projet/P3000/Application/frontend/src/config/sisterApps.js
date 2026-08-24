@@ -8,7 +8,7 @@
  *   - client/mjrservice → P3000 + Elekable
  */
 const SISTER_APPS = [
-  { label: "Elekable", url: "https://elekable.fr" },
+  { label: "P3000", url: "https://myp3000app.com" },
   { label: "MJR Services", url: "https://mjrserviceapp.com" },
 ];
 
