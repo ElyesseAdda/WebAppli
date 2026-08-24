@@ -30,6 +30,7 @@ import StockTab from "./StockTab";
 
 // Logo client
 import mjrLogo from "../../img/MJR SERVICES logo.jpg";
+import DISTRIBUTEURS_NAV from "../../config/distributeursNav";
 
 const DRAWER_WIDTH = 280;
 const DRAWER_COLLAPSED_WIDTH = 80;
@@ -307,11 +308,18 @@ const DesktopAppLayout = () => {
         <Box sx={{ mt: "auto", p: 2 }}>
           <Divider sx={{ mb: 2 }} />
           
-          {/* Bouton retour à l'application principale */}
-          <Tooltip title={sidebarCollapsed ? "Retour à P3000" : ""} placement="right">
+          {/* Bouton retour vers l'app d'origine (MJR Services) */}
+          <Tooltip
+            title={
+              sidebarCollapsed
+                ? DISTRIBUTEURS_NAV.returnLabel || "Retour à MJR Services"
+                : ""
+            }
+            placement="right"
+          >
             <Box
               component="a"
-              href="https://myp3000app.com/"
+              href={DISTRIBUTEURS_NAV.returnHref || "https://mjrserviceapp.com/"}
               sx={{
                 display: "flex",
                 alignItems: "center",
@@ -349,10 +357,10 @@ const DesktopAppLayout = () => {
               {!sidebarCollapsed && (
                 <Box>
                   <Typography variant="body2" sx={{ fontWeight: 700, lineHeight: 1.2 }}>
-                    Retour à P3000
+                    {DISTRIBUTEURS_NAV.returnLabel || "Retour à MJR Services"}
                   </Typography>
                   <Typography variant="caption" sx={{ opacity: 0.7, fontSize: "0.7rem" }}>
-                    Application principale
+                    {DISTRIBUTEURS_NAV.returnCaption || "Application principale"}
                   </Typography>
                 </Box>
               )}
