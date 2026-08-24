@@ -2848,6 +2848,124 @@ class AgentPrime(models.Model):
         self.full_clean()
         super().save(*args, **kwargs)
 
+def _parse_pointage_repartition_for_agency_expenses(pointage):
+    """
+    Parts [(agence_id|None, montant), ...] si répartition cohérente avec montant_charge ;
+    sinon None (fallback booléen `agence`).
+    """
+    montant = float(pointage.montant_charge or 0)
+    raw = getattr(pointage, "repartition_montant_charge", None) or []
+    if montant <= 0 or not isinstance(raw, list) or len(raw) == 0:
+        return None
+    parts = []
+    for item in raw:
+        if not isinstance(item, dict):
+            continue
+        try:
+            amt = float(item.get("montant") or 0)
+        except (TypeError, ValueError):
+            continue
+        aid = item.get("agence_id", "__missing__")
+        if aid is None or aid == "":
+            parts.append((None, amt))
+        else:
+            try:
+                parts.append((int(aid), amt))
+            except (TypeError, ValueError):
+                continue
+    if not parts:
+        return None
+    if abs(round(sum(a for _, a in parts), 2) - round(montant, 2)) > 0.05:
+        return None
+    return parts
+
+
+def sync_agency_expenses_from_pointage(pointage):
+    """
+    Miroir des parts agence du pointage mensuel dans AgencyExpenseMonth
+    (catégorie Pointage, marquées [POINTAGE_ID:...]) pour le tableau Agences.
+    """
+    if not pointage or not pointage.id:
+        return
+
+    marker = f"[POINTAGE_ID:{pointage.id}]"
+    existing_qs = AgencyExpenseMonth.objects.filter(description__contains=marker)
+    agent = pointage.agent
+    agent_label = f"{agent.name} {agent.surname}".strip()
+    month = pointage.month.month
+    year = pointage.month.year
+
+    desired = {}  # agence_id -> montant
+    parts = _parse_pointage_repartition_for_agency_expenses(pointage)
+    if parts is not None:
+        for ag_id, amt in parts:
+            if ag_id is None or amt <= 0:
+                continue
+            desired[ag_id] = round(desired.get(ag_id, 0) + amt, 2)
+    elif pointage.agence and float(pointage.montant_charge or 0) > 0:
+        main_agence = Agence.objects.order_by("id").first()
+        if main_agence:
+            desired[main_agence.id] = round(float(pointage.montant_charge), 2)
+
+    if not desired:
+        existing_qs.delete()
+        return
+
+    kept_ids = set()
+    for ag_id, amt in desired.items():
+        tag = f"[POINTAGE_ID:{pointage.id}:AGENCE:{ag_id}]"
+        description = f"{agent_label} — Pointage {tag}"
+        existing = existing_qs.filter(description__contains=f":AGENCE:{ag_id}]").first()
+        if existing is None:
+            # Ancien format sans AGENCE dans le tag (1 seule ligne legacy)
+            if existing_qs.count() == 1 and len(desired) == 1:
+                existing = existing_qs.first()
+        if existing:
+            existing.description = description
+            existing.amount = Decimal(str(amt))
+            existing.month = month
+            existing.year = year
+            existing.agent = agent
+            existing.agence_id = ag_id
+            existing.category = "Pointage"
+            existing.save()
+            kept_ids.add(existing.id)
+        else:
+            created = AgencyExpenseMonth.objects.create(
+                description=description,
+                amount=Decimal(str(amt)),
+                category="Pointage",
+                month=month,
+                year=year,
+                agent=agent,
+                agence_id=ag_id,
+            )
+            kept_ids.add(created.id)
+
+    existing_qs.exclude(id__in=kept_ids).delete()
+
+
+@receiver(post_save, sender=PointageMensuel)
+def create_agency_expense_from_pointage(sender, instance, **kwargs):
+    """Crée / met à jour les lignes Agences quand une part du montant charge est en agence."""
+    try:
+        sync_agency_expenses_from_pointage(instance)
+    except Exception as exc:
+        import logging
+        logging.getLogger(__name__).exception(
+            "Échec sync AgencyExpenseMonth depuis pointage %s: %s",
+            getattr(instance, "id", None),
+            exc,
+        )
+
+
+@receiver(post_delete, sender=PointageMensuel)
+def delete_agency_expense_from_pointage(sender, instance, **kwargs):
+    AgencyExpenseMonth.objects.filter(
+        description__contains=f"[POINTAGE_ID:{instance.id}]"
+    ).delete()
+
+
 # Signal pour créer automatiquement une AgencyExpenseMonth quand une prime de type 'agence' est créée
 @receiver(post_save, sender=AgentPrime)
 def create_agency_expense_from_prime(sender, instance, created, **kwargs):

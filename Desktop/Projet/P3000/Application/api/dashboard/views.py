@@ -827,6 +827,9 @@ class DashboardViewSet(viewsets.ViewSet):
                 month_date_aem = month_year_to_date(aem.year, aem.month)
                 if not in_period(month_date_aem):
                     continue
+                # Miroirs pointage déjà comptés via PointageMensuel — ne pas doubler.
+                if aem.description and "[POINTAGE_ID:" in aem.description:
+                    continue
                 # Si agent agence déjà compté par pointage mensuel sur ce mois, on ignore AEM.
                 if aem.agent_id and (
                     aem.agent_id,

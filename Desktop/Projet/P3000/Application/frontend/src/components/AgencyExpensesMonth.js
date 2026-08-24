@@ -412,6 +412,17 @@ const AgencyExpensesMonth = () => {
                       >
                         Gérer via "Gérer les Primes"
                       </Typography>
+                    ) : expense.category === "Pointage" ? (
+                      <Typography
+                        variant="caption"
+                        sx={{
+                          color: "#666",
+                          fontStyle: "italic",
+                          padding: "8px",
+                        }}
+                      >
+                        Gérer via Tableau de pointage
+                      </Typography>
                     ) : (
                       <>
                         <IconButton

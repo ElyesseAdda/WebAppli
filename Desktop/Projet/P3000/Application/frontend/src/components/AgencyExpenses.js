@@ -102,8 +102,8 @@ const AgencyExpenses = () => {
     "Autres",
   ];
 
-  /** Uniquement pour le filtre du tableau (lignes issues du planning, non saisissables à la main) */
-  const categoriesWithPlanning = [...categories, "Planning agence"];
+  /** Uniquement pour le filtre du tableau (lignes issues du planning / pointage, non saisissables à la main) */
+  const categoriesWithPlanning = [...categories, "Planning agence", "Pointage"];
 
   const agenceParam = agenceId ? `&agence_id=${agenceId}` : "";
   const scheduleParam = agenceChantierId
@@ -483,8 +483,13 @@ const AgencyExpenses = () => {
   const tableRowsCombined = useMemo(() => {
     const allRows = [...expenses, ...planningRowsFiltered];
     
-    // Identifier les lignes liées à un agent (Planning, Prime, Ajustement Sous-traitant)
-    const agentCategories = new Set(["Planning agence", "Prime", "Ajustement Sous-traitant"]);
+    // Identifier les lignes liées à un agent (Planning, Pointage, Prime, Ajustement Sous-traitant)
+    const agentCategories = new Set([
+      "Planning agence",
+      "Pointage",
+      "Prime",
+      "Ajustement Sous-traitant",
+    ]);
     const agentGroups = {};
     const standaloneRows = [];
     
@@ -504,6 +509,12 @@ const AgencyExpenses = () => {
         agentKey = match ? `agent-${match[1]}` : null;
         // Extraire le nom depuis la description "Nom Prénom — planning agence (...)"
         agentLabel = row.description?.split("—")[0]?.trim() || "Agent";
+      } else if (row.category === "Pointage") {
+        agentKey = row.agent ? `agent-${row.agent}` : null;
+        agentLabel =
+          row.agent_name ||
+          row.description?.split("—")[0]?.trim()?.replace(/\s*\[POINTAGE_ID:.*$/i, "").trim() ||
+          "Agent";
       } else if (row.category === "Prime") {
         agentKey = row.agent ? `agent-${row.agent}` : null;
         agentLabel = row.agent_name || row.description?.split(" - ")[1]?.trim() || "Agent";
@@ -599,6 +610,13 @@ const AgencyExpenses = () => {
   };
 
   const getExpenseDescriptionCourte = (expense) => {
+    if (expense.category === "Pointage" && expense.description) {
+      return expense.description
+        .replace(/\s*—\s*Pointage\s*/i, " — ")
+        .replace(/\s*\[POINTAGE_ID:[^\]]+\]\s*/gi, "")
+        .replace(/\s*—\s*$/, "")
+        .trim() || expense.description;
+    }
     if (expense.category === "Prime" && expense.description) {
       const parts = expense.description.split(" - ");
       if (parts.length >= 3) {
@@ -830,9 +848,11 @@ const AgencyExpenses = () => {
                   ? "#6a1b9a"
                   : row.category === "Prime"
                     ? "#f57c00"
-                    : row.category === "Ajustement Sous-traitant"
-                      ? "#1976d2"
-                      : "#333";
+                    : row.category === "Pointage"
+                      ? "#2e7d32"
+                      : row.category === "Ajustement Sous-traitant"
+                        ? "#1976d2"
+                        : "#333";
                 const sourceDot = (
                   <span style={{
                     width: 8, height: 8, borderRadius: "50%",
@@ -846,6 +866,8 @@ const AgencyExpenses = () => {
                   displayDescription = row.description;
                 } else if (row.category === "Prime") {
                   displayDescription = getExpenseDescriptionCourte(row);
+                } else if (row.category === "Pointage") {
+                  displayDescription = getExpenseDescriptionCourte(row);
                 } else if (row.category === "Ajustement Sous-traitant") {
                   displayDescription = row.description;
                 }
@@ -858,7 +880,9 @@ const AgencyExpenses = () => {
                         ? "rgba(123, 31, 162, 0.04)"
                         : row.category === "Prime"
                           ? "rgba(255, 152, 0, 0.04)"
-                          : "rgba(25, 118, 210, 0.04)",
+                          : row.category === "Pointage"
+                            ? "rgba(46, 125, 50, 0.04)"
+                            : "rgba(25, 118, 210, 0.04)",
                       "&:hover": { backgroundColor: "rgba(27, 120, 188, 0.08)" },
                     }}
                   >
@@ -896,7 +920,7 @@ const AgencyExpenses = () => {
                         >
                           {row.planningComment ? row.planningComment : "—"}
                         </Typography>
-                      ) : row.category === "Prime" ? null : (
+                      ) : row.category === "Prime" ? null : row.category === "Pointage" ? null : (
                         <TextField
                           size="small"
                           variant="standard"
@@ -935,6 +959,10 @@ const AgencyExpenses = () => {
                         ) : row.category === "Prime" ? (
                           <Typography variant="caption" sx={{ color: "#666", fontStyle: "italic", padding: "8px" }}>
                             Gérer via "Gérer les Primes"
+                          </Typography>
+                        ) : row.category === "Pointage" ? (
+                          <Typography variant="caption" sx={{ color: "#666", fontStyle: "italic", padding: "8px" }}>
+                            Gérer via Tableau de pointage
                           </Typography>
                         ) : row.category === "Ajustement Sous-traitant" ? (
                           <Typography variant="caption" sx={{ color: "#666", fontStyle: "italic", padding: "8px" }}>
@@ -1005,12 +1033,20 @@ const AgencyExpenses = () => {
                   </TableCell>
                   <TableCell>
                     <Box sx={{ display: "flex", gap: 1 }}>
-                      <IconButton size="small" color="primary" onClick={() => handleEditExpense(row)} disabled={loading}>
-                        <FaEdit />
-                      </IconButton>
-                      <IconButton size="small" color="error" onClick={() => openDeleteConfirm(row)} disabled={loading}>
-                        <FaTrash />
-                      </IconButton>
+                      {row.category === "Pointage" ? (
+                        <Typography variant="caption" sx={{ color: "#666", fontStyle: "italic", padding: "8px" }}>
+                          Gérer via Tableau de pointage
+                        </Typography>
+                      ) : (
+                        <>
+                          <IconButton size="small" color="primary" onClick={() => handleEditExpense(row)} disabled={loading}>
+                            <FaEdit />
+                          </IconButton>
+                          <IconButton size="small" color="error" onClick={() => openDeleteConfirm(row)} disabled={loading}>
+                            <FaTrash />
+                          </IconButton>
+                        </>
+                      )}
                     </Box>
                   </TableCell>
                 </TableRow>
