@@ -11,6 +11,7 @@ import {
   MdTableChart,
   MdAdd,
   MdExpandMore,
+  MdApps,
 } from "react-icons/md";
 import { SiGoogledrive } from "react-icons/si";
 import { FaHandshake } from "react-icons/fa";
@@ -19,6 +20,7 @@ import { MdManageAccounts, MdRestorePage } from "react-icons/md";
 import { NavLink, useLocation } from "react-router-dom";
 import axios from "axios";
 import logo from "../img/logo.png";
+import SISTER_APPS from "../config/sisterApps";
 import "./../../static/css/slideBar.css";
 
 const SlideBar = ({ toggleSidebar, isSidebarVisible, user, onOpenBonCommande }) => {
@@ -163,6 +165,22 @@ const SlideBar = ({ toggleSidebar, isSidebarVisible, user, onOpenBonCommande }) 
         icon: MdBusiness,
         to: "/distributeurs",
       },
+      ...(Array.isArray(SISTER_APPS) && SISTER_APPS.length > 0
+        ? [
+            {
+              key: "applications",
+              label: "Applications",
+              icon: MdApps,
+              children: SISTER_APPS.filter((app) => app?.url && app?.label).map(
+                (app) => ({
+                  label: app.label,
+                  href: app.url,
+                  external: true,
+                })
+              ),
+            },
+          ]
+        : []),
     ],
     [user, agenceItems]
   );
@@ -373,6 +391,19 @@ const SlideBar = ({ toggleSidebar, isSidebarVisible, user, onOpenBonCommande }) 
                                 </li>
                               ))}
                             </ul>
+                          </li>
+                        );
+                      }
+                      if (child.external && child.href) {
+                        return (
+                          <li key={`${item.key}-ext-${child.href}`}>
+                            <a
+                              href={child.href}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                            >
+                              {child.label}
+                            </a>
                           </li>
                         );
                       }
