@@ -709,7 +709,7 @@ const CreationSituation = ({ open, onClose, devis, chantier, onSuccess }) => {
             if (responsePrecedent.data) {
               const situationPrecedente = responsePrecedent.data;
 
-              // Définir la situation précédente comme lastSituation
+              // Définir la situation précédente comme lastSituation (cumul)
               setLastSituation(situationPrecedente);
 
               // Propager les taux depuis la situation précédente
@@ -718,23 +718,61 @@ const CreationSituation = ({ open, onClose, devis, chantier, onSuccess }) => {
               setRetenueCIE(situationPrecedente.retenue_cie ?? 0);
               setIsRetenueCIETouched(false);
 
+              // Si lignes absentes, remonter l'historique
+              let sourcePourcentages = situationPrecedente;
+              if (!situationPrecedente.lignes?.length) {
+                let current = situationPrecedente;
+                for (let i = 0; i < 12; i++) {
+                  if (!current?.id) break;
+                  try {
+                    const resPrev = await axios.get(
+                      `/api/situations/${current.id}/previous/`
+                    );
+                    if (!resPrev.data) break;
+                    current = resPrev.data;
+                    if (current.lignes?.length) {
+                      sourcePourcentages = current;
+                      alert(
+                        `Attention : la situation précédente (${situationPrecedente.numero_situation}) n'a plus de lignes. ` +
+                          `Pourcentages repris depuis ${current.numero_situation}.`
+                      );
+                      break;
+                    }
+                  } catch (e) {
+                    break;
+                  }
+                }
+                if (!sourcePourcentages.lignes?.length) {
+                  alert(
+                    `Attention : la situation précédente n'a plus de lignes détaillées. ` +
+                      `Avancement global appliqué : ${situationPrecedente.pourcentage_avancement || 0}%.`
+                  );
+                }
+              }
+
+              const fallbackPct = parseFloat(
+                situationPrecedente.pourcentage_avancement || 0
+              );
+              const hasSourceLignes = Boolean(sourcePourcentages.lignes?.length);
+
               // Réinitialiser la structure avec les pourcentages précédents
               const newStructure = structure.map((partie) => ({
                 ...partie,
                 sous_parties: partie.sous_parties.map((sousPartie) => ({
                   ...sousPartie,
                   lignes: sousPartie.lignes.map((ligne) => {
-                    const lignePrecedente = situationPrecedente.lignes.find(
+                    const lignePrecedente = sourcePourcentages.lignes?.find(
                       (l) => l.ligne_devis === ligne.id
                     );
+                    const pct = lignePrecedente
+                      ? parseFloat(lignePrecedente.pourcentage_actuel)
+                      : hasSourceLignes
+                      ? 0
+                      : fallbackPct;
                     return {
                       ...ligne,
-                      pourcentage_precedent: lignePrecedente
-                        ? parseFloat(lignePrecedente.pourcentage_actuel)
-                        : 0,
-                      pourcentage_actuel: lignePrecedente
-                        ? parseFloat(lignePrecedente.pourcentage_actuel)
-                        : 0,
+                      pourcentage_precedent: pct,
+                      pourcentage_actuel: pct,
                     };
                   }),
                 })),
@@ -742,7 +780,11 @@ const CreationSituation = ({ open, onClose, devis, chantier, onSuccess }) => {
               setStructure(newStructure);
 
               // Réinitialiser les avenants avec les pourcentages précédents
-              setPendingAvenantLignes(situationPrecedente.lignes_avenant || []);
+              setPendingAvenantLignes(
+                sourcePourcentages.lignes_avenant ||
+                  situationPrecedente.lignes_avenant ||
+                  []
+              );
 
               // Réinitialiser les lignes supplémentaires avec montants à 0
               if (situationPrecedente.lignes_supplementaires?.length > 0) {
@@ -1229,6 +1271,13 @@ const CreationSituation = ({ open, onClose, devis, chantier, onSuccess }) => {
       if (existingSituation) {
         if (!isRetenueCIETouched) {
           delete situationData.retenue_cie;
+        }
+        if (!situationData.lignes?.length) {
+          delete situationData.lignes;
+          alert(
+            "Impossible d'enregistrer : aucune ligne de devis chargée. Rechargez la page et réessayez."
+          );
+          return;
         }
         // Mise à jour d'une situation existante
         await axios.put(
