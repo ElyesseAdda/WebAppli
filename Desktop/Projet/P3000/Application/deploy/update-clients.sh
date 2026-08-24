@@ -88,6 +88,9 @@ PROTECTED_COMMON=(
 
     # --- Liens inter-clients (sidebar Applications) ---
     "$APP_PATH/frontend/src/config/sisterApps.js"
+
+    # --- Navigation Distributeurs (visible uniquement sur MJR Services) ---
+    "$APP_PATH/frontend/src/config/distributeursNav.js"
 )
 
 PROTECTED_ELEKABLE=(
