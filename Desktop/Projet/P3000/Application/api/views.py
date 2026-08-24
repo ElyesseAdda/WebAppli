@@ -7947,7 +7947,21 @@ def update_situation(request, pk):
         if 'devis' in data:
             data['devis'] = Devis.objects.get(pk=data['devis'])
 
+        incoming_lignes = data.get('lignes', None)
+        incoming_lignes_supplementaires = data.get('lignes_supplementaires', None)
+        incoming_lignes_speciales = data.get('lignes_speciales', None)
         incoming_lignes_avenant = data.get('lignes_avenant', None)
+
+        # Ne remplacer les lignes que si le payload en fournit réellement.
+        # Un tableau vide [] ne doit JAMAIS effacer les lignes existantes
+        # (cause connue de situations avec montants mais lignes: []).
+        should_replace_lignes = 'lignes' in data and bool(incoming_lignes)
+        should_replace_lignes_supplementaires = (
+            'lignes_supplementaires' in data and bool(incoming_lignes_supplementaires)
+        )
+        should_replace_lignes_speciales = (
+            'lignes_speciales' in data and bool(incoming_lignes_speciales)
+        )
         should_replace_lignes_avenant = (
             'lignes_avenant' in data and
             (
@@ -7956,14 +7970,14 @@ def update_situation(request, pk):
             )
         )
 
-        # Supprimer les anciennes lignes SEULEMENT si de nouvelles sont fournies
-        if 'lignes' in data:
+        # Supprimer les anciennes lignes SEULEMENT si de nouvelles sont fournies (non vides)
+        if should_replace_lignes:
             situation.lignes.all().delete()
-        if 'lignes_supplementaires' in data:
+        if should_replace_lignes_supplementaires:
             situation.lignes_supplementaires.all().delete()
         if should_replace_lignes_avenant:
             situation.lignes_avenant.all().delete()
-        if 'lignes_speciales' in data:
+        if should_replace_lignes_speciales:
             situation.lignes_speciales.all().delete()
 
         # Mise à jour des champs de base
@@ -7988,7 +8002,7 @@ def update_situation(request, pk):
         situation.save()
 
         # Création des nouvelles lignes
-        if 'lignes' in data:
+        if should_replace_lignes:
             for ligne in data['lignes']:
                 SituationLigne.objects.create(
                     situation=situation,
@@ -8002,7 +8016,7 @@ def update_situation(request, pk):
                 )
 
         # Création des lignes supplémentaires
-        if 'lignes_supplementaires' in data:
+        if should_replace_lignes_supplementaires:
             for ligne in data['lignes_supplementaires']:
                 SituationLigneSupplementaire.objects.create(
                     situation=situation,
@@ -8012,7 +8026,7 @@ def update_situation(request, pk):
                 )
 
         # Création des lignes d'avenant
-        if should_replace_lignes_avenant:
+        if should_replace_lignes_avenant and incoming_lignes_avenant:
             for ligne in data['lignes_avenant']:
                 SituationLigneAvenant.objects.create(
                     situation=situation,
@@ -8024,7 +8038,7 @@ def update_situation(request, pk):
                 )
 
         # Création des lignes spéciales
-        if 'lignes_speciales' in data:
+        if should_replace_lignes_speciales:
             for ligne in data['lignes_speciales']:
                 # Calculer montant_ht à partir de value et pourcentage_actuel si montant_ht n'est pas fourni
                 montant_ht = ligne.get('montant_ht')

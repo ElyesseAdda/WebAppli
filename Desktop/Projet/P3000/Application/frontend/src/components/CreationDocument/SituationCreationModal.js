@@ -988,6 +988,59 @@ const SituationCreationModal = ({
     existingSituationRef.current = existingSituation;
   }, [existingSituation]);
 
+  /**
+   * Si une situation a perdu ses lignes (lignes: []) mais conserve des montants,
+   * remonter la chaîne des situations précédentes pour retrouver des % exploitables.
+   */
+  const resolveSituationWithLignes = async (situation) => {
+    if (!situation) return null;
+    if (Array.isArray(situation.lignes) && situation.lignes.length > 0) {
+      return situation;
+    }
+
+    let current = situation;
+    for (let i = 0; i < 12; i++) {
+      if (!current?.id) break;
+      try {
+        const res = await axios.get(`/api/situations/${current.id}/previous/`);
+        if (!res.data) break;
+        current = res.data;
+        if (Array.isArray(current.lignes) && current.lignes.length > 0) {
+          return current;
+        }
+      } catch (error) {
+        console.error("Erreur lors de la recherche d'une situation avec lignes:", error);
+        break;
+      }
+    }
+    return null;
+  };
+
+  const applyPourcentagesFromSituation = (
+    targetStructure,
+    sourceSituation,
+    { useAsCurrent = true, fallbackPct = 0 } = {}
+  ) => {
+    const sourceLignes = sourceSituation?.lignes || [];
+    return targetStructure.map((partie) => ({
+      ...partie,
+      sous_parties: partie.sous_parties.map((sousPartie) => ({
+        ...sousPartie,
+        lignes: sousPartie.lignes.map((ligne) => {
+          const sourceLigne = sourceLignes.find((l) => l.ligne_devis === ligne.id);
+          const pct = sourceLigne
+            ? parseFloat(sourceLigne.pourcentage_actuel)
+            : fallbackPct;
+          return {
+            ...ligne,
+            pourcentage_precedent: pct,
+            pourcentage_actuel: useAsCurrent ? pct : ligne.pourcentage_actuel || 0,
+          };
+        }),
+      })),
+    }));
+  };
+
   // ✅ Détecter si le devis vient de DevisAvance.js via parties_metadata
   const isFromDevisAvance = devis?.parties_metadata && 
     devis.parties_metadata.selectedParties && 
@@ -1862,7 +1915,7 @@ const SituationCreationModal = ({
             if (responsePrecedent.data) {
               const situationPrecedente = responsePrecedent.data;
 
-              // Définir la situation précédente comme lastSituation
+              // Cumul toujours depuis la vraie situation précédente (montants)
               setLastSituation(situationPrecedente);
 
               // Propager les taux depuis la situation précédente
@@ -1871,49 +1924,65 @@ const SituationCreationModal = ({
               setRetenueCIE(situationPrecedente.retenue_cie ?? 0);
               setTypeRetenueCIE(situationPrecedente.type_retenue_cie ?? 'deduction');
 
-              // Réinitialiser la structure avec les pourcentages précédents
-              const newStructure = structure.map((partie) => ({
-                ...partie,
-                sous_parties: partie.sous_parties.map((sousPartie) => ({
-                  ...sousPartie,
-                  lignes: sousPartie.lignes.map((ligne) => {
-                    const lignePrecedente = situationPrecedente.lignes.find(
-                      (l) => l.ligne_devis === ligne.id
-                    );
-                    return {
-                      ...ligne,
-                      pourcentage_precedent: lignePrecedente
-                        ? parseFloat(lignePrecedente.pourcentage_actuel)
-                        : 0,
-                      pourcentage_actuel: lignePrecedente
-                        ? parseFloat(lignePrecedente.pourcentage_actuel)
-                        : 0,
-                      // Ne pas copier le montant_ht_mois
-                    };
-                  }),
-                })),
-              }));
+              // Si les lignes ont été effacées, chercher plus tôt dans l'historique
+              let sourcePourcentages = situationPrecedente;
+              if (!situationPrecedente.lignes?.length) {
+                const restored = await resolveSituationWithLignes(situationPrecedente);
+                if (restored) {
+                  sourcePourcentages = restored;
+                  console.warn(
+                    `Situation ${situationPrecedente.id} sans lignes — % repris depuis la situation ${restored.id}`
+                  );
+                  alert(
+                    `Attention : la situation précédente (${situationPrecedente.numero_situation}) n'a plus de lignes détaillées. ` +
+                      `Les pourcentages ont été repris depuis ${restored.numero_situation}. ` +
+                      `Vérifiez-les avant de créer, puis réenregistrez la situation ${situationPrecedente.numero_situation} si besoin.`
+                  );
+                } else {
+                  console.warn(
+                    `Situation ${situationPrecedente.id} sans lignes et aucun historique avec lignes`
+                  );
+                  alert(
+                    `Attention : la situation précédente (${situationPrecedente.numero_situation}) n'a plus de lignes. ` +
+                      `Les pourcentages démarrent à ${situationPrecedente.pourcentage_avancement || 0}% (avancement global). ` +
+                      `Rouvrez et réenregistrez cette situation pour restaurer le détail des lignes.`
+                  );
+                }
+              }
+
+              const fallbackPct = parseFloat(
+                situationPrecedente.pourcentage_avancement || 0
+              );
+              const newStructure = applyPourcentagesFromSituation(
+                structure,
+                sourcePourcentages,
+                {
+                  useAsCurrent: true,
+                  fallbackPct: sourcePourcentages.lignes?.length ? 0 : fallbackPct,
+                }
+              );
               setStructure(newStructure);
 
               // Réinitialiser les avenants avec les pourcentages précédents
               if (avenants.length > 0) {
+                const sourceAvenantLignes =
+                  sourcePourcentages.lignes_avenant ||
+                  situationPrecedente.lignes_avenant ||
+                  [];
                 const newAvenants = avenants.map((avenant) => ({
                   ...avenant,
                   factures_ts: (avenant.factures_ts || []).map((ts) => {
-                    const avenantPrecedent =
-                      situationPrecedente.lignes_avenant?.find(
-                        (l) => l.facture_ts === ts.id
-                      );
+                    const avenantPrecedent = sourceAvenantLignes.find(
+                      (l) => l.facture_ts === ts.id
+                    );
+                    const pct = avenantPrecedent
+                      ? parseFloat(avenantPrecedent.pourcentage_actuel)
+                      : 0;
                     return {
                       ...ts,
-                      pourcentage_precedent: avenantPrecedent
-                        ? parseFloat(avenantPrecedent.pourcentage_actuel)
-                        : 0,
-                      pourcentage_actuel: avenantPrecedent
-                        ? parseFloat(avenantPrecedent.pourcentage_actuel)
-                        : 0,
+                      pourcentage_precedent: pct,
+                      pourcentage_actuel: pct,
                       montant_ht: parseFloat(ts.montant_ht || 0),
-                      // Ne pas copier le montant du mois
                     };
                   }),
                 }));
@@ -1925,28 +1994,30 @@ const SituationCreationModal = ({
                 setLignesSupplementaires(
                   situationPrecedente.lignes_supplementaires.map((ligne) => ({
                     ...ligne,
-                    montant: "0.00", // Montant à 0 pour la nouvelle situation
+                    montant: "0.00",
                   }))
                 );
               }
 
               // Mettre à jour les lignes spéciales avec les pourcentages de la situation précédente
-              if (
-                lignesSpeciales.length > 0 &&
-                situationPrecedente.lignes_speciales?.length > 0
-              ) {
+              const sourceSpeciales =
+                sourcePourcentages.lignes_speciales ||
+                situationPrecedente.lignes_speciales ||
+                [];
+              if (lignesSpeciales.length > 0 && sourceSpeciales.length > 0) {
                 const newLignesSpeciales = lignesSpeciales.map((ligne) => {
-                  // Chercher la ligne spéciale correspondante dans la situation précédente
-                  const lignePrecedente =
-                    situationPrecedente.lignes_speciales.find(
-                      (l) =>
-                        l.description === ligne.description &&
-                        l.niveau === ligne.niveau
-                    );
+                  const lignePrecedente = sourceSpeciales.find(
+                    (l) =>
+                      l.description === ligne.description &&
+                      l.niveau === ligne.niveau
+                  );
 
                   return {
                     ...ligne,
                     pourcentage_actuel: lignePrecedente
+                      ? parseFloat(lignePrecedente.pourcentage_actuel || 0)
+                      : 0,
+                    pourcentage_precedent: lignePrecedente
                       ? parseFloat(lignePrecedente.pourcentage_actuel || 0)
                       : 0,
                   };
@@ -2529,6 +2600,21 @@ const SituationCreationModal = ({
         }
         if (!isTypeRetenueCIETouched) {
           delete situationData.type_retenue_cie;
+        }
+        // Ne jamais envoyer des tableaux de lignes vides en update
+        // (sinon le backend pourrait les interpréter comme un remplacement).
+        if (!situationData.lignes?.length) {
+          delete situationData.lignes;
+          alert(
+            "Impossible d'enregistrer : aucune ligne de devis chargée. Rechargez la page et réessayez."
+          );
+          return;
+        }
+        if (!situationData.lignes_speciales?.length) {
+          delete situationData.lignes_speciales;
+        }
+        if (!situationData.lignes_avenant?.length) {
+          delete situationData.lignes_avenant;
         }
 
         // Mise à jour d'une situation existante
