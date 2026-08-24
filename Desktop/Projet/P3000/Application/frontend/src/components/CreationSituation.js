@@ -9,6 +9,7 @@ import {
   FormControl,
   Grid,
   IconButton,
+  InputAdornment,
   InputLabel,
   MenuItem,
   Paper,
@@ -498,6 +499,7 @@ const CreationSituation = ({ open, onClose, devis, chantier, onSuccess }) => {
   const [existingSituation, setExistingSituation] = useState(null);
   const [pendingAvenantLignes, setPendingAvenantLignes] = useState(null);
   const [isRetenueCIETouched, setIsRetenueCIETouched] = useState(false);
+  const [pourcentageGlobal, setPourcentageGlobal] = useState("");
 
   useEffect(() => {
     if (devis?.id) {
@@ -1058,6 +1060,40 @@ const CreationSituation = ({ open, onClose, devis, chantier, onSuccess }) => {
     }
   };
 
+  const applyPourcentageGlobal = () => {
+    if (pourcentageGlobal === "" || pourcentageGlobal === null) return;
+
+    let newValue = parseFloat(pourcentageGlobal);
+    if (Number.isNaN(newValue)) return;
+    newValue = Math.min(Math.max(newValue, 0), 100);
+
+    setStructure((prev) =>
+      prev.map((partie) => ({
+        ...partie,
+        sous_parties: partie.sous_parties.map((sousPartie) => ({
+          ...sousPartie,
+          lignes: sousPartie.lignes.map((ligne) => ({
+            ...ligne,
+            pourcentage_actuel: newValue,
+          })),
+        })),
+      }))
+    );
+
+    setAvenants((prev) =>
+      prev.map((avenant) => ({
+        ...avenant,
+        factures_ts: avenant.factures_ts.map((ts) => ({
+          ...ts,
+          pourcentage_actuel: newValue,
+          montant: (parseFloat(ts.montant_ht || 0) * newValue) / 100,
+        })),
+      }))
+    );
+
+    setPourcentageGlobal(String(newValue));
+  };
+
   // Fonction pour récupérer le prochain numéro de situation
   const getNextSituationNumber = async () => {
     try {
@@ -1523,8 +1559,100 @@ const CreationSituation = ({ open, onClose, devis, chantier, onSuccess }) => {
           value={tauxProrata}
           onChange={(e) => setTauxProrata(e.target.value)}
           inputProps={{ step: "0.01", min: "0", max: "100" }}
-          sx={{ mb: 3, width: "200px" }}
+          sx={{ mb: 2, width: "200px" }}
         />
+
+        <Box
+          sx={{
+            mb: 1.5,
+            display: "flex",
+            justifyContent: "flex-end",
+            alignItems: "center",
+          }}
+        >
+          <Box
+            sx={{
+              display: "inline-flex",
+              alignItems: "center",
+              gap: 1,
+              px: 1.5,
+              py: 0.75,
+              borderRadius: 2,
+              bgcolor: "rgba(0, 0, 0, 0.02)",
+              border: "1px solid rgba(0, 0, 0, 0.08)",
+            }}
+          >
+            <Typography
+              variant="caption"
+              sx={{ color: "text.secondary", whiteSpace: "nowrap", mr: 0.5 }}
+            >
+              Appliquer à toutes
+            </Typography>
+            <TextField
+              size="small"
+              type="number"
+              placeholder="0"
+              value={pourcentageGlobal}
+              onChange={(e) => setPourcentageGlobal(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  e.preventDefault();
+                  applyPourcentageGlobal();
+                }
+              }}
+              inputProps={{ step: "0.01", min: "0", max: "100" }}
+              InputProps={{
+                endAdornment: (
+                  <InputAdornment position="end">
+                    <Typography variant="caption" color="text.secondary">
+                      %
+                    </Typography>
+                  </InputAdornment>
+                ),
+              }}
+              sx={{
+                width: 88,
+                "& .MuiOutlinedInput-root": {
+                  bgcolor: "background.paper",
+                  borderRadius: 1.5,
+                  "& fieldset": { borderColor: "rgba(0, 0, 0, 0.12)" },
+                },
+                "& input": {
+                  py: 0.75,
+                  px: 1,
+                  textAlign: "right",
+                  fontSize: "0.875rem",
+                },
+                "& input::-webkit-outer-spin-button, & input::-webkit-inner-spin-button":
+                  {
+                    WebkitAppearance: "none",
+                    margin: 0,
+                  },
+                "& input[type=number]": {
+                  MozAppearance: "textfield",
+                },
+              }}
+            />
+            <Button
+              size="small"
+              variant="text"
+              onClick={applyPourcentageGlobal}
+              disabled={pourcentageGlobal === "" || pourcentageGlobal === null}
+              sx={{
+                minWidth: "auto",
+                px: 1.25,
+                py: 0.5,
+                fontWeight: 600,
+                textTransform: "none",
+                borderRadius: 1.5,
+                color: "primary.main",
+                "&:hover": { bgcolor: "rgba(25, 118, 210, 0.08)" },
+              }}
+            >
+              Appliquer
+            </Button>
+          </Box>
+        </Box>
 
         <TableContainer
           component={Paper}
