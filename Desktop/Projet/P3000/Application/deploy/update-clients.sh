@@ -85,6 +85,9 @@ PROTECTED_COMMON=(
     # --- Fichiers PDF générés (binaires, propres à chaque client) ---
     "$APP_PATH/frontend/src/components/devis.pdf"
     "$APP_PATH/frontend/src/components/situation.pdf"
+
+    # --- Liens inter-clients (sidebar Applications) ---
+    "$APP_PATH/frontend/src/config/sisterApps.js"
 )
 
 PROTECTED_ELEKABLE=(
