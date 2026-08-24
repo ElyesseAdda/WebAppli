@@ -982,6 +982,11 @@ const SituationCreationModal = ({
   const [isNumeroSituationTouched, setIsNumeroSituationTouched] = useState(false);
   const [isRetenueCIETouched, setIsRetenueCIETouched] = useState(false);
   const [isTypeRetenueCIETouched, setIsTypeRetenueCIETouched] = useState(false);
+  const existingSituationRef = React.useRef(null);
+
+  useEffect(() => {
+    existingSituationRef.current = existingSituation;
+  }, [existingSituation]);
 
   // ✅ Détecter si le devis vient de DevisAvance.js via parties_metadata
   const isFromDevisAvance = devis?.parties_metadata && 
@@ -1657,7 +1662,9 @@ const SituationCreationModal = ({
   }, [avenants]);
 
   useEffect(() => {
-    if (open && chantier?.id && mois && annee) {
+    // Attendre que la structure devis soit chargée, sinon on écrase les %
+    // de la situation précédente avec une structure vide puis 0%.
+    if (open && chantier?.id && mois && annee && structure?.length > 0) {
       const fetchSituationData = async () => {
         try {
           const response = await axios.get(
@@ -1848,7 +1855,8 @@ const SituationCreationModal = ({
             // Charger la dernière situation créée (peu importe le mois)
             // au lieu de chercher uniquement le mois précédent
             const responsePrecedent = await axios.get(
-              `/api/chantier/${chantier.id}/last-situation/`
+              `/api/chantier/${chantier.id}/last-situation/`,
+              { params: { mois, annee } }
             );
 
             if (responsePrecedent.data) {
@@ -1980,7 +1988,7 @@ const SituationCreationModal = ({
 
       fetchSituationData();
     }
-  }, [open, chantier, mois, annee]);
+  }, [open, chantier, mois, annee, structure?.length, devis?.id]);
 
   // Fonction pour fusionner les lignes supplémentaires
   const mergeSupplementaryLines = (defaultLines, existingLines) => {
@@ -2153,6 +2161,7 @@ const SituationCreationModal = ({
 
   useEffect(() => {
     if (open && chantier?.id && mois && annee) {
+      let cancelled = false;
       const fetchCIEFactures = async () => {
         try {
           const response = await axios.get(
@@ -2161,15 +2170,23 @@ const SituationCreationModal = ({
               params: { mois, annee },
             }
           );
-          setRetenueCIE(response.data.total);
-          setFacturesCIE(response.data.factures);
+          if (cancelled) return;
+          setFacturesCIE(response.data.factures || []);
+          // Ne jamais écraser la CIE d'une situation déjà chargée (édition)
+          // ni une saisie manuelle utilisateur.
+          if (!existingSituationRef.current && !isRetenueCIETouched) {
+            setRetenueCIE(response.data.total);
+          }
         } catch (error) {
           console.error("Erreur lors du chargement des factures CIE:", error);
         }
       };
       fetchCIEFactures();
+      return () => {
+        cancelled = true;
+      };
     }
-  }, [open, chantier, mois, annee]);
+  }, [open, chantier, mois, annee, isRetenueCIETouched]);
 
   const getComparisonColor = (current, previous) => {
     if (current < previous) return "error.main"; // Rouge
@@ -2315,8 +2332,14 @@ const SituationCreationModal = ({
   // Fonction pour calculer le cumul des mois précédents
   const calculerCumulPrecedent = () => {
     // Si on a une situation précédente, utiliser son montant_total_cumul_ht
-    if (lastSituation && lastSituation.montant_total_cumul_ht) {
-      return parseFloat(lastSituation.montant_total_cumul_ht);
+    // (test nullish : 0 est une valeur valide, ne pas le traiter comme absent)
+    if (
+      lastSituation &&
+      lastSituation.montant_total_cumul_ht !== null &&
+      lastSituation.montant_total_cumul_ht !== undefined &&
+      lastSituation.montant_total_cumul_ht !== ""
+    ) {
+      return parseFloat(lastSituation.montant_total_cumul_ht) || 0;
     }
 
     // Sinon, calculer à partir des pourcentages précédents (pour la première situation)
@@ -2778,9 +2801,12 @@ const SituationCreationModal = ({
       // Initialiser la date de création avec la date du jour
       setDateCreation(new Date().toISOString().split('T')[0]);
       // Réinitialiser les états au cas où on réouvre le modal
-      // Note: Le numéro sera chargé automatiquement par fetchSituationData
       setExistingSituation(null);
-      // Ne pas réinitialiser numeroSituation ici, il sera géré par fetchSituationData
+      setLastSituation(null);
+      setNumeroSituation("");
+      setIsNumeroSituationTouched(false);
+      setIsRetenueCIETouched(false);
+      setIsTypeRetenueCIETouched(false);
     }
   }, [open]);
 
