@@ -154,22 +154,37 @@ const SousPartieSearch = ({
     );
   }, [inputValue, options, selectedSousParties, fuse, partieId]);
 
-  // Options avec possibilité de créer
+  // Options avec possibilité de créer.
+  // ✅ Toujours proposer la création si le libellé n'existe pas à l'identique,
+  // même quand Fuse trouve des résultats proches (ex: "Changement plinthe blue"
+  // ne doit pas bloquer la création de "Changement plinthe").
   const optionsWithCreate = useMemo(() => {
-    // Si pas de recherche ou si on a des résultats, retourner les options normales
-    if (inputValue.trim() === '' || filteredOptions.length > 0) {
+    const trimmed = inputValue.trim();
+    if (trimmed === '') {
       return filteredOptions;
     }
-    
-    // Si aucun résultat, proposer l'option de création
+
+    const searchLower = trimmed.toLowerCase();
+    const exactExists = options.some(option => {
+      const description = (option.data?.description || option.label || '')
+        .toLowerCase()
+        .trim();
+      return description === searchLower;
+    });
+
+    if (exactExists) {
+      return filteredOptions;
+    }
+
     return [
+      ...filteredOptions,
       {
         value: 'create',
-        label: `✨ Créer "${inputValue}"`,
-        data: { description: inputValue, isCreate: true }
+        label: `✨ Créer "${trimmed}"`,
+        data: { description: trimmed, isCreate: true }
       }
     ];
-  }, [filteredOptions, inputValue]);
+  }, [filteredOptions, inputValue, options]);
 
   // Gérer la sélection ou création
   const handleChange = async (selectedOption) => {
