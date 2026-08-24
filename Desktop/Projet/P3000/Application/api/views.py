@@ -8778,11 +8778,30 @@ def get_situations(request, chantier_id):
 @api_view(['GET'])
 def get_last_situation(request, chantier_id):
     try:
-        # Récupère la dernière situation basée sur la date de création puis l'ID
-        # L'ID est utilisé comme critère secondaire car il augmente toujours avec le temps
-        last_situation = Situation.objects.filter(
-            chantier_id=chantier_id
-        ).order_by('-date_creation', '-id').first()
+        # Chronologie métier : année / mois / id (pas date_creation qui peut être
+        # modifiée à l'édition et fausser la détection de la situation précédente)
+        qs = Situation.objects.filter(chantier_id=chantier_id)
+
+        # Si mois/année fournis (création d'une nouvelle situation), ne prendre
+        # que les situations strictement antérieures au mois ciblé.
+        mois = request.GET.get('mois')
+        annee = request.GET.get('annee')
+        if mois is not None and annee is not None:
+            try:
+                mois = int(mois)
+                annee = int(annee)
+                qs = qs.filter(
+                    Q(annee__lt=annee) | (Q(annee=annee) & Q(mois__lt=mois))
+                )
+            except (TypeError, ValueError):
+                pass
+
+        last_situation = qs.prefetch_related(
+            'lignes',
+            'lignes_supplementaires',
+            'lignes_avenant',
+            'lignes_speciales',
+        ).order_by('-annee', '-mois', '-id').first()
         
         if last_situation:
             return Response(SituationSerializer(last_situation).data)
@@ -8796,12 +8815,19 @@ def get_previous_situation(request, situation_id):
     try:
         situation = Situation.objects.get(id=situation_id)
         
-        # Trouver la situation précédente (même logique que dans update_situation)
+        # Situation chronologiquement antérieure (année/mois), hors situation courante
         situation_precedente = Situation.objects.filter(
             chantier=situation.chantier
+        ).exclude(
+            id=situation.id
         ).filter(
             Q(annee__lt=situation.annee) | (Q(annee=situation.annee) & Q(mois__lt=situation.mois))
-        ).order_by('-annee', '-mois').first()
+        ).prefetch_related(
+            'lignes',
+            'lignes_supplementaires',
+            'lignes_avenant',
+            'lignes_speciales',
+        ).order_by('-annee', '-mois', '-id').first()
         
         if situation_precedente:
             return Response(SituationSerializer(situation_precedente).data)
