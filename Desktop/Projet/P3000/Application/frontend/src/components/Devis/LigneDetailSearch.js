@@ -56,20 +56,39 @@ const LigneDetailSearch = ({
     );
   }, [inputValue, options, selectedLignesDetails, fuse]);
 
-  // Options avec possibilité de créer
+  // Options avec possibilité de créer.
+  // ✅ Toujours proposer la création si le libellé n'existe pas à l'identique,
+  // même quand Fuse trouve des résultats proches (ex: "Changement plinthe blue"
+  // ne doit pas bloquer la création de "Changement plinthe").
   const optionsWithCreate = useMemo(() => {
-    if (inputValue.trim() === '' || filteredOptions.length > 0) {
+    const trimmed = inputValue.trim();
+    if (trimmed === '') {
       return filteredOptions;
     }
-    
+
+    const searchLower = trimmed.toLowerCase();
+    const exactExists = options.some(option => {
+      const description = (option.data?.description || option.label || '')
+        .toLowerCase()
+        .trim();
+      // Le label affiché peut contenir " | unité| prix" — comparer aussi la partie avant |
+      const labelBase = (option.label || '').split('|')[0].toLowerCase().trim();
+      return description === searchLower || labelBase === searchLower;
+    });
+
+    if (exactExists) {
+      return filteredOptions;
+    }
+
     return [
+      ...filteredOptions,
       {
         value: 'create',
-        label: `✨ Créer "${inputValue}"`,
-        data: { description: inputValue, isCreate: true }
+        label: `✨ Créer "${trimmed}"`,
+        data: { description: trimmed, isCreate: true }
       }
     ];
-  }, [filteredOptions, inputValue]);
+  }, [filteredOptions, inputValue, options]);
 
   // Charger les options via l'endpoint search
   const loadOptions = useCallback(async () => {
