@@ -7,11 +7,10 @@
  * L'app Distributeurs est hébergée sur P3000 ; le retour pointe vers MJR Services.
  */
 const DISTRIBUTEURS_NAV = {
-  showInSidebar: false,
+  showInSidebar: true,
   label: "Distributeurs",
-  /** Si true + href : lien externe (nouvel onglet). Sinon route interne `to`. */
-  external: false,
-  href: null,
+  external: true,
+  href: "https://myp3000app.com/distributeurs",
   to: "/distributeurs",
   returnHref: "https://mjrserviceapp.com/",
   returnLabel: "Retour à MJR Services",
