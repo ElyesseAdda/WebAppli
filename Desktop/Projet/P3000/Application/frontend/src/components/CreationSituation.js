@@ -627,7 +627,7 @@ const CreationSituation = ({ open, onClose, devis, chantier, onSuccess }) => {
   }, [avenants, pendingAvenantLignes]);
 
   useEffect(() => {
-    if (open && chantier?.id && mois && annee) {
+    if (open && chantier?.id && mois && annee && structure?.length > 0) {
       const fetchSituationData = async () => {
         try {
           const response = await axios.get(
@@ -646,6 +646,24 @@ const CreationSituation = ({ open, onClose, devis, chantier, onSuccess }) => {
             setTauxProrata(currentSituation.taux_prorata);
             setTauxRetenueGarantie(currentSituation.taux_retenue_garantie !== null && currentSituation.taux_retenue_garantie !== undefined ? currentSituation.taux_retenue_garantie : 5.0);
             setRetenueCIE(currentSituation.retenue_cie);
+            setIsRetenueCIETouched(false);
+
+            // Charger la situation précédente pour le cumul / % précédents
+            let previousSituation = null;
+            try {
+              const responsePrevious = await axios.get(
+                `/api/situations/${currentSituation.id}/previous/`
+              );
+              if (responsePrevious.data) {
+                previousSituation = responsePrevious.data;
+                setLastSituation(previousSituation);
+              } else {
+                setLastSituation(null);
+              }
+            } catch (error) {
+              console.error("Erreur lors du chargement de la situation précédente:", error);
+              setLastSituation(null);
+            }
 
             // Mettre à jour la structure avec les pourcentages existants
             const newStructure = structure.map((partie) => ({
@@ -656,9 +674,14 @@ const CreationSituation = ({ open, onClose, devis, chantier, onSuccess }) => {
                   const situationLigne = currentSituation.lignes.find(
                     (l) => l.ligne_devis === ligne.id
                   );
+                  const previousLigne = previousSituation?.lignes?.find(
+                    (l) => l.ligne_devis === ligne.id
+                  );
                   return {
                     ...ligne,
-                    pourcentage_precedent: situationLigne
+                    pourcentage_precedent: previousLigne
+                      ? parseFloat(previousLigne.pourcentage_actuel)
+                      : situationLigne
                       ? parseFloat(situationLigne.pourcentage_actuel)
                       : 0,
                     pourcentage_actuel: situationLigne
@@ -677,22 +700,14 @@ const CreationSituation = ({ open, onClose, devis, chantier, onSuccess }) => {
               setLignesSupplementaires(currentSituation.lignes_supplementaires);
             }
           } else {
-            let moisPrecedent = parseInt(mois) - 1;
-            let anneePrecedente = parseInt(annee);
-            if (moisPrecedent === 0) {
-              moisPrecedent = 12;
-              anneePrecedente--;
-            }
-
+            // Dernière situation du chantier (pas seulement le mois calendaire -1)
             const responsePrecedent = await axios.get(
-              `/api/chantier/${chantier.id}/situations/by-month/`,
-              {
-                params: { mois: moisPrecedent, annee: anneePrecedente },
-              }
+              `/api/chantier/${chantier.id}/last-situation/`,
+              { params: { mois, annee } }
             );
 
-            if (responsePrecedent.data.length > 0) {
-              const situationPrecedente = responsePrecedent.data[0];
+            if (responsePrecedent.data) {
+              const situationPrecedente = responsePrecedent.data;
 
               // Définir la situation précédente comme lastSituation
               setLastSituation(situationPrecedente);
@@ -701,6 +716,7 @@ const CreationSituation = ({ open, onClose, devis, chantier, onSuccess }) => {
               setTauxProrata(situationPrecedente.taux_prorata ?? 2.5);
               setTauxRetenueGarantie(situationPrecedente.taux_retenue_garantie ?? 5.0);
               setRetenueCIE(situationPrecedente.retenue_cie ?? 0);
+              setIsRetenueCIETouched(false);
 
               // Réinitialiser la structure avec les pourcentages précédents
               const newStructure = structure.map((partie) => ({
@@ -759,7 +775,7 @@ const CreationSituation = ({ open, onClose, devis, chantier, onSuccess }) => {
 
       fetchSituationData();
     }
-  }, [open, chantier, mois, annee]);
+  }, [open, chantier, mois, annee, structure?.length, devis?.id]);
 
   // Fonction pour fusionner les lignes supplémentaires
   const mergeSupplementaryLines = (defaultLines, existingLines) => {
@@ -928,6 +944,7 @@ const CreationSituation = ({ open, onClose, devis, chantier, onSuccess }) => {
 
   useEffect(() => {
     if (open && chantier?.id && mois && annee) {
+      let cancelled = false;
       const fetchCIEFactures = async () => {
         try {
           const response = await axios.get(
@@ -936,15 +953,21 @@ const CreationSituation = ({ open, onClose, devis, chantier, onSuccess }) => {
               params: { mois, annee },
             }
           );
-          setRetenueCIE(response.data.total);
-          setFacturesCIE(response.data.factures);
+          if (cancelled) return;
+          setFacturesCIE(response.data.factures || []);
+          if (!existingSituation && !isRetenueCIETouched) {
+            setRetenueCIE(response.data.total);
+          }
         } catch (error) {
           console.error("Erreur lors du chargement des factures CIE:", error);
         }
       };
       fetchCIEFactures();
+      return () => {
+        cancelled = true;
+      };
     }
-  }, [open, chantier, mois, annee]);
+  }, [open, chantier, mois, annee, existingSituation, isRetenueCIETouched]);
 
   const getComparisonColor = (current, previous) => {
     if (current < previous) return "error.main"; // Rouge
@@ -1060,8 +1083,14 @@ const CreationSituation = ({ open, onClose, devis, chantier, onSuccess }) => {
   // Fonction pour calculer le cumul des mois précédents
   const calculerCumulPrecedent = () => {
     // Si on a une situation précédente, utiliser son montant_total_cumul_ht
-    if (lastSituation && lastSituation.montant_total_cumul_ht) {
-      return parseFloat(lastSituation.montant_total_cumul_ht);
+    // (test nullish : 0 est une valeur valide)
+    if (
+      lastSituation &&
+      lastSituation.montant_total_cumul_ht !== null &&
+      lastSituation.montant_total_cumul_ht !== undefined &&
+      lastSituation.montant_total_cumul_ht !== ""
+    ) {
+      return parseFloat(lastSituation.montant_total_cumul_ht) || 0;
     }
 
     // Sinon, calculer à partir des pourcentages précédents (pour la première situation)
