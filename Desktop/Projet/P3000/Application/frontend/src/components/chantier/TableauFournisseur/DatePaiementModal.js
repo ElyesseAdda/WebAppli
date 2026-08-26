@@ -15,8 +15,10 @@ const DatePaiementModal = ({ open, onClose, onSave, onCancel, datePaiement, mont
 
   useEffect(() => {
     if (open) {
-      // Préremplir le montant
-      setLocalMontantPaye(montantPaye || "");
+      // Préremplir le montant (y compris 0)
+      setLocalMontantPaye(
+        montantPaye === 0 || montantPaye === "0" ? "0" : (montantPaye ?? "")
+      );
       
       // Préremplir avec la date du jour si aucune date n'est fournie
       if (datePaiement) {

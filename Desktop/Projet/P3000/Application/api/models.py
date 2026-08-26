@@ -3447,11 +3447,17 @@ class SuiviPaiementSousTraitantMensuel(models.Model):
     # Note: chantier peut être null pour les agents journaliers regroupés ou certaines dépenses d'agence
     
     # Informations de suivi spécifiques au tableau
-    montant_paye_ht = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True, default=0)  # Montant payé saisi
+    # null = non saisi (utiliser le calcul auto des paiements) ; 0 = zéro explicite
+    montant_paye_ht = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True, default=None)
+    # True dès qu'un montant a été saisi / ajusté depuis le tableau (validation facture, modal, etc.)
+    montant_paye_saisi = models.BooleanField(default=False)
     date_paiement_reel = models.DateField(null=True, blank=True)  # Date de paiement réel saisie
     date_envoi_facture = models.DateField(null=True, blank=True)  # Date de réception de la facture
     date_paiement_prevue = models.DateField(null=True, blank=True)  # Date de paiement prévue (calculée)
     delai_paiement = models.IntegerField(default=45)  # Délai de paiement en jours (45 ou 60)
+    # IDs FactureSousTraitant masqués dans la colonne factures du tableau
+    # (la ligne / a_payer restent ; la facture n'apparaît plus dans le tableau)
+    factures_st_masquees = models.JSONField(default=list, blank=True)
     
     # Métadonnées
     created_at = models.DateTimeField(auto_now_add=True)
@@ -3475,7 +3481,7 @@ class SuiviPaiementSousTraitantMensuel(models.Model):
     def save(self, *args, **kwargs):
         # Calculer automatiquement date_paiement_prevue si date_envoi est définie
         if self.date_envoi_facture and self.delai_paiement:
-            from datetime import timedelta, date as date_type
+            from datetime import timedelta
             # Convertir en date si c'est une string
             if isinstance(self.date_envoi_facture, str):
                 from datetime import datetime
@@ -3483,6 +3489,9 @@ class SuiviPaiementSousTraitantMensuel(models.Model):
             else:
                 date_envoi = self.date_envoi_facture
             self.date_paiement_prevue = date_envoi + timedelta(days=self.delai_paiement)
+        else:
+            # Plus de date d'envoi → plus de date prévue ni d'écart cohérent
+            self.date_paiement_prevue = None
         super().save(*args, **kwargs)
     
     @property
@@ -3605,6 +3614,8 @@ class PaiementFournisseurMateriel(models.Model):
         if self.date_envoi:
             from datetime import timedelta
             self.date_paiement_prevue = self.date_envoi + timedelta(days=45)
+        else:
+            self.date_paiement_prevue = None
         super().save(*args, **kwargs)
 
     class Meta:

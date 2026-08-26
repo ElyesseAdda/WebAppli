@@ -2341,10 +2341,12 @@ class SuiviPaiementSousTraitantMensuelSerializer(serializers.ModelSerializer):
             'chantier',
             'chantier_name',
             'montant_paye_ht',
+            'montant_paye_saisi',
             'date_paiement_reel',
             'date_envoi_facture',
             'date_paiement_prevue',
             'delai_paiement',
+            'factures_st_masquees',
             'factures_suivi',
             'mois_annee',
             'ecart_paiement_jours',
@@ -2353,6 +2355,16 @@ class SuiviPaiementSousTraitantMensuelSerializer(serializers.ModelSerializer):
         ]
         read_only_fields = ['id', 'date_paiement_prevue', 'mois_annee', 'ecart_paiement_jours', 'created_at', 'updated_at']
     
+    def update(self, instance, validated_data):
+        if 'montant_paye_ht' in validated_data and 'montant_paye_saisi' not in validated_data:
+            validated_data['montant_paye_saisi'] = True
+        return super().update(instance, validated_data)
+
+    def create(self, validated_data):
+        if 'montant_paye_ht' in validated_data and 'montant_paye_saisi' not in validated_data:
+            validated_data['montant_paye_saisi'] = True
+        return super().create(validated_data)
+
     def validate(self, data):
         """Validation des données"""
         # Vérifier que le mois est entre 1 et 12

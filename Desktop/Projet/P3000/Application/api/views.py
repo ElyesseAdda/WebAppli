@@ -11746,9 +11746,20 @@ class SuiviPaiementSousTraitantMensuelViewSet(viewsets.ModelViewSet):
         
         # Filtrer les champs à mettre à jour
         update_fields = {}
-        for field in ['montant_paye_ht', 'date_paiement_reel', 'date_envoi_facture', 'delai_paiement']:
+        for field in [
+            'montant_paye_ht',
+            'montant_paye_saisi',
+            'date_paiement_reel',
+            'date_envoi_facture',
+            'delai_paiement',
+            'factures_st_masquees',
+        ]:
             if field in request.data:
                 update_fields[field] = request.data[field]
+
+        # Toute écriture explicite du montant payé marque le suivi comme "saisi"
+        if 'montant_paye_ht' in update_fields and 'montant_paye_saisi' not in update_fields:
+            update_fields['montant_paye_saisi'] = True
         
         # Créer ou mettre à jour
         suivi, created = SuiviPaiementSousTraitantMensuel.objects.update_or_create(
@@ -13440,7 +13451,7 @@ def _get_tableau_sous_traitant_data(chantier_id=None):
     else:
         suivis = SuiviPaiementSousTraitantMensuel.objects.all()
     
-    suivis = suivis.prefetch_related('factures_suivi').select_related('chantier')
+    suivis = suivis.prefetch_related('factures_suivi').select_related('chantier').order_by('updated_at')
     
     for suivi in suivis:
         # Format: MM/YY
@@ -13450,24 +13461,33 @@ def _get_tableau_sous_traitant_data(chantier_id=None):
         chantier_id_val = suivi.chantier_id if suivi.chantier else 0
         
         # ✅ FIX : Si le suivi a chantier_id=null (chantier_id_val=0) et que le sous-traitant
-        # a déjà des entrées agent_journalier, fusionner les données du suivi dans ces entrées
-        # au lieu de créer une entrée fantôme avec a_payer=0 qui écraserait les vraies données
+        # a déjà des entrées agent_journalier OU agency_expense, fusionner les données du suivi
+        # dans ces entrées au lieu de créer une entrée fantôme avec a_payer=0
         if chantier_id_val == 0 and key in data and sous_traitant_nom in data[key]:
             agent_chantier_ids = [
                 cid for cid, entry in data[key][sous_traitant_nom].items()
                 if entry.get('source_type') == 'agent_journalier'
             ]
-            if agent_chantier_ids:
-                # Ce suivi correspond à un agent journalier - fusionner dans les entrées existantes
-                first_cid = agent_chantier_ids[0]
+            agency_chantier_ids = [
+                cid for cid, entry in data[key][sous_traitant_nom].items()
+                if entry.get('source_type') == 'agency_expense'
+            ]
+            target_chantier_ids = agent_chantier_ids if agent_chantier_ids else agency_chantier_ids
+            if target_chantier_ids:
+                # Ce suivi correspond à un agent journalier ou une dépense agence
+                first_cid = target_chantier_ids[0]
                 
-                # Appliquer le montant payé uniquement sur la première entrée
-                # (le frontend fait la somme des paye individuels pour le total)
+                # Appliquer le montant payé sur la première entrée
+                # Priorité absolue si le montant a été saisi dans le tableau (y compris 0)
                 if suivi.montant_paye_ht is not None:
-                    data[key][sous_traitant_nom][first_cid]['paye'] = Decimal(str(suivi.montant_paye_ht))
+                    montant_suivi = Decimal(str(suivi.montant_paye_ht))
+                    montant_saisi = bool(getattr(suivi, 'montant_paye_saisi', False))
+                    has_factures_suivi = any(True for _ in suivi.factures_suivi.all())
+                    if montant_saisi or montant_suivi != 0 or has_factures_suivi:
+                        data[key][sous_traitant_nom][first_cid]['paye'] = montant_suivi
                 
-                # Appliquer les dates et suivi_paiement_id sur toutes les entrées agent
-                for cid in agent_chantier_ids:
+                # Appliquer les dates et suivi_paiement_id sur toutes les entrées cibles
+                for cid in target_chantier_ids:
                     if suivi.date_paiement_reel:
                         data[key][sous_traitant_nom][cid]['date_paiement'] = suivi.date_paiement_reel.isoformat()
                     if suivi.date_envoi_facture:
@@ -13482,7 +13502,7 @@ def _get_tableau_sous_traitant_data(chantier_id=None):
                     if ecart_jours is not None:
                         data[key][sous_traitant_nom][cid]['ecart_paiement_reel'] = ecart_jours
                 
-                # Appliquer les factures du suivi sur la première entrée
+                # Appliquer / fusionner les factures du suivi sur la première entrée
                 factures_suivi = []
                 for f in suivi.factures_suivi.all():
                     factures_suivi.append({
@@ -13494,12 +13514,65 @@ def _get_tableau_sous_traitant_data(chantier_id=None):
                     })
                 
                 existing_factures = data[key][sous_traitant_nom][first_cid].get('factures', [])
-                existing_numeros = {f.get('numero_facture') for f in existing_factures if f.get('numero_facture')}
+                # Masquer les FactureSousTraitant retirées du tableau (sans toucher a_payer)
+                masquees = set()
+                raw_masquees = suivi.factures_st_masquees or []
+                if isinstance(raw_masquees, list):
+                    for mid in raw_masquees:
+                        try:
+                            masquees.add(int(mid))
+                        except (TypeError, ValueError):
+                            pass
+                if masquees:
+                    filtered = []
+                    for f in existing_factures:
+                        fid = f.get('id')
+                        if fid is None or str(fid).startswith('suivi_'):
+                            filtered.append(f)
+                            continue
+                        try:
+                            if int(fid) in masquees:
+                                continue
+                        except (TypeError, ValueError):
+                            pass
+                        filtered.append(f)
+                    existing_factures = filtered
+                existing_by_numero = {
+                    f.get('numero_facture'): f
+                    for f in existing_factures
+                    if f.get('numero_facture')
+                }
                 for facture_suivi in factures_suivi:
-                    if facture_suivi['numero_facture'] not in existing_numeros:
+                    num = facture_suivi['numero_facture']
+                    if num in existing_by_numero:
+                        # Le suivi (saisie tableau) fait foi pour le statut payé
+                        existing = existing_by_numero[num]
+                        existing['payee'] = bool(facture_suivi.get('payee'))
+                        existing['date_paiement_facture'] = facture_suivi.get('date_paiement_facture')
+                        if str(existing.get('id', '')).startswith('suivi_') or not existing.get('id'):
+                            existing['id'] = facture_suivi['id']
+                            existing['montant_facture'] = facture_suivi.get(
+                                'montant_facture', existing.get('montant_facture', 0)
+                            )
+                    else:
                         existing_factures.append(facture_suivi)
-                        existing_numeros.add(facture_suivi['numero_facture'])
+                        existing_by_numero[num] = facture_suivi
                 data[key][sous_traitant_nom][first_cid]['factures'] = existing_factures
+                
+                # Plus aucune facture visible : vider les dates ST résiduelles
+                if not existing_factures:
+                    data[key][sous_traitant_nom][first_cid]['date_envoi'] = (
+                        suivi.date_envoi_facture.isoformat() if suivi.date_envoi_facture else None
+                    )
+                    data[key][sous_traitant_nom][first_cid]['date_paiement_prevue'] = (
+                        suivi.date_paiement_prevue.isoformat() if suivi.date_paiement_prevue else None
+                    )
+                    data[key][sous_traitant_nom][first_cid]['date_paiement'] = (
+                        suivi.date_paiement_reel.isoformat() if suivi.date_paiement_reel else None
+                    )
+                    data[key][sous_traitant_nom][first_cid]['ecart_paiement_reel'] = (
+                        suivi.ecart_paiement_jours if suivi.date_paiement_reel and suivi.date_paiement_prevue else None
+                    )
                 
                 continue  # Ne PAS créer d'entrée fantôme, passer au suivi suivant
         
@@ -13526,16 +13599,23 @@ def _get_tableau_sous_traitant_data(chantier_id=None):
             }
         
         # Mettre à jour avec les données du suivi (PRIORITÉ sur les autres sources)
-        # ✅ Ne pas écraser si source_type === 'facture_sous_traitant' et que le suivi n'a pas de montant défini
-        # Car le montant a déjà été calculé depuis PaiementFactureSousTraitant (plus précis)
+        # Si montant_paye_saisi : le montant du tableau fait toujours foi (y compris 0).
+        # Sinon : ne pas écraser le calcul auto des paiements ST avec un suivi "vide".
         source_type = data[key][sous_traitant_nom][chantier_id_val].get('source_type')
         if suivi.montant_paye_ht is not None:
-            # Si c'est une facture_sous_traitant et que le suivi a un montant de 0, ne pas écraser
-            if source_type == 'facture_sous_traitant' and suivi.montant_paye_ht == 0:
-                # Ne pas écraser, garder le montant calculé depuis les factures
+            montant_suivi = Decimal(str(suivi.montant_paye_ht))
+            montant_saisi = bool(getattr(suivi, 'montant_paye_saisi', False))
+            has_factures_suivi = any(True for _ in suivi.factures_suivi.all())
+            if (
+                not montant_saisi
+                and source_type == 'facture_sous_traitant'
+                and montant_suivi == 0
+                and not has_factures_suivi
+            ):
+                # Suivi technique (ex: masquage) sans saisie de montant : garder le calcul paiements
                 pass
             else:
-                data[key][sous_traitant_nom][chantier_id_val]['paye'] = Decimal(str(suivi.montant_paye_ht))
+                data[key][sous_traitant_nom][chantier_id_val]['paye'] = montant_suivi
         
         if suivi.date_paiement_reel:
             data[key][sous_traitant_nom][chantier_id_val]['date_paiement'] = suivi.date_paiement_reel.isoformat()
@@ -13568,17 +13648,69 @@ def _get_tableau_sous_traitant_data(chantier_id=None):
                 'date_paiement_facture': f.date_paiement_facture.isoformat() if f.date_paiement_facture else None
             })
         
-        # Fusionner les factures (éviter les doublons par numéro de facture)
+        # Fusionner les factures (éviter les doublons par numéro, synchroniser le statut payé)
         existing_factures = data[key][sous_traitant_nom][chantier_id_val].get('factures', [])
-        existing_numeros = {f.get('numero_facture') for f in existing_factures if f.get('numero_facture')}
+        # Masquer les FactureSousTraitant retirées du tableau (sans toucher a_payer / la ligne)
+        masquees = set()
+        raw_masquees = suivi.factures_st_masquees or []
+        if isinstance(raw_masquees, list):
+            for mid in raw_masquees:
+                try:
+                    masquees.add(int(mid))
+                except (TypeError, ValueError):
+                    pass
+        if masquees:
+            filtered = []
+            for f in existing_factures:
+                fid = f.get('id')
+                if fid is None or str(fid).startswith('suivi_'):
+                    filtered.append(f)
+                    continue
+                try:
+                    if int(fid) in masquees:
+                        continue
+                except (TypeError, ValueError):
+                    pass
+                filtered.append(f)
+            existing_factures = filtered
+        existing_by_numero = {
+            f.get('numero_facture'): f
+            for f in existing_factures
+            if f.get('numero_facture')
+        }
         
         for facture_suivi in factures_suivi:
-            # Ajouter seulement si le numéro n'existe pas déjà
-            if facture_suivi['numero_facture'] not in existing_numeros:
+            num = facture_suivi['numero_facture']
+            if num in existing_by_numero:
+                # Même numéro : le suivi (saisie tableau) fait foi pour le statut payé
+                existing = existing_by_numero[num]
+                existing['payee'] = bool(facture_suivi.get('payee'))
+                existing['date_paiement_facture'] = facture_suivi.get('date_paiement_facture')
+                if str(existing.get('id', '')).startswith('suivi_') or not existing.get('id'):
+                    existing['id'] = facture_suivi['id']
+                    existing['montant_facture'] = facture_suivi.get(
+                        'montant_facture', existing.get('montant_facture', 0)
+                    )
+            else:
                 existing_factures.append(facture_suivi)
-                existing_numeros.add(facture_suivi['numero_facture'])
+                existing_by_numero[num] = facture_suivi
         
         data[key][sous_traitant_nom][chantier_id_val]['factures'] = existing_factures
+        
+        # Plus aucune facture visible dans le tableau : ne pas garder les dates issues des ST masquées
+        if not existing_factures:
+            data[key][sous_traitant_nom][chantier_id_val]['date_envoi'] = (
+                suivi.date_envoi_facture.isoformat() if suivi.date_envoi_facture else None
+            )
+            data[key][sous_traitant_nom][chantier_id_val]['date_paiement_prevue'] = (
+                suivi.date_paiement_prevue.isoformat() if suivi.date_paiement_prevue else None
+            )
+            data[key][sous_traitant_nom][chantier_id_val]['date_paiement'] = (
+                suivi.date_paiement_reel.isoformat() if suivi.date_paiement_reel else None
+            )
+            data[key][sous_traitant_nom][chantier_id_val]['ecart_paiement_reel'] = (
+                suivi.ecart_paiement_jours if suivi.date_paiement_reel and suivi.date_paiement_prevue else None
+            )
         
         # Ajouter l'ID du suivi pour permettre les mises à jour depuis le frontend
         data[key][sous_traitant_nom][chantier_id_val]['suivi_paiement_id'] = suivi.id
@@ -13611,6 +13743,7 @@ def _get_tableau_sous_traitant_data(chantier_id=None):
                     else:
                         # Si aucune facture n'a de paiement, mettre à None
                         valeurs['date_paiement'] = None
+                        valeurs['ecart_paiement_reel'] = None
                     
                     final_date_paiement = valeurs.get('date_paiement')
                     final_date_paiement_prevue = valeurs.get('date_paiement_prevue')
@@ -13622,6 +13755,8 @@ def _get_tableau_sous_traitant_data(chantier_id=None):
                             valeurs['ecart_paiement_reel'] = (date_reel - date_prevue).days
                         except:
                             pass  # Garder l'écart existant si le calcul échoue
+                    elif not final_date_paiement:
+                        valeurs['ecart_paiement_reel'] = None
                 
                 item = {
                     'mois': mois_key,
