@@ -109,6 +109,8 @@ from .views import (
     PaiementFactureSousTraitantViewSet,
     SuiviPaiementSousTraitantMensuelViewSet,
     FactureSuiviSousTraitantViewSet,
+    LigneMasqueeTableauSousTraitantViewSet,
+    LigneMasqueeTableauFournisseurViewSet,
     create_ecole_event,
     delete_ecole_event,
     get_ecole_hours,
@@ -247,6 +249,8 @@ router.register(r'factures-sous-traitant', FactureSousTraitantViewSet, basename=
 router.register(r'paiements-facture-sous-traitant', PaiementFactureSousTraitantViewSet, basename='paiements-facture-sous-traitant')
 router.register(r'suivi-paiements-sous-traitant-mensuel', SuiviPaiementSousTraitantMensuelViewSet, basename='suivi-paiements-sous-traitant-mensuel')
 router.register(r'factures-suivi-sous-traitant', FactureSuiviSousTraitantViewSet, basename='factures-suivi-sous-traitant')
+router.register(r'lignes-masquees-tableau-sous-traitant', LigneMasqueeTableauSousTraitantViewSet, basename='lignes-masquees-tableau-sous-traitant')
+router.register(r'lignes-masquees-tableau-fournisseur', LigneMasqueeTableauFournisseurViewSet, basename='lignes-masquees-tableau-fournisseur')
 router.register(r'fournisseurs', FournisseurViewSet)
 router.register(r'appels-offres', AppelOffresViewSet, basename='appels-offres')
 router.register(r'drive', DriveViewSet, basename='drive')

@@ -28,7 +28,7 @@ import DatePaiementModal from "./DatePaiementModal";
 import DateEnvoiModal from "./DateEnvoiModal";
 import DatePaiementFactureModal from "./DatePaiementFactureModal";
 import RecapFournisseur from "./RecapFournisseur";
-import { Add as AddIcon, Close as CloseIcon, CheckCircle as CheckCircleIcon } from "@mui/icons-material";
+import { Add as AddIcon, Close as CloseIcon, CheckCircle as CheckCircleIcon, VisibilityOff as VisibilityOffIcon, Visibility as VisibilityIcon } from "@mui/icons-material";
 import axios from "axios";
 import React, { useEffect, useState, useRef, useCallback, useMemo } from "react";
 import { FaSync } from "react-icons/fa";
@@ -132,6 +132,12 @@ const TableauFournisseur = () => {
   // État pour le modal de date de paiement de facture
   const [datePaiementFactureModalOpen, setDatePaiementFactureModalOpen] = useState(false);
   const [currentFacturePaiement, setCurrentFacturePaiement] = useState(null); // {mois, fournisseur, chantierId, factureIndex}
+
+  // Lignes masquées (hors totaux / dashboard)
+  const [lignesMasquees, setLignesMasquees] = useState([]);
+  const [lignesMasqueesModalOpen, setLignesMasqueesModalOpen] = useState(false);
+  const [loadingMasquees, setLoadingMasquees] = useState(false);
+  const [hidingLigne, setHidingLigne] = useState(false);
   
   // Timer pour la sauvegarde automatique
   const saveTimerRef = useRef(null);
@@ -172,6 +178,73 @@ const TableauFournisseur = () => {
   useEffect(() => {
     fetchData();
   }, []);
+
+  const parseMoisAnnee = (moisKey) => {
+    const [moisStr, annee2Str] = String(moisKey || "").split("/");
+    const mois = Number(moisStr);
+    const annee2 = Number(annee2Str);
+    const annee = annee2 < 50 ? 2000 + annee2 : 1900 + annee2;
+    return { mois, annee };
+  };
+
+  const fetchLignesMasquees = async (anneeFilter = selectedAnnee) => {
+    setLoadingMasquees(true);
+    try {
+      const params = {};
+      if (anneeFilter) params.annee = anneeFilter;
+      const res = await axios.get("/api/lignes-masquees-tableau-fournisseur/", { params });
+      setLignesMasquees(Array.isArray(res.data) ? res.data : []);
+    } catch (err) {
+      console.error("Erreur chargement lignes masquées:", err);
+      setLignesMasquees([]);
+    } finally {
+      setLoadingMasquees(false);
+    }
+  };
+
+  const handleOpenLignesMasqueesModal = async () => {
+    setLignesMasqueesModalOpen(true);
+    await fetchLignesMasquees();
+  };
+
+  const handleMasquerLigne = async (item) => {
+    if (!item) return;
+    const ok = window.confirm(
+      "Masquer cette ligne ? Elle ne sera plus affichée ni comptabilisée dans les totaux et le dashboard. Vous pourrez la réafficher plus tard."
+    );
+    if (!ok) return;
+
+    const { mois, annee } = parseMoisAnnee(item.mois);
+    setHidingLigne(true);
+    try {
+      await axios.post("/api/lignes-masquees-tableau-fournisseur/", {
+        mois,
+        annee,
+        fournisseur: item.fournisseur,
+        chantier_id: item.chantier_id ?? 0,
+        source_type: item.source_type || "",
+        chantier_name: item.chantier_name || "",
+        a_payer: item.a_payer || 0,
+      });
+      await fetchData();
+    } catch (err) {
+      console.error("Erreur masquage ligne:", err);
+      alert("Impossible de masquer cette ligne.");
+    } finally {
+      setHidingLigne(false);
+    }
+  };
+
+  const handleReafficherLigne = async (masqueeId) => {
+    if (!masqueeId) return;
+    try {
+      await axios.delete(`/api/lignes-masquees-tableau-fournisseur/${masqueeId}/`);
+      await Promise.all([fetchLignesMasquees(), fetchData()]);
+    } catch (err) {
+      console.error("Erreur réaffichage ligne:", err);
+      alert("Impossible de réafficher cette ligne.");
+    }
+  };
 
   // Initialiser l'année actuelle
   useEffect(() => {
@@ -2274,6 +2347,23 @@ const TableauFournisseur = () => {
           >
             Actualiser
           </Button>
+
+          <Button
+            onClick={handleOpenLignesMasqueesModal}
+            variant="outlined"
+            sx={{
+              backgroundColor: "white",
+              color: "rgba(27, 120, 188, 1)",
+              borderColor: "rgba(27, 120, 188, 1)",
+              border: "1px solid rgba(27, 120, 188, 1)",
+              "&:hover": {
+                backgroundColor: "rgba(27, 120, 188, 0.1)",
+              },
+            }}
+            startIcon={<VisibilityOffIcon />}
+          >
+            Lignes masquées
+          </Button>
         </Box>
       </Box>
 
@@ -2552,6 +2642,8 @@ const TableauFournisseur = () => {
                             </TableCell>
                           ) : null}
                           <TableCell sx={commonBodyCellStyle}>
+                            <Box sx={{ display: "flex", alignItems: "center", gap: 0.5, justifyContent: "space-between" }}>
+                              <Box sx={{ flex: 1, minWidth: 0 }}>
                             {item.commentaire ? (
                               <Tooltip
                                 title={item.commentaire}
@@ -2589,6 +2681,27 @@ const TableauFournisseur = () => {
                                 {item.chantier_name}
                               </Typography>
                             )}
+                              </Box>
+                              <Tooltip title="Masquer la ligne (hors totaux / dashboard)">
+                                <span>
+                                  <IconButton
+                                    size="small"
+                                    disabled={hidingLigne}
+                                    onClick={() => handleMasquerLigne(item)}
+                                    sx={{
+                                      padding: "2px",
+                                      color: "rgba(97, 97, 97, 0.7)",
+                                      "&:hover": {
+                                        color: "rgba(211, 47, 47, 1)",
+                                        backgroundColor: "rgba(211, 47, 47, 0.08)",
+                                      },
+                                    }}
+                                  >
+                                    <VisibilityOffIcon sx={{ fontSize: "1rem" }} />
+                                  </IconButton>
+                                </span>
+                              </Tooltip>
+                            </Box>
                           </TableCell>
                           <TableCell sx={commonBodyCellStyle}>
                             <Typography
@@ -3330,6 +3443,77 @@ const TableauFournisseur = () => {
               >
                 Confirmer
               </Button>
+            </DialogActions>
+          </Dialog>
+
+          <Dialog
+            open={lignesMasqueesModalOpen}
+            onClose={() => setLignesMasqueesModalOpen(false)}
+            maxWidth="md"
+            fullWidth
+          >
+            <DialogTitle sx={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+              Lignes masquées
+              <IconButton size="small" onClick={() => setLignesMasqueesModalOpen(false)}>
+                <CloseIcon />
+              </IconButton>
+            </DialogTitle>
+            <DialogContent dividers>
+              <DialogContentText sx={{ mb: 2 }}>
+                Ces lignes sont exclues des totaux du tableau et du coût matériel du dashboard.
+                Réaffichez-les pour les comptabiliser à nouveau.
+              </DialogContentText>
+              {loadingMasquees ? (
+                <Box display="flex" justifyContent="center" py={3}>
+                  <CircularProgress size={28} />
+                </Box>
+              ) : lignesMasquees.length === 0 ? (
+                <Typography color="text.secondary">
+                  Aucune ligne masquée{selectedAnnee ? ` pour ${selectedAnnee}` : ""}.
+                </Typography>
+              ) : (
+                <Table size="small">
+                  <TableHead>
+                    <TableRow>
+                      <TableCell>Mois</TableCell>
+                      <TableCell>Fournisseur</TableCell>
+                      <TableCell>Chantier</TableCell>
+                      <TableCell align="right">À payer</TableCell>
+                      <TableCell align="center">Action</TableCell>
+                    </TableRow>
+                  </TableHead>
+                  <TableBody>
+                    {lignesMasquees.map((ligne) => (
+                      <TableRow key={ligne.id} hover>
+                        <TableCell>
+                          {String(ligne.mois).padStart(2, "0")}/{ligne.annee}
+                        </TableCell>
+                        <TableCell>{ligne.fournisseur}</TableCell>
+                        <TableCell>
+                          {ligne.source_type === "agency_expense_fournisseur"
+                            ? (ligne.chantier_name || "Agence")
+                            : (ligne.chantier_name || (ligne.chantier_id ? `Chantier ${ligne.chantier_id}` : "—"))}
+                        </TableCell>
+                        <TableCell align="right">
+                          {formatNumber(ligne.a_payer || 0)} €
+                        </TableCell>
+                        <TableCell align="center">
+                          <Button
+                            size="small"
+                            startIcon={<VisibilityIcon />}
+                            onClick={() => handleReafficherLigne(ligne.id)}
+                          >
+                            Réafficher
+                          </Button>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              )}
+            </DialogContent>
+            <DialogActions>
+              <Button onClick={() => setLignesMasqueesModalOpen(false)}>Fermer</Button>
             </DialogActions>
           </Dialog>
 

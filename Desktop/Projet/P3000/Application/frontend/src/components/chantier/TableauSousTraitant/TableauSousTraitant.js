@@ -34,7 +34,7 @@ import FactureModal from "./FactureModal";
 import DatePaiementModal from "./DatePaiementModal";
 import DateEnvoiModal from "./DateEnvoiModal";
 import DatePaiementFactureModal from "./DatePaiementFactureModal";
-import { Add as AddIcon, Close as CloseIcon, CheckCircle as CheckCircleIcon, AddCircleOutline as AddCircleOutlineIcon, ExpandMore as ExpandMoreIcon, Search as SearchIcon } from "@mui/icons-material";
+import { Add as AddIcon, Close as CloseIcon, CheckCircle as CheckCircleIcon, AddCircleOutline as AddCircleOutlineIcon, ExpandMore as ExpandMoreIcon, Search as SearchIcon, VisibilityOff as VisibilityOffIcon, Visibility as VisibilityIcon } from "@mui/icons-material";
 import axios from "axios";
 import React, { useEffect, useState, useRef, useCallback, useMemo } from "react";
 import { FaSync } from "react-icons/fa";
@@ -85,6 +85,12 @@ const TableauSousTraitant = () => {
   const [currentAjustement, setCurrentAjustement] = useState(null); // {agent_id, mois, annee, sous_traitant, a_payer_labor_cost, ajustement_montant, ajustement_description, chantiersDetails}
   const [ajustementFormData, setAjustementFormData] = useState({ montant: "", description: "" });
   const [savingAjustement, setSavingAjustement] = useState(false);
+
+  // Lignes masquées (hors totaux / dashboard)
+  const [lignesMasquees, setLignesMasquees] = useState([]);
+  const [lignesMasqueesModalOpen, setLignesMasqueesModalOpen] = useState(false);
+  const [loadingMasquees, setLoadingMasquees] = useState(false);
+  const [hidingLigne, setHidingLigne] = useState(false);
   
   // Timer pour la sauvegarde automatique
   const saveTimerRef = useRef(null);
@@ -167,6 +173,74 @@ const TableauSousTraitant = () => {
   useEffect(() => {
     fetchData();
   }, []);
+
+  const parseMoisAnnee = (moisKey) => {
+    const [moisStr, annee2Str] = String(moisKey || "").split("/");
+    const mois = Number(moisStr);
+    const annee2 = Number(annee2Str);
+    const annee = annee2 < 50 ? 2000 + annee2 : 1900 + annee2;
+    return { mois, annee };
+  };
+
+  const fetchLignesMasquees = async (anneeFilter = selectedAnnee) => {
+    setLoadingMasquees(true);
+    try {
+      const params = {};
+      if (anneeFilter) params.annee = anneeFilter;
+      const res = await axios.get("/api/lignes-masquees-tableau-sous-traitant/", { params });
+      setLignesMasquees(Array.isArray(res.data) ? res.data : []);
+    } catch (err) {
+      console.error("Erreur chargement lignes masquées:", err);
+      setLignesMasquees([]);
+    } finally {
+      setLoadingMasquees(false);
+    }
+  };
+
+  const handleOpenLignesMasqueesModal = async () => {
+    setLignesMasqueesModalOpen(true);
+    await fetchLignesMasquees();
+  };
+
+  const handleMasquerLigne = async (item) => {
+    if (!item) return;
+    const ok = window.confirm(
+      "Masquer cette ligne ? Elle ne sera plus affichée ni comptabilisée dans les totaux et le dashboard. Vous pourrez la réafficher plus tard."
+    );
+    if (!ok) return;
+
+    const { mois, annee } = parseMoisAnnee(item.mois);
+    const isAgent = item.isAgentJournalier || item.source_type === "agent_journalier";
+    setHidingLigne(true);
+    try {
+      await axios.post("/api/lignes-masquees-tableau-sous-traitant/", {
+        mois,
+        annee,
+        sous_traitant: item.sous_traitant,
+        chantier_id: isAgent ? 0 : (item.chantier_id ?? 0),
+        source_type: item.source_type || (isAgent ? "agent_journalier" : "facture_sous_traitant"),
+        chantier_name: item.chantier_name || "",
+        a_payer: item.a_payer || 0,
+      });
+      await fetchData();
+    } catch (err) {
+      console.error("Erreur masquage ligne:", err);
+      alert("Impossible de masquer cette ligne.");
+    } finally {
+      setHidingLigne(false);
+    }
+  };
+
+  const handleReafficherLigne = async (masqueeId) => {
+    if (!masqueeId) return;
+    try {
+      await axios.delete(`/api/lignes-masquees-tableau-sous-traitant/${masqueeId}/`);
+      await Promise.all([fetchLignesMasquees(), fetchData()]);
+    } catch (err) {
+      console.error("Erreur réaffichage ligne:", err);
+      alert("Impossible de réafficher cette ligne.");
+    }
+  };
 
   // Initialiser l'année actuelle
   useEffect(() => {
@@ -3071,6 +3145,23 @@ const TableauSousTraitant = () => {
           >
             Actualiser
           </Button>
+
+          <Button
+            onClick={handleOpenLignesMasqueesModal}
+            variant="outlined"
+            sx={{
+              backgroundColor: "white",
+              color: "rgba(27, 120, 188, 1)",
+              borderColor: "rgba(27, 120, 188, 1)",
+              border: "1px solid rgba(27, 120, 188, 1)",
+              "&:hover": {
+                backgroundColor: "rgba(27, 120, 188, 0.1)",
+              },
+            }}
+            startIcon={<VisibilityOffIcon />}
+          >
+            Lignes masquées
+          </Button>
         </Box>
       </Box>
 
@@ -3349,6 +3440,8 @@ const TableauSousTraitant = () => {
                             </TableCell>
                           ) : null}
                           <TableCell sx={commonBodyCellStyle}>
+                            <Box sx={{ display: "flex", alignItems: "center", gap: 0.5, justifyContent: "space-between" }}>
+                              <Box sx={{ flex: 1, minWidth: 0 }}>
                             {item.isAgentJournalier && item.chantiersDetails ? (
                               <Typography
                                 sx={{
@@ -3403,6 +3496,27 @@ const TableauSousTraitant = () => {
                                 {item.chantier_name}
                               </Typography>
                             )}
+                              </Box>
+                              <Tooltip title="Masquer la ligne (hors totaux / dashboard)">
+                                <span>
+                                  <IconButton
+                                    size="small"
+                                    disabled={hidingLigne}
+                                    onClick={() => handleMasquerLigne(item)}
+                                    sx={{
+                                      padding: "2px",
+                                      color: "rgba(97, 97, 97, 0.7)",
+                                      "&:hover": {
+                                        color: "rgba(211, 47, 47, 1)",
+                                        backgroundColor: "rgba(211, 47, 47, 0.08)",
+                                      },
+                                    }}
+                                  >
+                                    <VisibilityOffIcon sx={{ fontSize: "1rem" }} />
+                                  </IconButton>
+                                </span>
+                              </Tooltip>
+                            </Box>
                           </TableCell>
                           <TableCell sx={commonBodyCellStyle}>
                             {item.source_type === 'agency_expense' && item.agency_expense_id ? (
@@ -4785,6 +4899,75 @@ const TableauSousTraitant = () => {
               >
                 {savingAjustement ? <CircularProgress size={20} /> : 'Sauvegarder'}
               </Button>
+            </DialogActions>
+          </Dialog>
+
+          <Dialog
+            open={lignesMasqueesModalOpen}
+            onClose={() => setLignesMasqueesModalOpen(false)}
+            maxWidth="md"
+            fullWidth
+          >
+            <DialogTitle sx={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+              Lignes masquées
+              <IconButton size="small" onClick={() => setLignesMasqueesModalOpen(false)}>
+                <CloseIcon />
+              </IconButton>
+            </DialogTitle>
+            <DialogContent dividers>
+              <DialogContentText sx={{ mb: 2 }}>
+                Ces lignes sont exclues des totaux du tableau et du coût sous-traitance du dashboard.
+                Réaffichez-les pour les comptabiliser à nouveau.
+              </DialogContentText>
+              {loadingMasquees ? (
+                <Box display="flex" justifyContent="center" py={3}>
+                  <CircularProgress size={28} />
+                </Box>
+              ) : lignesMasquees.length === 0 ? (
+                <Typography color="text.secondary">Aucune ligne masquée{selectedAnnee ? ` pour ${selectedAnnee}` : ""}.</Typography>
+              ) : (
+                <Table size="small">
+                  <TableHead>
+                    <TableRow>
+                      <TableCell>Mois</TableCell>
+                      <TableCell>Sous-traitant</TableCell>
+                      <TableCell>Chantier</TableCell>
+                      <TableCell align="right">À payer</TableCell>
+                      <TableCell align="center">Action</TableCell>
+                    </TableRow>
+                  </TableHead>
+                  <TableBody>
+                    {lignesMasquees.map((ligne) => (
+                      <TableRow key={ligne.id} hover>
+                        <TableCell>
+                          {String(ligne.mois).padStart(2, "0")}/{ligne.annee}
+                        </TableCell>
+                        <TableCell>{ligne.sous_traitant}</TableCell>
+                        <TableCell>
+                          {ligne.source_type === "agent_journalier"
+                            ? "Agent journalier (tous chantiers)"
+                            : (ligne.chantier_name || (ligne.chantier_id ? `Chantier ${ligne.chantier_id}` : "—"))}
+                        </TableCell>
+                        <TableCell align="right">
+                          {formatNumber(ligne.a_payer || 0)} €
+                        </TableCell>
+                        <TableCell align="center">
+                          <Button
+                            size="small"
+                            startIcon={<VisibilityIcon />}
+                            onClick={() => handleReafficherLigne(ligne.id)}
+                          >
+                            Réafficher
+                          </Button>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              )}
+            </DialogContent>
+            <DialogActions>
+              <Button onClick={() => setLignesMasqueesModalOpen(false)}>Fermer</Button>
             </DialogActions>
           </Dialog>
 

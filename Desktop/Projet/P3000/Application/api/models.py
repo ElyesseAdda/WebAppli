@@ -3547,6 +3547,72 @@ class FactureSuiviSousTraitant(models.Model):
         return f"Facture {self.numero_facture} - {self.montant_facture_ht}€ ({status})"
 
 
+class LigneMasqueeTableauSousTraitant(models.Model):
+    """
+    Lignes masquées du tableau sous-traitant global.
+    Exclues de l'affichage, des totaux du tableau et des agrégats dashboard.
+    """
+    mois = models.IntegerField()
+    annee = models.IntegerField()
+    sous_traitant = models.CharField(max_length=255)
+    # 0 = agence / agent regroupé / sans chantier
+    chantier_id = models.IntegerField(default=0)
+    source_type = models.CharField(max_length=64, blank=True, default='')
+    chantier_name = models.CharField(max_length=255, blank=True, default='')
+    a_payer = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        verbose_name = "Ligne masquée tableau sous-traitant"
+        verbose_name_plural = "Lignes masquées tableau sous-traitant"
+        ordering = ['-annee', '-mois', 'sous_traitant']
+        constraints = [
+            models.UniqueConstraint(
+                fields=['mois', 'annee', 'sous_traitant', 'chantier_id', 'source_type'],
+                name='uniq_ligne_masquee_tableau_st',
+            ),
+        ]
+        indexes = [
+            models.Index(fields=['mois', 'annee', 'sous_traitant']),
+        ]
+
+    def __str__(self):
+        return f"Masquée {self.sous_traitant} {self.mois:02d}/{self.annee} chantier={self.chantier_id}"
+
+
+class LigneMasqueeTableauFournisseur(models.Model):
+    """
+    Lignes masquées du tableau fournisseur global.
+    Exclues de l'affichage, des totaux du tableau et des agrégats dashboard matériel.
+    """
+    mois = models.IntegerField()
+    annee = models.IntegerField()
+    fournisseur = models.CharField(max_length=255)
+    # 0 = agence / sans chantier
+    chantier_id = models.IntegerField(default=0)
+    source_type = models.CharField(max_length=64, blank=True, default='')
+    chantier_name = models.CharField(max_length=255, blank=True, default='')
+    a_payer = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        verbose_name = "Ligne masquée tableau fournisseur"
+        verbose_name_plural = "Lignes masquées tableau fournisseur"
+        ordering = ['-annee', '-mois', 'fournisseur']
+        constraints = [
+            models.UniqueConstraint(
+                fields=['mois', 'annee', 'fournisseur', 'chantier_id', 'source_type'],
+                name='uniq_ligne_masquee_tableau_fournisseur',
+            ),
+        ]
+        indexes = [
+            models.Index(fields=['mois', 'annee', 'fournisseur']),
+        ]
+
+    def __str__(self):
+        return f"Masquée {self.fournisseur} {self.mois:02d}/{self.annee} chantier={self.chantier_id}"
+
+
 class AjustementAgentJournalier(models.Model):
     """
     Modèle pour stocker les ajustements manuels des montants des agents journaliers.

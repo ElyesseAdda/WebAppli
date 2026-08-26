@@ -37,7 +37,7 @@ import subprocess
 import os
 import json
 import calendar
-from .serializers import  DocumentSerializer, DocumentUploadSerializer, DocumentListSerializer, FolderItemSerializer,AppelOffresSerializer, BanqueSerializer,FournisseurSerializer, SousTraitantSerializer, ContactSousTraitantSerializer, ContactSocieteSerializer, ContratSousTraitanceSerializer, AvenantSousTraitanceSerializer,PaiementFournisseurMaterielSerializer, PaiementSousTraitantSerializer, PaiementGlobalSousTraitantSerializer, FactureSousTraitantSerializer, PaiementFactureSousTraitantSerializer, RecapFinancierSerializer, ChantierSerializer, SocieteSerializer, DevisSerializer, PartieSerializer, SousPartieSerializer,LigneDetailSerializer, ClientSerializer, StockSerializer, AgentSerializer, PresenceSerializer, StockMovementSerializer, StockHistorySerializer, EventSerializer, ScheduleSerializer, LaborCostSerializer, FactureSerializer, ChantierDetailSerializer, BonCommandeSerializer, AgentPrimeSerializer, AvenantSerializer, FactureTSSerializer, FactureTSCreateSerializer, SituationSerializer, SituationCreateSerializer, SituationLigneSerializer, SituationLigneUpdateSerializer, FactureTSListSerializer, SituationLigneAvenantSerializer, SituationLigneSupplementaireSerializer,ChantierLigneSupplementaireSerializer,AgencyExpenseSerializer, AgencyExpenseMonthSerializer, EmetteurSerializer, ColorSerializer, SuiviPaiementSousTraitantMensuelSerializer, FactureSuiviSousTraitantSerializer, DistributeurSerializer, DistributeurMouvementSerializer, DistributeurCellSerializer, DistributeurVenteSerializer, DistributeurReapproSessionSerializer, DistributeurReapproLigneSerializer, DistributeurFraisSerializer, StockProductSerializer, StockPurchaseSerializer, StockPurchaseCreateSerializer, StockLotSerializer, AgenceSerializer, PointageMensuelSerializer
+from .serializers import  DocumentSerializer, DocumentUploadSerializer, DocumentListSerializer, FolderItemSerializer,AppelOffresSerializer, BanqueSerializer,FournisseurSerializer, SousTraitantSerializer, ContactSousTraitantSerializer, ContactSocieteSerializer, ContratSousTraitanceSerializer, AvenantSousTraitanceSerializer,PaiementFournisseurMaterielSerializer, PaiementSousTraitantSerializer, PaiementGlobalSousTraitantSerializer, FactureSousTraitantSerializer, PaiementFactureSousTraitantSerializer, RecapFinancierSerializer, ChantierSerializer, SocieteSerializer, DevisSerializer, PartieSerializer, SousPartieSerializer,LigneDetailSerializer, ClientSerializer, StockSerializer, AgentSerializer, PresenceSerializer, StockMovementSerializer, StockHistorySerializer, EventSerializer, ScheduleSerializer, LaborCostSerializer, FactureSerializer, ChantierDetailSerializer, BonCommandeSerializer, AgentPrimeSerializer, AvenantSerializer, FactureTSSerializer, FactureTSCreateSerializer, SituationSerializer, SituationCreateSerializer, SituationLigneSerializer, SituationLigneUpdateSerializer, FactureTSListSerializer, SituationLigneAvenantSerializer, SituationLigneSupplementaireSerializer,ChantierLigneSupplementaireSerializer,AgencyExpenseSerializer, AgencyExpenseMonthSerializer, EmetteurSerializer, ColorSerializer, SuiviPaiementSousTraitantMensuelSerializer, FactureSuiviSousTraitantSerializer, LigneMasqueeTableauSousTraitantSerializer, LigneMasqueeTableauFournisseurSerializer, DistributeurSerializer, DistributeurMouvementSerializer, DistributeurCellSerializer, DistributeurVenteSerializer, DistributeurReapproSessionSerializer, DistributeurReapproLigneSerializer, DistributeurFraisSerializer, StockProductSerializer, StockPurchaseSerializer, StockPurchaseCreateSerializer, StockLotSerializer, AgenceSerializer, PointageMensuelSerializer
 from .models import (
     AppelOffres, TauxFixe, update_chantier_cout_main_oeuvre, Chantier, PaiementSousTraitant, SousTraitant, ContactSousTraitant, ContactSociete, ContratSousTraitance, AvenantSousTraitance, Chantier, Devis, Facture, Quitus, Societe, Partie, SousPartie, 
     LigneDetail, Client, Stock, Agent, Presence, StockMovement, 
@@ -49,7 +49,7 @@ from .models import (
     Banque, Emetteur, FactureSousTraitant, PaiementFactureSousTraitant,
     AgencyExpenseAggregate, AgentPrime, Color, LigneSpeciale, FactureFournisseurMateriel,
     RecapFinancierPreference,
-    SuiviPaiementSousTraitantMensuel, FactureSuiviSousTraitant, Distributeur, DistributeurMouvement, DistributeurCell, DistributeurVente, DistributeurReapproSession, DistributeurReapproLigne, DistributeurFrais, StockProduct, StockProductBestPurchase, StockPurchase, StockPurchaseItem, StockLot, StockLoss,
+    SuiviPaiementSousTraitantMensuel, FactureSuiviSousTraitant, LigneMasqueeTableauSousTraitant, LigneMasqueeTableauFournisseur, Distributeur, DistributeurMouvement, DistributeurCell, DistributeurVente, DistributeurReapproSession, DistributeurReapproLigne, DistributeurFrais, StockProduct, StockProductBestPurchase, StockPurchase, StockPurchaseItem, StockLot, StockLoss,
     Agence,
 )
 from .drive_automation import drive_automation
@@ -11792,6 +11792,124 @@ class FactureSuiviSousTraitantViewSet(viewsets.ModelViewSet):
         return queryset.select_related('suivi_paiement')
 
 
+class LigneMasqueeTableauSousTraitantViewSet(viewsets.ModelViewSet):
+    """
+    Lignes masquées du tableau sous-traitant global.
+    Exclues de l'affichage, des totaux et des agrégats dashboard sous-traitance.
+    """
+    queryset = LigneMasqueeTableauSousTraitant.objects.all()
+    serializer_class = LigneMasqueeTableauSousTraitantSerializer
+    permission_classes = [AllowAny]
+
+    def get_queryset(self):
+        queryset = super().get_queryset()
+        mois = self.request.query_params.get('mois')
+        annee = self.request.query_params.get('annee')
+        if mois:
+            queryset = queryset.filter(mois=mois)
+        if annee:
+            queryset = queryset.filter(annee=annee)
+        return queryset
+
+    def create(self, request, *args, **kwargs):
+        data = request.data.copy() if hasattr(request.data, 'copy') else dict(request.data)
+        chantier_id = data.get('chantier_id')
+        if chantier_id is None or chantier_id == '':
+            chantier_id = 0
+        else:
+            try:
+                chantier_id = int(chantier_id)
+            except (TypeError, ValueError):
+                chantier_id = 0
+        source_type = data.get('source_type') or ''
+        if source_type == 'agent_journalier':
+            chantier_id = 0
+
+        mois = data.get('mois')
+        annee = data.get('annee')
+        sous_traitant = data.get('sous_traitant')
+        if not all([mois, annee, sous_traitant]):
+            return Response(
+                {'error': 'mois, annee et sous_traitant sont requis'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        obj, created = LigneMasqueeTableauSousTraitant.objects.update_or_create(
+            mois=int(mois),
+            annee=int(annee),
+            sous_traitant=sous_traitant,
+            chantier_id=chantier_id,
+            source_type=source_type,
+            defaults={
+                'chantier_name': data.get('chantier_name') or '',
+                'a_payer': data.get('a_payer') or 0,
+            },
+        )
+        serializer = self.get_serializer(obj)
+        return Response(
+            serializer.data,
+            status=status.HTTP_201_CREATED if created else status.HTTP_200_OK,
+        )
+
+
+class LigneMasqueeTableauFournisseurViewSet(viewsets.ModelViewSet):
+    """
+    Lignes masquées du tableau fournisseur global.
+    Exclues de l'affichage, des totaux et des agrégats dashboard matériel.
+    """
+    queryset = LigneMasqueeTableauFournisseur.objects.all()
+    serializer_class = LigneMasqueeTableauFournisseurSerializer
+    permission_classes = [AllowAny]
+
+    def get_queryset(self):
+        queryset = super().get_queryset()
+        mois = self.request.query_params.get('mois')
+        annee = self.request.query_params.get('annee')
+        if mois:
+            queryset = queryset.filter(mois=mois)
+        if annee:
+            queryset = queryset.filter(annee=annee)
+        return queryset
+
+    def create(self, request, *args, **kwargs):
+        data = request.data.copy() if hasattr(request.data, 'copy') else dict(request.data)
+        chantier_id = data.get('chantier_id')
+        if chantier_id is None or chantier_id == '':
+            chantier_id = 0
+        else:
+            try:
+                chantier_id = int(chantier_id)
+            except (TypeError, ValueError):
+                chantier_id = 0
+        source_type = data.get('source_type') or ''
+
+        mois = data.get('mois')
+        annee = data.get('annee')
+        fournisseur = data.get('fournisseur')
+        if not all([mois, annee, fournisseur]):
+            return Response(
+                {'error': 'mois, annee et fournisseur sont requis'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        obj, created = LigneMasqueeTableauFournisseur.objects.update_or_create(
+            mois=int(mois),
+            annee=int(annee),
+            fournisseur=fournisseur,
+            chantier_id=chantier_id,
+            source_type=source_type,
+            defaults={
+                'chantier_name': data.get('chantier_name') or '',
+                'a_payer': data.get('a_payer') or 0,
+            },
+        )
+        serializer = self.get_serializer(obj)
+        return Response(
+            serializer.data,
+            status=status.HTTP_201_CREATED if created else status.HTTP_200_OK,
+        )
+
+
 class RecapFinancierChantierAPIView(APIView):
     permission_classes = []
 
@@ -12979,6 +13097,38 @@ def _get_tableau_fournisseur_data(chantier_id=None):
                     'delai_paiement': valeurs.get('delai_paiement', 45),
                     'commentaire': valeurs.get('commentaire', ''),
                 })
+
+    # Exclure les lignes masquées (hors totaux tableau + dashboard)
+    masquees_qs = LigneMasqueeTableauFournisseur.objects.all()
+    masked_exact = set()
+    for m in masquees_qs:
+        source = m.source_type or ''
+        cid = 0 if m.chantier_id is None else int(m.chantier_id)
+        masked_exact.add((m.mois, m.annee, m.fournisseur, cid, source))
+
+    if masked_exact:
+        filtered = []
+        for item in result:
+            try:
+                mois_str, annee_2_str = str(item.get('mois', '')).split('/')
+                mois_i = int(mois_str)
+                annee_2 = int(annee_2_str)
+                annee_i = 2000 + annee_2 if annee_2 < 50 else 1900 + annee_2
+            except (ValueError, AttributeError):
+                filtered.append(item)
+                continue
+
+            fournisseur_nom = item.get('fournisseur') or ''
+            source = item.get('source_type') or ''
+            cid_raw = item.get('chantier_id')
+            cid = 0 if cid_raw is None else int(cid_raw)
+            if (mois_i, annee_i, fournisseur_nom, cid, source) in masked_exact:
+                continue
+            # Compat : masques sans source_type pour lignes paiement classiques
+            if not source and (mois_i, annee_i, fournisseur_nom, cid, '') in masked_exact:
+                continue
+            filtered.append(item)
+        result = filtered
     
     return result
 
@@ -13788,6 +13938,46 @@ def _get_tableau_sous_traitant_data(chantier_id=None):
                     item['total_primes'] = valeurs.get('total_primes', 0)
                 
                 result.append(item)
+
+    # Exclure les lignes masquées (hors totaux tableau + dashboard)
+    masquees_qs = LigneMasqueeTableauSousTraitant.objects.all()
+    masked_exact = set()
+    masked_agents = set()
+    for m in masquees_qs:
+        source = m.source_type or ''
+        if source == 'agent_journalier':
+            masked_agents.add((m.mois, m.annee, m.sous_traitant))
+        else:
+            cid = 0 if m.chantier_id is None else int(m.chantier_id)
+            masked_exact.add((m.mois, m.annee, m.sous_traitant, cid, source))
+
+    if masked_exact or masked_agents:
+        filtered = []
+        for item in result:
+            try:
+                mois_str, annee_2_str = str(item.get('mois', '')).split('/')
+                mois_i = int(mois_str)
+                annee_2 = int(annee_2_str)
+                annee_i = 2000 + annee_2 if annee_2 < 50 else 1900 + annee_2
+            except (ValueError, AttributeError):
+                filtered.append(item)
+                continue
+
+            st_name = item.get('sous_traitant') or ''
+            source = item.get('source_type') or ''
+            if source == 'agent_journalier':
+                if (mois_i, annee_i, st_name) in masked_agents:
+                    continue
+            else:
+                cid_raw = item.get('chantier_id')
+                cid = 0 if cid_raw is None else int(cid_raw)
+                if (mois_i, annee_i, st_name, cid, source) in masked_exact:
+                    continue
+                # Compat : anciennes masques sans source_type
+                if (mois_i, annee_i, st_name, cid, '') in masked_exact:
+                    continue
+            filtered.append(item)
+        result = filtered
     
     return result
 

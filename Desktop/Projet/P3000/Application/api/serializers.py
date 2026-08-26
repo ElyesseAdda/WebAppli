@@ -10,6 +10,7 @@ from .models import (
     PaiementFournisseurMateriel, FactureFournisseurMateriel, HistoriqueModificationPaiementFournisseur, Fournisseur, Magasin, Banque, AppelOffres, AgencyExpenseAggregate,
     Document, PaiementGlobalSousTraitant, Emetteur, FactureSousTraitant, PaiementFactureSousTraitant,
     AgentPrime, Color, LigneSpeciale, AgencyExpenseMonth, SuiviPaiementSousTraitantMensuel, FactureSuiviSousTraitant,
+    LigneMasqueeTableauSousTraitant, LigneMasqueeTableauFournisseur,
     Distributeur, DistributeurMouvement, DistributeurCell, DistributeurVente, DistributeurReapproSession, DistributeurReapproLigne, DistributeurFrais, StockProduct, StockProductBestPurchase, StockPurchase, StockPurchaseItem, StockLot, StockLoss,
     Agence
 )
@@ -2379,4 +2380,52 @@ class SuiviPaiementSousTraitantMensuelSerializer(serializers.ModelSerializer):
                 'annee': "L'année doit être entre 2000 et 2100"
             })
         
+        return data
+
+
+class LigneMasqueeTableauSousTraitantSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = LigneMasqueeTableauSousTraitant
+        fields = [
+            'id',
+            'mois',
+            'annee',
+            'sous_traitant',
+            'chantier_id',
+            'source_type',
+            'chantier_name',
+            'a_payer',
+            'created_at',
+        ]
+        read_only_fields = ['id', 'created_at']
+
+    def validate(self, data):
+        if data.get('chantier_id') is None:
+            data['chantier_id'] = 0
+        if not data.get('source_type'):
+            data['source_type'] = ''
+        return data
+
+
+class LigneMasqueeTableauFournisseurSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = LigneMasqueeTableauFournisseur
+        fields = [
+            'id',
+            'mois',
+            'annee',
+            'fournisseur',
+            'chantier_id',
+            'source_type',
+            'chantier_name',
+            'a_payer',
+            'created_at',
+        ]
+        read_only_fields = ['id', 'created_at']
+
+    def validate(self, data):
+        if data.get('chantier_id') is None:
+            data['chantier_id'] = 0
+        if not data.get('source_type'):
+            data['source_type'] = ''
         return data
