@@ -1925,90 +1925,91 @@ class ClientViewSet(viewsets.ModelViewSet):
         return queryset
 
 class AgentViewSet(viewsets.ModelViewSet):
-    queryset = Agent.objects.all()
+    queryset = Agent.objects.all().prefetch_related('periodes_inactivite')
     serializer_class = AgentSerializer
     permission_classes = [AllowAny]
 
     def get_queryset(self):
-        """Filtrer les agents selon leur statut d'effectif et la période"""
-        queryset = Agent.objects.all()
-        
-        # Paramètres pour la logique temporelle
+        """Filtrer les agents selon leur statut d'effectif et la période (liste uniquement)."""
+        from calendar import monthrange
+        from .agent_effectif import filter_agents_visible_for_range
+
+        queryset = Agent.objects.all().prefetch_related('periodes_inactivite')
+
+        # Détail / actions : toujours accessible (actifs et inactifs)
+        if getattr(self, 'action', None) not in (None, 'list'):
+            return queryset
+
         week = self.request.query_params.get('week')
         year = self.request.query_params.get('year')
         month = self.request.query_params.get('month')
         year_param = self.request.query_params.get('year')
-        
-        # Paramètre pour récupérer tous les agents (actifs et inactifs)
-        # Utile pour la logique temporelle côté frontend
+
         include_inactive = self.request.query_params.get('include_inactive', 'false').lower() == 'true'
-        
-        # Si on demande tous les agents (actifs et inactifs), les retourner sans filtre
+
         if include_inactive:
             return queryset
-        
-        # Si on a des paramètres de période, appliquer la logique temporelle
+
         if week and year:
-            # datetime / timedelta : imports en tête du module (évite UnboundLocalError sur la branche month)
-            # Convertir semaine/année en date de début de semaine
             try:
-                # Utiliser dayjs-like logic pour calculer le début de semaine
                 year_int = int(year)
                 week_int = int(week)
-                
-                # Calculer le premier jour de l'année
                 jan_1 = datetime(year_int, 1, 1)
-                # Trouver le premier lundi de l'année
                 first_monday = jan_1 + timedelta(days=(7 - jan_1.weekday()) % 7)
-                # Calculer le début de la semaine demandée
                 week_start = first_monday + timedelta(weeks=week_int - 1)
-                
-                # Filtrer : agent actif OU encore présent sur la semaine (désactivation en fin de semaine incluse)
-                queryset = queryset.filter(
-                    Q(is_active=True) |
-                    Q(date_desactivation__gte=week_start)
+                week_end = week_start + timedelta(days=6)
+                queryset = filter_agents_visible_for_range(
+                    queryset, week_start.date(), week_end.date()
                 )
             except (ValueError, TypeError):
-                # En cas d'erreur de conversion, retourner tous les agents actifs
                 queryset = queryset.filter(is_active=True)
-                
+
         elif month and year_param:
-            # Pour les rapports mensuels
             try:
                 year_int = int(year_param)
                 month_int = int(month)
-                month_start = datetime(year_int, month_int, 1)
-                
-                # Filtrer : agent actif OU encore en poste ce mois (désactivation le 1er du mois incluse)
-                queryset = queryset.filter(
-                    Q(is_active=True) |
-                    Q(date_desactivation__gte=month_start)
-                )
+                month_start = datetime(year_int, month_int, 1).date()
+                last_day = monthrange(year_int, month_int)[1]
+                month_end = datetime(year_int, month_int, last_day).date()
+                queryset = filter_agents_visible_for_range(queryset, month_start, month_end)
             except (ValueError, TypeError):
                 queryset = queryset.filter(is_active=True)
         else:
-            # Par défaut, ne montrer que les agents actifs
             queryset = queryset.filter(is_active=True)
-            
+
         return queryset
 
     @action(detail=True, methods=['post'])
     def desactiver(self, request, pk=None):
-        """Désactiver un agent (le retirer de l'effectif)"""
-        agent = self.get_object()
+        """Désactiver un agent pour une période (date_fin optionnelle = ouverte)."""
+        from .agent_effectif import create_periode
+
+        try:
+            agent = Agent.objects.get(pk=pk)
+        except Agent.DoesNotExist:
+            return Response(
+                {'error': 'Agent non trouvé'},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
         date_desactivation = request.data.get('date_desactivation')
-        
+        date_fin = request.data.get('date_fin') or None
+        motif = request.data.get('motif') or ''
+
         if not date_desactivation:
             return Response(
-                {'error': 'La date de désactivation est requise'}, 
-                status=status.HTTP_400_BAD_REQUEST
+                {'error': 'La date de désactivation est requise'},
+                status=status.HTTP_400_BAD_REQUEST,
             )
-        
+
         try:
-            agent.is_active = False
-            agent.date_desactivation = date_desactivation
-            agent.save()
-            
+            periode = create_periode(
+                agent,
+                date_debut=date_desactivation,
+                date_fin=date_fin,
+                motif=motif,
+            )
+            agent.refresh_from_db()
             return Response({
                 'message': f'Agent {agent.name} {agent.surname} retiré de l\'effectif',
                 'agent': {
@@ -2016,55 +2017,143 @@ class AgentViewSet(viewsets.ModelViewSet):
                     'name': agent.name,
                     'surname': agent.surname,
                     'is_active': agent.is_active,
-                    'date_desactivation': agent.date_desactivation
-                }
+                    'date_desactivation': agent.date_desactivation,
+                },
+                'periode': {
+                    'id': periode.id,
+                    'date_debut': periode.date_debut,
+                    'date_fin': periode.date_fin,
+                    'motif': periode.motif,
+                },
             })
+        except ValueError as e:
+            return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
         except Exception as e:
             return Response(
-                {'error': f'Erreur lors de la désactivation: {str(e)}'}, 
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+                {'error': f'Erreur lors de la désactivation: {str(e)}'},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
 
     @action(detail=True, methods=['post'])
     def reactiver(self, request, pk=None):
-        """Réactiver un agent (le remettre dans l'effectif)"""
-        # Récupérer l'agent directement depuis la base de données, 
-        # sans passer par get_queryset() qui filtre les agents inactifs
+        """Réactiver un agent en fermant les périodes ouvertes (historique conservé)."""
+        from .agent_effectif import close_open_periodes
+
         try:
             agent = Agent.objects.get(pk=pk)
         except Agent.DoesNotExist:
             return Response(
-                {'error': 'Agent non trouvé'}, 
-                status=status.HTTP_404_NOT_FOUND
+                {'error': 'Agent non trouvé'},
+                status=status.HTTP_404_NOT_FOUND,
             )
-        
+
+        date_fin = request.data.get('date_fin') or None
+
         try:
-            agent.is_active = True
-            agent.date_desactivation = None
-            agent.save()
-            
+            closed = close_open_periodes(agent, date_fin=date_fin)
+            agent.refresh_from_db()
             return Response({
                 'message': f'Agent {agent.name} {agent.surname} remis dans l\'effectif',
+                'periodes_fermees': closed,
                 'agent': {
                     'id': agent.id,
                     'name': agent.name,
                     'surname': agent.surname,
                     'is_active': agent.is_active,
-                    'date_desactivation': agent.date_desactivation
-                }
+                    'date_desactivation': agent.date_desactivation,
+                },
             })
         except Exception as e:
             return Response(
-                {'error': f'Erreur lors de la réactivation: {str(e)}'}, 
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+                {'error': f'Erreur lors de la réactivation: {str(e)}'},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
 
     @action(detail=False, methods=['get'])
     def inactifs(self, request):
         """Récupérer la liste des agents inactifs"""
-        queryset = Agent.objects.filter(is_active=False).order_by('-date_desactivation')
+        queryset = (
+            Agent.objects.filter(is_active=False)
+            .prefetch_related('periodes_inactivite')
+            .order_by('-date_desactivation')
+        )
         serializer = self.get_serializer(queryset, many=True)
         return Response(serializer.data)
+
+    @action(detail=True, methods=['get', 'post'], url_path='periodes-inactivite')
+    def periodes_inactivite(self, request, pk=None):
+        """Liste ou crée les périodes d'inactivité d'un agent."""
+        from .agent_effectif import create_periode
+        from .serializers import AgentPeriodeInactiviteSerializer
+
+        try:
+            agent = Agent.objects.get(pk=pk)
+        except Agent.DoesNotExist:
+            return Response({'error': 'Agent non trouvé'}, status=status.HTTP_404_NOT_FOUND)
+
+        if request.method == 'GET':
+            qs = agent.periodes_inactivite.all()
+            return Response(AgentPeriodeInactiviteSerializer(qs, many=True).data)
+
+        date_debut = request.data.get('date_debut') or request.data.get('date_desactivation')
+        date_fin = request.data.get('date_fin') or None
+        motif = request.data.get('motif') or ''
+        if not date_debut:
+            return Response(
+                {'error': 'date_debut est requis'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        try:
+            periode = create_periode(agent, date_debut=date_debut, date_fin=date_fin, motif=motif)
+            return Response(
+                AgentPeriodeInactiviteSerializer(periode).data,
+                status=status.HTTP_201_CREATED,
+            )
+        except ValueError as e:
+            return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
+    @action(
+        detail=True,
+        methods=['patch', 'delete'],
+        url_path=r'periodes-inactivite/(?P<periode_id>[^/.]+)',
+    )
+    def periode_inactivite_detail(self, request, pk=None, periode_id=None):
+        """Modifie ou supprime une période d'inactivité."""
+        from .agent_effectif import sync_agent_status, validate_no_overlap
+        from .models import AgentPeriodeInactivite
+        from .serializers import AgentPeriodeInactiviteSerializer
+
+        try:
+            agent = Agent.objects.get(pk=pk)
+        except Agent.DoesNotExist:
+            return Response({'error': 'Agent non trouvé'}, status=status.HTTP_404_NOT_FOUND)
+
+        try:
+            periode = AgentPeriodeInactivite.objects.get(pk=periode_id, agent=agent)
+        except AgentPeriodeInactivite.DoesNotExist:
+            return Response({'error': 'Période non trouvée'}, status=status.HTTP_404_NOT_FOUND)
+
+        if request.method == 'DELETE':
+            periode.delete()
+            sync_agent_status(agent)
+            return Response(status=status.HTTP_204_NO_CONTENT)
+
+        date_debut = request.data.get('date_debut', periode.date_debut)
+        date_fin = request.data.get('date_fin', periode.date_fin)
+        if 'date_fin' in request.data and request.data.get('date_fin') in ('', None):
+            date_fin = None
+        motif = request.data.get('motif', periode.motif)
+
+        error = validate_no_overlap(agent, date_debut, date_fin, exclude_periode_id=periode.id)
+        if error:
+            return Response({'error': error}, status=status.HTTP_400_BAD_REQUEST)
+
+        periode.date_debut = date_debut
+        periode.date_fin = date_fin
+        periode.motif = motif or ''
+        periode.save()
+        sync_agent_status(agent)
+        return Response(AgentPeriodeInactiviteSerializer(periode).data)
 
     def create(self, request):
         serializer = self.get_serializer(data=request.data)

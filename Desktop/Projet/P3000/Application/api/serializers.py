@@ -2,7 +2,7 @@ from rest_framework import serializers
 from django.db.models import Q
 from .models import (
     Chantier, Societe, Devis, Partie, SousPartie, LigneDetail, Client, 
-    Agent, Stock, Presence, StockMovement, StockHistory, Event, MonthlyHours, PointageMensuel,
+    Agent, AgentPeriodeInactivite, Stock, Presence, StockMovement, StockHistory, Event, MonthlyHours, PointageMensuel,
     Schedule, LaborCost, DevisLigne, Facture, FactureLigne, BonCommande, LigneBonCommande,
     Avenant, FactureTS, Situation, SituationLigne, SituationLigneSupplementaire, SituationLigneSpeciale,
     ChantierLigneSupplementaire, SituationLigneAvenant, AgencyExpense, AgencyExpenseOverride,
@@ -716,10 +716,18 @@ class AgentPrimeSerializer(serializers.Serializer):
     description = serializers.CharField(max_length=100)
     montant = serializers.DecimalField(max_digits=10, decimal_places=2)
 
+class AgentPeriodeInactiviteSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = AgentPeriodeInactivite
+        fields = ['id', 'agent', 'date_debut', 'date_fin', 'motif', 'created_at']
+        read_only_fields = ['id', 'created_at']
+
+
 class AgentSerializer(serializers.ModelSerializer):
     heures_travail_journalieres = serializers.ReadOnlyField()
     monthly_hours = MonthlyHoursSerializer(many=True, read_only=True)
     primes = serializers.JSONField(required=False)
+    periodes_inactivite = AgentPeriodeInactiviteSerializer(many=True, read_only=True)
 
     class Meta:
         model = Agent

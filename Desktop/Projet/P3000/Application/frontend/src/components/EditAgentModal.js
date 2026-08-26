@@ -1,6 +1,8 @@
-import { Box, Button, MenuItem, Select, TextField, Alert, Dialog, DialogTitle, DialogContent, DialogActions, Typography } from "@mui/material";
+import { Box, Button, MenuItem, Select, TextField, Alert, Dialog, DialogTitle, DialogContent, DialogActions, Typography, IconButton, Divider } from "@mui/material";
+import DeleteIcon from "@mui/icons-material/Delete";
 import axios from "axios";
 import React, { useEffect, useRef, useState } from "react";
+import { formatPeriodeInactivite } from "../utils/agentEffectif";
 
 const EditAgentModal = ({ isOpen, handleClose, refreshAgents, agents = [] }) => {
   // Agents dans l'effectif uniquement (exclure retirés de l'effectif)
@@ -31,10 +33,14 @@ const EditAgentModal = ({ isOpen, handleClose, refreshAgents, agents = [] }) => 
     jours_travail: [],
     is_active: true,
     date_desactivation: null,
+    periodes_inactivite: [],
   });
   
   const [showDesactivationDialog, setShowDesactivationDialog] = React.useState(false);
   const [dateDesactivation, setDateDesactivation] = React.useState("");
+  const [dateFinDesactivation, setDateFinDesactivation] = React.useState("");
+  const [nouvellePeriode, setNouvellePeriode] = React.useState({ date_debut: "", date_fin: "", motif: "" });
+  const [dateReactivation, setDateReactivation] = React.useState("");
   const [isLoading, setIsLoading] = React.useState(false);
   const [message, setMessage] = React.useState({ type: "", text: "" });
 
@@ -47,6 +53,19 @@ const EditAgentModal = ({ isOpen, handleClose, refreshAgents, agents = [] }) => 
     "samedi",
     "dimanche",
   ];
+
+  const refreshAgentPeriodes = async (agentId) => {
+    if (!agentId) return;
+    try {
+      const response = await axios.get(`/api/agent/${agentId}/periodes-inactivite/`);
+      setAgentData((prev) => ({
+        ...prev,
+        periodes_inactivite: response.data || [],
+      }));
+    } catch (error) {
+      console.error("Erreur chargement périodes:", error);
+    }
+  };
 
   const handleAgentSelect = (selectedAgent) => {
     if (selectedAgent) {
@@ -69,9 +88,12 @@ const EditAgentModal = ({ isOpen, handleClose, refreshAgents, agents = [] }) => 
           : [],
         is_active: selectedAgent.is_active !== undefined ? selectedAgent.is_active : true,
         date_desactivation: selectedAgent.date_desactivation || null,
+        periodes_inactivite: selectedAgent.periodes_inactivite || [],
       });
       setAgentSearchQuery("");
       setAgentDropdownOpen(false);
+      setNouvellePeriode({ date_debut: "", date_fin: "", motif: "" });
+      setDateReactivation("");
     }
   };
 
@@ -168,6 +190,9 @@ const EditAgentModal = ({ isOpen, handleClose, refreshAgents, agents = [] }) => 
       setMessage({ type: "error", text: "Aucun agent sélectionné." });
       return;
     }
+    const today = new Date().toISOString().split('T')[0];
+    setDateDesactivation(today);
+    setDateFinDesactivation("");
     setShowDesactivationDialog(true);
   };
 
@@ -179,21 +204,24 @@ const EditAgentModal = ({ isOpen, handleClose, refreshAgents, agents = [] }) => 
 
     setIsLoading(true);
     try {
-      const response = await axios.post(`/api/agent/${agentData.id}/desactiver/`, {
-        date_desactivation: dateDesactivation
-      });
+      const payload = { date_desactivation: dateDesactivation };
+      if (dateFinDesactivation) {
+        payload.date_fin = dateFinDesactivation;
+      }
+      const response = await axios.post(`/api/agent/${agentData.id}/desactiver/`, payload);
       
       setMessage({ type: "success", text: response.data.message });
       setShowDesactivationDialog(false);
       setDateDesactivation("");
+      setDateFinDesactivation("");
       refreshAgents();
       
-      // Mettre à jour les données de l'agent
       setAgentData(prev => ({
         ...prev,
-        is_active: false,
-        date_desactivation: dateDesactivation
+        is_active: response.data.agent?.is_active ?? false,
+        date_desactivation: response.data.agent?.date_desactivation ?? dateDesactivation,
       }));
+      await refreshAgentPeriodes(agentData.id);
     } catch (error) {
       console.error("Erreur lors de la désactivation:", error);
       setMessage({ 
@@ -213,22 +241,86 @@ const EditAgentModal = ({ isOpen, handleClose, refreshAgents, agents = [] }) => 
 
     setIsLoading(true);
     try {
-      const response = await axios.post(`/api/agent/${agentData.id}/reactiver/`);
+      const payload = {};
+      if (dateReactivation) {
+        payload.date_fin = dateReactivation;
+      }
+      const response = await axios.post(`/api/agent/${agentData.id}/reactiver/`, payload);
       
       setMessage({ type: "success", text: response.data.message });
       refreshAgents();
+      setDateReactivation("");
       
-      // Mettre à jour les données de l'agent
       setAgentData(prev => ({
         ...prev,
-        is_active: true,
-        date_desactivation: null
+        is_active: response.data.agent?.is_active ?? true,
+        date_desactivation: response.data.agent?.date_desactivation ?? null,
       }));
+      await refreshAgentPeriodes(agentData.id);
     } catch (error) {
       console.error("Erreur lors de la réactivation:", error);
       setMessage({ 
         type: "error", 
         text: error.response?.data?.error || "Erreur lors de la réactivation" 
+      });
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleAddPeriode = async () => {
+    if (!agentData.id || !nouvellePeriode.date_debut) {
+      setMessage({ type: "error", text: "La date de début est requise." });
+      return;
+    }
+    setIsLoading(true);
+    try {
+      const payload = {
+        date_debut: nouvellePeriode.date_debut,
+        motif: nouvellePeriode.motif || "",
+      };
+      if (nouvellePeriode.date_fin) {
+        payload.date_fin = nouvellePeriode.date_fin;
+      }
+      await axios.post(`/api/agent/${agentData.id}/periodes-inactivite/`, payload);
+      setMessage({ type: "success", text: "Période d'inactivité ajoutée." });
+      setNouvellePeriode({ date_debut: "", date_fin: "", motif: "" });
+      refreshAgents();
+      const agentRes = await axios.get(`/api/agent/${agentData.id}/`);
+      setAgentData((prev) => ({
+        ...prev,
+        is_active: agentRes.data.is_active,
+        date_desactivation: agentRes.data.date_desactivation,
+        periodes_inactivite: agentRes.data.periodes_inactivite || [],
+      }));
+    } catch (error) {
+      setMessage({
+        type: "error",
+        text: error.response?.data?.error || "Erreur lors de l'ajout de la période",
+      });
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleDeletePeriode = async (periodeId) => {
+    if (!agentData.id || !periodeId) return;
+    setIsLoading(true);
+    try {
+      await axios.delete(`/api/agent/${agentData.id}/periodes-inactivite/${periodeId}/`);
+      setMessage({ type: "success", text: "Période supprimée." });
+      refreshAgents();
+      const agentRes = await axios.get(`/api/agent/${agentData.id}/`);
+      setAgentData((prev) => ({
+        ...prev,
+        is_active: agentRes.data.is_active,
+        date_desactivation: agentRes.data.date_desactivation,
+        periodes_inactivite: agentRes.data.periodes_inactivite || [],
+      }));
+    } catch (error) {
+      setMessage({
+        type: "error",
+        text: error.response?.data?.error || "Erreur lors de la suppression",
       });
     } finally {
       setIsLoading(false);
@@ -289,6 +381,7 @@ const EditAgentModal = ({ isOpen, handleClose, refreshAgents, agents = [] }) => 
                     jours_travail: [],
                     is_active: true,
                     date_desactivation: null,
+                    periodes_inactivite: [],
                   });
                 }
                 setAgentDropdownOpen(true);
@@ -373,13 +466,110 @@ const EditAgentModal = ({ isOpen, handleClose, refreshAgents, agents = [] }) => 
           {agentData.id && (
             <Box sx={{ mb: 2, p: 2, bgcolor: agentData.is_active ? '#e8f5e8' : '#ffebee', borderRadius: 1 }}>
               <Typography variant="body2" color={agentData.is_active ? 'success.main' : 'error.main'}>
-                <strong>Statut :</strong> {agentData.is_active ? '✅ Actif dans l\'effectif' : '❌ Retiré de l\'effectif'}
+                <strong>Statut :</strong> {agentData.is_active ? 'Actif dans l\'effectif' : 'Retiré de l\'effectif'}
               </Typography>
               {!agentData.is_active && agentData.date_desactivation && (
                 <Typography variant="body2" color="error.main">
                   <strong>Date de désactivation :</strong> {new Date(agentData.date_desactivation).toLocaleDateString('fr-FR')}
                 </Typography>
               )}
+              {!agentData.is_active && (
+                <TextField
+                  label="Date de reprise (optionnel)"
+                  type="date"
+                  value={dateReactivation}
+                  onChange={(e) => setDateReactivation(e.target.value)}
+                  fullWidth
+                  margin="normal"
+                  size="small"
+                  InputLabelProps={{ shrink: true }}
+                  helperText="Laissez vide pour reprendre aujourd'hui"
+                />
+              )}
+            </Box>
+          )}
+
+          {/* Périodes d'inactivité */}
+          {agentData.id && (
+            <Box sx={{ mb: 2, p: 2, border: '1px solid #e0e0e0', borderRadius: 1 }}>
+              <Typography variant="subtitle2" sx={{ mb: 1 }}>
+                Périodes d&apos;inactivité
+              </Typography>
+              {(agentData.periodes_inactivite || []).length === 0 ? (
+                <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+                  Aucune période enregistrée
+                </Typography>
+              ) : (
+                (agentData.periodes_inactivite || []).map((periode) => (
+                  <Box
+                    key={periode.id}
+                    sx={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      py: 0.5,
+                    }}
+                  >
+                    <Typography variant="body2">
+                      {formatPeriodeInactivite(periode)}
+                      {periode.motif ? ` — ${periode.motif}` : ''}
+                      {periode.date_fin ? " — période terminée" : " — période active"}
+                    </Typography>
+                    <IconButton
+                      size="small"
+                      color="error"
+                      onClick={() => handleDeletePeriode(periode.id)}
+                      disabled={isLoading}
+                      aria-label="Supprimer la période"
+                    >
+                      <DeleteIcon fontSize="small" />
+                    </IconButton>
+                  </Box>
+                ))
+              )}
+              <Divider sx={{ my: 1.5 }} />
+              <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+                Ajouter une période (ex. absence en août uniquement)
+              </Typography>
+              <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap', alignItems: 'center' }}>
+                <TextField
+                  label="Début"
+                  type="date"
+                  value={nouvellePeriode.date_debut}
+                  onChange={(e) =>
+                    setNouvellePeriode((p) => ({ ...p, date_debut: e.target.value }))
+                  }
+                  size="small"
+                  InputLabelProps={{ shrink: true }}
+                />
+                <TextField
+                  label="Fin (optionnel)"
+                  type="date"
+                  value={nouvellePeriode.date_fin}
+                  onChange={(e) =>
+                    setNouvellePeriode((p) => ({ ...p, date_fin: e.target.value }))
+                  }
+                  size="small"
+                  InputLabelProps={{ shrink: true }}
+                />
+                <TextField
+                  label="Motif"
+                  value={nouvellePeriode.motif}
+                  onChange={(e) =>
+                    setNouvellePeriode((p) => ({ ...p, motif: e.target.value }))
+                  }
+                  size="small"
+                  sx={{ minWidth: 140 }}
+                />
+                <Button
+                  variant="outlined"
+                  size="small"
+                  onClick={handleAddPeriode}
+                  disabled={isLoading || !nouvellePeriode.date_debut}
+                >
+                  Ajouter
+                </Button>
+              </Box>
             </Box>
           )}
           
@@ -569,16 +759,26 @@ const EditAgentModal = ({ isOpen, handleClose, refreshAgents, agents = [] }) => 
         <DialogTitle>Confirmer la désactivation</DialogTitle>
         <DialogContent>
           <Typography sx={{ mb: 2 }}>
-            Êtes-vous sûr de vouloir retirer <strong>{agentData.name} {agentData.surname}</strong> de l'effectif ?
+            Êtes-vous sûr de vouloir retirer <strong>{agentData.name} {agentData.surname}</strong> de l&apos;effectif ?
           </Typography>
           <TextField
-            label="Date de désactivation"
+            label="Date de début"
             type="date"
             value={dateDesactivation}
             onChange={(e) => setDateDesactivation(e.target.value)}
             fullWidth
             margin="normal"
             InputLabelProps={{ shrink: true }}
+          />
+          <TextField
+            label="Date de fin (optionnel)"
+            type="date"
+            value={dateFinDesactivation}
+            onChange={(e) => setDateFinDesactivation(e.target.value)}
+            fullWidth
+            margin="normal"
+            InputLabelProps={{ shrink: true }}
+            helperText="Laissez vide pour une absence jusqu'à réactivation manuelle"
           />
         </DialogContent>
         <DialogActions>

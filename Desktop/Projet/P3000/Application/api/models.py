@@ -588,6 +588,32 @@ class Agent(models.Model):
         return 0
 
 
+class AgentPeriodeInactivite(models.Model):
+    """Période d'inactivité d'un agent (plage de dates, éventuellement ouverte)."""
+    agent = models.ForeignKey(
+        Agent,
+        on_delete=models.CASCADE,
+        related_name='periodes_inactivite',
+    )
+    date_debut = models.DateField(help_text="Début d'inactivité (inclusif)")
+    date_fin = models.DateField(
+        null=True,
+        blank=True,
+        help_text="Fin d'inactivité (inclusive) ; null = période ouverte jusqu'à réactivation",
+    )
+    motif = models.CharField(max_length=255, blank=True, default='')
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-date_debut', '-id']
+        verbose_name = "Période d'inactivité agent"
+        verbose_name_plural = "Périodes d'inactivité agents"
+
+    def __str__(self):
+        fin = self.date_fin.isoformat() if self.date_fin else '…'
+        return f'{self.agent} inactif {self.date_debut} → {fin}'
+
+
 class MonthlyPresence(models.Model):
     agent = models.ForeignKey(Agent, on_delete=models.CASCADE)
     month = models.DateField()  # Utilisez le premier jour du mois pour représenter le mois
