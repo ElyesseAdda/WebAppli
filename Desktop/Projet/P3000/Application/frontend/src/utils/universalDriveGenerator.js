@@ -165,6 +165,18 @@ const DOCUMENT_TYPES = {
     getLoadingMessage: (data) =>
       `Génération du certificat de paiement ${data.sousTraitantName || ''} vers le Drive...`,
   },
+
+  gantt: {
+    apiEndpoint: "/generate-gantt-pdf-drive/",
+    previewUrl: (data) => `/api/preview-gantt/${data.diagrammeId}/`,
+    // Le chantier est facultatif : un diagramme indépendant est classé dans
+    // Documents_Generaux/PLANNING_GANTT/{année}.
+    requiredFields: ["diagrammeId"],
+    displayName: "Diagramme de Gantt",
+    getDisplayName: (data) => `Planning ${data.nom || data.diagrammeId}`,
+    getLoadingMessage: (data) =>
+      `Génération du planning ${data.nom || ''} vers le Drive...`,
+  },
 };
 
 /**
@@ -365,6 +377,11 @@ const buildApiParams = (documentType, data) => {
         facture_id: data.factureId,
         mois: data.mois,
         annee: data.annee,
+      });
+
+    case "gantt":
+      return addCustomParams({
+        diagramme_id: data.diagrammeId,
       });
 
     default:

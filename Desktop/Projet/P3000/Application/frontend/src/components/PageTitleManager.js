@@ -8,6 +8,8 @@ const ROUTE_TITLES = [
   { path: "/login", title: "Connexion" },
   { path: "/distributeurs", title: "Distributeurs automatiques" },
   { path: "/ListeChantier", title: "Liste des chantiers" },
+  { path: "/gantt", title: "Diagrammes de Gantt" },
+  { path: "/gantt/:id", title: "Diagramme de Gantt" },
   { path: "/ChantiersDashboard", title: "Chantiers - Dashboard" },
   { path: "/chantier/:id", title: "Chantier" },
   { path: "/ChantierDetail/:id", title: "Chantier - Détails" },

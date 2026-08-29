@@ -650,3 +650,8 @@ urlpatterns += [
 urlpatterns += [
     path('', include('api.urls_rapport')),
 ]
+
+# --- URLs POUR LES DIAGRAMMES DE GANTT ---
+urlpatterns += [
+    path('', include('api.urls_gantt')),
+]

@@ -1,0 +1,277 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="fr">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Planning - {{ diagramme.nom }}</title>
+    <style>
+      @page {
+        size: A4 landscape;
+        margin: 8mm;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        font-family: Arial, Helvetica, "Roboto", sans-serif;
+        margin: 0;
+        padding: 0;
+        color: #1a1a1a;
+        font-size: 11px;
+      }
+
+      .entete {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        border-bottom: 2px solid #1a2b4c;
+        padding-bottom: 8px;
+        margin-bottom: 12px;
+      }
+
+      .entete h1 {
+        margin: 0;
+        font-size: 18px;
+        color: #1a2b4c;
+      }
+
+      .entete .sous-titre {
+        margin-top: 3px;
+        font-size: 11px;
+        color: #555;
+      }
+
+      .entete .meta {
+        text-align: right;
+        font-size: 10px;
+        color: #666;
+      }
+
+      .statut {
+        display: inline-block;
+        padding: 2px 8px;
+        border-radius: 10px;
+        font-size: 10px;
+        font-weight: bold;
+        color: #fff;
+      }
+
+      .statut-termine {
+        background-color: #2e7d32;
+      }
+
+      .statut-brouillon {
+        background-color: #ed6c02;
+      }
+
+      .grille {
+        width: 100%;
+        border: 1px solid #d5d9e0;
+        border-radius: 3px;
+        overflow: hidden;
+      }
+
+      .rangee {
+        display: flex;
+        width: 100%;
+        border-bottom: 1px solid #eceff3;
+        page-break-inside: avoid;
+        break-inside: avoid;
+      }
+
+      .rangee:last-child {
+        border-bottom: none;
+      }
+
+      .rangee-titre {
+        background-color: #f5f7fa;
+      }
+
+      .colonne-libelle {
+        width: 200px;
+        min-width: 200px;
+        border-right: 1px solid #d5d9e0;
+        padding: 5px 8px;
+        display: flex;
+        align-items: center;
+        overflow: hidden;
+        word-break: break-word;
+      }
+
+      .colonne-libelle.indente {
+        padding-left: 20px;
+      }
+
+      .libelle-titre {
+        font-weight: bold;
+        color: #1a2b4c;
+      }
+
+      .zone-barres {
+        flex: 1;
+        position: relative;
+        min-height: 22px;
+        display: flex;
+      }
+
+      .cellule {
+        border-right: 1px solid #f2f4f7;
+        min-height: 22px;
+      }
+
+      .cellule:last-child {
+        border-right: none;
+      }
+
+      .barre {
+        position: absolute;
+        top: 4px;
+        height: 14px;
+        border-radius: 3px;
+        color: #fff;
+        font-size: 9px;
+        line-height: 14px;
+        padding: 0 4px;
+        white-space: nowrap;
+        overflow: hidden;
+      }
+
+      .barre-titre {
+        top: 8px;
+        height: 6px;
+        opacity: 0.55;
+      }
+
+      .barre-titre.barre-avec-duree {
+        top: 4px;
+        height: 14px;
+        opacity: 1;
+      }
+
+      .entete-grille {
+        display: flex;
+        background-color: #f5f7fa;
+        border-bottom: 1px solid #d5d9e0;
+      }
+
+      .entete-grille .colonne-libelle {
+        font-weight: bold;
+        font-size: 10px;
+      }
+
+      .bande-groupes,
+      .bande-periodes {
+        display: flex;
+        width: 100%;
+      }
+
+      .bande-groupes div {
+        border-right: 1px solid #d5d9e0;
+        text-align: center;
+        font-size: 10px;
+        font-weight: bold;
+        padding: 3px 0;
+        text-transform: capitalize;
+        overflow: hidden;
+        white-space: nowrap;
+      }
+
+      .bande-periodes div {
+        border-right: 1px solid #e8ebef;
+        text-align: center;
+        font-size: 9px;
+        color: #666;
+        padding: 2px 0;
+        overflow: hidden;
+        white-space: nowrap;
+      }
+
+      .vide {
+        padding: 30px;
+        text-align: center;
+        color: #888;
+      }
+
+      .pied {
+        margin-top: 10px;
+        font-size: 9px;
+        color: #888;
+        text-align: right;
+      }
+    </style>
+  </head>
+
+  <body>
+    <div class="entete">
+      <div>
+        <h1>{{ diagramme.nom }}</h1>
+        <div class="sous-titre">
+          {% if chantier %}Chantier : {{ chantier.chantier_name }}{% if societe_nom %} — {{ societe_nom }}{% endif %}
+          {% else %}Diagramme indépendant{% endif %}
+          {% if diagramme.description %} · {{ diagramme.description }}{% endif %}
+        </div>
+      </div>
+      <div class="meta">
+        
+        <div style="margin-top: 4px">
+          Édité le {{ date_edition|date:"d/m/Y à H:i" }}
+        </div>
+      </div>
+    </div>
+
+    {% if axe.periodes %}
+    <div class="grille">
+      <div class="entete-grille">
+        <div class="colonne-libelle">Désignation</div>
+        <div style="flex: 1">
+          <div class="bande-groupes">
+            {% for groupe in axe.groupes %}
+            <div style="width: {{ groupe.largeur }}%">{{ groupe.libelle }}</div>
+            {% endfor %}
+          </div>
+          <div class="bande-periodes">
+            {% for periode in axe.periodes %}
+            <div style="width: {{ periode.largeur }}%">{{ periode.libelle }}</div>
+            {% endfor %}
+          </div>
+        </div>
+      </div>
+
+      {% for ligne in lignes %}
+      <div class="rangee {% if ligne.est_titre %}rangee-titre{% endif %}">
+        <div class="colonne-libelle {% if ligne.indente %}indente{% endif %}">
+          <span class="{% if ligne.est_titre %}libelle-titre{% endif %}">
+            {{ ligne.libelle|default:"(sans désignation)" }}
+          </span>
+        </div>
+        <div class="zone-barres">
+          {% for periode in axe.periodes %}
+          <div class="cellule" style="width: {{ periode.largeur }}%"></div>
+          {% endfor %}
+          {% if ligne.barre %}
+          <div
+            class="barre {% if ligne.est_titre %}barre-titre{% if ligne.doit_afficher_duree %} barre-avec-duree{% endif %}{% endif %}"
+            style="left: {{ ligne.barre.gauche }}%; width: {{ ligne.barre.largeur }}%; background-color: {{ ligne.couleur }};"
+          >
+            {% if ligne.doit_afficher_duree %}{{ ligne.barre.duree }} j{% endif %}
+          </div>
+          {% endif %}
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+    {% else %}
+    <div class="grille">
+      <div class="vide">
+        Ce diagramme ne contient aucune ligne datée.
+      </div>
+    </div>
+    {% endif %}
+
+    <div class="pied">
+     Échelle : {{ diagramme.get_echelle_display }}
+    </div>
+  </body>
+</html>

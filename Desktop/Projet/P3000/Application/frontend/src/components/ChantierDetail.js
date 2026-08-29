@@ -39,6 +39,7 @@ import ChantierCommandesTab from "./chantier/ChantierCommandesTab";
 import ChantierDocumentsTab from "./chantier/ChantierDocumentsTab";
 import ChantierInfoTab from "./chantier/ChantierInfoTab";
 import ChantierRecapFinancierTab from "./chantier/ChantierRecapFinancierTab";
+import GanttChantierTab from "./Gantt/GanttChantierTab";
 
 // Déplace TabPanel en dehors du composant ChantierDetail
 /** Filtres statut demandés pour la modale liste chantiers (valeurs API `state_chantier`) */
@@ -1262,6 +1263,7 @@ const ChantierDetail = () => {
                 <Tab label="Documents" />
                 <Tab label="Commandes" />
                 <Tab label="Récap Financier" />
+                <Tab label="Planning Gantt" />
               </Tabs>
             </Box>
           </AppBar>
@@ -1318,6 +1320,9 @@ const ChantierDetail = () => {
                 chantierId={id}
                 isActive={selectedTab === 3}
               />
+            </TabPanel>
+            <TabPanel value={selectedTab} index={4}>
+              <GanttChantierTab chantierId={id} isActive={selectedTab === 4} />
             </TabPanel>
           </Paper>
         </Box>

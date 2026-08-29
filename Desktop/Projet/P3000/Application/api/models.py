@@ -3929,6 +3929,18 @@ from .models_rapport import (  # noqa: E402  (import après signaux/post_migrate
 )
 
 
+# --- Diagrammes de Gantt -------------------------------------------------
+# Modèles définis dans ``api/models_gantt.py`` et réexportés ici afin de
+# rester accessibles via ``from api.models import GanttDiagramme``.
+from .models_gantt import (  # noqa: E402  (import après signaux/post_migrate)
+    GanttDiagramme,
+    GanttElement,
+    GanttHistorique,
+    GanttDesignation,
+    normaliser_libelle,
+)
+
+
 class UserMobileAccess(models.Model):
     """Droits d'accès aux sections mobiles (PWA) par utilisateur."""
     user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='mobile_access')

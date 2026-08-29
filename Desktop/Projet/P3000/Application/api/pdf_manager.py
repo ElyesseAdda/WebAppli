@@ -79,6 +79,7 @@ class PDFManager:
             'avenant_sous_traitance': 'SOUS_TRAITANT',
             'certificat_paiement': 'SOUS_TRAITANT',
             'rapport_intervention': 'RAPPORT_INTERVENTION',
+            'gantt': 'PLANNING_GANTT',
         }
 
     def _build_historique_destination_path(self, source_path: str) -> str:
@@ -240,6 +241,12 @@ class PDFManager:
             numero = kwargs.get('numero', 'Facture n°01.2025')
             # Normaliser le nom pour encoder "/" en "∕"
             normalized_name = normalize_filename(numero)
+            return f"{normalized_name}.pdf"
+
+        elif document_type == 'gantt':
+            # Format : Planning - {nom du diagramme}.pdf
+            nom_diagramme = kwargs.get('diagramme_nom', 'Planning')
+            normalized_name = normalize_filename(f"Planning - {nom_diagramme}")
             return f"{normalized_name}.pdf"
         
         else:
@@ -424,6 +431,18 @@ class PDFManager:
             chantier_slug = normalize_drive_segment(chantier_name)
             subfolder = self.document_type_folders.get(document_type, 'Documents_Execution')
             return f"Sociétés/{societe_slug}/{chantier_slug}/{subfolder}"
+
+        elif document_type == 'gantt':
+            # Un diagramme peut ne pas être rattaché à un chantier : dans ce cas
+            # il n'existe pas de dossier Chantiers/... et on bascule sur un
+            # dossier général classé par année.
+            subfolder = self.document_type_folders.get(document_type, 'PLANNING_GANTT')
+            chantier_name = kwargs.get('chantier_name')
+            if chantier_name:
+                chantier_slug = normalize_drive_segment(chantier_name)
+                return f"Chantiers/{societe_slug}/{chantier_slug}/{subfolder}"
+            year = kwargs.get('year', datetime.now().year)
+            return f"Documents_Generaux/{subfolder}/{year}"
         
         else:
             # Type de document non reconnu, stocker dans un dossier général
@@ -499,6 +518,10 @@ class PDFManager:
             elif document_type == 'rapport_agents':
                 script_name = 'generate_monthly_agents_pdf.js'
                 output_filename = 'rapport_agents_temp.pdf'
+            elif document_type == 'gantt':
+                # Script dédié : un diagramme de Gantt exige le format paysage
+                script_name = 'generate_gantt_pdf.js'
+                output_filename = 'gantt_temp.pdf'
             else:
                 # Utiliser le script par défaut
                 script_name = 'generate_pdf.js'
@@ -795,6 +818,10 @@ class PDFManager:
             elif document_type == 'rapport_agents':
                 script_name = 'generate_monthly_agents_pdf.js'
                 output_filename = 'rapport_agents_temp.pdf'
+            elif document_type == 'gantt':
+                # Script dédié : un diagramme de Gantt exige le format paysage
+                script_name = 'generate_gantt_pdf.js'
+                output_filename = 'gantt_temp.pdf'
             else:
                 # Utiliser le script par défaut
                 script_name = 'generate_pdf.js'
