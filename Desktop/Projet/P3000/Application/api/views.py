@@ -13722,8 +13722,13 @@ def _get_tableau_sous_traitant_data(chantier_id=None):
                     montant_suivi = Decimal(str(suivi.montant_paye_ht))
                     montant_saisi = bool(getattr(suivi, 'montant_paye_saisi', False))
                     has_factures_suivi = any(True for _ in suivi.factures_suivi.all())
-                    if montant_saisi or montant_suivi != 0 or has_factures_suivi:
-                        data[key][sous_traitant_nom][first_cid]['paye'] = montant_suivi
+                if montant_saisi or montant_suivi != 0 or has_factures_suivi:
+                    data[key][sous_traitant_nom][first_cid]['paye'] = montant_suivi
+                    # Montant saisi au niveau agrégé : éviter de re-sommer les anciens
+                    # paiements par chantier (PaiementSousTraitant) au regroupement frontend.
+                    if montant_saisi:
+                        for cid in target_chantier_ids[1:]:
+                            data[key][sous_traitant_nom][cid]['paye'] = Decimal('0')
                 
                 # Appliquer les dates et suivi_paiement_id sur toutes les entrées cibles
                 for cid in target_chantier_ids:

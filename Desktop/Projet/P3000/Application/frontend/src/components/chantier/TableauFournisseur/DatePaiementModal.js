@@ -35,61 +35,79 @@ const DatePaiementModal = ({ open, onClose, onSave, onCancel, datePaiement, mont
     }
   }, [open, datePaiement, montantPaye]);
 
+  const canSave = localDatePaiement;
+
   const handleSave = () => {
+    if (!canSave) return;
     const montant = parseFloat(localMontantPaye) || 0;
     onSave(montant, localDatePaiement);
     onClose();
   };
 
+  const handleSubmit = (e) => {
+    e.preventDefault();
+    handleSave();
+  };
+
+  const handleKeyDown = (e) => {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      handleSave();
+    }
+  };
+
   return (
     <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth>
       <DialogTitle>Montant payé et date de paiement</DialogTitle>
-      <DialogContent>
-        <Box sx={{ display: "flex", flexDirection: "column", gap: 2, mt: 1 }}>
-          <TextField
-            label="Montant payé"
-            type="number"
-            value={localMontantPaye}
-            onChange={(e) => setLocalMontantPaye(e.target.value)}
-            fullWidth
-            required
-            inputProps={{
-              min: 0,
-              step: 0.01,
-            }}
-          />
-          <TextField
-            label="Date de paiement"
-            type="date"
-            value={localDatePaiement}
-            onChange={(e) => setLocalDatePaiement(e.target.value)}
-            fullWidth
-            required
-            InputLabelProps={{
-              shrink: true,
-            }}
-          />
-        </Box>
-      </DialogContent>
-      <DialogActions>
-        <Button onClick={onClose}>Fermer</Button>
-        {hasExistingPayment && (
-          <Button 
-            onClick={() => {
-              if (onCancel) {
-                onCancel();
-              }
-            }} 
-            variant="outlined" 
-            color="error"
-          >
-            Annuler le paiement
+      <form onSubmit={handleSubmit} onKeyDown={handleKeyDown}>
+        <DialogContent>
+          <Box sx={{ display: "flex", flexDirection: "column", gap: 2, mt: 1 }}>
+            <TextField
+              label="Montant payé"
+              type="number"
+              value={localMontantPaye}
+              onChange={(e) => setLocalMontantPaye(e.target.value)}
+              fullWidth
+              required
+              inputProps={{
+                min: 0,
+                step: 0.01,
+              }}
+            />
+            <TextField
+              label="Date de paiement"
+              type="date"
+              value={localDatePaiement}
+              onChange={(e) => setLocalDatePaiement(e.target.value)}
+              fullWidth
+              required
+              InputLabelProps={{
+                shrink: true,
+              }}
+            />
+          </Box>
+        </DialogContent>
+        <DialogActions>
+          <Button type="button" onClick={onClose}>Fermer</Button>
+          {hasExistingPayment && (
+            <Button
+              type="button"
+              onClick={() => {
+                if (onCancel) {
+                  onCancel();
+                }
+              }}
+              variant="outlined"
+              color="error"
+            >
+              Annuler le paiement
+            </Button>
+          )}
+          <Button type="submit" variant="contained" disabled={!canSave}>
+            Valider
           </Button>
-        )}
-        <Button onClick={handleSave} variant="contained" disabled={!localDatePaiement}>
-          Valider
-        </Button>
-      </DialogActions>
+        </DialogActions>
+      </form>
     </Dialog>
   );
 };

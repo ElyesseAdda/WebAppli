@@ -3326,6 +3326,14 @@ const TableauFournisseur = () => {
             <DialogTitle>
               Remplir automatiquement les paiements
             </DialogTitle>
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                if (fillDatePaiement) {
+                  executeFillAllFournisseurMois();
+                }
+              }}
+            >
             <DialogContent>
               {pendingFillAction && (() => {
                 const [moisNum, annee2digits] = pendingFillAction.mois.split("/").map(Number);
@@ -3424,6 +3432,7 @@ const TableauFournisseur = () => {
             </DialogContent>
             <DialogActions>
               <Button
+                type="button"
                 onClick={() => {
                   setConfirmFillModalOpen(false);
                   setPendingFillAction(null);
@@ -3435,7 +3444,7 @@ const TableauFournisseur = () => {
                 Annuler
               </Button>
               <Button
-                onClick={executeFillAllFournisseurMois}
+                type="submit"
                 color="primary"
                 variant="contained"
                 autoFocus
@@ -3444,6 +3453,7 @@ const TableauFournisseur = () => {
                 Confirmer
               </Button>
             </DialogActions>
+            </form>
           </Dialog>
 
           <Dialog

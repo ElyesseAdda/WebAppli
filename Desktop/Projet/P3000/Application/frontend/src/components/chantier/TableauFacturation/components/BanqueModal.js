@@ -90,35 +90,44 @@ const BanqueModal = ({
         }}
       >
         <DialogTitle>Créer une nouvelle banque</DialogTitle>
-        <DialogContent>
-          <Box sx={{ p: 2, minWidth: 300 }}>
-            <TextField
-              fullWidth
-              label="Nom de la banque"
-              value={newBanqueName}
-              onChange={(e) => setNewBanqueName(e.target.value)}
-              sx={{ mb: 2 }}
-              onKeyPress={(e) => {
-                if (e.key === "Enter") {
-                  handleCreateBanque();
-                }
+        <form
+          onSubmit={(e) => {
+            e.preventDefault();
+            handleCreateBanque();
+          }}
+        >
+          <DialogContent>
+            <Box sx={{ p: 2, minWidth: 300 }}>
+              <TextField
+                fullWidth
+                label="Nom de la banque"
+                value={newBanqueName}
+                onChange={(e) => setNewBanqueName(e.target.value)}
+                sx={{ mb: 2 }}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    e.preventDefault();
+                    handleCreateBanque();
+                  }
+                }}
+              />
+            </Box>
+          </DialogContent>
+          <DialogActions>
+            <Button
+              type="button"
+              onClick={() => {
+                setOpenCreateModal(false);
+                setNewBanqueName("");
               }}
-            />
-          </Box>
-        </DialogContent>
-        <DialogActions>
-          <Button
-            onClick={() => {
-              setOpenCreateModal(false);
-              setNewBanqueName("");
-            }}
-          >
-            Annuler
-          </Button>
-          <Button onClick={handleCreateBanque} variant="contained">
-            Créer
-          </Button>
-        </DialogActions>
+            >
+              Annuler
+            </Button>
+            <Button type="submit" variant="contained">
+              Créer
+            </Button>
+          </DialogActions>
+        </form>
       </Dialog>
     </>
   );

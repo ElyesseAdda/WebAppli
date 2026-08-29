@@ -35,30 +35,45 @@ const DatePaiementFactureModal = ({ open, onClose, onSave, datePaiement }) => {
     }
   };
 
+  const handleSubmit = (e) => {
+    e.preventDefault();
+    handleSave();
+  };
+
+  const handleKeyDown = (e) => {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      handleSave();
+    }
+  };
+
   return (
     <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth>
       <DialogTitle>Date de paiement de la facture</DialogTitle>
-      <DialogContent>
-        <Box sx={{ display: "flex", flexDirection: "column", gap: 2, mt: 1 }}>
-          <TextField
-            label="Date de paiement"
-            type="date"
-            value={localDatePaiement}
-            onChange={(e) => setLocalDatePaiement(e.target.value)}
-            fullWidth
-            required
-            InputLabelProps={{
-              shrink: true,
-            }}
-          />
-        </Box>
-      </DialogContent>
-      <DialogActions>
-        <Button onClick={onClose}>Annuler</Button>
-        <Button onClick={handleSave} variant="contained" disabled={!localDatePaiement}>
-          Valider
-        </Button>
-      </DialogActions>
+      <form onSubmit={handleSubmit}>
+        <DialogContent>
+          <Box sx={{ display: "flex", flexDirection: "column", gap: 2, mt: 1 }}>
+            <TextField
+              label="Date de paiement"
+              type="date"
+              value={localDatePaiement}
+              onChange={(e) => setLocalDatePaiement(e.target.value)}
+              onKeyDown={handleKeyDown}
+              fullWidth
+              required
+              InputLabelProps={{
+                shrink: true,
+              }}
+            />
+          </Box>
+        </DialogContent>
+        <DialogActions>
+          <Button type="button" onClick={onClose}>Annuler</Button>
+          <Button type="submit" variant="contained" disabled={!localDatePaiement}>
+            Valider
+          </Button>
+        </DialogActions>
+      </form>
     </Dialog>
   );
 };

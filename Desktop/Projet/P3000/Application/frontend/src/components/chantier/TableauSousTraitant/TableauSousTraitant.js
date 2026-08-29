@@ -122,10 +122,19 @@ const TableauSousTraitant = () => {
               mois: item.mois,
               sous_traitant: item.sous_traitant,
               paye: 0,
+              hasSuiviAggregate: false,
               factures: []
             };
           }
-          agentsJournaliersData[keyAgent].paye += item.paye || 0;
+          // Suivi agrégé (chantier_id null) : ne pas re-sommer les anciens montants par chantier
+          if (item.suivi_paiement_id) {
+            if (!agentsJournaliersData[keyAgent].hasSuiviAggregate) {
+              agentsJournaliersData[keyAgent].paye = item.paye ?? 0;
+              agentsJournaliersData[keyAgent].hasSuiviAggregate = true;
+            }
+          } else if (!agentsJournaliersData[keyAgent].hasSuiviAggregate) {
+            agentsJournaliersData[keyAgent].paye += item.paye || 0;
+          }
           if (item.factures && item.factures.length > 0) {
             agentsJournaliersData[keyAgent].factures.push(...item.factures);
           }
@@ -375,12 +384,19 @@ const TableauSousTraitant = () => {
 
   // Ouvrir le modal pour saisir/modifier le montant payé et la date
   const handleOpenDatePaiementModal = (mois, sous_traitant, chantierId) => {
-    const currentData = data.find(d => 
-      d.mois === mois && 
-      d.sous_traitant === sous_traitant && 
-      d.chantier_id === chantierId
-    );
-    const key = chantierId === 0 || chantierId === null
+    const isAgentJournalierRow = chantierId === 0 || chantierId === null;
+    const currentData = isAgentJournalierRow
+      ? data.find(d =>
+          d.mois === mois &&
+          d.sous_traitant === sous_traitant &&
+          d.source_type === 'agent_journalier'
+        )
+      : data.find(d =>
+          d.mois === mois &&
+          d.sous_traitant === sous_traitant &&
+          d.chantier_id === chantierId
+        );
+    const key = isAgentJournalierRow
       ? `${mois}_${sous_traitant}_AGENT_JOURNALIER`
       : `${mois}_${sous_traitant}_${chantierId}`;
     const montantPayeActuel = editedValuesPaye[key] !== undefined
@@ -401,82 +417,96 @@ const TableauSousTraitant = () => {
   
   // Gérer la sauvegarde depuis le modal de date de paiement (MONTANT PAYÉ)
   const handleSaveDatePaiement = async (montantPaye, datePaiement) => {
-    if (currentPaiement) {
-      const { mois, sous_traitant, chantierId } = currentPaiement;
-      // ✅ FIX : Utiliser la bonne clé pour les agents journaliers (_AGENT_JOURNALIER au lieu de _0)
-      const key = chantierId === 0 || chantierId === null
-        ? `${mois}_${sous_traitant}_AGENT_JOURNALIER`
-        : `${mois}_${sous_traitant}_${chantierId}`;
-      
-      // ✅ TOUTES les lignes (y compris AgencyExpenseMonth et agents journaliers) utilisent le système de suivi
-      setEditedValuesPaye((prev) => ({
-        ...prev,
-        [key]: montantPaye,
-      }));
-      
-      // Sauvegarder avec la date de paiement dans SuiviPaiementSousTraitantMensuel
-      // Pour les lignes avec chantierId === 0 (AgencyExpenseMonth et agents journaliers),
-      // appeler directement l'API car savePaiement les exclut
-      if (chantierId === 0 || chantierId === null) {
-        try {
-          setSaving(true);
-          
-          const [moisNum, annee2digits] = mois.split("/").map(Number);
-          const anneeComplete = annee2digits < 50 ? 2000 + annee2digits : 1900 + annee2digits;
-          
-          const response = await axios.post(
-            `/api/suivi-paiements-sous-traitant-mensuel/update_or_create_suivi/`,
-            {
-              mois: moisNum,
-              annee: anneeComplete,
-              sous_traitant: sous_traitant,
-              chantier_id: null,  // null pour les lignes sans chantier spécifique
-              montant_paye_ht: montantPaye == null ? 0 : montantPaye,
-              montant_paye_saisi: true,
-              date_paiement_reel: datePaiement
-            }
-          );
-          
-          // Mise à jour dynamique
-          const suiviData = response.data;
-          
-          setData((prevData) => {
-            return prevData.map((item) => {
-              if (
-                item.mois === mois &&
-                item.sous_traitant === sous_traitant &&
-                item.chantier_id === chantierId
-              ) {
-                return {
-                  ...item,
-                  paye: suiviData.montant_paye_ht ?? 0,
-                  date_paiement: suiviData.date_paiement_reel,
-                  date_envoi: suiviData.date_envoi_facture,
-                  date_paiement_prevue: suiviData.date_paiement_prevue,
-                  ecart_paiement_reel: suiviData.ecart_paiement_reel,
-                  delai_paiement: suiviData.delai_paiement,
-                  suivi_paiement_id: suiviData.id
-                };
-              }
-              return item;
-            });
-          });
-          
-          setSaveSuccess(true);
-          setTimeout(() => setSaveSuccess(false), 2000);
-        } catch (error) {
-          console.error("Erreur lors de la sauvegarde:", error);
-          setError("Erreur lors de la sauvegarde du montant payé");
-        } finally {
-          setSaving(false);
-        }
-      } else {
-        // Pour les autres lignes, utiliser savePaiement normalement
-        savePaiement(mois, sous_traitant, chantierId, montantPaye, null, datePaiement);
-      }
+    if (!currentPaiement) {
+      return;
     }
-    setDatePaiementModalOpen(false);
-    setCurrentPaiement(null);
+
+    const { mois, sous_traitant, chantierId } = currentPaiement;
+    const isAgentJournalierRow = chantierId === 0 || chantierId === null;
+    const key = isAgentJournalierRow
+      ? `${mois}_${sous_traitant}_AGENT_JOURNALIER`
+      : `${mois}_${sous_traitant}_${chantierId}`;
+
+    setEditedValuesPaye((prev) => ({
+      ...prev,
+      [key]: montantPaye,
+    }));
+
+    try {
+      setSaving(true);
+
+      const [moisNum, annee2digits] = mois.split("/").map(Number);
+      const anneeComplete = annee2digits < 50 ? 2000 + annee2digits : 1900 + annee2digits;
+
+      const response = await axios.post(
+        `/api/suivi-paiements-sous-traitant-mensuel/update_or_create_suivi/`,
+        {
+          mois: moisNum,
+          annee: anneeComplete,
+          sous_traitant: sous_traitant,
+          chantier_id: isAgentJournalierRow ? null : (chantierId || null),
+          montant_paye_ht: montantPaye == null ? 0 : montantPaye,
+          montant_paye_saisi: true,
+          date_paiement_reel: datePaiement,
+        }
+      );
+
+      const suiviData = response.data;
+      let agentPayeApplied = false;
+
+      setData((prevData) => {
+        return prevData.map((item) => {
+          if (item.mois !== mois || item.sous_traitant !== sous_traitant) {
+            return item;
+          }
+
+          const suiviUpdates = {
+            paye: suiviData.montant_paye_ht ?? 0,
+            date_paiement: suiviData.date_paiement_reel,
+            date_envoi: suiviData.date_envoi_facture,
+            date_paiement_prevue: suiviData.date_paiement_prevue,
+            ecart_paiement_reel: suiviData.ecart_paiement_reel,
+            delai_paiement: suiviData.delai_paiement,
+            suivi_paiement_id: suiviData.id,
+            ecart: (item.a_payer || 0) - (suiviData.montant_paye_ht ?? 0),
+          };
+
+          if (isAgentJournalierRow && item.source_type === 'agent_journalier') {
+            if (!agentPayeApplied) {
+              agentPayeApplied = true;
+              return { ...item, ...suiviUpdates };
+            }
+            return {
+              ...item,
+              paye: 0,
+              ecart: item.a_payer || 0,
+              date_paiement: suiviData.date_paiement_reel,
+              date_envoi: suiviData.date_envoi_facture,
+              date_paiement_prevue: suiviData.date_paiement_prevue,
+              ecart_paiement_reel: suiviData.ecart_paiement_reel,
+              delai_paiement: suiviData.delai_paiement,
+              suivi_paiement_id: suiviData.id,
+            };
+          }
+
+          if (item.chantier_id === chantierId) {
+            return { ...item, ...suiviUpdates };
+          }
+
+          return item;
+        });
+      });
+
+      setSaveSuccess(true);
+      setTimeout(() => setSaveSuccess(false), 2000);
+    } catch (error) {
+      console.error("Erreur lors de la sauvegarde:", error);
+      setError("Erreur lors de la sauvegarde du montant payé");
+    } finally {
+      setSaving(false);
+      setDatePaiementModalOpen(false);
+      setCurrentPaiement(null);
+    }
   };
   
   // Nouvelle fonction pour modifier le MONTANT À PAYER des lignes AgencyExpenseMonth
@@ -3628,93 +3658,51 @@ const TableauSousTraitant = () => {
                             )}
                           </TableCell>
                           <TableCell sx={commonBodyCellStyle}>
-                            {item.isAgentJournalier ? (
-                              <TextField
-                                type="number"
-                                size="small"
-                                value={item.paye ?? ""}
-                                onChange={(e) => {
-                                  const newValue = parseFloat(e.target.value) || 0;
-                                  const key = item.keyAgentJournalier || `${row.mois}_${row.sous_traitant}_AGENT_JOURNALIER`;
-                                  setEditedValuesPaye((prev) => ({
-                                    ...prev,
-                                    [key]: newValue,
-                                  }));
-                                  // Pour les agents journaliers, on ne peut pas sauvegarder directement car il n'y a pas de chantier_id unique
-                                  // La sauvegarde devra être gérée différemment
-                                }}
-                                inputProps={{
-                                  min: 0,
-                                  step: 0.01,
-                                  style: {
-                                    textAlign: "center",
-                                    fontSize: "0.75rem",
-                                    padding: "4px 8px",
-                                    color: colorForAmount(item.paye),
-                                    fontWeight: 500,
+                            <TextField
+                              type="number"
+                              size="small"
+                              value={item.paye ?? ""}
+                              onClick={() =>
+                                handleOpenDatePaiementModal(
+                                  row.mois,
+                                  row.sous_traitant,
+                                  item.isAgentJournalier ? 0 : item.chantier_id
+                                )
+                              }
+                              InputProps={{
+                                readOnly: true,
+                              }}
+                              inputProps={{
+                                min: 0,
+                                step: 0.01,
+                                style: {
+                                  textAlign: "center",
+                                  fontSize: "0.75rem",
+                                  padding: "4px 8px",
+                                  cursor: "pointer",
+                                  textDecoration: "none",
+                                  color: colorForAmount(item.paye),
+                                  fontWeight: 500,
+                                },
+                              }}
+                              sx={{
+                                width: "100%",
+                                "& .MuiInputBase-root": {
+                                  fontSize: "0.75rem",
+                                  height: "32px",
+                                  cursor: "pointer",
+                                },
+                                "& .MuiOutlinedInput-root": {
+                                  backgroundColor: "white",
+                                  "&:hover": {
+                                    borderColor: "rgba(27, 120, 188, 1)",
                                   },
-                                }}
-                                sx={{
-                                  width: "100%",
-                                  "& .MuiInputBase-root": {
-                                    fontSize: "0.75rem",
-                                    height: "32px",
-                                  },
-                                  "& .MuiOutlinedInput-root": {
-                                    backgroundColor: "white",
-                                    "&:hover": {
-                                      borderColor: "rgba(27, 120, 188, 1)",
-                                    },
-                                  },
-                                }}
-                              />
-                            ) : (
-                              <TextField
-                                type="number"
-                                size="small"
-                                value={item.paye ?? ""}
-                                onClick={() =>
-                                  handleOpenDatePaiementModal(
-                                    row.mois,
-                                    row.sous_traitant,
-                                    item.chantier_id
-                                  )
-                                }
-                                InputProps={{
-                                  readOnly: true,
-                                }}
-                                inputProps={{
-                                  min: 0,
-                                  step: 0.01,
-                                  style: {
-                                    textAlign: "center",
-                                    fontSize: "0.75rem",
-                                    padding: "4px 8px",
-                                    cursor: "pointer",
-                                    textDecoration: "none",
-                                    color: colorForAmount(item.paye),
-                                    fontWeight: 500,
-                                  },
-                                }}
-                                sx={{
-                                  width: "100%",
-                                  "& .MuiInputBase-root": {
-                                    fontSize: "0.75rem",
-                                    height: "32px",
-                                    cursor: "pointer",
-                                  },
-                                  "& .MuiOutlinedInput-root": {
-                                    backgroundColor: "white",
-                                    "&:hover": {
-                                      borderColor: "rgba(27, 120, 188, 1)",
-                                    },
-                                  },
-                                  "& input": {
-                                    textDecoration: "none !important",
-                                  },
-                                }}
-                              />
-                            )}
+                                },
+                                "& input": {
+                                  textDecoration: "none !important",
+                                },
+                              }}
+                            />
                           </TableCell>
                           <TableCell 
                             sx={{ 
@@ -4627,6 +4615,14 @@ const TableauSousTraitant = () => {
             <DialogTitle>
               Confirmer le remplissage automatique
             </DialogTitle>
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                if (!saving) {
+                  executeFillAllSousTraitantMois();
+                }
+              }}
+            >
             <DialogContent>
               {pendingFillAction && (() => {
                 const [moisNum, annee2digits] = pendingFillAction.mois.split("/").map(Number);
@@ -4724,6 +4720,7 @@ const TableauSousTraitant = () => {
             </DialogContent>
             <DialogActions>
               <Button
+                type="button"
                 onClick={() => {
                   setConfirmFillModalOpen(false);
                   setPendingFillAction(null);
@@ -4734,7 +4731,7 @@ const TableauSousTraitant = () => {
                 Annuler
               </Button>
               <Button
-                onClick={executeFillAllSousTraitantMois}
+                type="submit"
                 color="primary"
                 variant="contained"
                 disabled={saving}
@@ -4743,6 +4740,7 @@ const TableauSousTraitant = () => {
                 Confirmer
               </Button>
             </DialogActions>
+            </form>
           </Dialog>
 
           {/* Modal d'ajustement pour les agents journaliers */}
@@ -4765,6 +4763,14 @@ const TableauSousTraitant = () => {
                 {currentAjustement && `${String(currentAjustement.mois).padStart(2, '0')}/${currentAjustement.annee}`}
               </Typography>
             </DialogTitle>
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                if (!savingAjustement) {
+                  handleSaveAjustement();
+                }
+              }}
+            >
             <DialogContent sx={{ pt: 2 }}>
               {/* Détail par chantier */}
               {currentAjustement?.chantiersDetails && currentAjustement.chantiersDetails.length > 0 && (
@@ -4880,6 +4886,7 @@ const TableauSousTraitant = () => {
             <DialogActions sx={{ p: 2, borderTop: '1px solid #e0e0e0' }}>
               {currentAjustement?.ajustement_id && (
                 <Button
+                  type="button"
                   onClick={handleDeleteAjustement}
                   color="error"
                   disabled={savingAjustement}
@@ -4888,11 +4895,11 @@ const TableauSousTraitant = () => {
                   Supprimer l'ajustement
                 </Button>
               )}
-              <Button onClick={handleCloseAjustementModal} color="secondary">
+              <Button type="button" onClick={handleCloseAjustementModal} color="secondary">
                 Annuler
               </Button>
               <Button
-                onClick={handleSaveAjustement}
+                type="submit"
                 color="primary"
                 variant="contained"
                 disabled={savingAjustement}
@@ -4900,6 +4907,7 @@ const TableauSousTraitant = () => {
                 {savingAjustement ? <CircularProgress size={20} /> : 'Sauvegarder'}
               </Button>
             </DialogActions>
+            </form>
           </Dialog>
 
           <Dialog

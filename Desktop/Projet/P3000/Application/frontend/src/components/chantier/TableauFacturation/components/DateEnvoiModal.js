@@ -5,6 +5,8 @@ import {
   DialogActions,
   DialogContent,
   DialogTitle,
+  FormControl,
+  InputLabel,
   MenuItem,
   Select,
   TextField,
@@ -33,7 +35,7 @@ const DateEnvoiModal = ({ open, onClose, situation, onSubmit }) => {
     }
   }, [situation, open, isFacture]);
 
-  const handleSubmit = () => {
+  const handleSave = () => {
     onSubmit(situation.id, {
       dateEnvoi,
       delaiPaiement,
@@ -42,39 +44,56 @@ const DateEnvoiModal = ({ open, onClose, situation, onSubmit }) => {
     onClose();
   };
 
+  const handleSubmit = (e) => {
+    e.preventDefault();
+    handleSave();
+  };
+
+  const handleKeyDown = (e) => {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      handleSave();
+    }
+  };
+
   return (
     <Dialog open={open} onClose={onClose}>
       <DialogTitle>Date d'envoi et délai de paiement</DialogTitle>
-      <DialogContent>
-        <Box sx={{ p: 2 }}>
-          <TextField
-            type="date"
-            label="Date d'envoi"
-            value={dateEnvoi}
-            onChange={(e) => setDateEnvoi(e.target.value)}
-            fullWidth
-            sx={{ mb: 2 }}
-          />
-          <Select
-            value={delaiPaiement}
-            onChange={(e) => setDelaiPaiement(e.target.value)}
-            fullWidth
-            label="Délai de paiement"
-          >
-            <MenuItem value={45}>45 jours</MenuItem>
-            <MenuItem value={60}>60 jours</MenuItem>
-          </Select>
-        </Box>
-      </DialogContent>
-      <DialogActions>
-        <Button onClick={onClose}>Annuler</Button>
-        <Button onClick={handleSubmit} variant="contained">
-          Valider
-        </Button>
-      </DialogActions>
+      <form onSubmit={handleSubmit} onKeyDown={handleKeyDown}>
+        <DialogContent>
+          <Box sx={{ p: 2 }}>
+            <TextField
+              type="date"
+              label="Date d'envoi"
+              value={dateEnvoi}
+              onChange={(e) => setDateEnvoi(e.target.value)}
+              fullWidth
+              sx={{ mb: 2 }}
+              InputLabelProps={{ shrink: true }}
+            />
+            <FormControl fullWidth>
+              <InputLabel id="delai-paiement-label">Délai de paiement</InputLabel>
+              <Select
+                labelId="delai-paiement-label"
+                value={delaiPaiement}
+                onChange={(e) => setDelaiPaiement(e.target.value)}
+                label="Délai de paiement"
+              >
+                <MenuItem value={45}>45 jours</MenuItem>
+                <MenuItem value={60}>60 jours</MenuItem>
+              </Select>
+            </FormControl>
+          </Box>
+        </DialogContent>
+        <DialogActions>
+          <Button type="button" onClick={onClose}>Annuler</Button>
+          <Button type="submit" variant="contained">
+            Valider
+          </Button>
+        </DialogActions>
+      </form>
     </Dialog>
   );
 };
 
 export default DateEnvoiModal;
-
