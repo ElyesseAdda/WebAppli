@@ -37,6 +37,7 @@ import { useNavigate, useParams } from "react-router-dom";
 import ColorPicker from "../Devis/LignesSpeciales/ColorPicker";
 import GanttDesignationInput from "./GanttDesignationInput";
 import GanttHistoriqueDrawer from "./GanttHistoriqueDrawer";
+import GanttLogoClientPicker from "./GanttLogoClientPicker";
 import GanttStatutBadge from "./GanttStatutBadge";
 import GanttTimeline from "./GanttTimeline";
 import { STYLES_BARRE, sxApercuStyle } from "./ganttBarStyles";
@@ -244,6 +245,7 @@ const GanttDetail = () => {
         description: courant.description || "",
         chantier: courant.chantier,
         echelle: courant.echelle,
+        afficher_logo_client: Boolean(courant.afficher_logo_client),
         elements: elementsRef.current.map((element) => ({
           id: element.id,
           type_element: element.type_element,
@@ -674,6 +676,22 @@ const GanttDetail = () => {
             value={diagramme.description || ""}
             onChange={(e) => majDiagramme({ description: e.target.value })}
             sx={{ flex: 1, minWidth: 240 }}
+          />
+          <GanttLogoClientPicker
+            diagrammeId={diagramme.id}
+            logoUrl={diagramme.logo_client_url || ""}
+            afficherLogoClient={Boolean(diagramme.afficher_logo_client)}
+            onAfficherChange={(valeur) =>
+              majDiagramme({ afficher_logo_client: valeur })
+            }
+            onLogoUpdated={(data) => {
+              setDiagramme((precedent) => ({
+                ...precedent,
+                logo_client_s3_key: data.logo_client_s3_key ?? null,
+                logo_client_url: data.logo_client_url || "",
+                afficher_logo_client: Boolean(data.afficher_logo_client),
+              }));
+            }}
           />
         </Box>
       </Paper>

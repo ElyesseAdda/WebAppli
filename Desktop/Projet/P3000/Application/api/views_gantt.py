@@ -3,7 +3,9 @@
 import os
 import subprocess
 import tempfile
+import uuid as _uuid
 from datetime import date, timedelta
+from io import BytesIO
 
 from django.db import transaction
 from django.http import HttpResponse, JsonResponse
@@ -228,6 +230,34 @@ def _alimenter_designations(diagramme, utilisateur):
             designation.save()
 
 
+def _optimiser_logo_gantt(contenu):
+    """Redimensionne et compresse un logo pour le PDF (qualité visuelle, taille réduite)."""
+    from PIL import Image
+
+    image = Image.open(BytesIO(contenu))
+    if image.mode in ('RGBA', 'LA', 'P'):
+        image = image.convert('RGBA')
+    elif image.mode != 'RGB':
+        image = image.convert('RGB')
+
+    largeur, hauteur = image.size
+    max_dim = 512
+    if max(largeur, hauteur) > max_dim:
+        ratio = max_dim / max(largeur, hauteur)
+        image = image.resize(
+            (int(largeur * ratio), int(hauteur * ratio)),
+            Image.Resampling.LANCZOS,
+        )
+
+    sortie = BytesIO()
+    if image.mode == 'RGBA':
+        image.save(sortie, format='PNG', optimize=True)
+        return sortie.getvalue(), 'image/png', 'png'
+
+    image.save(sortie, format='JPEG', quality=85, optimize=True)
+    return sortie.getvalue(), 'image/jpeg', 'jpg'
+
+
 class GanttDiagrammeViewSet(viewsets.ModelViewSet):
     """CRUD des diagrammes, avec validation, réouverture et historique.
 
@@ -363,6 +393,108 @@ class GanttDiagrammeViewSet(viewsets.ModelViewSet):
             )
 
         return Response(GanttDiagrammeSerializer(diagramme).data)
+
+    @action(detail=True, methods=['post'])
+    def upload_logo_client(self, request, pk=None):
+        """Enregistre le logo client du diagramme sur S3 (image optimisée)."""
+        diagramme = self.get_object()
+        fichier = request.FILES.get('logo')
+        if not fichier:
+            return Response({'error': 'Fichier logo requis'}, status=400)
+        try:
+            from .utils import (
+                generate_presigned_url_for_display,
+                get_s3_bucket_name,
+                get_s3_client,
+                is_s3_available,
+            )
+
+            if not is_s3_available():
+                return Response({'error': 'S3 non disponible'}, status=503)
+
+            contenu, content_type, ext = _optimiser_logo_gantt(fichier.read())
+            s3_key = (
+                f"gantt/logos/{diagramme.id}_{_uuid.uuid4().hex[:8]}.{ext}"
+            )
+            s3_client = get_s3_client()
+            bucket_name = get_s3_bucket_name()
+
+            if diagramme.logo_client_s3_key:
+                try:
+                    s3_client.delete_object(
+                        Bucket=bucket_name, Key=diagramme.logo_client_s3_key
+                    )
+                except Exception:
+                    pass
+
+            s3_client.put_object(
+                Bucket=bucket_name,
+                Key=s3_key,
+                Body=contenu,
+                ContentType=content_type,
+            )
+            diagramme.logo_client_s3_key = s3_key
+            diagramme.afficher_logo_client = True
+            diagramme.modified_by = _utilisateur(request)
+            diagramme.save(
+                update_fields=[
+                    'logo_client_s3_key',
+                    'afficher_logo_client',
+                    'modified_by',
+                    'date_modification',
+                ]
+            )
+            logo_url = generate_presigned_url_for_display(s3_key, expires_in=3600)
+            return Response(
+                {
+                    'success': True,
+                    'logo_client_s3_key': s3_key,
+                    'logo_client_url': logo_url,
+                    'afficher_logo_client': diagramme.afficher_logo_client,
+                }
+            )
+        except Exception as e:
+            return Response({'error': str(e)}, status=500)
+
+    @action(detail=True, methods=['delete'])
+    def delete_logo_client(self, request, pk=None):
+        diagramme = self.get_object()
+        if not diagramme.logo_client_s3_key:
+            return Response({'error': 'Aucun logo client'}, status=400)
+        try:
+            from .utils import get_s3_bucket_name, get_s3_client, is_s3_available
+
+            if is_s3_available():
+                s3_client = get_s3_client()
+                bucket_name = get_s3_bucket_name()
+                try:
+                    s3_client.delete_object(
+                        Bucket=bucket_name, Key=diagramme.logo_client_s3_key
+                    )
+                except Exception:
+                    pass
+        except Exception:
+            pass
+
+        diagramme.logo_client_s3_key = None
+        diagramme.afficher_logo_client = False
+        diagramme.modified_by = _utilisateur(request)
+        diagramme.save(
+            update_fields=[
+                'logo_client_s3_key',
+                'afficher_logo_client',
+                'modified_by',
+                'date_modification',
+            ]
+        )
+        return Response(
+            {
+                'success': True,
+                'logo_client_s3_key': None,
+                'logo_client_url': '',
+                'afficher_logo_client': False,
+            }
+        )
 
     @action(detail=True, methods=['get'])
     def historique(self, request, pk=None):
@@ -834,10 +966,23 @@ def preview_gantt(request, diagramme_id):
         else None
     )
 
+    from .utils import generate_presigned_url_for_display
+
+    logo_client_url = ''
+    if diagramme.afficher_logo_client and diagramme.logo_client_s3_key:
+        try:
+            logo_client_url = generate_presigned_url_for_display(
+                diagramme.logo_client_s3_key, expires_in=3600
+            )
+        except Exception:
+            pass
+
     return render(request, 'preview_gantt.html', {
         'diagramme': diagramme,
         'chantier': diagramme.chantier,
         'societe_nom': societe.nom_societe if societe else '',
+        'afficher_logo_client': diagramme.afficher_logo_client,
+        'logo_client_url': logo_client_url,
         'axe': layout['axe'],
         'lignes': layout['lignes'],
         'enchainements': layout['enchainements'],

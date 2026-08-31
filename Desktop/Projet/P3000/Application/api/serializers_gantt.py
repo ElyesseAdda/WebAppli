@@ -75,6 +75,7 @@ class GanttDiagrammeSerializer(serializers.ModelSerializer):
     chantier_nom = serializers.CharField(
         source='chantier.chantier_name', read_only=True, default=None
     )
+    logo_client_url = serializers.SerializerMethodField()
     created_by_nom = serializers.SerializerMethodField()
     modified_by_nom = serializers.SerializerMethodField()
     date_debut = serializers.DateField(read_only=True)
@@ -90,6 +91,9 @@ class GanttDiagrammeSerializer(serializers.ModelSerializer):
             'chantier_nom',
             'statut',
             'echelle',
+            'afficher_logo_client',
+            'logo_client_s3_key',
+            'logo_client_url',
             'elements',
             'date_debut',
             'date_fin',
@@ -110,7 +114,21 @@ class GanttDiagrammeSerializer(serializers.ModelSerializer):
             'modified_by',
             'validated_by',
             'statut',
+            'logo_client_s3_key',
+            'logo_client_url',
         ]
+
+    def get_logo_client_url(self, obj):
+        if not obj.logo_client_s3_key:
+            return ''
+        try:
+            from .utils import generate_presigned_url_for_display
+
+            return generate_presigned_url_for_display(
+                obj.logo_client_s3_key, expires_in=3600
+            )
+        except Exception:
+            return ''
 
     def _nom_utilisateur(self, user):
         if not user:
@@ -203,6 +221,7 @@ class GanttDiagrammeApercuSerializer(serializers.ModelSerializer):
             'chantier_nom',
             'statut',
             'echelle',
+            'afficher_logo_client',
             'date_debut',
             'date_fin',
             'nb_lignes',

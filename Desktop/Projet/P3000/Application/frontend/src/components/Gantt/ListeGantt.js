@@ -26,6 +26,8 @@ import {
   formatDateFr,
 } from "./ganttLayout";
 import GanttStatutBadge from "./GanttStatutBadge";
+import GanttLogoClientPicker from "./GanttLogoClientPicker";
+import { uploadLogoClientDiagramme } from "./ganttLogoUtils";
 
 const LARGEUR_LIBELLES = 300;
 
@@ -43,7 +45,34 @@ const ListeGantt = () => {
   const [dialogOuvert, setDialogOuvert] = useState(false);
   const [nouveauNom, setNouveauNom] = useState("");
   const [nouveauChantier, setNouveauChantier] = useState(null);
+  const [afficherLogoClient, setAfficherLogoClient] = useState(false);
+  const [logoBlobEnAttente, setLogoBlobEnAttente] = useState(null);
+  const [logoPreviewUrl, setLogoPreviewUrl] = useState("");
   const [erreur, setErreur] = useState(null);
+
+  const reinitialiserLogoCreation = () => {
+    setAfficherLogoClient(false);
+    setLogoBlobEnAttente(null);
+    if (logoPreviewUrl?.startsWith("blob:")) {
+      URL.revokeObjectURL(logoPreviewUrl);
+    }
+    setLogoPreviewUrl("");
+  };
+
+  const handlePendingLogo = (blob) => {
+    if (logoPreviewUrl?.startsWith("blob:")) {
+      URL.revokeObjectURL(logoPreviewUrl);
+    }
+    if (!blob) {
+      setLogoBlobEnAttente(null);
+      setLogoPreviewUrl("");
+      setAfficherLogoClient(false);
+      return;
+    }
+    setLogoBlobEnAttente(blob);
+    setLogoPreviewUrl(URL.createObjectURL(blob));
+    setAfficherLogoClient(true);
+  };
 
   const lie = onglet === 0 ? "oui" : "non";
 
@@ -102,11 +131,16 @@ const ListeGantt = () => {
         description: "",
         chantier: nouveauChantier ? nouveauChantier.id : null,
         echelle: "semaine",
+        afficher_logo_client: afficherLogoClient,
         elements: [],
       });
+      if (logoBlobEnAttente) {
+        await uploadLogoClientDiagramme(res.data.id, logoBlobEnAttente);
+      }
       setDialogOuvert(false);
       setNouveauNom("");
       setNouveauChantier(null);
+      reinitialiserLogoCreation();
       navigate(`/gantt/${res.data.id}`);
     } catch (e) {
       setErreur("Impossible de créer le diagramme.");
@@ -141,6 +175,7 @@ const ListeGantt = () => {
           startIcon={<AddIcon />}
           onClick={() => {
             setNouveauChantier(null);
+            reinitialiserLogoCreation();
             setDialogOuvert(true);
           }}
         >
@@ -384,6 +419,15 @@ const ListeGantt = () => {
               />
             )}
           />
+          <Box sx={{ mt: 2 }}>
+            <GanttLogoClientPicker
+              afficherLogoClient={afficherLogoClient}
+              onAfficherChange={setAfficherLogoClient}
+              pendingPreviewUrl={logoPreviewUrl}
+              onPendingLogo={handlePendingLogo}
+              compact
+            />
+          </Box>
           <Typography variant="caption" color="text.secondary" sx={{ mt: 1, display: "block" }}>
             Le diagramme est enregistré immédiatement comme brouillon : vous
             pourrez le reprendre plus tard, et vos collègues aussi.

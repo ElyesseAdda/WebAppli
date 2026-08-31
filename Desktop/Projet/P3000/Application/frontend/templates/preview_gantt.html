@@ -22,31 +22,104 @@
         font-size: 11px;
       }
 
-      .entete {
-        display: flex;
-        align-items: flex-start;
-        justify-content: space-between;
-        border-bottom: 2px solid #1a2b4c;
-        padding-bottom: 8px;
-        margin-bottom: 12px;
+      .page {
+        width: 100%;
+        padding-top: 12px;
       }
 
-      .entete h1 {
+      .entete-page {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 16px;
+        width: 100%;
+        margin-bottom: 14px;
+      }
+
+      .entete-logo-gauche,
+      .entete-logo-droite {
+        flex: 0 0 280px;
+        min-width: 280px;
+        display: flex;
+        align-items: center;
+        min-height: 80px;
+      }
+
+      .entete-logo-gauche {
+        justify-content: flex-start;
+        padding-left: 18px;
+      }
+
+      .entete-logo-droite {
+        justify-content: flex-end;
+        padding-right: 18px;
+      }
+
+      .logo-societe {
+        max-height: 80px;
+        max-width: 280px;
+        width: auto;
+        height: auto;
+        object-fit: contain;
+        display: block;
+      }
+
+      .logo-client {
+        max-height: 80px;
+        max-width: 280px;
+        width: auto;
+        height: auto;
+        object-fit: contain;
+        display: block;
+      }
+
+      .page-corps {
+        width: 100%;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+      }
+
+      .entete-titre {
+        flex: 1;
+        min-width: 0;
+        text-align: center;
+      }
+
+      .entete-titre h1 {
         margin: 0;
         font-size: 18px;
         color: #1a2b4c;
       }
 
-      .entete .sous-titre {
-        margin-top: 3px;
+      .entete-titre .sous-titre {
+        margin-top: 4px;
         font-size: 11px;
         color: #555;
       }
 
-      .entete .meta {
-        text-align: right;
+      .entete-titre .meta-edition {
+        margin-top: 6px;
         font-size: 10px;
         color: #666;
+      }
+
+      .grille-wrapper {
+        width: 100%;
+        display: flex;
+        justify-content: center;
+      }
+
+      .grille {
+        width: 100%;
+        max-width: 100%;
+        border: 1px solid #d5d9e0;
+        border-radius: 3px;
+        overflow: visible;
+      }
+
+      .entete {
+        display: none;
       }
 
       .statut {
@@ -64,13 +137,6 @@
 
       .statut-brouillon {
         background-color: #ed6c02;
-      }
-
-      .grille {
-        width: 100%;
-        border: 1px solid #d5d9e0;
-        border-radius: 3px;
-        overflow: visible;
       }
 
       .corps-grille {
@@ -327,30 +393,39 @@
         margin-top: 10px;
         font-size: 9px;
         color: #888;
-        text-align: right;
+        text-align: center;
+        width: 100%;
       }
     </style>
   </head>
 
   <body>
-    <div class="entete">
-      <div>
-        <h1>{{ diagramme.nom }}</h1>
-        <div class="sous-titre">
-          {% if chantier %}Chantier : {{ chantier.chantier_name }}{% if societe_nom %} — {{ societe_nom }}{% endif %}
-          {% else %}Diagramme indépendant{% endif %}
-          {% if diagramme.description %} · {{ diagramme.description }}{% endif %}
+    <div class="page">
+      <div class="entete-page">
+        <div class="entete-logo-gauche">
+          <img class="logo-societe" src="{% static 'logo.png' %}" alt="Logo société" />
+        </div>
+        <div class="entete-titre">
+          <h1>{{ diagramme.nom }}</h1>
+          <div class="sous-titre">
+            {% if chantier %}Chantier : {{ chantier.chantier_name }}{% if societe_nom %} — {{ societe_nom }}{% endif %}
+            {% else %}Diagramme indépendant{% endif %}
+            {% if diagramme.description %} · {{ diagramme.description }}{% endif %}
+          </div>
+          <div class="meta-edition">
+            Édité le {{ date_edition|date:"d/m/Y à H:i" }}
+          </div>
+        </div>
+        <div class="entete-logo-droite">
+          {% if afficher_logo_client and logo_client_url %}
+          <img class="logo-client" src="{{ logo_client_url }}" alt="Logo client" />
+          {% endif %}
         </div>
       </div>
-      <div class="meta">
-        
-        <div style="margin-top: 4px">
-          Édité le {{ date_edition|date:"d/m/Y à H:i" }}
-        </div>
-      </div>
-    </div>
 
+      <div class="page-corps">
     {% if axe.periodes %}
+    <div class="grille-wrapper">
     <div class="grille">
       <div class="entete-grille">
         <div class="colonne-libelle">Désignation</div>
@@ -441,16 +516,21 @@
       {% endfor %}
       </div>
     </div>
+    </div>
     {% else %}
+    <div class="grille-wrapper">
     <div class="grille">
       <div class="vide">
         Ce diagramme ne contient aucune ligne datée.
       </div>
     </div>
+    </div>
     {% endif %}
 
     <div class="pied">
      Échelle : {{ diagramme.get_echelle_display }}
+    </div>
+      </div>
     </div>
   </body>
 </html>

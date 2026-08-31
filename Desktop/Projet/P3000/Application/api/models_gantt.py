@@ -53,6 +53,16 @@ class GanttDiagramme(models.Model):
     echelle = models.CharField(
         max_length=10, choices=ECHELLE_CHOICES, default='semaine'
     )
+    afficher_logo_client = models.BooleanField(
+        default=False,
+        verbose_name='Afficher le logo client dans le PDF',
+    )
+    logo_client_s3_key = models.CharField(
+        max_length=500,
+        blank=True,
+        null=True,
+        verbose_name='Clé S3 du logo client',
+    )
 
     created_by = models.ForeignKey(
         User,
