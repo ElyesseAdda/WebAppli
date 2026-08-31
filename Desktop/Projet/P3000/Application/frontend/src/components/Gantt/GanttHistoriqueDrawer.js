@@ -1,3 +1,7 @@
+import CloseIcon from "@mui/icons-material/Close";
+import SearchIcon from "@mui/icons-material/Search";
+import axios from "axios";
+import React, { useEffect, useMemo, useState } from "react";
 import {
   Box,
   Chip,
@@ -5,11 +9,10 @@ import {
   Drawer,
   Divider,
   IconButton,
+  InputAdornment,
+  TextField,
   Typography,
 } from "@mui/material";
-import CloseIcon from "@mui/icons-material/Close";
-import axios from "axios";
-import React, { useEffect, useState } from "react";
 
 const COULEURS_ACTION = {
   validation: "success",
@@ -41,20 +44,48 @@ const formatHorodatage = (valeur) => {
   });
 };
 
+const normaliserRecherche = (valeur) =>
+  String(valeur || "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .trim();
+
+const texteEntreeHistorique = (entree) =>
+  [
+    entree.description,
+    entree.utilisateur_nom,
+    LIBELLES_ACTION[entree.action],
+    entree.action,
+    formatHorodatage(entree.date),
+  ]
+    .filter(Boolean)
+    .join(" ");
+
 /** Journal des modifications d'un diagramme, alimenté après sa validation. */
 const GanttHistoriqueDrawer = ({ open, onClose, diagrammeId }) => {
   const [entrees, setEntrees] = useState([]);
   const [chargement, setChargement] = useState(false);
+  const [recherche, setRecherche] = useState("");
 
   useEffect(() => {
     if (!open || !diagrammeId) return;
     setChargement(true);
+    setRecherche("");
     axios
       .get(`/api/gantt/diagrammes/${diagrammeId}/historique/`)
       .then((res) => setEntrees(res.data || []))
       .catch(() => setEntrees([]))
       .finally(() => setChargement(false));
   }, [open, diagrammeId]);
+
+  const entreesFiltrees = useMemo(() => {
+    const terme = normaliserRecherche(recherche);
+    if (!terme) return entrees;
+    return entrees.filter((entree) =>
+      normaliserRecherche(texteEntreeHistorique(entree)).includes(terme)
+    );
+  }, [entrees, recherche]);
 
   return (
     <Drawer anchor="right" open={open} onClose={onClose}>
@@ -74,6 +105,24 @@ const GanttHistoriqueDrawer = ({ open, onClose, diagrammeId }) => {
         </Box>
         <Divider sx={{ mb: 2 }} />
 
+        {!chargement && entrees.length > 0 && (
+          <TextField
+            fullWidth
+            size="small"
+            placeholder="Rechercher (description, auteur, type, date…)"
+            value={recherche}
+            onChange={(event) => setRecherche(event.target.value)}
+            sx={{ mb: 2 }}
+            InputProps={{
+              startAdornment: (
+                <InputAdornment position="start">
+                  <SearchIcon fontSize="small" color="action" />
+                </InputAdornment>
+              ),
+            }}
+          />
+        )}
+
         {chargement && (
           <Box sx={{ display: "flex", justifyContent: "center", py: 4 }}>
             <CircularProgress size={28} />
@@ -87,8 +136,22 @@ const GanttHistoriqueDrawer = ({ open, onClose, diagrammeId }) => {
           </Typography>
         )}
 
+        {!chargement && entrees.length > 0 && recherche && !entreesFiltrees.length && (
+          <Typography variant="body2" color="text.secondary">
+            Aucun résultat pour « {recherche} ».
+          </Typography>
+        )}
+
+        {!chargement && entrees.length > 0 && (
+          <Typography variant="caption" color="text.secondary" sx={{ display: "block", mb: 1.5 }}>
+            {recherche
+              ? `${entreesFiltrees.length} résultat${entreesFiltrees.length > 1 ? "s" : ""} sur ${entrees.length}`
+              : `${entrees.length} entrée${entrees.length > 1 ? "s" : ""}`}
+          </Typography>
+        )}
+
         {!chargement &&
-          entrees.map((entree) => (
+          entreesFiltrees.map((entree) => (
             <Box
               key={entree.id}
               sx={{
