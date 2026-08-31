@@ -8,7 +8,7 @@ class Migration(migrations.Migration):
 
     dependencies = [
         ('api', '0115_vigik_plus_multiple_photos'),
-        ('api', '0120_suivipaiement_montant_paye_saisi'),
+        ('api', '0119_suivipaiement_factures_st_masquees'),
     ]
 
     operations = [
