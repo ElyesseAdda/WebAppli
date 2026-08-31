@@ -132,6 +132,32 @@ class GanttElement(models.Model):
     couleur = models.CharField(max_length=7, default='#1976d2')
     ordre = models.IntegerField(default=0)
     commentaire = models.TextField(blank=True, default='')
+    STYLE_BARRE_CHOICES = [
+        ('plein', 'Plein'),
+        ('leger', 'Léger'),
+        ('degrade', 'Dégradé'),
+        ('hachure', 'Hachuré'),
+        ('hachure_croise', 'Hachure croisée'),
+        ('rayures_v', 'Rayures verticales'),
+        ('rayures_h', 'Rayures horizontales'),
+        ('damier', 'Damier'),
+        ('contour', 'Contour'),
+        ('contour_epais', 'Contour épais'),
+        ('double', 'Double contour'),
+        ('pointille', 'Pointillé'),
+        ('tirets', 'Tirets'),
+        ('arrondi', 'Arrondi'),
+        ('ombre', 'Ombre'),
+        ('bord_gauche', 'Bord gauche'),
+        ('bord_haut', 'Bord haut'),
+        ('croix', 'Croisillons'),
+    ]
+    style_barre = models.CharField(
+        max_length=20,
+        choices=STYLE_BARRE_CHOICES,
+        default='plein',
+        verbose_name='Style de barre',
+    )
     afficher_duree = models.BooleanField(
         null=True,
         blank=True,

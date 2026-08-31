@@ -37,6 +37,7 @@ class GanttElementSerializer(serializers.ModelSerializer):
             'ordre',
             'commentaire',
             'afficher_duree',
+            'style_barre',
         ]
 
 

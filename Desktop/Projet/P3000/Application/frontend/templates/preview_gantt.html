@@ -307,7 +307,7 @@
             </div>
             <div
               class="barre {% if ligne.est_titre %}barre-titre{% endif %}"
-              style="background-color: {{ ligne.couleur }};"
+              style="{{ ligne.style_barre_css }}"
             ></div>
           </div>
           {% endif %}

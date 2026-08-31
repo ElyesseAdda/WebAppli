@@ -55,6 +55,7 @@ def _snapshot(diagramme):
             'ordre': element.ordre,
             'commentaire': element.commentaire,
             'afficher_duree': element.afficher_duree,
+            'style_barre': element.style_barre,
         }
         for element in diagramme.elements.all()
     }
@@ -79,6 +80,7 @@ def _snapshot_serialisable(diagramme):
                 'ordre': e.ordre,
                 'commentaire': e.commentaire,
                 'afficher_duree': e.afficher_duree,
+                'style_barre': e.style_barre,
             }
             for e in diagramme.elements.all()
         ],
@@ -92,6 +94,7 @@ LIBELLES_CHAMPS = {
     'couleur': 'couleur',
     'commentaire': 'commentaire',
     'afficher_duree': 'affichage de la durée',
+    'style_barre': 'style de barre',
 }
 
 
@@ -523,6 +526,106 @@ def _libelle_dates_plage(date_debut, date_fin, duree=None):
     return f"{duree} j"
 
 
+def _style_barre_css(couleur, style_barre, est_titre):
+    """Aligné sur ``sxBarreGantt`` dans ``frontend/.../ganttBarStyles.js``."""
+    c = couleur or '#1976d2'
+    radius = '999px' if style_barre == 'arrondi' else ('2px' if est_titre else '3px')
+    op_titre_plein = '0.55' if est_titre else '1'
+    op_titre = '0.75' if est_titre else '1'
+
+    styles = {
+        'leger': (
+            f"background-color:{c}59;border-radius:{radius};opacity:{op_titre_plein};"
+        ),
+        'degrade': (
+            f"background:linear-gradient(180deg,{c}8c 0%,{c} 100%);"
+            f"border-radius:{radius};opacity:{op_titre_plein};"
+        ),
+        'hachure': (
+            f"background-color:{c};"
+            "background-image:repeating-linear-gradient(-45deg,"
+            f"{c},{c} 4px,rgba(255,255,255,0.38) 4px,rgba(255,255,255,0.38) 8px);"
+            f"border-radius:{radius};opacity:{op_titre};"
+        ),
+        'hachure_croise': (
+            f"background-color:{c};"
+            "background-image:"
+            f"repeating-linear-gradient(-45deg,{c},{c} 3px,rgba(255,255,255,0.35) 3px,rgba(255,255,255,0.35) 6px),"
+            f"repeating-linear-gradient(45deg,{c},{c} 3px,rgba(255,255,255,0.2) 3px,rgba(255,255,255,0.2) 6px);"
+            f"border-radius:{radius};opacity:{op_titre};"
+        ),
+        'rayures_v': (
+            f"background-color:{c};"
+            "background-image:repeating-linear-gradient(90deg,"
+            f"{c},{c} 5px,rgba(255,255,255,0.35) 5px,rgba(255,255,255,0.35) 10px);"
+            f"border-radius:{radius};opacity:{op_titre};"
+        ),
+        'rayures_h': (
+            f"background-color:{c};"
+            "background-image:repeating-linear-gradient(0deg,"
+            f"{c},{c} 4px,rgba(255,255,255,0.35) 4px,rgba(255,255,255,0.35) 8px);"
+            f"border-radius:{radius};opacity:{op_titre};"
+        ),
+        'damier': (
+            f"background-color:{c}59;"
+            "background-image:"
+            f"linear-gradient(45deg,{c} 25%,transparent 25%),"
+            f"linear-gradient(-45deg,{c} 25%,transparent 25%),"
+            f"linear-gradient(45deg,transparent 75%,{c} 75%),"
+            f"linear-gradient(-45deg,transparent 75%,{c} 75%);"
+            "background-size:8px 8px;"
+            "background-position:0 0,0 4px,4px -4px,-4px 0;"
+            f"border-radius:{radius};opacity:{op_titre};"
+        ),
+        'contour': (
+            f"background-color:transparent;border:2px solid {c};"
+            f"border-radius:{radius};opacity:1;"
+        ),
+        'contour_epais': (
+            f"background-color:{c}2e;border:3px solid {c};"
+            f"border-radius:{radius};opacity:1;"
+        ),
+        'double': (
+            f"background-color:{c}2e;border:2px solid {c};"
+            f"border-radius:{radius};box-shadow:inset 0 0 0 1px {c};opacity:1;"
+        ),
+        'pointille': (
+            f"background-color:{c}40;border:2px dashed {c};"
+            f"border-radius:{radius};opacity:1;"
+        ),
+        'tirets': (
+            f"background-color:transparent;border:2px dotted {c};"
+            f"border-radius:{radius};opacity:1;"
+        ),
+        'arrondi': (
+            f"background-color:{c};border-radius:{radius};opacity:{op_titre_plein};"
+        ),
+        'ombre': (
+            f"background-color:{c};border-radius:{radius};"
+            f"box-shadow:0 2px 4px {c}8c;opacity:{op_titre_plein};"
+        ),
+        'bord_gauche': (
+            f"background-color:{c}33;border-left:5px solid {c};"
+            f"border-radius:{radius};opacity:1;"
+        ),
+        'bord_haut': (
+            f"background-color:{c}26;border-top:4px solid {c};"
+            f"border-radius:{radius};opacity:1;"
+        ),
+        'croix': (
+            f"background-color:{c}33;"
+            "background-image:"
+            f"repeating-linear-gradient(45deg,{c}8c 0,{c}8c 1px,transparent 1px,transparent 6px),"
+            f"repeating-linear-gradient(-45deg,{c}8c 0,{c}8c 1px,transparent 1px,transparent 6px);"
+            f"border:1px solid {c};border-radius:{radius};opacity:1;"
+        ),
+    }
+    return styles.get(
+        style_barre,
+        f"background-color:{c};border-radius:{radius};opacity:{op_titre_plein};",
+    )
+
+
 def _calculer_layout(diagramme):
     """Prépare les périodes et les lignes prêtes à afficher dans le template."""
     elements = list(diagramme.elements.all())
@@ -551,6 +654,10 @@ def _calculer_layout(diagramme):
                 ligne.date_fin,
                 barre['duree'] if barre else None,
             ),
+            'style_barre': ligne.style_barre or 'plein',
+            'style_barre_css': _style_barre_css(
+                ligne.couleur, ligne.style_barre or 'plein', False
+            ),
             'barre': barre,
         })
 
@@ -572,6 +679,10 @@ def _calculer_layout(diagramme):
                 bornes_titre[0] if bornes_titre else None,
                 bornes_titre[1] if bornes_titre else None,
                 barre_titre['duree'] if barre_titre else None,
+            ),
+            'style_barre': titre.style_barre or 'plein',
+            'style_barre_css': _style_barre_css(
+                titre.couleur, titre.style_barre or 'plein', True
             ),
             'barre': barre_titre,
         })

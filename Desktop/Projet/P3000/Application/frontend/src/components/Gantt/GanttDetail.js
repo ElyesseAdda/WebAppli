@@ -39,8 +39,10 @@ import GanttDesignationInput from "./GanttDesignationInput";
 import GanttHistoriqueDrawer from "./GanttHistoriqueDrawer";
 import GanttStatutBadge from "./GanttStatutBadge";
 import GanttTimeline from "./GanttTimeline";
+import { STYLES_BARRE, sxApercuStyle } from "./ganttBarStyles";
 
 const COULEUR_DEFAUT = "#1976d2";
+const STYLE_BARRE_DEFAUT = "plein";
 const DELAI_AUTOSAVE = 1500;
 
 const BOUTONS_BARRE = {
@@ -250,6 +252,7 @@ const GanttDetail = () => {
           date_debut: element.date_debut || null,
           date_fin: element.date_fin || null,
           couleur: element.couleur || COULEUR_DEFAUT,
+          style_barre: element.style_barre || STYLE_BARRE_DEFAUT,
           ordre: element.ordre,
           commentaire: element.commentaire || "",
           afficher_duree: element.afficher_duree ?? null,
@@ -321,6 +324,7 @@ const GanttDetail = () => {
         date_debut: null,
         date_fin: null,
         couleur: "#455a64",
+        style_barre: STYLE_BARRE_DEFAUT,
         ordre: precedents.length,
         commentaire: "",
       },
@@ -339,6 +343,7 @@ const GanttDetail = () => {
       date_debut: null,
       date_fin: null,
       couleur: COULEUR_DEFAUT,
+      style_barre: STYLE_BARRE_DEFAUT,
       ordre: 0,
       commentaire: "",
     };
@@ -897,7 +902,7 @@ const GanttDetail = () => {
         onClose={() => setCouleurCible(null)}
         anchorOrigin={{ vertical: "bottom", horizontal: "left" }}
       >
-        <Box sx={{ p: 2, width: 260 }}>
+        <Box sx={{ p: 2, width: 320 }}>
           <ColorPicker
             label="Couleur de la barre"
             value={couleurCible?.element?.couleur || COULEUR_DEFAUT}
@@ -911,6 +916,72 @@ const GanttDetail = () => {
               }
             }}
           />
+          <Typography variant="body2" sx={{ mt: 2, mb: 1, fontWeight: 500, fontSize: 13 }}>
+            Style de la barre
+          </Typography>
+          <Box
+            sx={{
+              display: "flex",
+              flexWrap: "wrap",
+              gap: 0.75,
+              maxHeight: 280,
+              overflowY: "auto",
+              pr: 0.5,
+            }}
+          >
+            {STYLES_BARRE.map((style) => {
+              const actif =
+                (couleurCible?.element?.style_barre || STYLE_BARRE_DEFAUT) ===
+                style.id;
+              return (
+                <Box
+                  key={style.id}
+                  onClick={() => {
+                    if (!couleurCible) return;
+                    majElement(couleurCible.element.id, { style_barre: style.id });
+                    setCouleurCible((precedent) => ({
+                      ...precedent,
+                      element: { ...precedent.element, style_barre: style.id },
+                    }));
+                  }}
+                  sx={{
+                    display: "flex",
+                    flexDirection: "column",
+                    alignItems: "center",
+                    gap: 0.35,
+                    p: 0.6,
+                    borderRadius: 1,
+                    border: "2px solid",
+                    borderColor: actif ? "#1976d2" : "#e0e0e0",
+                    cursor: "pointer",
+                    width: 88,
+                    flexShrink: 0,
+                    "&:hover": {
+                      borderColor: "#1976d2",
+                      backgroundColor: "#f5f9ff",
+                    },
+                  }}
+                >
+                  <Box
+                    sx={sxApercuStyle(
+                      style.id,
+                      couleurCible?.element?.couleur || COULEUR_DEFAUT
+                    )}
+                  />
+                  <Typography
+                    variant="caption"
+                    sx={{
+                      fontSize: 9,
+                      lineHeight: 1.2,
+                      textAlign: "center",
+                    }}
+                  >
+                    {style.label}
+                  </Typography>
+                </Box>
+              );
+            })}
+          </Box>
         </Box>
       </Popover>
 

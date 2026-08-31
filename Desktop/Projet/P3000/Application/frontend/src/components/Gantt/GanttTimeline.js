@@ -1,6 +1,7 @@
 import { Box, Typography } from "@mui/material";
 import React, { useMemo } from "react";
 import { calculerLayout, formatDateFr, libelleDatesPlage } from "./ganttLayout";
+import { sxBarreGantt } from "./ganttBarStyles";
 
 const LARGEUR_LIBELLES = 220;
 const LARGEUR_DUREE = 40;
@@ -286,10 +287,12 @@ const GanttTimeline = ({
                       sx={{
                         width: "100%",
                         height: ligne.estTitre ? 6 : hauteurBarre,
-                        backgroundColor: ligne.couleur || "#1976d2",
-                        borderRadius: ligne.estTitre ? "2px" : "3px",
-                        opacity: ligne.estTitre ? 0.55 : 1,
                         flexShrink: 0,
+                        ...sxBarreGantt(
+                          ligne.couleur,
+                          ligne.style_barre || "plein",
+                          ligne.estTitre
+                        ),
                       }}
                     />
                   </Box>
