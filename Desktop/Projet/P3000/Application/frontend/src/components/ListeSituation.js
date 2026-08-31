@@ -1,5 +1,6 @@
 import DeleteIcon from "@mui/icons-material/Delete";
 import {
+  Box,
   Button,
   Dialog,
   DialogActions,
@@ -9,7 +10,6 @@ import {
   IconButton,
   MenuItem,
   Paper,
-  Select,
   Table,
   TableBody,
   TableHead,
@@ -23,6 +23,7 @@ import React, { useEffect, useState } from "react";
 import {
   AlignedCell,
   CenteredTableCell,
+  ChantierCell,
   DevisNumber,
   FilterCell,
   PriceTextField,
@@ -36,128 +37,201 @@ import { RegeneratePDFIconButton } from "./shared/RegeneratePDFButton";
 import { DOCUMENT_TYPES } from "../config/documentTypeConfig";
 
 const formatNumber = (number) => {
-  return number?.toString().replace(/\B(?=(\d{3})+(?!\d))/g, " ");
+  const value = Number.parseFloat(number);
+  if (Number.isNaN(value)) {
+    return "0,00";
+  }
+  return value.toLocaleString("fr-FR", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  });
 };
 
-const getMonthName = (monthNumber) => {
-  const months = [
-    "Janvier",
-    "Février",
-    "Mars",
-    "Avril",
-    "Mai",
-    "Juin",
-    "Juillet",
-    "Août",
-    "Septembre",
-    "Octobre",
-    "Novembre",
-    "Décembre",
-  ];
-  return months[monthNumber - 1];
+const formatYear = (year) => year.toString().slice(-2);
+
+const formatStatusLabel = (status) => {
+  const labels = {
+    brouillon: "En attente",
+    validee: "Validée",
+    facturee: "Facturée",
+  };
+  return labels[status] || status;
 };
 
-const formatYear = (year) => {
-  return year.toString().slice(-2);
-};
+const normalizeSituationEntries = (items = []) =>
+  items.map((item) => ({
+    ...item,
+    chantier_name: item.chantier_name || "",
+    client_name: item.client_name || item.societe_name || "",
+  }));
+
+const sortByNewestFirst = (items = []) =>
+  [...items].sort((a, b) => {
+    const dateA = a.date_creation
+      ? new Date(a.date_creation).getTime()
+      : a.annee * 100 + a.mois;
+    const dateB = b.date_creation
+      ? new Date(b.date_creation).getTime()
+      : b.annee * 100 + b.mois;
+    return dateB - dateA;
+  });
+
+const hasActiveFilters = (filters) =>
+  filters.numero_situation ||
+  filters.chantier_name ||
+  filters.client_name ||
+  filters.periode ||
+  filters.pourcentage_avancement ||
+  filters.montant_apres_retenues ||
+  (filters.statut && filters.statut !== "Tous");
 
 const ListeSituation = () => {
-  const [chantiers, setChantiers] = useState([]);
-  const [selectedChantierId, setSelectedChantierId] = useState("");
   const [situations, setSituations] = useState([]);
   const [filteredSituations, setFilteredSituations] = useState([]);
+  const [isLoading, setIsLoading] = useState(false);
+  const [nextPageUrl, setNextPageUrl] = useState(null);
+  const [totalCount, setTotalCount] = useState(0);
+  const [allSituationsForFilter, setAllSituationsForFilter] = useState(null);
   const [filters, setFilters] = useState({
     numero_situation: "",
-    mois: "",
-    annee: "",
+    chantier_name: "",
+    client_name: "",
+    periode: "",
     pourcentage_avancement: "",
     montant_apres_retenues: "",
     statut: "Tous",
   });
-  const [orderBy, setOrderBy] = useState("date_creation");
+  const [orderBy, setOrderBy] = useState("date");
   const [order, setOrder] = useState("desc");
-  const [loading, setLoading] = useState(true);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [situationToDelete, setSituationToDelete] = useState(null);
 
-  const statusOptions = ["brouillon", "validee", "facturee"];
+  const statusOptions = [
+    { value: "brouillon", label: "En attente" },
+    { value: "validee", label: "Validée" },
+    { value: "facturee", label: "Facturée" },
+  ];
 
   useEffect(() => {
-    const fetchChantiers = async () => {
-      try {
-        setLoading(true);
-        const response = await axios.get("/api/chantier/");
-        setChantiers(response.data);
-        if (response.data.length > 0) {
-          setSelectedChantierId(response.data[0].id);
-        }
-      } catch (error) {
-        console.error("Erreur lors du chargement des chantiers:", error);
-      } finally {
-        setLoading(false);
-      }
-    };
-    fetchChantiers();
+    fetchSituations();
   }, []);
 
-  useEffect(() => {
-    if (selectedChantierId) {
-      fetchSituations();
-    }
-  }, [selectedChantierId]);
-
-  const fetchSituations = async () => {
-    if (!selectedChantierId) return;
-
+  const fetchSituations = async (url = "/api/situations/", append = false) => {
     try {
-      const response = await axios.get(
-        `/api/chantier/${selectedChantierId}/situations/`
-      );
-      setSituations(response.data);
-      setFilteredSituations(response.data);
+      setIsLoading(true);
+      const response = await axios.get(url);
+      const data = response.data;
+
+      const newSituations = data.results || data;
+      const next = data.next || null;
+      const count = data.count || newSituations.length;
+
+      const normalized = normalizeSituationEntries(newSituations);
+
+      if (append) {
+        setSituations((prev) => [...prev, ...normalized]);
+        if (!hasActiveFilters(filters)) {
+          setFilteredSituations((prev) => [...prev, ...normalized]);
+        }
+      } else {
+        setSituations(normalized);
+        if (!hasActiveFilters(filters)) {
+          setFilteredSituations(normalized);
+        }
+      }
+
+      setNextPageUrl(next);
+      setTotalCount(count);
     } catch (error) {
       console.error("Erreur lors du chargement des situations:", error);
+    } finally {
+      setIsLoading(false);
     }
   };
 
-  const handleFilterChange = (field) => (event) => {
+  const loadAllSituationsForFilter = async () => {
+    if (allSituationsForFilter) return allSituationsForFilter;
+
+    try {
+      setIsLoading(true);
+      const response = await axios.get("/api/situations/?page_size=1000");
+      const data = response.data;
+      const allItems = sortByNewestFirst(
+        normalizeSituationEntries(data.results || data)
+      );
+      setAllSituationsForFilter(allItems);
+      return allItems;
+    } catch (error) {
+      console.error("Erreur lors du chargement des situations pour filtre:", error);
+      return situations;
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const applyFilters = (items, activeFilters) =>
+    items.filter((situation) =>
+      Object.keys(activeFilters).every((key) => {
+        if (!activeFilters[key] || activeFilters[key] === "Tous") return true;
+
+        switch (key) {
+          case "numero_situation":
+            return situation.numero_situation
+              ?.toLowerCase()
+              .includes(activeFilters[key].toLowerCase());
+          case "chantier_name":
+            return situation.chantier_name
+              ?.toLowerCase()
+              .includes(activeFilters[key].toLowerCase());
+          case "client_name":
+            return situation.client_name
+              ?.toLowerCase()
+              .includes(activeFilters[key].toLowerCase());
+          case "periode":
+            return `${situation.mois}/${formatYear(situation.annee)}`.includes(
+              activeFilters[key]
+            );
+          case "pourcentage_avancement":
+            return situation.pourcentage_avancement
+              ?.toString()
+              .includes(activeFilters[key]);
+          case "montant_apres_retenues":
+            return situation.montant_apres_retenues
+              ?.toString()
+              .includes(activeFilters[key]);
+          case "statut":
+            return situation.statut === activeFilters[key];
+          default:
+            return true;
+        }
+      })
+    );
+
+  const handleFilterChange = (field) => async (event) => {
     const newFilters = {
       ...filters,
       [field]: event.target.value,
     };
     setFilters(newFilters);
 
-    let filtered = situations.filter((situation) => {
-      return Object.keys(newFilters).every((key) => {
-        if (!newFilters[key] || newFilters[key] === "Tous") return true;
-
-        switch (key) {
-          case "numero_situation":
-            return situation.numero_situation
-              ?.toLowerCase()
-              .includes(newFilters[key].toLowerCase());
-          case "mois":
-            return situation.mois.toString().includes(newFilters[key]);
-          case "annee":
-            return situation.annee.toString().includes(newFilters[key]);
-          case "pourcentage_avancement":
-            return situation.pourcentage_avancement
-              .toString()
-              .includes(newFilters[key]);
-          case "montant_apres_retenues":
-            return situation.montant_apres_retenues
-              .toString()
-              .includes(newFilters[key]);
-          case "statut":
-            return situation.statut === newFilters[key];
-          default:
-            return true;
-        }
-      });
-    });
-
-    setFilteredSituations(filtered);
+    if (hasActiveFilters(newFilters)) {
+      const allItems = await loadAllSituationsForFilter();
+      setFilteredSituations(applyFilters(allItems, newFilters));
+    } else {
+      setFilteredSituations(situations);
+      setAllSituationsForFilter(null);
+    }
   };
+
+  const handleLoadMore = () => {
+    if (nextPageUrl && !isLoading) {
+      fetchSituations(nextPageUrl, true);
+    }
+  };
+
+  const situationsToDisplay = filteredSituations;
+  const hasMoreSituations =
+    !hasActiveFilters(filters) && nextPageUrl !== null;
 
   const handleSort = (property) => {
     const isAsc = orderBy === property && order === "asc";
@@ -165,8 +239,17 @@ const ListeSituation = () => {
     setOrderBy(property);
 
     const sorted = [...filteredSituations].sort((a, b) => {
-      if (property === "montant_apres_retenues") {
-        return (isAsc ? 1 : -1) * (a[property] - b[property]);
+      if (property === "montant_apres_retenues" || property === "pourcentage_avancement") {
+        return (isAsc ? 1 : -1) * (parseFloat(a[property]) - parseFloat(b[property]));
+      }
+      if (property === "date_creation") {
+        const dateA = a.date_creation
+          ? new Date(a.date_creation).getTime()
+          : a.annee * 100 + a.mois;
+        const dateB = b.date_creation
+          ? new Date(b.date_creation).getTime()
+          : b.annee * 100 + b.mois;
+        return (isAsc ? 1 : -1) * (dateA - dateB);
       }
       return (isAsc ? 1 : -1) * (a[property] < b[property] ? -1 : 1);
     });
@@ -189,10 +272,12 @@ const ListeSituation = () => {
     try {
       await axios.delete(`/api/situations/${situationToDelete.id}/`);
 
-      // Mettre à jour la liste des situations
-      setSituations((prevSituations) =>
-        prevSituations.filter((s) => s.id !== situationToDelete.id)
+      setSituations((prev) => prev.filter((s) => s.id !== situationToDelete.id));
+      setFilteredSituations((prev) =>
+        prev.filter((s) => s.id !== situationToDelete.id)
       );
+      setTotalCount((prev) => Math.max(0, prev - 1));
+      setAllSituationsForFilter(null);
 
       setDeleteDialogOpen(false);
       setSituationToDelete(null);
@@ -206,22 +291,6 @@ const ListeSituation = () => {
     setDeleteDialogOpen(false);
     setSituationToDelete(null);
   };
-
-  if (loading) {
-    return (
-      <Typography variant="body1" sx={{ textAlign: "center", mt: 3 }}>
-        Chargement des chantiers...
-      </Typography>
-    );
-  }
-
-  if (chantiers.length === 0) {
-    return (
-      <Typography variant="body1" sx={{ textAlign: "center", mt: 3 }}>
-        Aucun chantier disponible
-      </Typography>
-    );
-  }
 
   return (
     <div
@@ -250,28 +319,10 @@ const ListeSituation = () => {
           Liste des Situations
         </Typography>
 
-        <Select
-          value={selectedChantierId}
-          onChange={(e) => setSelectedChantierId(e.target.value)}
-          variant="standard"
-          sx={{
-            mb: 3,
-            minWidth: 200,
-            color: "rgba(27, 120, 188, 1)",
-            fontWeight: "bold",
-          }}
-        >
-          Mois :
-          {chantiers.map((chantier) => (
-            <MenuItem key={chantier.id} value={chantier.id}>
-              {chantier.chantier_name}
-            </MenuItem>
-          ))}
-        </Select>
-
         <StyledTableContainer component={Paper}>
           <Table>
             <TableHead>
+              <TableRow />
               <TableRow>
                 <FilterCell>
                   <StyledTextField
@@ -279,20 +330,31 @@ const ListeSituation = () => {
                     variant="standard"
                     value={filters.numero_situation}
                     onChange={handleFilterChange("numero_situation")}
-                    sx={{
-                      "& .MuiInputBase-input": {
-                        color: "rgba(27, 120, 188, 1)",
-                        fontWeight: "bold",
-                      },
-                    }}
+                  />
+                </FilterCell>
+                <FilterCell>
+                  <StyledTextField
+                    label="Chantier"
+                    variant="standard"
+                    value={filters.chantier_name}
+                    onChange={handleFilterChange("chantier_name")}
+                  />
+                </FilterCell>
+                <FilterCell>
+                  <StyledTextField
+                    label="Société"
+                    variant="standard"
+                    value={filters.client_name}
+                    onChange={handleFilterChange("client_name")}
                   />
                 </FilterCell>
                 <FilterCell>
                   <StyledTextField
                     label="Période"
                     variant="standard"
-                    value={filters.mois}
-                    onChange={handleFilterChange("mois")}
+                    value={filters.periode}
+                    onChange={handleFilterChange("periode")}
+                    placeholder="MM/AA"
                   />
                 </FilterCell>
                 <AlignedCell>
@@ -332,11 +394,12 @@ const ListeSituation = () => {
                     value={filters.statut}
                     onChange={handleFilterChange("statut")}
                     variant="standard"
+                    sx={{ pt: "10px" }}
                   >
                     <MenuItem value="Tous">Tous</MenuItem>
                     {statusOptions.map((status) => (
-                      <MenuItem key={status} value={status}>
-                        {status}
+                      <MenuItem key={status.value} value={status.value}>
+                        {status.label}
                       </MenuItem>
                     ))}
                   </StyledSelect>
@@ -345,9 +408,10 @@ const ListeSituation = () => {
                   <Typography
                     variant="subtitle2"
                     sx={{
-                      color: "rgba(27, 120, 188, 1)",
+                      color: "white",
                       fontWeight: "bold",
                       textAlign: "center",
+                      pt: "10px",
                     }}
                   >
                     Actions
@@ -356,7 +420,7 @@ const ListeSituation = () => {
               </TableRow>
             </TableHead>
             <TableBody>
-              {filteredSituations.map((situation) => (
+              {situationsToDisplay.map((situation) => (
                 <TableRow key={situation.id}>
                   <DevisNumber
                     onClick={() => handlePreviewSituation(situation.id)}
@@ -364,6 +428,8 @@ const ListeSituation = () => {
                   >
                     {situation.numero_situation}
                   </DevisNumber>
+                  <ChantierCell>{situation.chantier_name}</ChantierCell>
+                  <CenteredTableCell>{situation.client_name}</CenteredTableCell>
                   <CenteredTableCell>
                     {`${situation.mois}/${formatYear(situation.annee)}`}
                   </CenteredTableCell>
@@ -375,30 +441,24 @@ const ListeSituation = () => {
                   >
                     {formatNumber(situation.montant_apres_retenues)} €
                   </CenteredTableCell>
-                  <StatusCell status={situation.statut}>
-                    {situation.statut}
+                  <StatusCell status={formatStatusLabel(situation.statut)}>
+                    {formatStatusLabel(situation.statut)}
                   </StatusCell>
                   <CenteredTableCell>
-                    {/* Bouton de régénération dans le Drive */}
                     <RegeneratePDFIconButton
                       documentType={DOCUMENT_TYPES.SITUATION}
                       documentData={{
                         ...situation,
                         chantier: {
-                          id: selectedChantierId,
-                          chantier_name: chantiers.find(c => c.id === selectedChantierId)?.chantier_name,
-                          societe: chantiers.find(c => c.id === selectedChantierId)?.societe,
+                          id: situation.chantier || situation.chantier_id,
+                          chantier_name: situation.chantier_name,
+                          societe: { nom_societe: situation.societe_name },
                         },
                       }}
                       size="small"
                       color="primary"
                       tooltipPlacement="top"
-                      onSuccess={() => {
-                        console.log('✅ Situation régénérée avec succès');
-                      }}
                     />
-                    
-                    {/* Bouton de suppression */}
                     <IconButton
                       onClick={() => handleDeleteClick(situation)}
                       sx={{
@@ -418,9 +478,57 @@ const ListeSituation = () => {
             </TableBody>
           </Table>
         </StyledTableContainer>
+
+        {isLoading && (
+          <Box
+            sx={{
+              display: "flex",
+              justifyContent: "center",
+              alignItems: "center",
+              py: 2,
+              mt: 1,
+            }}
+          >
+            <Typography variant="body2" color="text.secondary">
+              Chargement...
+            </Typography>
+          </Box>
+        )}
+
+        {hasMoreSituations && !isLoading && (
+          <Box
+            sx={{
+              display: "flex",
+              justifyContent: "center",
+              alignItems: "center",
+              py: 2,
+              mt: 1,
+              borderTop: "1px solid #e0e0e0",
+            }}
+          >
+            <Button
+              variant="outlined"
+              onClick={handleLoadMore}
+              sx={{
+                textTransform: "none",
+                fontWeight: 500,
+                px: 4,
+              }}
+            >
+              Afficher plus ({totalCount - situations.length} restants)
+            </Button>
+          </Box>
+        )}
+
+        {!isLoading && situationsToDisplay.length === 0 && (
+          <Box sx={{ textAlign: "center", py: 3 }}>
+            <Typography variant="body2" color="text.secondary">
+              Aucune situation trouvée
+            </Typography>
+          </Box>
+        )}
       </StyledBox>
 
-      {/* Modal de confirmation de suppression */}
       <Dialog
         open={deleteDialogOpen}
         onClose={handleDeleteCancel}

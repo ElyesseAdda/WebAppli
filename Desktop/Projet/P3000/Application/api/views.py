@@ -380,6 +380,13 @@ class DevisPagination(PageNumberPagination):
     max_page_size = 100
 
 
+class SituationPagination(PageNumberPagination):
+    """Pagination pour la liste des situations"""
+    page_size = 15
+    page_size_query_param = 'page_size'
+    max_page_size = 100
+
+
 class DevisViewSet(viewsets.ModelViewSet):
     queryset = (
         Devis.objects.all()
@@ -3100,6 +3107,59 @@ class DistributeurVenteViewSet(viewsets.ModelViewSet):
         return queryset
 
 
+def _reappro_product_label(product=None, cell=None, product_id=None):
+    """Nom lisible d'un produit pour les erreurs de stock (jamais vide)."""
+    names = []
+    if product is not None:
+        n = (getattr(product, 'nom', None) or getattr(product, 'nom_produit', None) or '').strip()
+        if n:
+            names.append(n)
+    if cell is not None:
+        cn = (getattr(cell, 'nom_produit', None) or '').strip()
+        if cn and cn not in names:
+            names.append(cn)
+        if not names:
+            row = getattr(cell, 'row_index', 0) or 0
+            col = getattr(cell, 'col_index', 0) or 0
+            names.append(f'Case L{row + 1}C{col + 1}')
+    if not names:
+        names.append(f'Produit #{product_id}' if product_id else 'Produit inconnu')
+    return names[0]
+
+
+def _resolve_cell_stock_product(cell):
+    """Produit stock lié à la case, sinon correspondance par nom (comme add_ligne)."""
+    product = getattr(cell, 'stock_product', None)
+    if product is not None:
+        return product
+    nom_cell = (getattr(cell, 'nom_produit', None) or '').strip()
+    if not nom_cell:
+        return None
+    product = StockProduct.objects.filter(
+        Q(nom__iexact=nom_cell) | Q(nom_produit__iexact=nom_cell)
+    ).first()
+    if product:
+        return product
+    return StockProduct.objects.filter(
+        Q(nom__icontains=nom_cell) | Q(nom_produit__icontains=nom_cell)
+    ).first()
+
+
+def _stock_disponible(product):
+    total = StockLot.objects.filter(
+        produit=product, quantite_restante__gt=0
+    ).aggregate(total=Sum('quantite_restante'))['total'] or 0
+    try:
+        return int(total)
+    except (TypeError, ValueError):
+        return 0
+
+
+class _StockInsuffisantError(Exception):
+    def __init__(self, insuffisant):
+        self.insuffisant = insuffisant
+
+
 class DistributeurReapproSessionViewSet(viewsets.ModelViewSet):
     """Sessions de réapprovisionnement — grille cases, unités par case, résumé, terminer pour enregistrer."""
     serializer_class = DistributeurReapproSessionSerializer
@@ -3277,64 +3337,119 @@ class DistributeurReapproSessionViewSet(viewsets.ModelViewSet):
             if timezone.is_naive(parsed_date):
                 parsed_date = timezone.make_aware(parsed_date, timezone.get_current_timezone())
             date_fin_value = parsed_date
-        lignes = list(session.lignes.select_related('cell', 'cell__stock_product').all())
-        # Quantité requise par produit (plusieurs lignes peuvent concerner le même produit)
         from collections import defaultdict
-        by_product = defaultdict(int)
-        for lig in lignes:
-            if lig.cell.stock_product_id:
-                by_product[lig.cell.stock_product_id] += lig.quantite
-        # Vérifier que le stock est suffisant pour chaque produit
-        insuffisant = []
-        for product_id, quantite_requise in by_product.items():
-            try:
-                product = StockProduct.objects.get(pk=product_id)
-            except StockProduct.DoesNotExist:
-                insuffisant.append({'produit': f'Produit #%s' % product_id, 'requis': quantite_requise, 'disponible': 0})
-                continue
-            disponible = StockLot.objects.filter(
-                produit=product, quantite_restante__gt=0
-            ).aggregate(total=Sum('quantite_restante'))['total'] or 0
-            if disponible < quantite_requise:
-                insuffisant.append({
-                    'produit': product.nom or product.nom_produit or f'Produit #%s' % product_id,
-                    'requis': quantite_requise,
-                    'disponible': disponible,
-                })
-        if insuffisant:
-            msg = "Stock insuffisant. Faites un achat avant de valider le mouvement."
+
+        def collect_by_product(lignes_qs):
+            grouped = defaultdict(lambda: {'quantite': 0, 'product': None, 'cells': []})
+            for lig in lignes_qs:
+                if not lig.cell:
+                    continue
+                product = _resolve_cell_stock_product(lig.cell)
+                if not product:
+                    continue
+                entry = grouped[product.id]
+                entry['quantite'] += int(lig.quantite or 0)
+                entry['product'] = product
+                cell_label = _reappro_product_label(product, lig.cell, product.id)
+                if cell_label not in entry['cells']:
+                    entry['cells'].append(cell_label)
+            return grouped
+
+        def insuffisant_from_grouped(grouped):
+            items = []
+            for product_id, info in grouped.items():
+                product = info['product']
+                quantite_requise = int(info['quantite'] or 0)
+                if quantite_requise <= 0 or product is None:
+                    continue
+                disponible = _stock_disponible(product)
+                if disponible < quantite_requise:
+                    items.append({
+                        'produit': (
+                            info['cells'][0]
+                            if info['cells']
+                            else _reappro_product_label(product, None, product_id)
+                        ),
+                        'requis': quantite_requise,
+                        'disponible': int(disponible),
+                        'cellules': info['cells'],
+                    })
+            return items
+
+        try:
+            with transaction.atomic():
+                session = DistributeurReapproSession.objects.select_for_update().get(pk=session.pk)
+                if session.statut != 'en_cours':
+                    return Response(
+                        {'error': 'Cette session est déjà terminée'},
+                        status=status.HTTP_400_BAD_REQUEST,
+                    )
+                lignes_locked = list(
+                    session.lignes.select_related('cell', 'cell__stock_product')
+                    .select_for_update()
+                    .all()
+                )
+                by_product = collect_by_product(lignes_locked)
+                insuffisant = insuffisant_from_grouped(by_product)
+                if insuffisant:
+                    raise _StockInsuffisantError(insuffisant)
+
+                touched_product_ids = set()
+                for lig in lignes_locked:
+                    product = _resolve_cell_stock_product(lig.cell) if lig.cell else None
+                    if not product:
+                        continue
+                    quantite = int(lig.quantite or 0)
+                    consommation_lots = []
+                    lots = list(
+                        StockLot.objects.filter(produit=product, quantite_restante__gt=0)
+                        .order_by('date_achat', 'created_at')
+                        .select_for_update()
+                    )
+                    restant_a_retirer = quantite
+                    for lot in lots:
+                        if restant_a_retirer <= 0:
+                            break
+                        prise = min(int(restant_a_retirer), int(lot.quantite_restante or 0))
+                        if prise <= 0:
+                            continue
+                        lot.quantite_restante = int(lot.quantite_restante or 0) - prise
+                        lot.save(update_fields=['quantite_restante'])
+                        consommation_lots.append({'lot_id': lot.id, 'quantite': int(prise)})
+                        restant_a_retirer -= prise
+                    if restant_a_retirer > 0:
+                        raise _StockInsuffisantError([{
+                            'produit': _reappro_product_label(product, lig.cell, product.id),
+                            'requis': quantite,
+                            'disponible': _stock_disponible(product),
+                            'cellules': [_reappro_product_label(product, lig.cell, product.id)],
+                        }])
+                    lig.consommation_lots = consommation_lots
+                    lig.save(update_fields=['consommation_lots'])
+                    touched_product_ids.add(product.id)
+
+                for product_id in touched_product_ids:
+                    remaining = StockLot.objects.filter(produit_id=product_id).aggregate(
+                        total=Sum('quantite_restante')
+                    )['total'] or 0
+                    StockProduct.objects.filter(pk=product_id).update(quantite=max(0, int(remaining)))
+
+                session.statut = 'termine'
+                session.date_fin = date_fin_value
+                session.save()
+        except _StockInsuffisantError as exc:
             return Response({
-                'error': msg,
+                'error': 'Stock insuffisant. Faites un achat avant de valider le mouvement.',
+                'insuffisant': exc.insuffisant or [],
+            }, status=status.HTTP_400_BAD_REQUEST)
+        except IntegrityError:
+            lignes = list(session.lignes.select_related('cell', 'cell__stock_product').all())
+            insuffisant = insuffisant_from_grouped(collect_by_product(lignes))
+            return Response({
+                'error': 'Stock insuffisant. Faites un achat avant de valider le mouvement.',
                 'insuffisant': insuffisant,
             }, status=status.HTTP_400_BAD_REQUEST)
-        # Déduire du stock (FIFO) et terminer la session
-        with transaction.atomic():
-            for lig in lignes:
-                if not lig.cell.stock_product_id:
-                    continue
-                product = lig.cell.stock_product
-                quantite = lig.quantite
-                consommation_lots = []
-                lots = list(
-                    StockLot.objects.filter(produit=product, quantite_restante__gt=0)
-                    .order_by('date_achat', 'created_at')
-                    .select_for_update()
-                )
-                restant_a_retirer = quantite
-                for lot in lots:
-                    if restant_a_retirer <= 0:
-                        break
-                    prise = min(restant_a_retirer, lot.quantite_restante)
-                    lot.quantite_restante -= prise
-                    lot.save(update_fields=['quantite_restante'])
-                    consommation_lots.append({'lot_id': lot.id, 'quantite': int(prise)})
-                    restant_a_retirer -= prise
-                lig.consommation_lots = consommation_lots
-                lig.save(update_fields=['consommation_lots'])
-                StockProduct.objects.filter(pk=product.pk).update(quantite=F('quantite') - quantite)
-            session.statut = 'termine'
-            session.date_fin = date_fin_value
-            session.save()
+
         serializer = DistributeurReapproSessionSerializer(session)
         return Response(serializer.data, status=status.HTTP_200_OK)
 
@@ -7648,9 +7763,31 @@ def create_facture_cie(request):
 class SituationViewSet(viewsets.ModelViewSet):
     queryset = Situation.objects.all()
     serializer_class = SituationSerializer
+    permission_classes = [AllowAny]
+    pagination_class = SituationPagination
+
+    def get_serializer_class(self):
+        from .serializers import SituationListSerializer
+        if self.action == 'list':
+            return SituationListSerializer
+        return SituationSerializer
 
     def get_queryset(self):
-        """Optimise les requêtes avec prefetch_related pour charger les lignes"""
+        if self.action == 'list':
+            queryset = (
+                Situation.objects
+                .select_related(
+                    'chantier',
+                    'chantier__societe',
+                    'societe_devis',
+                )
+                .order_by('-annee', '-mois', '-id')
+            )
+            chantier_id = self.request.query_params.get('chantier')
+            if chantier_id:
+                queryset = queryset.filter(chantier_id=chantier_id)
+            return queryset
+
         return Situation.objects.prefetch_related(
             'lignes',
             'lignes__ligne_devis',
@@ -9029,12 +9166,20 @@ def get_all_situations_by_year(request):
 
 @api_view(['GET'])
 def get_situations_list(request):
-    situations = (Situation.objects
-                 .prefetch_related('lignes', 
-                                 'lignes_supplementaires',
-                                 'lignes_avenant')
-                 .all())
-    serializer = SituationSerializer(situations, many=True)
+    from .serializers import SituationListSerializer
+
+    queryset = (
+        Situation.objects
+        .select_related('chantier', 'chantier__societe', 'societe_devis')
+        .order_by('-annee', '-mois', '-id')
+    )
+    paginator = SituationPagination()
+    page = paginator.paginate_queryset(queryset, request)
+    if page is not None:
+        serializer = SituationListSerializer(page, many=True)
+        return paginator.get_paginated_response(serializer.data)
+
+    serializer = SituationListSerializer(queryset, many=True)
     return Response(serializer.data)
 
 def calculer_pourcentage_sous_partie(sous_partie):

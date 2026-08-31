@@ -150,6 +150,43 @@ class DevisListSerializer(serializers.ModelSerializer):
         return getattr(societe, 'nom_societe', None) if societe else None
 
 
+class SituationListSerializer(serializers.ModelSerializer):
+    """Serializer allégé pour la liste des situations (pagination rapide)"""
+    chantier_name = serializers.SerializerMethodField()
+    client_name = serializers.SerializerMethodField()
+    societe_name = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Situation
+        fields = [
+            'id', 'numero_situation', 'mois', 'annee', 'date_creation',
+            'pourcentage_avancement', 'montant_apres_retenues', 'statut',
+            'chantier_name', 'client_name', 'societe_name', 'chantier',
+        ]
+
+    def get_chantier_name(self, obj):
+        return obj.chantier.chantier_name if obj.chantier else None
+
+    def get_client_name(self, obj):
+        chantier = obj.chantier
+        if not chantier:
+            return None
+        if getattr(chantier, 'maitre_ouvrage_nom_societe', None):
+            return chantier.maitre_ouvrage_nom_societe
+        if obj.societe_devis:
+            return obj.societe_devis.nom_societe
+        if chantier.societe:
+            return chantier.societe.nom_societe
+        return None
+
+    def get_societe_name(self, obj):
+        if obj.societe_devis:
+            return obj.societe_devis.nom_societe
+        if obj.chantier and obj.chantier.societe:
+            return obj.chantier.societe.nom_societe
+        return None
+
+
 class DevisSerializer(serializers.ModelSerializer):
     lignes = DevisLigneSerializer(many=True, required=False)
     lignes_speciales = serializers.JSONField(required=False)

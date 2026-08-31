@@ -122,7 +122,9 @@ export const getStatusStyle = (status) => ({
       ? "orange"
       : status === "Refusé"
       ? "red"
-      : status === "Validé"
+      : status === "Validé" || status === "Validée"
+      ? "green"
+      : status === "Facturée"
       ? "green"
       : "inherit",
   fontWeight: 600,
