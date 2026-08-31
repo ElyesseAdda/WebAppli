@@ -134,7 +134,7 @@
       .zone-barres {
         flex: 1;
         position: relative;
-        min-height: 28px;
+        min-height: 32px;
         display: flex;
         overflow: visible;
       }
@@ -191,6 +191,65 @@
       .barre-titre {
         height: 6px;
         opacity: 0.55;
+      }
+
+      .barre-dates {
+        position: relative;
+        width: 100%;
+        height: 10px;
+        margin-top: 1px;
+        overflow: visible;
+      }
+
+      .barre-dates-externe {
+        position: absolute;
+        bottom: 2px;
+        overflow: visible;
+        z-index: 2;
+        height: 10px;
+        pointer-events: none;
+      }
+
+      .barre-dates-externe.combinee,
+      .barre-dates-externe.unique {
+        transform: translateX(-50%);
+        width: max-content;
+        max-width: none;
+      }
+
+      .barre-dates-externe.combinee .barre-dates-combinee,
+      .barre-dates-externe.unique .barre-dates-combinee {
+        position: static;
+        transform: none;
+      }
+
+      .barre-dates-debut,
+      .barre-dates-fin {
+        position: absolute;
+        top: 0;
+        font-size: 8px;
+        line-height: 1;
+        color: #666;
+        white-space: nowrap;
+      }
+
+      .barre-dates-debut {
+        left: 0;
+      }
+
+      .barre-dates-fin {
+        right: 0;
+      }
+
+      .barre-dates-combinee {
+        position: absolute;
+        left: 50%;
+        top: 0;
+        transform: translateX(-50%);
+        font-size: 8px;
+        line-height: 1;
+        color: #666;
+        white-space: nowrap;
       }
 
       .entete-grille {
@@ -310,6 +369,22 @@
               style="{{ ligne.style_barre_css }}"
             ></div>
           </div>
+          {% if ligne.dates_barre.mode == 'separees' %}
+          <div
+            class="barre-dates-externe separees"
+            style="left: {{ ligne.barre.gauche }}%; width: {{ ligne.barre.largeur }}%;"
+          >
+            <span class="barre-dates-debut">{{ ligne.dates_barre.debut }}</span>
+            <span class="barre-dates-fin">{{ ligne.dates_barre.fin }}</span>
+          </div>
+          {% elif ligne.dates_barre.mode == 'combinee' or ligne.dates_barre.mode == 'unique' %}
+          <div
+            class="barre-dates-externe {% if ligne.dates_barre.mode == 'unique' %}unique{% else %}combinee{% endif %}"
+            style="left: {{ ligne.barre.centre }};"
+          >
+            <span class="barre-dates-combinee">{{ ligne.dates_barre.texte }}</span>
+          </div>
+          {% endif %}
           {% endif %}
         </div>
       </div>

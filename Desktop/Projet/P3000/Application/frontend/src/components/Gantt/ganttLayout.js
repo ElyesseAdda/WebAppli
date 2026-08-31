@@ -80,10 +80,34 @@ export function formatDateFr(valeur) {
   return `${jour}/${mois}/${date.getUTCFullYear()}`;
 }
 
+/** Date courte JJ/MM affichée aux extrémités des barres. */
+export function formatDateCourte(valeur) {
+  const date = parseDate(valeur);
+  if (!date) return "";
+  const jour = String(date.getUTCDate()).padStart(2, "0");
+  const mois = String(date.getUTCMonth() + 1).padStart(2, "0");
+  return `${jour}/${mois}`;
+}
+
 /** Durée affichée à côté de la désignation (écran + PDF). */
 export function libelleDatesPlage(ligne) {
   if (!ligne?.barre?.duree) return "";
   return `${ligne.barre.duree} j`;
+}
+
+/**
+ * Affichage des dates JJ/MM sous une barre selon sa largeur (% de la timeline).
+ * Aligné sur ``_mode_dates_barre`` dans ``api/views_gantt.py``.
+ */
+export function modeDatesBarre(largeurPct, dateDebut, dateFin) {
+  const debut = formatDateCourte(dateDebut);
+  const fin = formatDateCourte(dateFin);
+  if (!debut && !fin) return { mode: "none" };
+  if (debut === fin) return { mode: "unique", texte: debut };
+
+  const largeur = Number(largeurPct) || 0;
+  if (largeur < 11) return { mode: "combinee", texte: `${debut} → ${fin}` };
+  return { mode: "separees", debut, fin };
 }
 
 /** Bornes du diagramme : première date de début et dernière date de fin. */
@@ -178,7 +202,7 @@ export function calculerBarre(dateDebut, dateFin, axe) {
   const gauche = (decalage / total) * 100;
   const largeur = Math.min(100 - gauche, (duree / total) * 100);
 
-  return { gauche, largeur, duree };
+  return { gauche, largeur, duree, centre: gauche + largeur / 2 };
 }
 
 /**

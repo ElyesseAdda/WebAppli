@@ -1,11 +1,11 @@
 import { Box, Typography } from "@mui/material";
 import React, { useMemo } from "react";
-import { calculerLayout, formatDateFr, libelleDatesPlage } from "./ganttLayout";
+import { calculerLayout, formatDateFr, libelleDatesPlage, modeDatesBarre } from "./ganttLayout";
 import { sxBarreGantt } from "./ganttBarStyles";
 
 const LARGEUR_LIBELLES = 220;
 const LARGEUR_DUREE = 40;
-const HAUTEUR_LIGNE = 42;
+const HAUTEUR_LIGNE = 52;
 const HAUTEUR_BARRE = 14;
 
 const stylesColonneFixe = {
@@ -154,6 +154,13 @@ const GanttTimeline = ({
         {lignes.map((ligne) => {
           const estSelectionnee = ligneSelectionnee === ligne.id;
           const texteDates = libelleDatesPlage(ligne);
+          const affichageDates = ligne.barre
+            ? modeDatesBarre(
+                ligne.barre.largeur,
+                ligne.date_debut,
+                ligne.date_fin
+              )
+            : { mode: "none" };
 
           return (
             <Box
@@ -246,56 +253,130 @@ const GanttTimeline = ({
                 </Box>
 
                 {ligne.barre && (
-                  <Box
-                    sx={{
-                      position: "absolute",
-                      left: `${ligne.barre.gauche}%`,
-                      width: `${ligne.barre.largeur}%`,
-                      top: 0,
-                      bottom: 0,
-                      display: "flex",
-                      flexDirection: "column",
-                      alignItems: "flex-start",
-                      justifyContent: "center",
-                      overflow: "visible",
-                      pointerEvents: "none",
-                      zIndex: 1,
-                    }}
-                    title={`${ligne.libelle} : ${formatDateFr(
-                      ligne.date_debut
-                    )} au ${formatDateFr(ligne.date_fin)}`}
-                  >
+                  <>
                     <Box
-                      component="span"
                       sx={{
-                        fontSize: compact ? 9 : 10,
-                        lineHeight: 1.15,
-                        color: ligne.estTitre ? "#1a2b4c" : "text.secondary",
-                        fontWeight: ligne.estTitre ? 700 : 500,
-                        whiteSpace: "nowrap",
-                        width: "max-content",
-                        maxWidth: "none",
+                        position: "absolute",
+                        left: `${ligne.barre.gauche}%`,
+                        width: `${ligne.barre.largeur}%`,
+                        top: 0,
+                        bottom: 0,
+                        display: "flex",
+                        flexDirection: "column",
+                        alignItems: "flex-start",
+                        justifyContent: "center",
                         overflow: "visible",
-                        mb: 0.25,
-                        position: "relative",
-                        zIndex: 2,
+                        pointerEvents: "none",
+                        zIndex: 1,
                       }}
+                      title={`${ligne.libelle} : ${formatDateFr(
+                        ligne.date_debut
+                      )} au ${formatDateFr(ligne.date_fin)}`}
                     >
-                      {ligne.libelle || "(sans désignation)"}
+                      <Box
+                        component="span"
+                        sx={{
+                          fontSize: compact ? 9 : 10,
+                          lineHeight: 1.15,
+                          color: ligne.estTitre ? "#1a2b4c" : "text.secondary",
+                          fontWeight: ligne.estTitre ? 700 : 500,
+                          whiteSpace: "nowrap",
+                          width: "max-content",
+                          maxWidth: "none",
+                          overflow: "visible",
+                          mb: 0.25,
+                          position: "relative",
+                          zIndex: 2,
+                        }}
+                      >
+                        {ligne.libelle || "(sans désignation)"}
+                      </Box>
+                      <Box
+                        sx={{
+                          width: "100%",
+                          height: ligne.estTitre ? 6 : hauteurBarre,
+                          flexShrink: 0,
+                          ...sxBarreGantt(
+                            ligne.couleur,
+                            ligne.style_barre || "plein",
+                            ligne.estTitre
+                          ),
+                        }}
+                      />
                     </Box>
-                    <Box
-                      sx={{
-                        width: "100%",
-                        height: ligne.estTitre ? 6 : hauteurBarre,
-                        flexShrink: 0,
-                        ...sxBarreGantt(
-                          ligne.couleur,
-                          ligne.style_barre || "plein",
-                          ligne.estTitre
-                        ),
-                      }}
-                    />
-                  </Box>
+                    {affichageDates.mode !== "none" && (
+                      <Box
+                        sx={{
+                          position: "absolute",
+                          bottom: compact ? 2 : 4,
+                          overflow: "visible",
+                          pointerEvents: "none",
+                          zIndex: 2,
+                          height: compact ? 10 : 12,
+                          ...(affichageDates.mode === "separees"
+                            ? {
+                                left: `${ligne.barre.gauche}%`,
+                                width: `${ligne.barre.largeur}%`,
+                              }
+                            : {
+                                left: `${ligne.barre.centre}%`,
+                                transform: "translateX(-50%)",
+                                width: "max-content",
+                                maxWidth: "none",
+                              }),
+                        }}
+                      >
+                        {(affichageDates.mode === "combinee" ||
+                          affichageDates.mode === "unique") && (
+                          <Box
+                            component="span"
+                            sx={{
+                              fontSize: compact ? 8 : 9,
+                              color: "text.secondary",
+                              fontWeight: 500,
+                              whiteSpace: "nowrap",
+                            }}
+                          >
+                            {affichageDates.texte}
+                          </Box>
+                        )}
+                        {affichageDates.mode === "separees" && (
+                          <>
+                            <Box
+                              component="span"
+                              sx={{
+                                position: "absolute",
+                                left: 0,
+                                top: 0,
+                                fontSize: compact ? 8 : 9,
+                                color: "text.secondary",
+                                fontWeight: 500,
+                                whiteSpace: "nowrap",
+                                width: "max-content",
+                              }}
+                            >
+                              {affichageDates.debut}
+                            </Box>
+                            <Box
+                              component="span"
+                              sx={{
+                                position: "absolute",
+                                right: 0,
+                                top: 0,
+                                fontSize: compact ? 8 : 9,
+                                color: "text.secondary",
+                                fontWeight: 500,
+                                whiteSpace: "nowrap",
+                                width: "max-content",
+                              }}
+                            >
+                              {affichageDates.fin}
+                            </Box>
+                          </>
+                        )}
+                      </Box>
+                    )}
+                  </>
                 )}
               </Box>
             </Box>

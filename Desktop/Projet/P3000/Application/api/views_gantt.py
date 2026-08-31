@@ -515,8 +515,33 @@ def _calculer_barre(date_debut, date_fin, axe):
         'gauche': _pourcentage_css(gauche),
         'largeur': _pourcentage_css(largeur),
         'largeur_num': largeur,
+        'centre': _pourcentage_css(gauche + largeur / 2),
         'duree': duree,
     }
+
+
+def _format_date_courte(valeur):
+    """Aligné sur ``formatDateCourte`` dans ``frontend/.../ganttLayout.js``."""
+    if not valeur:
+        return ''
+    return valeur.strftime('%d/%m')
+
+
+def _mode_dates_barre(largeur_pct, date_debut, date_fin):
+    """Aligné sur ``modeDatesBarre`` dans ``frontend/.../ganttLayout.js``."""
+    debut = _format_date_courte(date_debut)
+    fin = _format_date_courte(date_fin)
+    if not debut and not fin:
+        return {'mode': 'none'}
+    if debut == fin:
+        return {'mode': 'unique', 'texte': debut}
+    try:
+        largeur = float(largeur_pct or 0)
+    except (TypeError, ValueError):
+        largeur = 0
+    if largeur < 11:
+        return {'mode': 'combinee', 'texte': f'{debut} → {fin}'}
+    return {'mode': 'separees', 'debut': debut, 'fin': fin}
 
 
 def _libelle_dates_plage(date_debut, date_fin, duree=None):
@@ -649,6 +674,13 @@ def _calculer_layout(diagramme):
             'couleur': ligne.couleur,
             'date_debut': ligne.date_debut,
             'date_fin': ligne.date_fin,
+            'date_debut_courte': _format_date_courte(ligne.date_debut),
+            'date_fin_courte': _format_date_courte(ligne.date_fin),
+            'dates_barre': _mode_dates_barre(
+                barre['largeur_num'] if barre else 0,
+                ligne.date_debut,
+                ligne.date_fin,
+            ),
             'libelle_dates': _libelle_dates_plage(
                 ligne.date_debut,
                 ligne.date_fin,
@@ -675,6 +707,17 @@ def _calculer_layout(diagramme):
             'couleur': titre.couleur,
             'date_debut': bornes_titre[0] if bornes_titre else None,
             'date_fin': bornes_titre[1] if bornes_titre else None,
+            'date_debut_courte': _format_date_courte(
+                bornes_titre[0] if bornes_titre else None
+            ),
+            'date_fin_courte': _format_date_courte(
+                bornes_titre[1] if bornes_titre else None
+            ),
+            'dates_barre': _mode_dates_barre(
+                barre_titre['largeur_num'] if barre_titre else 0,
+                bornes_titre[0] if bornes_titre else None,
+                bornes_titre[1] if bornes_titre else None,
+            ),
             'libelle_dates': _libelle_dates_plage(
                 bornes_titre[0] if bornes_titre else None,
                 bornes_titre[1] if bornes_titre else None,
