@@ -80,6 +80,12 @@ export function formatDateFr(valeur) {
   return `${jour}/${mois}/${date.getUTCFullYear()}`;
 }
 
+/** Durée affichée à côté de la désignation (écran + PDF). */
+export function libelleDatesPlage(ligne) {
+  if (!ligne?.barre?.duree) return "";
+  return `${ligne.barre.duree} j`;
+}
+
 /** Bornes du diagramme : première date de début et dernière date de fin. */
 export function calculerBornes(elements) {
   const debuts = [];
@@ -173,18 +179,6 @@ export function calculerBarre(dateDebut, dateFin, axe) {
   const largeur = Math.min(100 - gauche, (duree / total) * 100);
 
   return { gauche, largeur, duree };
-}
-
-/**
- * Affichage de la durée sur une barre.
- * null = automatique (visible si la barre est assez large), true/false = forcé.
- *
- * Même logique que ``_doit_afficher_duree`` dans ``api/views_gantt.py`` pour le PDF.
- */
-export function doitAfficherDuree(ligne) {
-  if (ligne.afficher_duree === false) return false;
-  if (ligne.afficher_duree === true) return true;
-  return Boolean(ligne.barre && ligne.barre.largeur > 12);
 }
 
 /**

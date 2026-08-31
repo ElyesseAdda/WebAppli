@@ -1,13 +1,30 @@
 import { Box, Typography } from "@mui/material";
 import React, { useMemo } from "react";
-import { calculerLayout, doitAfficherDuree, formatDateFr } from "./ganttLayout";
+import { calculerLayout, formatDateFr, libelleDatesPlage } from "./ganttLayout";
 
-const LARGEUR_LIBELLES = 260;
+const LARGEUR_LIBELLES = 220;
+const LARGEUR_DUREE = 40;
 const HAUTEUR_LIGNE = 34;
 
+const stylesColonneFixe = {
+  borderRight: "1px solid #e0e0e0",
+  display: "flex",
+  alignItems: "center",
+  flexShrink: 0,
+};
+
+const stylesColonneDuree = (largeur) => ({
+  ...stylesColonneFixe,
+  width: largeur,
+  minWidth: largeur,
+  maxWidth: largeur,
+  px: 0,
+  justifyContent: "center",
+  textAlign: "center",
+});
+
 /**
- * Rendu visuel d'un diagramme : colonne de libellés à gauche, grille de
- * périodes et barres colorées à droite.
+ * Rendu visuel d'un diagramme : libellés, dates, puis grille de périodes et barres.
  *
  * Composant de présentation pur. L'édition est gérée par le parent, qui passe
  * `onSelectionLigne` pour rendre les lignes cliquables.
@@ -18,7 +35,6 @@ const GanttTimeline = ({
   onSelectionLigne,
   ligneSelectionnee = null,
   compact = false,
-  onBasculerDuree,
 }) => {
   const { axe, lignes } = useMemo(
     () => calculerLayout(elements, echelle),
@@ -26,6 +42,8 @@ const GanttTimeline = ({
   );
 
   const hauteurLigne = compact ? 26 : HAUTEUR_LIGNE;
+  const largeurDuree = compact ? 36 : LARGEUR_DUREE;
+  const largeurLibelles = compact ? 200 : LARGEUR_LIBELLES;
 
   if (!axe.periodes.length) {
     return (
@@ -57,17 +75,34 @@ const GanttTimeline = ({
         backgroundColor: "#fff",
       }}
     >
-      <Box sx={{ minWidth: axe.periodes.length > 18 ? 900 : "100%" }}>
+      <Box sx={{ minWidth: axe.periodes.length > 18 ? 900 + largeurDuree : "100%" }}>
         {/* En-tête : groupes (mois ou année) puis périodes */}
         <Box sx={{ display: "flex", borderBottom: "1px solid #e0e0e0" }}>
           <Box
             sx={{
-              width: LARGEUR_LIBELLES,
-              minWidth: LARGEUR_LIBELLES,
-              borderRight: "1px solid #e0e0e0",
+              ...stylesColonneFixe,
+              width: largeurLibelles,
+              minWidth: largeurLibelles,
               backgroundColor: "#f5f7fa",
+              px: 1,
+              fontSize: 12,
+              fontWeight: 600,
+              color: "#1a2b4c",
             }}
-          />
+          >
+            Désignation
+          </Box>
+          <Box
+            sx={{
+              ...stylesColonneDuree(largeurDuree),
+              backgroundColor: "#f5f7fa",
+              fontSize: 10,
+              fontWeight: 600,
+              color: "#1a2b4c",
+            }}
+          >
+            Durée
+          </Box>
           <Box sx={{ flex: 1 }}>
             <Box sx={{ display: "flex", backgroundColor: "#f5f7fa" }}>
               {axe.groupes.map((groupe, index) => (
@@ -115,8 +150,8 @@ const GanttTimeline = ({
         {/* Corps */}
         {lignes.map((ligne) => {
           const estSelectionnee = ligneSelectionnee === ligne.id;
-          const afficherDuree = doitAfficherDuree(ligne);
-          const barreCliquable = Boolean(onBasculerDuree && ligne.barre);
+          const texteDates = libelleDatesPlage(ligne);
+
           return (
             <Box
               key={`${ligne.type_element}-${ligne.id}`}
@@ -140,14 +175,12 @@ const GanttTimeline = ({
             >
               <Box
                 sx={{
-                  width: LARGEUR_LIBELLES,
-                  minWidth: LARGEUR_LIBELLES,
-                  borderRight: "1px solid #e0e0e0",
-                  display: "flex",
-                  alignItems: "center",
+                  ...stylesColonneFixe,
+                  width: largeurLibelles,
+                  minWidth: largeurLibelles,
                   px: 1,
                   pl: ligne.indente ? 3 : 1,
-                  fontSize: 13,
+                  fontSize: compact ? 12 : 13,
                   fontWeight: ligne.estTitre ? 700 : 400,
                   color: ligne.estTitre ? "#1a2b4c" : "inherit",
                 }}
@@ -163,6 +196,20 @@ const GanttTimeline = ({
                 >
                   {ligne.libelle || "(sans désignation)"}
                 </Box>
+              </Box>
+
+              <Box
+                sx={{
+                  ...stylesColonneDuree(largeurDuree),
+                  fontSize: compact ? 10 : 11,
+                  color: texteDates ? "text.secondary" : "transparent",
+                  fontWeight: ligne.estTitre ? 600 : 400,
+                  whiteSpace: "nowrap",
+                  overflow: "hidden",
+                }}
+                title={texteDates}
+              >
+                {texteDates || "—"}
               </Box>
 
               <Box
@@ -195,60 +242,20 @@ const GanttTimeline = ({
 
                 {ligne.barre && (
                   <Box
-                    onClick={
-                      barreCliquable
-                        ? (event) => {
-                            event.stopPropagation();
-                            onBasculerDuree(ligne);
-                          }
-                        : undefined
-                    }
                     sx={{
                       position: "absolute",
                       left: `${ligne.barre.gauche}%`,
                       width: `${ligne.barre.largeur}%`,
-                      height:
-                        ligne.estTitre && !afficherDuree
-                          ? 8
-                          : hauteurLigne - 14,
+                      height: ligne.estTitre ? 8 : hauteurLigne - 14,
                       backgroundColor: ligne.couleur || "#1976d2",
                       borderRadius: ligne.estTitre ? "2px" : "3px",
-                      opacity: ligne.estTitre && !afficherDuree ? 0.55 : 1,
-                      display: "flex",
-                      alignItems: "center",
-                      px: 0.75,
+                      opacity: ligne.estTitre ? 0.55 : 1,
                       boxSizing: "border-box",
-                      cursor: barreCliquable ? "pointer" : "default",
                     }}
-                    title={
-                      barreCliquable
-                        ? `${ligne.libelle} : ${formatDateFr(
-                            ligne.date_debut
-                          )} au ${formatDateFr(ligne.date_fin)} — Cliquer pour ${
-                            afficherDuree ? "masquer" : "afficher"
-                          } la durée`
-                        : `${ligne.libelle} : ${formatDateFr(
-                            ligne.date_debut
-                          )} au ${formatDateFr(ligne.date_fin)}`
-                    }
-                  >
-                    {afficherDuree && (
-                      <Box
-                        component="span"
-                        sx={{
-                          fontSize: 11,
-                          color: "#fff",
-                          whiteSpace: "nowrap",
-                          overflow: "hidden",
-                          textOverflow: "ellipsis",
-                          textShadow: "0 1px 1px rgba(0,0,0,0.35)",
-                          pointerEvents: "none",
-                        }}
-                      >
-                        {ligne.barre.duree} j
-                      </Box>
-                    )}
-                  </Box>
+                    title={`${ligne.libelle} : ${formatDateFr(
+                      ligne.date_debut
+                    )} au ${formatDateFr(ligne.date_fin)}`}
+                  />
                 )}
               </Box>
             </Box>

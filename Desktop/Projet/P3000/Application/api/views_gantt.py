@@ -516,13 +516,11 @@ def _calculer_barre(date_debut, date_fin, axe):
     }
 
 
-def _doit_afficher_duree(afficher_duree, largeur_num):
-    """Aligné sur ``doitAfficherDuree`` dans ``frontend/.../ganttLayout.js``."""
-    if afficher_duree is False:
-        return False
-    if afficher_duree is True:
-        return True
-    return largeur_num > 12
+def _libelle_dates_plage(date_debut, date_fin, duree=None):
+    """Aligné sur ``libelleDatesPlage`` dans ``frontend/.../ganttLayout.js``."""
+    if not duree:
+        return ''
+    return f"{duree} j"
 
 
 def _calculer_layout(diagramme):
@@ -548,12 +546,12 @@ def _calculer_layout(diagramme):
             'couleur': ligne.couleur,
             'date_debut': ligne.date_debut,
             'date_fin': ligne.date_fin,
-            'afficher_duree': ligne.afficher_duree,
-            'barre': barre,
-            'doit_afficher_duree': _doit_afficher_duree(
-                ligne.afficher_duree,
-                barre['largeur_num'] if barre else 0,
+            'libelle_dates': _libelle_dates_plage(
+                ligne.date_debut,
+                ligne.date_fin,
+                barre['duree'] if barre else None,
             ),
+            'barre': barre,
         })
 
     for titre in titres:
@@ -570,12 +568,12 @@ def _calculer_layout(diagramme):
             'couleur': titre.couleur,
             'date_debut': bornes_titre[0] if bornes_titre else None,
             'date_fin': bornes_titre[1] if bornes_titre else None,
-            'afficher_duree': titre.afficher_duree,
-            'barre': barre_titre,
-            'doit_afficher_duree': _doit_afficher_duree(
-                titre.afficher_duree,
-                barre_titre['largeur_num'] if barre_titre else 0,
+            'libelle_dates': _libelle_dates_plage(
+                bornes_titre[0] if bornes_titre else None,
+                bornes_titre[1] if bornes_titre else None,
+                barre_titre['duree'] if barre_titre else None,
             ),
+            'barre': barre_titre,
         })
         for enfant in enfants:
             ajouter_ligne(enfant, True)

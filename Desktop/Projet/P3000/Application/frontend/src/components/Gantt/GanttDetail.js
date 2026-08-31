@@ -39,7 +39,6 @@ import GanttDesignationInput from "./GanttDesignationInput";
 import GanttHistoriqueDrawer from "./GanttHistoriqueDrawer";
 import GanttStatutBadge from "./GanttStatutBadge";
 import GanttTimeline from "./GanttTimeline";
-import { doitAfficherDuree } from "./ganttLayout";
 
 const COULEUR_DEFAUT = "#1976d2";
 const DELAI_AUTOSAVE = 1500;
@@ -504,11 +503,6 @@ const GanttDetail = () => {
   const toutReplier = () => setTitresReplies(new Set(titresRepliables));
   const toutDeplier = () => setTitresReplies(new Set());
 
-  const basculerAfficherDuree = (ligne) => {
-    if (!ligne.barre) return;
-    majElement(ligne.id, { afficher_duree: !doitAfficherDuree(ligne) });
-  };
-
   if (chargement) {
     return (
       <Box sx={{ display: "flex", justifyContent: "center", p: 6 }}>
@@ -895,11 +889,7 @@ const GanttDetail = () => {
         </Box>
       </Paper>
 
-      <GanttTimeline
-        elements={elements}
-        echelle={diagramme.echelle}
-        onBasculerDuree={basculerAfficherDuree}
-      />
+      <GanttTimeline elements={elements} echelle={diagramme.echelle} />
 
       <Popover
         open={Boolean(couleurCible)}

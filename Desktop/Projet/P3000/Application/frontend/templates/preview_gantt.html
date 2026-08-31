@@ -90,14 +90,35 @@
       }
 
       .colonne-libelle {
-        width: 200px;
-        min-width: 200px;
+        width: 180px;
+        min-width: 180px;
         border-right: 1px solid #d5d9e0;
         padding: 5px 8px;
         display: flex;
         align-items: center;
         overflow: hidden;
         word-break: break-word;
+      }
+
+      .colonne-dates {
+        width: 40px;
+        min-width: 40px;
+        max-width: 40px;
+        border-right: 1px solid #d5d9e0;
+        padding: 5px 0;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 9px;
+        color: #555;
+        white-space: nowrap;
+        overflow: hidden;
+        text-align: center;
+      }
+
+      .colonne-dates.titre {
+        font-weight: 600;
+        color: #1a2b4c;
       }
 
       .colonne-libelle.indente {
@@ -142,12 +163,6 @@
         top: 8px;
         height: 6px;
         opacity: 0.55;
-      }
-
-      .barre-titre.barre-avec-duree {
-        top: 4px;
-        height: 14px;
-        opacity: 1;
       }
 
       .entete-grille {
@@ -225,6 +240,7 @@
     <div class="grille">
       <div class="entete-grille">
         <div class="colonne-libelle">Désignation</div>
+        <div class="colonne-dates">Durée</div>
         <div style="flex: 1">
           <div class="bande-groupes">
             {% for groupe in axe.groupes %}
@@ -246,17 +262,18 @@
             {{ ligne.libelle|default:"(sans désignation)" }}
           </span>
         </div>
+        <div class="colonne-dates {% if ligne.est_titre %}titre{% endif %}">
+          {{ ligne.libelle_dates|default:"" }}
+        </div>
         <div class="zone-barres">
           {% for periode in axe.periodes %}
           <div class="cellule" style="width: {{ periode.largeur }}%"></div>
           {% endfor %}
           {% if ligne.barre %}
           <div
-            class="barre {% if ligne.est_titre %}barre-titre{% if ligne.doit_afficher_duree %} barre-avec-duree{% endif %}{% endif %}"
+            class="barre {% if ligne.est_titre %}barre-titre{% endif %}"
             style="left: {{ ligne.barre.gauche }}%; width: {{ ligne.barre.largeur }}%; background-color: {{ ligne.couleur }};"
-          >
-            {% if ligne.doit_afficher_duree %}{{ ligne.barre.duree }} j{% endif %}
-          </div>
+          ></div>
           {% endif %}
         </div>
       </div>
