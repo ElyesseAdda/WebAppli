@@ -1891,6 +1891,12 @@ class Situation(models.Model):
     class Meta:
         ordering = ['-annee', '-mois']
         unique_together = ['chantier', 'mois', 'annee']
+        indexes = [
+            models.Index(fields=['-annee', '-mois'], name='situation_annee_mois_idx'),
+            models.Index(fields=['statut'], name='situation_statut_idx'),
+            models.Index(fields=['chantier', '-annee', '-mois'], name='situation_chantier_periode_idx'),
+            models.Index(fields=['-date_creation'], name='situation_date_creation_idx'),
+        ]
 
     def __str__(self):
         return f"Situation {self.numero_situation} - {self.chantier.chantier_name} ({self.mois}/{self.annee})"

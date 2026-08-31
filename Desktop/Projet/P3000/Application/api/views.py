@@ -380,6 +380,13 @@ class DevisPagination(PageNumberPagination):
     max_page_size = 100
 
 
+class SituationPagination(PageNumberPagination):
+    """Pagination pour la liste des situations"""
+    page_size = 15
+    page_size_query_param = 'page_size'
+    max_page_size = 100
+
+
 class DevisViewSet(viewsets.ModelViewSet):
     queryset = (
         Devis.objects.all()
@@ -7648,9 +7655,31 @@ def create_facture_cie(request):
 class SituationViewSet(viewsets.ModelViewSet):
     queryset = Situation.objects.all()
     serializer_class = SituationSerializer
+    permission_classes = [AllowAny]
+    pagination_class = SituationPagination
+
+    def get_serializer_class(self):
+        from .serializers import SituationListSerializer
+        if self.action == 'list':
+            return SituationListSerializer
+        return SituationSerializer
 
     def get_queryset(self):
-        """Optimise les requêtes avec prefetch_related pour charger les lignes"""
+        if self.action == 'list':
+            queryset = (
+                Situation.objects
+                .select_related(
+                    'chantier',
+                    'chantier__societe',
+                    'societe_devis',
+                )
+                .order_by('-annee', '-mois', '-id')
+            )
+            chantier_id = self.request.query_params.get('chantier')
+            if chantier_id:
+                queryset = queryset.filter(chantier_id=chantier_id)
+            return queryset
+
         return Situation.objects.prefetch_related(
             'lignes',
             'lignes__ligne_devis',
@@ -9029,12 +9058,20 @@ def get_all_situations_by_year(request):
 
 @api_view(['GET'])
 def get_situations_list(request):
-    situations = (Situation.objects
-                 .prefetch_related('lignes', 
-                                 'lignes_supplementaires',
-                                 'lignes_avenant')
-                 .all())
-    serializer = SituationSerializer(situations, many=True)
+    from .serializers import SituationListSerializer
+
+    queryset = (
+        Situation.objects
+        .select_related('chantier', 'chantier__societe', 'societe_devis')
+        .order_by('-annee', '-mois', '-id')
+    )
+    paginator = SituationPagination()
+    page = paginator.paginate_queryset(queryset, request)
+    if page is not None:
+        serializer = SituationListSerializer(page, many=True)
+        return paginator.get_paginated_response(serializer.data)
+
+    serializer = SituationListSerializer(queryset, many=True)
     return Response(serializer.data)
 
 def calculer_pourcentage_sous_partie(sous_partie):
