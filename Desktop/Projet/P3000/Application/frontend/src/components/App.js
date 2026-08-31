@@ -35,6 +35,8 @@ import DriveV2 from "./DriveV2/DriveV2";
 import DriveRecovery from "./DriveV2/DriveRecovery";
 import FilePreviewPage from "./DriveV2/FilePreviewPage";
 import OnlyOfficeEditor from "./DriveV2/OnlyOfficeEditor";
+import GanttDetail from "./Gantt/GanttDetail";
+import ListeGantt from "./Gantt/ListeGantt";
 import GestionAppelsOffres from "./GestionAppelsOffres";
 import GlobalConflictModal from "./GlobalConflictModal";
 import Layout from "./Layout";
@@ -255,6 +257,28 @@ function App() {
               <ProtectedRoute isAuthenticated={isAuthenticated}>
                 <Layout user={user} onLogout={handleLogout}>
                   <ChantiersDashboard />
+                </Layout>
+              </ProtectedRoute>
+            }
+          />
+
+          <Route
+            path="/gantt"
+            element={
+              <ProtectedRoute isAuthenticated={isAuthenticated}>
+                <Layout user={user} onLogout={handleLogout}>
+                  <ListeGantt />
+                </Layout>
+              </ProtectedRoute>
+            }
+          />
+
+          <Route
+            path="/gantt/:id"
+            element={
+              <ProtectedRoute isAuthenticated={isAuthenticated}>
+                <Layout user={user} onLogout={handleLogout}>
+                  <GanttDetail />
                 </Layout>
               </ProtectedRoute>
             }

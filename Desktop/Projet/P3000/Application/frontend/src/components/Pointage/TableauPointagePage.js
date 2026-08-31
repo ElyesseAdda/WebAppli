@@ -18,6 +18,7 @@ import {
   Tooltip,
   Typography,
 } from "@mui/material";
+import { agentVisibleForRange, monthRangeBounds } from "../../utils/agentEffectif";
 import PointageRecapCards from "./PointageRecapCards";
 import PointageEditDialog from "./PointageEditDialog";
 import PointageRepartitionAgenceModal, {
@@ -203,13 +204,10 @@ const normalizeRepartitionFromApi = (raw) => {
 const hasAgencePartInRepartition = (rep) =>
   Array.isArray(rep) && rep.some((x) => x.agence_id !== null && toNumber(x.montant) > 0);
 
-/** Inclus dans le tableau pour le mois `YYYY-MM` : effectif actuel, ou encore présent ce mois-là (désactivation). */
+/** Inclus dans le tableau pour le mois `YYYY-MM` : pas de période d'inactivité chevauchante. */
 const agentVisibleForPointageMonth = (agent, monthKey) => {
-  if (agent?.is_active === true) return true;
-  const dd = agent?.date_desactivation;
-  if (!dd) return false;
-  const deactivationYm = String(dd).slice(0, 7);
-  return String(monthKey) <= deactivationYm;
+  const { start, end } = monthRangeBounds(monthKey);
+  return agentVisibleForRange(agent, start, end);
 };
 
 const getPreviousMonthKey = (monthKey) => {

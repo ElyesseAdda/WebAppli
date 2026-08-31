@@ -148,7 +148,7 @@ const congeSubtypes = [
   { value: "paternite", label: "Paternité" },
 ];
 
-const CalendrierAgent = ({ agents }) => {
+const CalendrierAgent = ({ agents, onPeriodChange, initialDate }) => {
   const [events, setEvents] = useState([]);
   const [modalIsOpen, setModalIsOpen] = useState(false);
   const [selectedDate, setSelectedDate] = useState(null);
@@ -573,7 +573,16 @@ const CalendrierAgent = ({ agents }) => {
         plugins={[resourceTimelinePlugin]}
         schedulerLicenseKey="GPL-My-Project-Is-Open-Source"
         initialView="resourceTimelineMonth"
+        initialDate={initialDate || undefined}
         locale={frLocale}
+        datesSet={(arg) => {
+          if (!onPeriodChange) return;
+          // Bornes du mois affiché (pas la plage paddée du calendrier)
+          const monthStart = arg.view.currentStart;
+          const monthEndExclusive = arg.view.currentEnd;
+          const monthEnd = dayjs(monthEndExclusive).subtract(1, "day").toDate();
+          onPeriodChange(monthStart, monthEnd);
+        }}
         resources={
           agents.length > 0
             ? [...agents]

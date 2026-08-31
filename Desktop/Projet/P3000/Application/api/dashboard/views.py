@@ -21,6 +21,8 @@ from ..models import (
     AgencyExpenseMonth,
     DashboardSettings,
     PointageMensuel,
+    LigneMasqueeTableauSousTraitant,
+    LigneMasqueeTableauFournisseur,
 )
 
 
@@ -654,9 +656,20 @@ class DashboardViewSet(viewsets.ViewSet):
             if year is not None and not (period_start and period_end):
                 fournisseurs_query = fournisseurs_query.filter(annee=year)
 
+            # Lignes masquées du tableau fournisseur → exclure des agrégats dashboard
+            masked_fq = set()
+            for m in LigneMasqueeTableauFournisseur.objects.exclude(
+                source_type='agency_expense_fournisseur'
+            ):
+                cid = 0 if m.chantier_id is None else int(m.chantier_id)
+                masked_fq.add((m.mois, m.annee, m.fournisseur, cid))
+
             total_cout_materiel = 0.0
             for pfm in fournisseurs_query:
                 if pfm.chantier_id in agency_chantier_ids:
+                    continue
+                cid = pfm.chantier_id or 0
+                if (pfm.mois, pfm.annee, pfm.fournisseur, cid) in masked_fq:
                     continue
                 month_date = month_year_to_date(pfm.annee, pfm.mois)
                 if not in_period(month_date):
@@ -673,9 +686,26 @@ class DashboardViewSet(viewsets.ViewSet):
             if year is not None and not (period_start and period_end):
                 st_factures_query = st_factures_query.filter(annee=year)
 
+            # Lignes masquées du tableau ST → exclure des agrégats dashboard
+            masked_st = set()
+            for m in LigneMasqueeTableauSousTraitant.objects.exclude(source_type='agent_journalier'):
+                source = m.source_type or ''
+                if source and source not in ('facture_sous_traitant', ''):
+                    continue
+                cid = 0 if m.chantier_id is None else int(m.chantier_id)
+                masked_st.add((m.mois, m.annee, m.sous_traitant, cid))
+
             total_cout_sous_traitance = 0.0
-            for facture_st in st_factures_query:
+            for facture_st in st_factures_query.select_related('sous_traitant'):
                 if facture_st.chantier_id in agency_chantier_ids:
+                    continue
+                st_nom = (
+                    facture_st.sous_traitant.entreprise
+                    if hasattr(facture_st.sous_traitant, 'entreprise') and facture_st.sous_traitant
+                    else str(facture_st.sous_traitant or '')
+                )
+                cid = facture_st.chantier_id or 0
+                if (facture_st.mois, facture_st.annee, st_nom, cid) in masked_st:
                     continue
                 month_date = month_year_to_date(facture_st.annee, facture_st.mois)
                 if month_date is None and facture_st.date_reception:

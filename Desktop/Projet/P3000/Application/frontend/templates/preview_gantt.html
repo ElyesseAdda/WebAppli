@@ -1,0 +1,541 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="fr">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Planning - {{ diagramme.nom }}</title>
+    <style>
+      @page {
+        size: A4 landscape;
+        margin: 8mm;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        font-family: Arial, Helvetica, "Roboto", sans-serif;
+        margin: 0;
+        padding: 0;
+        color: #1a1a1a;
+        font-size: 11px;
+      }
+
+      .page {
+        width: 100%;
+        padding-top: 12px;
+      }
+
+      .entete-page {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 16px;
+        width: 100%;
+        margin-bottom: 14px;
+      }
+
+      .entete-logo-gauche,
+      .entete-logo-droite {
+        flex: 0 0 280px;
+        min-width: 280px;
+        display: flex;
+        align-items: center;
+        min-height: 80px;
+      }
+
+      .entete-logo-gauche {
+        justify-content: flex-start;
+        padding-left: 18px;
+      }
+
+      .entete-logo-droite {
+        justify-content: flex-end;
+        padding-right: 18px;
+      }
+
+      .logo-societe {
+        max-height: 80px;
+        max-width: 280px;
+        width: auto;
+        height: auto;
+        object-fit: contain;
+        display: block;
+      }
+
+      .logo-client {
+        max-height: 80px;
+        max-width: 280px;
+        width: auto;
+        height: auto;
+        object-fit: contain;
+        display: block;
+      }
+
+      .page-corps {
+        width: 100%;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+      }
+
+      .entete-titre {
+        flex: 1;
+        min-width: 0;
+        text-align: center;
+      }
+
+      .entete-titre h1 {
+        margin: 0;
+        font-size: 18px;
+        color: #1a2b4c;
+      }
+
+      .entete-titre .sous-titre {
+        margin-top: 4px;
+        font-size: 11px;
+        color: #555;
+      }
+
+      .entete-titre .meta-edition {
+        margin-top: 6px;
+        font-size: 10px;
+        color: #666;
+      }
+
+      .grille-wrapper {
+        width: 100%;
+        display: flex;
+        justify-content: center;
+      }
+
+      .grille {
+        width: 100%;
+        max-width: 100%;
+        border: 1px solid #d5d9e0;
+        border-radius: 3px;
+        overflow: visible;
+      }
+
+      .entete {
+        display: none;
+      }
+
+      .statut {
+        display: inline-block;
+        padding: 2px 8px;
+        border-radius: 10px;
+        font-size: 10px;
+        font-weight: bold;
+        color: #fff;
+      }
+
+      .statut-termine {
+        background-color: #2e7d32;
+      }
+
+      .statut-brouillon {
+        background-color: #ed6c02;
+      }
+
+      .corps-grille {
+        position: relative;
+      }
+
+      .fleches-enchainement {
+        position: absolute;
+        left: 220px;
+        right: 0;
+        top: 0;
+        bottom: 0;
+        pointer-events: none;
+        z-index: 3;
+      }
+
+      .fleches-enchainement svg {
+        width: 100%;
+        height: 100%;
+        display: block;
+      }
+
+      .fleches-enchainement path {
+        fill: none;
+        stroke: #8a94a6;
+        stroke-width: 1.2px;
+        vector-effect: non-scaling-stroke;
+      }
+
+      .rangee {
+        display: flex;
+        width: 100%;
+        border-bottom: 1px solid #eceff3;
+        page-break-inside: avoid;
+        break-inside: avoid;
+        overflow: visible;
+      }
+
+      .rangee:last-child {
+        border-bottom: none;
+      }
+
+      .rangee-titre {
+        background-color: #f5f7fa;
+      }
+
+      .colonne-libelle {
+        width: 180px;
+        min-width: 180px;
+        border-right: 1px solid #d5d9e0;
+        padding: 5px 8px;
+        display: flex;
+        align-items: center;
+        overflow: hidden;
+        word-break: break-word;
+      }
+
+      .colonne-dates {
+        width: 40px;
+        min-width: 40px;
+        max-width: 40px;
+        border-right: 1px solid #d5d9e0;
+        padding: 5px 0;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 9px;
+        color: #555;
+        white-space: nowrap;
+        overflow: hidden;
+        text-align: center;
+      }
+
+      .colonne-dates.titre {
+        font-weight: 600;
+        color: #1a2b4c;
+      }
+
+      .colonne-libelle.indente {
+        padding-left: 20px;
+      }
+
+      .libelle-titre {
+        font-weight: bold;
+        color: #1a2b4c;
+      }
+
+      .zone-barres {
+        flex: 1;
+        position: relative;
+        min-height: 52px;
+        display: flex;
+        overflow: visible;
+      }
+
+      .cellule {
+        border-right: 1px solid #f2f4f7;
+        min-height: 52px;
+      }
+
+      .cellule:last-child {
+        border-right: none;
+      }
+
+      .barre-bloc {
+        position: absolute;
+        top: 0;
+        bottom: 0;
+        display: flex;
+        flex-direction: column;
+        align-items: flex-start;
+        justify-content: center;
+        overflow: visible;
+        z-index: 1;
+        pointer-events: none;
+      }
+
+      .barre-libelle {
+        font-size: 8px;
+        line-height: 1.15;
+        color: #555;
+        white-space: nowrap;
+        overflow: visible;
+        width: max-content;
+        max-width: none;
+        margin-bottom: 1px;
+        position: relative;
+        z-index: 2;
+      }
+
+      .barre-libelle.titre {
+        font-weight: bold;
+        color: #1a2b4c;
+      }
+
+      .barre {
+        position: relative;
+        left: auto;
+        top: auto;
+        width: 100%;
+        height: 14px;
+        border-radius: 3px;
+        flex-shrink: 0;
+      }
+
+      .barre-titre {
+        height: 6px;
+        opacity: 0.55;
+      }
+
+      .barre-dates {
+        position: relative;
+        width: 100%;
+        height: 10px;
+        margin-top: 1px;
+        overflow: visible;
+      }
+
+      .barre-dates-externe {
+        position: absolute;
+        bottom: 3px;
+        overflow: visible;
+        z-index: 2;
+        height: 10px;
+        pointer-events: none;
+      }
+
+      .barre-dates-externe.separees {
+        position: absolute;
+      }
+
+      .barre-dates-externe.combinee,
+      .barre-dates-externe.unique {
+        transform: translateX(-50%);
+        width: max-content;
+        max-width: none;
+      }
+
+      .barre-dates-externe.combinee .barre-dates-combinee,
+      .barre-dates-externe.unique .barre-dates-combinee {
+        position: static;
+        transform: none;
+      }
+
+      .barre-dates-debut,
+      .barre-dates-fin {
+        position: absolute;
+        top: 0;
+        font-size: 8px;
+        line-height: 1;
+        color: #666;
+        white-space: nowrap;
+      }
+
+      .barre-dates-debut {
+        left: 0;
+      }
+
+      .barre-dates-fin {
+        right: 0;
+      }
+
+      .barre-dates-combinee {
+        position: absolute;
+        left: 50%;
+        top: 0;
+        transform: translateX(-50%);
+        font-size: 8px;
+        line-height: 1;
+        color: #666;
+        white-space: nowrap;
+      }
+
+      .entete-grille {
+        display: flex;
+        background-color: #f5f7fa;
+        border-bottom: 1px solid #d5d9e0;
+      }
+
+      .entete-grille .colonne-libelle {
+        font-weight: bold;
+        font-size: 10px;
+      }
+
+      .bande-groupes,
+      .bande-periodes {
+        display: flex;
+        width: 100%;
+      }
+
+      .bande-groupes div {
+        border-right: 1px solid #d5d9e0;
+        text-align: center;
+        font-size: 10px;
+        font-weight: bold;
+        padding: 3px 0;
+        text-transform: capitalize;
+        overflow: hidden;
+        white-space: nowrap;
+      }
+
+      .bande-periodes div {
+        border-right: 1px solid #e8ebef;
+        text-align: center;
+        font-size: 9px;
+        color: #666;
+        padding: 2px 0;
+        overflow: hidden;
+        white-space: nowrap;
+      }
+
+      .vide {
+        padding: 30px;
+        text-align: center;
+        color: #888;
+      }
+
+      .pied {
+        margin-top: 10px;
+        font-size: 9px;
+        color: #888;
+        text-align: center;
+        width: 100%;
+      }
+    </style>
+  </head>
+
+  <body>
+    <div class="page">
+      <div class="entete-page">
+        <div class="entete-logo-gauche">
+          <img class="logo-societe" src="{% static 'logo.png' %}" alt="Logo société" />
+        </div>
+        <div class="entete-titre">
+          <h1>{{ diagramme.nom }}</h1>
+          <div class="sous-titre">
+            {% if chantier %}Chantier : {{ chantier.chantier_name }}{% if societe_nom %} — {{ societe_nom }}{% endif %}
+            {% else %}Diagramme indépendant{% endif %}
+            {% if diagramme.description %} · {{ diagramme.description }}{% endif %}
+          </div>
+          <div class="meta-edition">
+            Édité le {{ date_edition|date:"d/m/Y à H:i" }}
+          </div>
+        </div>
+        <div class="entete-logo-droite">
+          {% if afficher_logo_client and logo_client_url %}
+          <img class="logo-client" src="{{ logo_client_url }}" alt="Logo client" />
+          {% endif %}
+        </div>
+      </div>
+
+      <div class="page-corps">
+    {% if axe.periodes %}
+    <div class="grille-wrapper">
+    <div class="grille">
+      <div class="entete-grille">
+        <div class="colonne-libelle">Désignation</div>
+        <div class="colonne-dates">Durée</div>
+        <div style="flex: 1">
+          <div class="bande-groupes">
+            {% for groupe in axe.groupes %}
+            <div style="width: {{ groupe.largeur }}%">{{ groupe.libelle }}</div>
+            {% endfor %}
+          </div>
+          <div class="bande-periodes">
+            {% for periode in axe.periodes %}
+            <div style="width: {{ periode.largeur }}%">{{ periode.libelle }}</div>
+            {% endfor %}
+          </div>
+        </div>
+      </div>
+
+      <div class="corps-grille">
+        {% if enchainements %}
+        <div class="fleches-enchainement">
+          <svg viewBox="0 0 100 {{ viewbox_h }}" preserveAspectRatio="none">
+            <defs>
+              <marker
+                id="gantt-fleche"
+                markerWidth="6"
+                markerHeight="6"
+                refX="5"
+                refY="3"
+                orient="auto"
+              >
+                <path d="M0,0 L6,3 L0,6 Z" fill="#8a94a6" />
+              </marker>
+            </defs>
+            {% for lien in enchainements %}
+            <path d="{{ lien.chemin }}" marker-end="url(#gantt-fleche)" />
+            {% endfor %}
+          </svg>
+        </div>
+        {% endif %}
+
+      {% for ligne in lignes %}
+      <div class="rangee {% if ligne.est_titre %}rangee-titre{% endif %}">
+        <div class="colonne-libelle {% if ligne.indente %}indente{% endif %}">
+          <span class="{% if ligne.est_titre %}libelle-titre{% endif %}">
+            {{ ligne.libelle|default:"(sans désignation)" }}
+          </span>
+        </div>
+        <div class="colonne-dates {% if ligne.est_titre %}titre{% endif %}">
+          {{ ligne.libelle_dates|default:"" }}
+        </div>
+        <div class="zone-barres">
+          {% for periode in axe.periodes %}
+          <div class="cellule" style="width: {{ periode.largeur }}%"></div>
+          {% endfor %}
+          {% if ligne.barre %}
+          <div
+            class="barre-bloc"
+            style="left: {{ ligne.barre.gauche }}%; width: {{ ligne.barre.largeur }}%;"
+          >
+            <div class="barre-libelle {% if ligne.est_titre %}titre{% endif %}">
+              {{ ligne.libelle|default:"(sans désignation)" }}
+            </div>
+            <div
+              class="barre {% if ligne.est_titre %}barre-titre{% endif %}"
+              style="{{ ligne.style_barre_css }}"
+            ></div>
+          </div>
+          {% if ligne.dates_barre.mode == 'separees' %}
+          <div
+            class="barre-dates-externe separees"
+            style="left: {{ ligne.barre.gauche }}%; width: {{ ligne.barre.largeur }}%;"
+          >
+            <span class="barre-dates-debut">{{ ligne.dates_barre.debut }}</span>
+            <span class="barre-dates-fin">{{ ligne.dates_barre.fin }}</span>
+          </div>
+          {% elif ligne.dates_barre.mode == 'combinee' or ligne.dates_barre.mode == 'unique' %}
+          <div
+            class="barre-dates-externe {% if ligne.dates_barre.mode == 'unique' %}unique{% else %}combinee{% endif %}"
+            style="left: {{ ligne.barre.centre }}%;"
+          >
+            <span class="barre-dates-combinee">{{ ligne.dates_barre.texte }}</span>
+          </div>
+          {% endif %}
+          {% endif %}
+        </div>
+      </div>
+      {% endfor %}
+      </div>
+    </div>
+    </div>
+    {% else %}
+    <div class="grille-wrapper">
+    <div class="grille">
+      <div class="vide">
+        Ce diagramme ne contient aucune ligne datée.
+      </div>
+    </div>
+    </div>
+    {% endif %}
+
+    <div class="pied">
+     Échelle : {{ diagramme.get_echelle_display }}
+    </div>
+      </div>
+    </div>
+  </body>
+</html>

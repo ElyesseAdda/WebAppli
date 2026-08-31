@@ -94,6 +94,7 @@ const SlideBar = ({ toggleSidebar, isSidebarVisible, user, onOpenBonCommande }) 
         children: [
           { label: "Gestion agent", to: "/CalendrierAgentContainer" },
           { label: "Planning hebdo", to: "/PlanningContainer" },
+          { label: "Diagrammes de Gantt", to: "/gantt" },
         ],
       },
       {
