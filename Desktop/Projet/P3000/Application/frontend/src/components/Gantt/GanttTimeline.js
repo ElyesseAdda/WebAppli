@@ -1,6 +1,6 @@
 import { Box, Typography } from "@mui/material";
 import React, { useMemo } from "react";
-import { calculerLayout, formatDateFr, libelleDatesPlage, modeDatesBarre } from "./ganttLayout";
+import { calculerLayout, cheminEnchainement, formatDateFr, libelleDatesPlage, modeDatesBarre } from "./ganttLayout";
 import { sxBarreGantt } from "./ganttBarStyles";
 
 const LARGEUR_LIBELLES = 220;
@@ -38,7 +38,7 @@ const GanttTimeline = ({
   ligneSelectionnee = null,
   compact = false,
 }) => {
-  const { axe, lignes } = useMemo(
+  const { axe, lignes, enchainements } = useMemo(
     () => calculerLayout(elements, echelle),
     [elements, echelle]
   );
@@ -151,7 +151,53 @@ const GanttTimeline = ({
         </Box>
 
         {/* Corps */}
-        {lignes.map((ligne) => {
+        <Box sx={{ position: "relative" }}>
+          {enchainements.length > 0 && (
+            <Box
+              sx={{
+                position: "absolute",
+                left: largeurLibelles + largeurDuree,
+                right: 0,
+                top: 0,
+                bottom: 0,
+                pointerEvents: "none",
+                zIndex: 3,
+              }}
+            >
+              <Box
+                component="svg"
+                viewBox={`0 0 100 ${lignes.length * 100}`}
+                preserveAspectRatio="none"
+                sx={{ width: "100%", height: "100%", display: "block" }}
+              >
+                <defs>
+                  <marker
+                    id="gantt-fleche"
+                    markerWidth="6"
+                    markerHeight="6"
+                    refX="5"
+                    refY="3"
+                    orient="auto"
+                  >
+                    <path d="M0,0 L6,3 L0,6 Z" fill="#8a94a6" />
+                  </marker>
+                </defs>
+                {enchainements.map((lien, index) => (
+                  <path
+                    key={`${lien.indexDe}-${lien.indexVers}-${index}`}
+                    d={cheminEnchainement(lien)}
+                    fill="none"
+                    stroke="#8a94a6"
+                    strokeWidth="1.2"
+                    vectorEffect="non-scaling-stroke"
+                    markerEnd="url(#gantt-fleche)"
+                  />
+                ))}
+              </Box>
+            </Box>
+          )}
+
+          {lignes.map((ligne) => {
           const estSelectionnee = ligneSelectionnee === ligne.id;
           const texteDates = libelleDatesPlage(ligne);
           const affichageDates = ligne.barre
@@ -382,6 +428,7 @@ const GanttTimeline = ({
             </Box>
           );
         })}
+        </Box>
       </Box>
     </Box>
   );

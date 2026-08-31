@@ -110,6 +110,57 @@ export function modeDatesBarre(largeurPct, dateDebut, dateFin) {
   return { mode: "separees", debut, fin };
 }
 
+/** True si la ligne suivante démarre le lendemain de la fin de la précédente. */
+export function lignesSEnchainent(lignePrec, ligneSuiv) {
+  if (!lignePrec || !ligneSuiv) return false;
+  if (lignePrec.estTitre || ligneSuiv.estTitre) return false;
+  const finPrec = parseDate(lignePrec.date_fin);
+  const debutSuiv = parseDate(ligneSuiv.date_debut);
+  if (!finPrec || !debutSuiv) return false;
+  return toISO(debutSuiv) === toISO(ajouterJours(finPrec, 1));
+}
+
+/**
+ * Flèches entre lignes datées qui s'enchaînent (fin J → début J+1).
+ * Ignore les titres intermédiaires pour relier la dernière ligne datée à la suivante.
+ */
+export function calculerEnchainements(lignes) {
+  const resultat = [];
+  let derniereLigne = null;
+  let indexDerniere = null;
+
+  (lignes || []).forEach((ligne, index) => {
+    if (ligne.estTitre || !ligne.barre) return;
+    if (
+      derniereLigne &&
+      indexDerniere !== null &&
+      lignesSEnchainent(derniereLigne, ligne)
+    ) {
+      resultat.push({
+        indexDe: indexDerniere,
+        indexVers: index,
+        xFin: derniereLigne.barre.gauche + derniereLigne.barre.largeur,
+        xDebut: ligne.barre.gauche,
+      });
+    }
+    derniereLigne = ligne;
+    indexDerniere = index;
+  });
+
+  return resultat;
+}
+
+/** Chemin SVG orthogonal entre deux barres (viewBox : 100 unités par ligne). */
+export function cheminEnchainement({ xFin, xDebut, indexDe, indexVers }) {
+  const y1 = indexDe * 100 + 50;
+  const y2 = indexVers * 100 + 50;
+  const yMid = (y1 + y2) / 2;
+  if (Math.abs(xFin - xDebut) < 0.5) {
+    return `M ${xFin} ${y1} L ${xDebut} ${y2}`;
+  }
+  return `M ${xFin} ${y1} L ${xFin} ${yMid} L ${xDebut} ${yMid} L ${xDebut} ${y2}`;
+}
+
 /** Bornes du diagramme : première date de début et dernière date de fin. */
 export function calculerBornes(elements) {
   const debuts = [];
@@ -261,5 +312,11 @@ export function calculerLayout(elements, echelle) {
   );
   const bornes = calculerBornes(lignesDatees);
   const axe = calculerPeriodes(bornes, echelle || "semaine");
-  return { axe, lignes: construireLignes(elements, axe), bornes };
+  const lignes = construireLignes(elements, axe);
+  return {
+    axe,
+    lignes,
+    bornes,
+    enchainements: calculerEnchainements(lignes),
+  };
 }

@@ -515,6 +515,7 @@ def _calculer_barre(date_debut, date_fin, axe):
         'gauche': _pourcentage_css(gauche),
         'largeur': _pourcentage_css(largeur),
         'largeur_num': largeur,
+        'gauche_num': gauche,
         'centre': _pourcentage_css(gauche + largeur / 2),
         'duree': duree,
     }
@@ -542,6 +543,59 @@ def _mode_dates_barre(largeur_pct, date_debut, date_fin):
     if largeur < 11:
         return {'mode': 'combinee', 'texte': f'{debut} → {fin}'}
     return {'mode': 'separees', 'debut': debut, 'fin': fin}
+
+
+def _lignes_s_enchainent(ligne_prec, ligne_suiv):
+    """Aligné sur ``lignesSEnchainent`` dans ``frontend/.../ganttLayout.js``."""
+    if ligne_prec.get('est_titre') or ligne_suiv.get('est_titre'):
+        return False
+    fin_prec = ligne_prec.get('date_fin')
+    debut_suiv = ligne_suiv.get('date_debut')
+    if not fin_prec or not debut_suiv:
+        return False
+    return debut_suiv == fin_prec + timedelta(days=1)
+
+
+def _calculer_enchainements(lignes):
+    """Aligné sur ``calculerEnchainements`` dans ``frontend/.../ganttLayout.js``."""
+    resultat = []
+    derniere_ligne = None
+    index_derniere = None
+
+    for index, ligne in enumerate(lignes or []):
+        if ligne.get('est_titre') or not ligne.get('barre'):
+            continue
+        if (
+            derniere_ligne is not None
+            and index_derniere is not None
+            and _lignes_s_enchainent(derniere_ligne, ligne)
+        ):
+            barre_prec = derniere_ligne['barre']
+            barre_suiv = ligne['barre']
+            resultat.append({
+                'index_de': index_derniere,
+                'index_vers': index,
+                'x_fin': barre_prec['gauche_num'] + barre_prec['largeur_num'],
+                'x_debut': barre_suiv['gauche_num'],
+            })
+        derniere_ligne = ligne
+        index_derniere = index
+
+    return resultat
+
+
+def _chemin_enchainement(lien, nb_lignes):
+    """Aligné sur ``cheminEnchainement`` dans ``frontend/.../ganttLayout.js``."""
+    y1 = lien['index_de'] * 100 + 50
+    y2 = lien['index_vers'] * 100 + 50
+    y_mid = (y1 + y2) / 2
+    x_fin = lien['x_fin']
+    x_debut = lien['x_debut']
+    if abs(x_fin - x_debut) < 0.5:
+        return f'M {x_fin} {y1} L {x_debut} {y2}'
+    return (
+        f'M {x_fin} {y1} L {x_fin} {y_mid} L {x_debut} {y_mid} L {x_debut} {y2}'
+    )
 
 
 def _libelle_dates_plage(date_debut, date_fin, duree=None):
@@ -745,9 +799,14 @@ def _calculer_layout(diagramme):
             groupe['nb_periodes'] * largeur_periode
         )
 
+    enchainements = _calculer_enchainements(resultat)
+    for lien in enchainements:
+        lien['chemin'] = _chemin_enchainement(lien, len(resultat))
+
     return {
         'axe': axe,
         'lignes': resultat,
+        'enchainements': enchainements,
         'largeur_periode': _pourcentage_css(largeur_periode),
     }
 
@@ -781,6 +840,8 @@ def preview_gantt(request, diagramme_id):
         'societe_nom': societe.nom_societe if societe else '',
         'axe': layout['axe'],
         'lignes': layout['lignes'],
+        'enchainements': layout['enchainements'],
+        'viewbox_h': len(layout['lignes']) * 100,
         'largeur_periode': layout['largeur_periode'],
         'date_edition': timezone.now(),
     })
