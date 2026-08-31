@@ -8013,6 +8013,25 @@ class SituationService:
         return 0
 
     @staticmethod
+    def calculer_montant_total_travaux(situation, data=None):
+        """
+        Montant total du marché = devis HT + somme des avenants du chantier.
+        Utilise la valeur envoyée par le frontend si disponible, sinon recalcule.
+        """
+        if data and data.get('montant_total_travaux') not in (None, ''):
+            return Decimal(str(data['montant_total_travaux']))
+
+        devis_ht = Decimal(str(
+            (situation.devis.price_ht if situation.devis else None)
+            or situation.montant_total_devis
+            or '0'
+        ))
+        total_avenants = Avenant.objects.filter(chantier=situation.chantier).aggregate(
+            total=Sum('montant_total')
+        )['total'] or Decimal('0')
+        return devis_ht + total_avenants
+
+    @staticmethod
     def calculer_net_a_payer(situation):
         montant = situation.montant_ht_mois
         montant -= situation.retenue_garantie
@@ -8210,7 +8229,8 @@ def update_situation(request, pk):
         for field in ['mois', 'annee', 'numero_situation', 'date_creation', 'montant_ht_mois', 'cumul_precedent', 
                      'montant_total_cumul_ht', 'retenue_garantie', 'montant_prorata', 
                      'retenue_cie', 'type_retenue_cie', 'montant_apres_retenues', 'tva', 'montant_total_ttc', 
-                     'pourcentage_avancement', 'taux_prorata', 'taux_retenue_garantie', 'tva_rate', 'statut']:
+                     'pourcentage_avancement', 'montant_total_travaux', 'montant_total_devis',
+                     'taux_prorata', 'taux_retenue_garantie', 'tva_rate', 'statut']:
             if field not in data:
                 continue
 
@@ -8386,7 +8406,8 @@ def update_situation(request, pk):
         # Recalculer le montant_total
         situation.montant_total = situation.montant_precedent + situation.montant_ht_mois
         
-        # Recalculer le pourcentage d'avancement (comme dans le frontend)
+        # Recalculer montant_total_travaux (devis HT + avenants) puis le % d'avancement
+        situation.montant_total_travaux = SituationService.calculer_montant_total_travaux(situation, data)
         montant_total_travaux_decimal = Decimal(str(situation.montant_total_travaux or '0'))
         if montant_total_travaux_decimal > 0:
             situation.pourcentage_avancement = (montant_total_cumul_ht / montant_total_travaux_decimal) * Decimal('100')
@@ -8486,6 +8507,16 @@ def update_situation(request, pk):
                 situation_suivante.montant_precedent = Decimal('0.00')
                 
             situation_suivante.montant_total = situation_suivante.montant_precedent + situation_suivante.montant_ht_mois
+
+            # Propager le montant total travaux (même chantier) et recalculer le % d'avancement
+            situation_suivante.montant_total_travaux = situation.montant_total_travaux
+            montant_total_travaux_suivante = Decimal(str(situation_suivante.montant_total_travaux or '0'))
+            if montant_total_travaux_suivante > 0:
+                situation_suivante.pourcentage_avancement = (
+                    montant_total_cumul_ht_suivante / montant_total_travaux_suivante
+                ) * Decimal('100')
+            else:
+                situation_suivante.pourcentage_avancement = Decimal('0.00')
                 
             situation_suivante.save()
 
