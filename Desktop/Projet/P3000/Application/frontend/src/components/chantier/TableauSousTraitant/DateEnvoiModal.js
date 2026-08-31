@@ -33,29 +33,44 @@ const DateEnvoiModal = ({ open, onClose, onSave, dateEnvoi }) => {
     onClose();
   };
 
+  const handleSubmit = (e) => {
+    e.preventDefault();
+    handleSave();
+  };
+
+  const handleKeyDown = (e) => {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      handleSave();
+    }
+  };
+
   return (
     <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth>
       <DialogTitle>Date d'envoi</DialogTitle>
-      <DialogContent>
-        <Box sx={{ display: "flex", flexDirection: "column", gap: 2, mt: 1 }}>
-          <TextField
-            label="Date d'envoi"
-            type="date"
-            value={localDateEnvoi}
-            onChange={(e) => setLocalDateEnvoi(e.target.value)}
-            fullWidth
-            InputLabelProps={{
-              shrink: true,
-            }}
-          />
-        </Box>
-      </DialogContent>
-      <DialogActions>
-        <Button onClick={onClose}>Annuler</Button>
-        <Button onClick={handleSave} variant="contained">
-          Valider
-        </Button>
-      </DialogActions>
+      <form onSubmit={handleSubmit}>
+        <DialogContent>
+          <Box sx={{ display: "flex", flexDirection: "column", gap: 2, mt: 1 }}>
+            <TextField
+              label="Date d'envoi"
+              type="date"
+              value={localDateEnvoi}
+              onChange={(e) => setLocalDateEnvoi(e.target.value)}
+              onKeyDown={handleKeyDown}
+              fullWidth
+              InputLabelProps={{
+                shrink: true,
+              }}
+            />
+          </Box>
+        </DialogContent>
+        <DialogActions>
+          <Button type="button" onClick={onClose}>Annuler</Button>
+          <Button type="submit" variant="contained">
+            Valider
+          </Button>
+        </DialogActions>
+      </form>
     </Dialog>
   );
 };

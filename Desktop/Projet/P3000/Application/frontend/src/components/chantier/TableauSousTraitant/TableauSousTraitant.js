@@ -34,7 +34,7 @@ import FactureModal from "./FactureModal";
 import DatePaiementModal from "./DatePaiementModal";
 import DateEnvoiModal from "./DateEnvoiModal";
 import DatePaiementFactureModal from "./DatePaiementFactureModal";
-import { Add as AddIcon, Close as CloseIcon, CheckCircle as CheckCircleIcon, AddCircleOutline as AddCircleOutlineIcon, ExpandMore as ExpandMoreIcon, Search as SearchIcon } from "@mui/icons-material";
+import { Add as AddIcon, Close as CloseIcon, CheckCircle as CheckCircleIcon, AddCircleOutline as AddCircleOutlineIcon, ExpandMore as ExpandMoreIcon, Search as SearchIcon, VisibilityOff as VisibilityOffIcon, Visibility as VisibilityIcon } from "@mui/icons-material";
 import axios from "axios";
 import React, { useEffect, useState, useRef, useCallback, useMemo } from "react";
 import { FaSync } from "react-icons/fa";
@@ -74,6 +74,7 @@ const TableauSousTraitant = () => {
   // État pour le modal de confirmation de remplissage automatique
   const [confirmFillModalOpen, setConfirmFillModalOpen] = useState(false);
   const [pendingFillAction, setPendingFillAction] = useState(null); // {mois, sous_traitant}
+  const [fillModalFactures, setFillModalFactures] = useState([{ numero: "", montant: "" }]);
   
   // État pour le modal de date de paiement de facture
   const [datePaiementFactureModalOpen, setDatePaiementFactureModalOpen] = useState(false);
@@ -84,6 +85,12 @@ const TableauSousTraitant = () => {
   const [currentAjustement, setCurrentAjustement] = useState(null); // {agent_id, mois, annee, sous_traitant, a_payer_labor_cost, ajustement_montant, ajustement_description, chantiersDetails}
   const [ajustementFormData, setAjustementFormData] = useState({ montant: "", description: "" });
   const [savingAjustement, setSavingAjustement] = useState(false);
+
+  // Lignes masquées (hors totaux / dashboard)
+  const [lignesMasquees, setLignesMasquees] = useState([]);
+  const [lignesMasqueesModalOpen, setLignesMasqueesModalOpen] = useState(false);
+  const [loadingMasquees, setLoadingMasquees] = useState(false);
+  const [hidingLigne, setHidingLigne] = useState(false);
   
   // Timer pour la sauvegarde automatique
   const saveTimerRef = useRef(null);
@@ -115,10 +122,19 @@ const TableauSousTraitant = () => {
               mois: item.mois,
               sous_traitant: item.sous_traitant,
               paye: 0,
+              hasSuiviAggregate: false,
               factures: []
             };
           }
-          agentsJournaliersData[keyAgent].paye += item.paye || 0;
+          // Suivi agrégé (chantier_id null) : ne pas re-sommer les anciens montants par chantier
+          if (item.suivi_paiement_id) {
+            if (!agentsJournaliersData[keyAgent].hasSuiviAggregate) {
+              agentsJournaliersData[keyAgent].paye = item.paye ?? 0;
+              agentsJournaliersData[keyAgent].hasSuiviAggregate = true;
+            }
+          } else if (!agentsJournaliersData[keyAgent].hasSuiviAggregate) {
+            agentsJournaliersData[keyAgent].paye += item.paye || 0;
+          }
           if (item.factures && item.factures.length > 0) {
             agentsJournaliersData[keyAgent].factures.push(...item.factures);
           }
@@ -166,6 +182,74 @@ const TableauSousTraitant = () => {
   useEffect(() => {
     fetchData();
   }, []);
+
+  const parseMoisAnnee = (moisKey) => {
+    const [moisStr, annee2Str] = String(moisKey || "").split("/");
+    const mois = Number(moisStr);
+    const annee2 = Number(annee2Str);
+    const annee = annee2 < 50 ? 2000 + annee2 : 1900 + annee2;
+    return { mois, annee };
+  };
+
+  const fetchLignesMasquees = async (anneeFilter = selectedAnnee) => {
+    setLoadingMasquees(true);
+    try {
+      const params = {};
+      if (anneeFilter) params.annee = anneeFilter;
+      const res = await axios.get("/api/lignes-masquees-tableau-sous-traitant/", { params });
+      setLignesMasquees(Array.isArray(res.data) ? res.data : []);
+    } catch (err) {
+      console.error("Erreur chargement lignes masquées:", err);
+      setLignesMasquees([]);
+    } finally {
+      setLoadingMasquees(false);
+    }
+  };
+
+  const handleOpenLignesMasqueesModal = async () => {
+    setLignesMasqueesModalOpen(true);
+    await fetchLignesMasquees();
+  };
+
+  const handleMasquerLigne = async (item) => {
+    if (!item) return;
+    const ok = window.confirm(
+      "Masquer cette ligne ? Elle ne sera plus affichée ni comptabilisée dans les totaux et le dashboard. Vous pourrez la réafficher plus tard."
+    );
+    if (!ok) return;
+
+    const { mois, annee } = parseMoisAnnee(item.mois);
+    const isAgent = item.isAgentJournalier || item.source_type === "agent_journalier";
+    setHidingLigne(true);
+    try {
+      await axios.post("/api/lignes-masquees-tableau-sous-traitant/", {
+        mois,
+        annee,
+        sous_traitant: item.sous_traitant,
+        chantier_id: isAgent ? 0 : (item.chantier_id ?? 0),
+        source_type: item.source_type || (isAgent ? "agent_journalier" : "facture_sous_traitant"),
+        chantier_name: item.chantier_name || "",
+        a_payer: item.a_payer || 0,
+      });
+      await fetchData();
+    } catch (err) {
+      console.error("Erreur masquage ligne:", err);
+      alert("Impossible de masquer cette ligne.");
+    } finally {
+      setHidingLigne(false);
+    }
+  };
+
+  const handleReafficherLigne = async (masqueeId) => {
+    if (!masqueeId) return;
+    try {
+      await axios.delete(`/api/lignes-masquees-tableau-sous-traitant/${masqueeId}/`);
+      await Promise.all([fetchLignesMasquees(), fetchData()]);
+    } catch (err) {
+      console.error("Erreur réaffichage ligne:", err);
+      alert("Impossible de réafficher cette ligne.");
+    }
+  };
 
   // Initialiser l'année actuelle
   useEffect(() => {
@@ -231,7 +315,8 @@ const TableauSousTraitant = () => {
           annee: anneeComplete,
           sous_traitant: sous_traitant,
           chantier_id: chantierId || null,
-          montant_paye_ht: montantPaye || 0,
+          montant_paye_ht: montantPaye == null ? 0 : montantPaye,
+          montant_paye_saisi: true,
         };
 
         // Ajouter les dates si fournies
@@ -264,7 +349,7 @@ const TableauSousTraitant = () => {
             ) {
               return {
                 ...item,
-                paye: suiviData.montant_paye_ht || 0,
+                paye: suiviData.montant_paye_ht ?? 0,
                 date_paiement: suiviData.date_paiement_reel,
                 date_envoi: suiviData.date_envoi_facture,
                 date_paiement_prevue: suiviData.date_paiement_prevue,
@@ -280,7 +365,7 @@ const TableauSousTraitant = () => {
         // ✅ Synchroniser editedValuesPaye
         setEditedValuesPaye((prev) => ({
           ...prev,
-          [key]: suiviData.montant_paye_ht || 0
+          [key]: suiviData.montant_paye_ht ?? 0
         }));
 
         setSaveSuccess(true);
@@ -299,17 +384,30 @@ const TableauSousTraitant = () => {
 
   // Ouvrir le modal pour saisir/modifier le montant payé et la date
   const handleOpenDatePaiementModal = (mois, sous_traitant, chantierId) => {
-    const currentData = data.find(d => 
-      d.mois === mois && 
-      d.sous_traitant === sous_traitant && 
-      d.chantier_id === chantierId
-    );
+    const isAgentJournalierRow = chantierId === 0 || chantierId === null;
+    const currentData = isAgentJournalierRow
+      ? data.find(d =>
+          d.mois === mois &&
+          d.sous_traitant === sous_traitant &&
+          d.source_type === 'agent_journalier'
+        )
+      : data.find(d =>
+          d.mois === mois &&
+          d.sous_traitant === sous_traitant &&
+          d.chantier_id === chantierId
+        );
+    const key = isAgentJournalierRow
+      ? `${mois}_${sous_traitant}_AGENT_JOURNALIER`
+      : `${mois}_${sous_traitant}_${chantierId}`;
+    const montantPayeActuel = editedValuesPaye[key] !== undefined
+      ? editedValuesPaye[key]
+      : (currentData?.paye ?? 0);
     
     setCurrentPaiement({
       mois,
       sous_traitant,
       chantierId,
-      montantPaye: currentData?.a_payer || 0, // Préremplir avec le montant à payer
+      montantPaye: montantPayeActuel,
       datePaiement: currentData?.date_paiement || null,
       sourceType: currentData?.source_type || null,
       agencyExpenseId: currentData?.agency_expense_id || null
@@ -319,81 +417,96 @@ const TableauSousTraitant = () => {
   
   // Gérer la sauvegarde depuis le modal de date de paiement (MONTANT PAYÉ)
   const handleSaveDatePaiement = async (montantPaye, datePaiement) => {
-    if (currentPaiement) {
-      const { mois, sous_traitant, chantierId } = currentPaiement;
-      // ✅ FIX : Utiliser la bonne clé pour les agents journaliers (_AGENT_JOURNALIER au lieu de _0)
-      const key = chantierId === 0 || chantierId === null
-        ? `${mois}_${sous_traitant}_AGENT_JOURNALIER`
-        : `${mois}_${sous_traitant}_${chantierId}`;
-      
-      // ✅ TOUTES les lignes (y compris AgencyExpenseMonth et agents journaliers) utilisent le système de suivi
-      setEditedValuesPaye((prev) => ({
-        ...prev,
-        [key]: montantPaye,
-      }));
-      
-      // Sauvegarder avec la date de paiement dans SuiviPaiementSousTraitantMensuel
-      // Pour les lignes avec chantierId === 0 (AgencyExpenseMonth et agents journaliers),
-      // appeler directement l'API car savePaiement les exclut
-      if (chantierId === 0 || chantierId === null) {
-        try {
-          setSaving(true);
-          
-          const [moisNum, annee2digits] = mois.split("/").map(Number);
-          const anneeComplete = annee2digits < 50 ? 2000 + annee2digits : 1900 + annee2digits;
-          
-          const response = await axios.post(
-            `/api/suivi-paiements-sous-traitant-mensuel/update_or_create_suivi/`,
-            {
-              mois: moisNum,
-              annee: anneeComplete,
-              sous_traitant: sous_traitant,
-              chantier_id: null,  // null pour les lignes sans chantier spécifique
-              montant_paye_ht: montantPaye || 0,
-              date_paiement_reel: datePaiement
-            }
-          );
-          
-          // Mise à jour dynamique
-          const suiviData = response.data;
-          
-          setData((prevData) => {
-            return prevData.map((item) => {
-              if (
-                item.mois === mois &&
-                item.sous_traitant === sous_traitant &&
-                item.chantier_id === chantierId
-              ) {
-                return {
-                  ...item,
-                  paye: suiviData.montant_paye_ht || 0,
-                  date_paiement: suiviData.date_paiement_reel,
-                  date_envoi: suiviData.date_envoi_facture,
-                  date_paiement_prevue: suiviData.date_paiement_prevue,
-                  ecart_paiement_reel: suiviData.ecart_paiement_reel,
-                  delai_paiement: suiviData.delai_paiement,
-                  suivi_paiement_id: suiviData.id
-                };
-              }
-              return item;
-            });
-          });
-          
-          setSaveSuccess(true);
-          setTimeout(() => setSaveSuccess(false), 2000);
-        } catch (error) {
-          console.error("Erreur lors de la sauvegarde:", error);
-          setError("Erreur lors de la sauvegarde du montant payé");
-        } finally {
-          setSaving(false);
-        }
-      } else {
-        // Pour les autres lignes, utiliser savePaiement normalement
-        savePaiement(mois, sous_traitant, chantierId, montantPaye, null, datePaiement);
-      }
+    if (!currentPaiement) {
+      return;
     }
-    setDatePaiementModalOpen(false);
-    setCurrentPaiement(null);
+
+    const { mois, sous_traitant, chantierId } = currentPaiement;
+    const isAgentJournalierRow = chantierId === 0 || chantierId === null;
+    const key = isAgentJournalierRow
+      ? `${mois}_${sous_traitant}_AGENT_JOURNALIER`
+      : `${mois}_${sous_traitant}_${chantierId}`;
+
+    setEditedValuesPaye((prev) => ({
+      ...prev,
+      [key]: montantPaye,
+    }));
+
+    try {
+      setSaving(true);
+
+      const [moisNum, annee2digits] = mois.split("/").map(Number);
+      const anneeComplete = annee2digits < 50 ? 2000 + annee2digits : 1900 + annee2digits;
+
+      const response = await axios.post(
+        `/api/suivi-paiements-sous-traitant-mensuel/update_or_create_suivi/`,
+        {
+          mois: moisNum,
+          annee: anneeComplete,
+          sous_traitant: sous_traitant,
+          chantier_id: isAgentJournalierRow ? null : (chantierId || null),
+          montant_paye_ht: montantPaye == null ? 0 : montantPaye,
+          montant_paye_saisi: true,
+          date_paiement_reel: datePaiement,
+        }
+      );
+
+      const suiviData = response.data;
+      let agentPayeApplied = false;
+
+      setData((prevData) => {
+        return prevData.map((item) => {
+          if (item.mois !== mois || item.sous_traitant !== sous_traitant) {
+            return item;
+          }
+
+          const suiviUpdates = {
+            paye: suiviData.montant_paye_ht ?? 0,
+            date_paiement: suiviData.date_paiement_reel,
+            date_envoi: suiviData.date_envoi_facture,
+            date_paiement_prevue: suiviData.date_paiement_prevue,
+            ecart_paiement_reel: suiviData.ecart_paiement_reel,
+            delai_paiement: suiviData.delai_paiement,
+            suivi_paiement_id: suiviData.id,
+            ecart: (item.a_payer || 0) - (suiviData.montant_paye_ht ?? 0),
+          };
+
+          if (isAgentJournalierRow && item.source_type === 'agent_journalier') {
+            if (!agentPayeApplied) {
+              agentPayeApplied = true;
+              return { ...item, ...suiviUpdates };
+            }
+            return {
+              ...item,
+              paye: 0,
+              ecart: item.a_payer || 0,
+              date_paiement: suiviData.date_paiement_reel,
+              date_envoi: suiviData.date_envoi_facture,
+              date_paiement_prevue: suiviData.date_paiement_prevue,
+              ecart_paiement_reel: suiviData.ecart_paiement_reel,
+              delai_paiement: suiviData.delai_paiement,
+              suivi_paiement_id: suiviData.id,
+            };
+          }
+
+          if (item.chantier_id === chantierId) {
+            return { ...item, ...suiviUpdates };
+          }
+
+          return item;
+        });
+      });
+
+      setSaveSuccess(true);
+      setTimeout(() => setSaveSuccess(false), 2000);
+    } catch (error) {
+      console.error("Erreur lors de la sauvegarde:", error);
+      setError("Erreur lors de la sauvegarde du montant payé");
+    } finally {
+      setSaving(false);
+      setDatePaiementModalOpen(false);
+      setCurrentPaiement(null);
+    }
   };
   
   // Nouvelle fonction pour modifier le MONTANT À PAYER des lignes AgencyExpenseMonth
@@ -626,8 +739,9 @@ const TableauSousTraitant = () => {
       return;
     }
 
-    // Ouvrir le modal de confirmation
+    // Facture optionnelle : champs vides par défaut (pas obligatoire)
     setPendingFillAction({ mois, sous_traitant });
+    setFillModalFactures([{ numero: "", montant: "" }]);
     setConfirmFillModalOpen(true);
   };
 
@@ -650,8 +764,17 @@ const TableauSousTraitant = () => {
 
     if (lignesSousTraitant.length === 0) {
       setPendingFillAction(null);
+      setFillModalFactures([{ numero: "", montant: "" }]);
       return;
     }
+
+    // Factures optionnelles : uniquement celles avec un numéro renseigné
+    const facturesACreer = fillModalFactures
+      .filter((f) => f.numero && String(f.numero).trim())
+      .map((f) => ({
+        numero_facture: String(f.numero).trim(),
+        montant_facture: parseFloat(f.montant) || 0,
+      }));
 
     setSaving(true);
     setSaveSuccess(false);
@@ -662,79 +785,221 @@ const TableauSousTraitant = () => {
       const anneeComplete = annee2digits < 50 ? 2000 + annee2digits : 1900 + annee2digits;
       const dateDuJour = new Date().toISOString().split('T')[0];
 
-      // Préparer toutes les mises à jour d'état
       const updatedValuesPaye = { ...editedValuesPaye };
+      const updatedEditedFactures = { ...editedFactures };
       const updatedData = [...data];
 
-      // Mettre à jour toutes les lignes
-      const updatePromises = lignesSousTraitant.map(async (ligne) => {
-        const key = `${mois}_${sous_traitant}_${ligne.chantier_id}`;
-        const montantAPayer = ligne.a_payer || 0;
-        
-        // Mettre à jour les valeurs payées
-        updatedValuesPaye[key] = montantAPayer;
-        
-        // Récupérer les factures actuelles
-        const facturesList = editedFactures[key] !== undefined 
-          ? editedFactures[key] 
-          : ((ligne.factures || []).map(f => ({
-              id: f.id || null,
-              numero_facture: f.numero_facture || f,
-              montant_facture: f.montant_facture || 0,
-              payee: f.payee || false,
-              date_paiement_facture: f.date_paiement_facture || null
-            })));
-        
-        // Préparer le payload pour le suivi
-        const payload = {
-          sous_traitant: sous_traitant,
-          mois: moisNum,
-          annee: anneeComplete,
-          chantier_id: ligne.chantier_id || null,
-          montant_paye_ht: montantAPayer,
-          date_paiement_reel: dateDuJour,
-          date_envoi_facture: ligne.date_envoi || null,
-          delai_paiement: ligne.delai_paiement || 45,
-        };
-
-        // Appel API via le bon endpoint suivi
-        const response = await axios.post(
-          `/api/suivi-paiements-sous-traitant-mensuel/update_or_create_suivi/`,
-          payload
+      const applyDatesFillLocal = (item) => {
+        const delai = item.delai_paiement || 45;
+        const { date_paiement_prevue, ecart_paiement_reel } = computeDatesPaiementLigne(
+          dateDuJour,
+          dateDuJour,
+          delai
         );
+        return {
+          date_envoi: dateDuJour,
+          date_paiement: dateDuJour,
+          date_paiement_prevue,
+          ecart_paiement_reel,
+        };
+      };
 
-        // Mettre à jour les données locales
-        if (response.data) {
-          const updatedPaiement = response.data;
-          const annee2digitsKey = anneeComplete.toString().slice(-2);
-          const moisKey = `${moisNum.toString().padStart(2, '0')}/${annee2digitsKey}`;
-          
-          const dataIndex = updatedData.findIndex(item => 
-            item.mois === moisKey &&
+      // 1) Remplir toujours le montant payé = montant à payer (indépendant des factures)
+      for (const ligne of lignesSousTraitant) {
+        const isAgentJournalier = ligne.source_type === 'agent_journalier' || ligne.isAgentJournalier;
+        const key = isAgentJournalier
+          ? `${mois}_${sous_traitant}_AGENT_JOURNALIER`
+          : `${mois}_${sous_traitant}_${ligne.chantier_id}`;
+
+        let montantAPayer = parseFloat(ligne.a_payer) || 0;
+
+        // Pour les agents journaliers regroupés : utiliser le total affiché (labor + ajustement + primes)
+        if (isAgentJournalier) {
+          const lignesAgent = lignesSousTraitant.filter(
+            (l) => l.source_type === 'agent_journalier' || l.isAgentJournalier
+          );
+          const totalLabor = lignesAgent.reduce((s, l) => s + (parseFloat(l.a_payer) || 0), 0);
+          const ajustement = parseFloat(ligne.ajustement_montant) || 0;
+          const primes = parseFloat(ligne.total_primes) || 0;
+          montantAPayer = totalLabor + ajustement + primes;
+          updatedValuesPaye[key] = montantAPayer;
+
+          // Un seul appel suivi pour le groupe agent (chantier_id null)
+          await axios.post(
+            `/api/suivi-paiements-sous-traitant-mensuel/update_or_create_suivi/`,
+            {
+              sous_traitant: sous_traitant,
+              mois: moisNum,
+              annee: anneeComplete,
+              chantier_id: null,
+              montant_paye_ht: montantAPayer,
+              montant_paye_saisi: true,
+              date_paiement_reel: dateDuJour,
+              date_envoi_facture: dateDuJour,
+              delai_paiement: ligne.delai_paiement || 45,
+            }
+          );
+
+          // Mettre à jour toutes les lignes agent du groupe en local
+          updatedData.forEach((item, idx) => {
+            if (
+              item.mois === mois &&
+              item.sous_traitant === sous_traitant &&
+              item.source_type === 'agent_journalier'
+            ) {
+              updatedData[idx] = {
+                ...item,
+                paye: montantAPayer,
+                ecart: (item.a_payer || 0) - montantAPayer,
+                ...applyDatesFillLocal(item),
+              };
+            }
+          });
+
+          // Ne traiter le groupe agent qu'une seule fois
+          break;
+        }
+
+        updatedValuesPaye[key] = montantAPayer;
+
+        if (ligne.source_type === 'agency_expense' && ligne.agency_expense_id) {
+          await axios.post(
+            `/api/suivi-paiements-sous-traitant-mensuel/update_or_create_suivi/`,
+            {
+              sous_traitant: sous_traitant,
+              mois: moisNum,
+              annee: anneeComplete,
+              chantier_id: (ligne.chantier_id === 0 || ligne.chantier_id == null) ? null : ligne.chantier_id,
+              montant_paye_ht: montantAPayer,
+              montant_paye_saisi: true,
+              date_paiement_reel: dateDuJour,
+              date_envoi_facture: dateDuJour,
+              delai_paiement: ligne.delai_paiement || 45,
+            }
+          );
+          // Aussi synchroniser la date de réception côté AgencyExpenseMonth
+          await axios.patch(`/api/agency-expenses-month/${ligne.agency_expense_id}/`, {
+            date_reception_facture: dateDuJour,
+            date_paiement_reel: dateDuJour,
+          });
+        } else {
+          await axios.post(
+            `/api/suivi-paiements-sous-traitant-mensuel/update_or_create_suivi/`,
+            {
+              sous_traitant: sous_traitant,
+              mois: moisNum,
+              annee: anneeComplete,
+              chantier_id: ligne.chantier_id || null,
+              montant_paye_ht: montantAPayer,
+              montant_paye_saisi: true,
+              date_paiement_reel: dateDuJour,
+              date_envoi_facture: dateDuJour,
+              delai_paiement: ligne.delai_paiement || 45,
+            }
+          );
+        }
+
+        const dataIndex = updatedData.findIndex(
+          (item) =>
+            item.mois === mois &&
             item.sous_traitant === sous_traitant &&
             item.chantier_id === ligne.chantier_id
+        );
+
+        if (dataIndex !== -1) {
+          updatedData[dataIndex] = {
+            ...updatedData[dataIndex],
+            paye: montantAPayer,
+            ecart: (updatedData[dataIndex].a_payer || 0) - montantAPayer,
+            ...applyDatesFillLocal(updatedData[dataIndex]),
+          };
+        }
+      }
+
+      // 2) Créer / valider les factures UNIQUEMENT si l'utilisateur en a saisi
+      if (facturesACreer.length > 0) {
+        const cibleLigne = lignesSousTraitant[0];
+        const isAgentCible =
+          cibleLigne.source_type === 'agent_journalier' || cibleLigne.isAgentJournalier;
+        const keyCible = isAgentCible
+          ? `${mois}_${sous_traitant}_AGENT_JOURNALIER`
+          : `${mois}_${sous_traitant}_${cibleLigne.chantier_id}`;
+
+        let facturesList =
+          cibleLigne.source_type === 'agency_expense'
+            ? [...(cibleLigne.factures || [])]
+            : [...(editedFactures[keyCible] || cibleLigne.factures || [])];
+
+        if (cibleLigne.source_type === 'agency_expense' && cibleLigne.agency_expense_id) {
+          facturesACreer.forEach((nouvelleFacture) => {
+            facturesList.push({
+              numero_facture: nouvelleFacture.numero_facture,
+              montant_facture: nouvelleFacture.montant_facture,
+              payee: true,
+              date_paiement_facture: dateDuJour,
+            });
+          });
+
+          await axios.patch(`/api/agency-expenses-month/${cibleLigne.agency_expense_id}/`, {
+            factures: facturesList,
+          });
+        } else {
+          // S'assurer d'avoir un suivi pour y rattacher les factures
+          const suiviResponse = await axios.post(
+            `/api/suivi-paiements-sous-traitant-mensuel/update_or_create_suivi/`,
+            {
+              sous_traitant: sous_traitant,
+              mois: moisNum,
+              annee: anneeComplete,
+              chantier_id: isAgentCible ? null : (cibleLigne.chantier_id || null),
+            }
           );
-          
-          if (dataIndex !== -1) {
-            updatedData[dataIndex] = {
-              ...updatedData[dataIndex],
-              paye: parseFloat(updatedPaiement.montant_paye_ht) || 0,
-              ecart: (updatedData[dataIndex].a_payer || 0) - (parseFloat(updatedPaiement.montant_paye_ht) || 0),
-              date_paiement: updatedPaiement.date_paiement_reel || dateDuJour,
-              date_envoi: updatedPaiement.date_envoi_facture !== undefined ? updatedPaiement.date_envoi_facture : updatedData[dataIndex].date_envoi,
-              date_paiement_prevue: updatedPaiement.date_paiement_prevue !== undefined ? updatedPaiement.date_paiement_prevue : updatedData[dataIndex].date_paiement_prevue,
-              ecart_paiement_reel: updatedPaiement.ecart_paiement_reel !== undefined ? updatedPaiement.ecart_paiement_reel : updatedData[dataIndex].ecart_paiement_reel,
-              suivi_paiement_id: updatedPaiement.id,
-            };
+          const suiviId = suiviResponse.data?.id || cibleLigne.suivi_paiement_id;
+
+          if (suiviId) {
+            for (const nouvelleFacture of facturesACreer) {
+              const created = await axios.post('/api/factures-suivi-sous-traitant/', {
+                suivi_paiement: suiviId,
+                numero_facture: nouvelleFacture.numero_facture,
+                montant_facture_ht: nouvelleFacture.montant_facture,
+                payee: true,
+                date_paiement_facture: dateDuJour,
+              });
+              facturesList.push({
+                id: `suivi_${created.data.id}`,
+                numero_facture: created.data.numero_facture,
+                montant_facture: created.data.montant_facture_ht,
+                payee: true,
+                date_paiement_facture: created.data.date_paiement_facture || dateDuJour,
+              });
+            }
           }
         }
-      });
 
-      // Attendre que toutes les mises à jour soient terminées
-      await Promise.all(updatePromises);
+        updatedEditedFactures[keyCible] = facturesList;
 
-      // Appliquer toutes les mises à jour d'état en une seule fois
+        // Propager les factures sur la/les ligne(s) concernées sans modifier le montant payé
+        updatedData.forEach((item, idx) => {
+          const sameAgent =
+            isAgentCible &&
+            item.mois === mois &&
+            item.sous_traitant === sous_traitant &&
+            item.source_type === 'agent_journalier';
+          const sameRow =
+            item.mois === mois &&
+            item.sous_traitant === sous_traitant &&
+            item.chantier_id === cibleLigne.chantier_id;
+          if (sameAgent || sameRow) {
+            updatedData[idx] = {
+              ...item,
+              factures: facturesList,
+            };
+          }
+        });
+      }
+
       setEditedValuesPaye(updatedValuesPaye);
+      setEditedFactures(updatedEditedFactures);
       setData(updatedData);
 
       setSaveSuccess(true);
@@ -747,6 +1012,7 @@ const TableauSousTraitant = () => {
     } finally {
       setSaving(false);
       setPendingFillAction(null);
+      setFillModalFactures([{ numero: "", montant: "" }]);
     }
   };
 
@@ -757,6 +1023,14 @@ const TableauSousTraitant = () => {
       d.mois === mois && 
       d.sous_traitant === sous_traitant && 
       d.chantier_id === chantierId
+    ) || (
+      (chantierId === 0 || chantierId === null)
+        ? data.find(d =>
+            d.mois === mois &&
+            d.sous_traitant === sous_traitant &&
+            d.source_type === 'agent_journalier'
+          )
+        : null
     );
 
     // Pour les agents journaliers (chantierId = 0 ou null), utiliser une clé spéciale
@@ -764,10 +1038,12 @@ const TableauSousTraitant = () => {
       ? `${mois}_${sous_traitant}_AGENT_JOURNALIER`
       : `${mois}_${sous_traitant}_${chantierId}`;
     
-    // ✅ CORRECTION : Pour AgencyExpenseMonth, utiliser currentData.factures au lieu de editedFactures
+    // Même source que l'affichage : agency → data ; sinon editedFactures puis fallback data
     const factures = currentData?.source_type === 'agency_expense' 
-      ? (currentData.factures || [])  // Factures depuis les données pour AgencyExpenseMonth
-      : (editedFactures[key] || []);  // Factures depuis editedFactures pour les autres
+      ? (currentData.factures || [])
+      : (editedFactures[key] !== undefined
+          ? editedFactures[key]
+          : (currentData?.factures || []));
     
     if (factureIndex !== null && factureIndex < factures.length && factures[factureIndex]) {
       // Mode édition
@@ -896,68 +1172,140 @@ const TableauSousTraitant = () => {
     }
 
     const { mois, sous_traitant, chantierId, factureIndex } = currentFacture;
+    const isAgentJournalierRow = chantierId === 0 || chantierId === null;
+    const key = isAgentJournalierRow
+      ? `${mois}_${sous_traitant}_AGENT_JOURNALIER`
+      : `${mois}_${sous_traitant}_${chantierId}`;
     
-    // Vérifier si c'est une ligne AgencyExpenseMonth
     const currentData = data.find(d => 
       d.mois === mois && 
       d.sous_traitant === sous_traitant && 
       d.chantier_id === chantierId
+    ) || (
+      isAgentJournalierRow
+        ? data.find(d =>
+            d.mois === mois &&
+            d.sous_traitant === sous_traitant &&
+            d.source_type === 'agent_journalier'
+          )
+        : null
     );
+
+    const [moisNum, annee2digits] = mois.split("/").map(Number);
+    const anneeComplete = annee2digits < 50 ? 2000 + annee2digits : 1900 + annee2digits;
+    const nouveauMontantFacture = parseFloat(factureModalData.montant) || 0;
+
+    const getMontantPayeActuel = () =>
+      parseFloat(
+        editedValuesPaye[key] !== undefined
+          ? editedValuesPaye[key]
+          : (currentData?.paye || 0)
+      ) || 0;
+
+    const applyPayeLocal = (nouveauMontantPaye, updatedFactures) => {
+      setEditedValuesPaye((prev) => ({
+        ...prev,
+        [key]: nouveauMontantPaye,
+      }));
+      setData((prevData) =>
+        prevData.map((item) => {
+          const isSameAgentGroup =
+            isAgentJournalierRow &&
+            item.mois === mois &&
+            item.sous_traitant === sous_traitant &&
+            item.source_type === 'agent_journalier';
+          const isExactRow =
+            item.mois === mois &&
+            item.sous_traitant === sous_traitant &&
+            item.chantier_id === chantierId;
+          if (isExactRow || isSameAgentGroup) {
+            return {
+              ...item,
+              factures: updatedFactures !== undefined ? updatedFactures : item.factures,
+              paye: nouveauMontantPaye,
+              ecart: (item.a_payer || 0) - nouveauMontantPaye,
+            };
+          }
+          return item;
+        })
+      );
+    };
+
+    // Ajuster le montant payé si on modifie une facture déjà validée
+    const adjustPayeForPaidEdit = async (oldFacture) => {
+      if (!oldFacture?.payee) {
+        return null;
+      }
+      const ancienMontant = parseFloat(oldFacture.montant_facture) || 0;
+      const nouveauMontantPaye = Math.max(
+        0,
+        getMontantPayeActuel() - ancienMontant + nouveauMontantFacture
+      );
+      await persistMontantPayeSuivi({
+        suiviId: currentData?.suivi_paiement_id || null,
+        mois: moisNum,
+        annee: anneeComplete,
+        sous_traitant,
+        chantierId: isAgentJournalierRow ? null : ((chantierId === 0 || chantierId === null) ? null : chantierId),
+        montantPaye: nouveauMontantPaye,
+        datePaiement: currentData?.date_paiement || oldFacture.date_paiement_facture || null,
+      });
+      return nouveauMontantPaye;
+    };
     
-    // Si c'est une ligne AgencyExpenseMonth, utiliser l'ancienne méthode
+    // Si c'est une ligne AgencyExpenseMonth
     if (currentData?.source_type === 'agency_expense' && currentData?.agency_expense_id) {
       try {
         setSaving(true);
         
-        // Récupérer les factures actuelles
         const currentFactures = currentData.factures || [];
-        
         let updatedFactures;
+        let nouveauMontantPaye = null;
+
         if (factureIndex !== null && factureIndex < currentFactures.length) {
-          // Modification : conserver payee et date_paiement_facture
+          const oldFacture = currentFactures[factureIndex];
           updatedFactures = [...currentFactures];
           updatedFactures[factureIndex] = {
-            ...currentFactures[factureIndex],  // Conserver tous les champs existants (payee, date_paiement_facture)
+            ...oldFacture,
             numero_facture: factureModalData.numero.trim(),
-            montant_facture: parseFloat(factureModalData.montant) || 0
+            montant_facture: nouveauMontantFacture,
           };
+          nouveauMontantPaye = await adjustPayeForPaidEdit(oldFacture);
         } else {
-          // Ajout : nouvelle facture
-          const newFacture = {
-            numero_facture: factureModalData.numero.trim(),
-            montant_facture: parseFloat(factureModalData.montant) || 0,
-            payee: false,
-            date_paiement_facture: null
-          };
-          updatedFactures = [...currentFactures, newFacture];
+          updatedFactures = [
+            ...currentFactures,
+            {
+              numero_facture: factureModalData.numero.trim(),
+              montant_facture: nouveauMontantFacture,
+              payee: false,
+              date_paiement_facture: null,
+            },
+          ];
         }
         
-        // Sauvegarder via l'API
         await axios.patch(`/api/agency-expenses-month/${currentData.agency_expense_id}/`, {
           factures: updatedFactures
         });
         
-        const key = chantierId === 0 || chantierId === null 
-          ? `${mois}_${sous_traitant}_AGENT_JOURNALIER`
-          : `${mois}_${sous_traitant}_${chantierId}`;
-        
-        // ✅ Mise à jour dynamique : mettre à jour uniquement cette ligne dans data
-        // Pour AgencyExpenseMonth, on ne synchronise PAS editedFactures
-        setData((prevData) => {
-          return prevData.map((item) => {
-            if (
-              item.mois === mois &&
-              item.sous_traitant === sous_traitant &&
-              item.chantier_id === chantierId
-            ) {
-              return {
-                ...item,
-                factures: updatedFactures
-              };
-            }
-            return item;
+        if (nouveauMontantPaye !== null) {
+          applyPayeLocal(nouveauMontantPaye, updatedFactures);
+        } else {
+          setData((prevData) => {
+            return prevData.map((item) => {
+              if (
+                item.mois === mois &&
+                item.sous_traitant === sous_traitant &&
+                item.chantier_id === chantierId
+              ) {
+                return {
+                  ...item,
+                  factures: updatedFactures
+                };
+              }
+              return item;
+            });
           });
-        });
+        }
         
         setSaveSuccess(true);
         setTimeout(() => setSaveSuccess(false), 2000);
@@ -968,105 +1316,102 @@ const TableauSousTraitant = () => {
         setSaving(false);
       }
     } else {
-      // Utiliser le nouveau système de suivi pour les autres lignes
+      // Système de suivi pour les autres lignes
       try {
         setSaving(true);
         
-        const [moisNum, annee2digits] = mois.split("/").map(Number);
-        const anneeComplete = annee2digits < 50 ? 2000 + annee2digits : 1900 + annee2digits;
-        
-        // 1. Créer ou récupérer le suivi de paiement
         const suiviResponse = await axios.post('/api/suivi-paiements-sous-traitant-mensuel/update_or_create_suivi/', {
           mois: moisNum,
           annee: anneeComplete,
           sous_traitant: sous_traitant,
-          chantier_id: chantierId || null,
+          chantier_id: isAgentJournalierRow ? null : (chantierId || null),
         });
         
         const suiviId = suiviResponse.data.id;
+        const factures = editedFactures[key] || currentData?.factures || [];
+        let nouveauMontantPaye = null;
         
-        // 2. Créer ou mettre à jour la facture
         const factureData = {
           suivi_paiement: suiviId,
           numero_facture: factureModalData.numero.trim(),
-          montant_facture_ht: parseFloat(factureModalData.montant) || 0,
+          montant_facture_ht: nouveauMontantFacture,
         };
         
-        if (factureIndex !== null && currentData?.suivi_paiement_id) {
-          // Mode édition : récupérer l'ID de la facture
-          const key = chantierId === 0 || chantierId === null 
-            ? `${mois}_${sous_traitant}_AGENT_JOURNALIER`
-            : `${mois}_${sous_traitant}_${chantierId}`;
-          const factures = editedFactures[key] || currentData.factures || [];
+        if (factureIndex !== null && factureIndex < factures.length) {
           const factureToEdit = factures[factureIndex];
+          nouveauMontantPaye = await adjustPayeForPaidEdit(factureToEdit);
           
           if (factureToEdit && factureToEdit.id && factureToEdit.id.toString().startsWith('suivi_')) {
-            // C'est une facture de suivi, on peut la mettre à jour
             const factureId = factureToEdit.id.replace('suivi_', '');
             await axios.patch(`/api/factures-suivi-sous-traitant/${factureId}/`, factureData);
           } else {
-            // Nouvelle facture
             await axios.post('/api/factures-suivi-sous-traitant/', factureData);
           }
         } else {
-          // Mode ajout
           await axios.post('/api/factures-suivi-sous-traitant/', factureData);
         }
         
-        // ✅ Mise à jour dynamique : recharger uniquement les données du backend pour cette ligne
-        const [moisNum2, annee2digits2] = mois.split("/").map(Number);
-        const anneeComplete2 = annee2digits2 < 50 ? 2000 + annee2digits2 : 1900 + annee2digits2;
-        
         const response = await axios.get(`/api/suivi-paiements-sous-traitant-mensuel/`, {
           params: {
-            mois: moisNum2,
-            annee: anneeComplete2,
+            mois: moisNum,
+            annee: anneeComplete,
             sous_traitant: sous_traitant,
-            chantier_id: chantierId || null
+            chantier_id: isAgentJournalierRow ? null : (chantierId || null),
           }
         });
         
         if (response.data && response.data.length > 0) {
           const updatedSuivi = response.data[0];
-          
-          // Mettre à jour uniquement cette ligne dans data
-          setData((prevData) => {
-            return prevData.map((item) => {
-              if (
-                item.mois === mois &&
-                item.sous_traitant === sous_traitant &&
-                item.chantier_id === chantierId
-              ) {
-                return {
-                  ...item,
-                  factures: updatedSuivi.factures_suivi?.map(f => ({
-                    id: `suivi_${f.id}`,
-                    numero_facture: f.numero_facture,
-                    montant_facture: f.montant_facture_ht,
-                    payee: f.payee,
-                    date_paiement_facture: f.date_paiement_facture
-                  })) || [],
-                  suivi_paiement_id: updatedSuivi.id
-                };
-              }
-              return item;
+          const mappedFactures = updatedSuivi.factures_suivi?.map(f => ({
+            id: `suivi_${f.id}`,
+            numero_facture: f.numero_facture,
+            montant_facture: f.montant_facture_ht,
+            payee: f.payee,
+            date_paiement_facture: f.date_paiement_facture
+          })) || [];
+
+          if (nouveauMontantPaye !== null) {
+            applyPayeLocal(nouveauMontantPaye, mappedFactures);
+            setData((prevData) =>
+              prevData.map((item) => {
+                if (
+                  item.mois === mois &&
+                  item.sous_traitant === sous_traitant &&
+                  item.chantier_id === chantierId
+                ) {
+                  return {
+                    ...item,
+                    factures: mappedFactures,
+                    paye: nouveauMontantPaye,
+                    ecart: (item.a_payer || 0) - nouveauMontantPaye,
+                    suivi_paiement_id: updatedSuivi.id,
+                  };
+                }
+                return item;
+              })
+            );
+          } else {
+            setData((prevData) => {
+              return prevData.map((item) => {
+                if (
+                  item.mois === mois &&
+                  item.sous_traitant === sous_traitant &&
+                  item.chantier_id === chantierId
+                ) {
+                  return {
+                    ...item,
+                    factures: mappedFactures,
+                    suivi_paiement_id: updatedSuivi.id
+                  };
+                }
+                return item;
+              });
             });
-          });
-          
-          // Mettre à jour aussi editedFactures pour la cohérence
-          const key = chantierId === 0 || chantierId === null 
-            ? `${mois}_${sous_traitant}_AGENT_JOURNALIER`
-            : `${mois}_${sous_traitant}_${chantierId}`;
+          }
           
           setEditedFactures((prev) => ({
             ...prev,
-            [key]: updatedSuivi.factures_suivi?.map(f => ({
-              id: `suivi_${f.id}`,
-              numero_facture: f.numero_facture,
-              montant_facture: f.montant_facture_ht,
-              payee: f.payee,
-              date_paiement_facture: f.date_paiement_facture
-            })) || []
+            [key]: mappedFactures
           }));
         }
         
@@ -1118,6 +1463,244 @@ const TableauSousTraitant = () => {
     // Ouvrir le modal pour saisir la date de paiement
     setCurrentFacturePaiement({ mois, sous_traitant, chantierId, factureIndex });
     setDatePaiementFactureModalOpen(true);
+  };
+
+  // Persister le montant payé sur le bon suivi (évite de créer un doublon avec un autre chantier_id)
+  const persistMontantPayeSuivi = async ({
+    suiviId,
+    mois,
+    annee,
+    sous_traitant,
+    chantierId,
+    montantPaye,
+    datePaiement,
+    dateEnvoi,
+  }) => {
+    const payload = {
+      montant_paye_ht: montantPaye == null ? 0 : montantPaye,
+      montant_paye_saisi: true,
+      date_paiement_reel: datePaiement,
+    };
+    if (dateEnvoi !== undefined) {
+      payload.date_envoi_facture = dateEnvoi;
+    }
+    if (suiviId) {
+      await axios.patch(`/api/suivi-paiements-sous-traitant-mensuel/${suiviId}/`, payload);
+      return;
+    }
+    await axios.post('/api/suivi-paiements-sous-traitant-mensuel/update_or_create_suivi/', {
+      mois,
+      annee,
+      sous_traitant,
+      chantier_id: (chantierId === 0 || chantierId === null) ? null : chantierId,
+      ...payload,
+    });
+  };
+
+  const computeDatesPaiementLigne = (dateEnvoi, datePaiement, delai = 45) => {
+    let date_paiement_prevue = null;
+    let ecart_paiement_reel = null;
+    if (dateEnvoi) {
+      const d = new Date(dateEnvoi);
+      d.setDate(d.getDate() + Number(delai || 45));
+      date_paiement_prevue = d.toISOString().split('T')[0];
+    }
+    if (datePaiement && date_paiement_prevue) {
+      ecart_paiement_reel = Math.round(
+        (new Date(datePaiement) - new Date(date_paiement_prevue)) / 86400000
+      );
+    }
+    return { date_paiement_prevue, ecart_paiement_reel };
+  };
+
+  // Annuler la validation d'une facture et soustraire son montant du montant payé
+  const handleUnmarkFactureAsPaid = async (mois, sous_traitant, chantierId, factureIndex) => {
+    const isAgentJournalierRow = chantierId === 0 || chantierId === null;
+    const currentData = data.find(d =>
+      d.mois === mois &&
+      d.sous_traitant === sous_traitant &&
+      d.chantier_id === chantierId
+    );
+    const resolvedCurrentData = currentData || (
+      isAgentJournalierRow
+        ? data.find(d =>
+            d.mois === mois &&
+            d.sous_traitant === sous_traitant &&
+            d.source_type === 'agent_journalier'
+          )
+        : null
+    );
+    const isAgentJournalierType =
+      resolvedCurrentData?.source_type === 'agent_journalier' || isAgentJournalierRow;
+
+    const key = isAgentJournalierRow
+      ? `${mois}_${sous_traitant}_AGENT_JOURNALIER`
+      : `${mois}_${sous_traitant}_${chantierId}`;
+
+    let currentFactures;
+    if (resolvedCurrentData?.source_type === 'agency_expense') {
+      currentFactures = resolvedCurrentData.factures || [];
+    } else {
+      currentFactures = editedFactures[key] || resolvedCurrentData?.factures || [];
+    }
+
+    if (factureIndex < 0 || factureIndex >= currentFactures.length) {
+      return;
+    }
+
+    const facture = currentFactures[factureIndex];
+    if (!facture?.payee) {
+      return;
+    }
+
+    const montantFacture = parseFloat(facture.montant_facture) || 0;
+    const montantPayeActuel = parseFloat(
+      editedValuesPaye[key] !== undefined
+        ? editedValuesPaye[key]
+        : (resolvedCurrentData?.paye || 0)
+    ) || 0;
+    const nouveauMontantPaye = Math.max(0, montantPayeActuel - montantFacture);
+
+    const updatedFactures = currentFactures.map((f, idx) => {
+      if (idx === factureIndex) {
+        return {
+          ...f,
+          payee: false,
+          date_paiement_facture: null,
+        };
+      }
+      return f;
+    });
+
+    const datesPaiementFactures = updatedFactures
+      .filter((f) => f.payee && f.date_paiement_facture)
+      .map((f) => new Date(f.date_paiement_facture));
+    const datePaiementReelGlobale = datesPaiementFactures.length > 0
+      ? new Date(Math.max(...datesPaiementFactures)).toISOString().split('T')[0]
+      : null;
+
+    const [moisNum, annee2digits] = mois.split("/").map(Number);
+    const anneeComplete = annee2digits < 50 ? 2000 + annee2digits : 1900 + annee2digits;
+    const suiviId = resolvedCurrentData?.suivi_paiement_id || null;
+    const chantierIdSuivi = isAgentJournalierRow
+      ? null
+      : ((chantierId === 0 || chantierId === null) ? null : chantierId);
+
+    const applyLocalState = () => {
+      setData((prevData) =>
+        prevData.map((item) => {
+          const isSameAgentGroup =
+            isAgentJournalierType &&
+            item.mois === mois &&
+            item.sous_traitant === sous_traitant &&
+            item.source_type === 'agent_journalier';
+          const isExactRow =
+            item.mois === mois &&
+            item.sous_traitant === sous_traitant &&
+            item.chantier_id === chantierId;
+          if (isExactRow || isSameAgentGroup) {
+            return {
+              ...item,
+              factures: updatedFactures,
+              paye: nouveauMontantPaye,
+              date_paiement: datePaiementReelGlobale,
+              ecart: (item.a_payer || 0) - nouveauMontantPaye,
+            };
+          }
+          return item;
+        })
+      );
+
+      if (resolvedCurrentData?.source_type !== 'agency_expense') {
+        setEditedFactures((prev) => ({
+          ...prev,
+          [key]: updatedFactures,
+        }));
+      }
+
+      setEditedValuesPaye((prev) => ({
+        ...prev,
+        [key]: nouveauMontantPaye,
+      }));
+    };
+
+    try {
+      setSaving(true);
+
+      if (resolvedCurrentData?.source_type === 'agency_expense' && resolvedCurrentData?.agency_expense_id) {
+        await axios.patch(`/api/agency-expenses-month/${resolvedCurrentData.agency_expense_id}/`, {
+          factures: updatedFactures,
+        });
+        await persistMontantPayeSuivi({
+          suiviId,
+          mois: moisNum,
+          annee: anneeComplete,
+          sous_traitant,
+          chantierId: chantierIdSuivi,
+          montantPaye: nouveauMontantPaye,
+          datePaiement: datePaiementReelGlobale,
+        });
+      } else if (facture.id && facture.id.toString().startsWith('suivi_')) {
+        const factureId = facture.id.toString().replace('suivi_', '');
+        await axios.patch(`/api/factures-suivi-sous-traitant/${factureId}/`, {
+          payee: false,
+          date_paiement_facture: null,
+        });
+        await persistMontantPayeSuivi({
+          suiviId,
+          mois: moisNum,
+          annee: anneeComplete,
+          sous_traitant,
+          chantierId: chantierIdSuivi,
+          montantPaye: nouveauMontantPaye,
+          datePaiement: datePaiementReelGlobale,
+        });
+      } else if (
+        resolvedCurrentData?.source_type === 'facture_sous_traitant' &&
+        facture.id &&
+        !Number.isNaN(Number(facture.id))
+      ) {
+        const paiementsResp = await axios.get('/api/paiements-facture-sous-traitant/', {
+          params: { facture: facture.id },
+        });
+        const paiements = Array.isArray(paiementsResp.data)
+          ? paiementsResp.data
+          : (paiementsResp.data?.results || []);
+        await Promise.all(
+          paiements.map((p) =>
+            axios.delete(`/api/paiements-facture-sous-traitant/${p.id}/`)
+          )
+        );
+        await persistMontantPayeSuivi({
+          suiviId,
+          mois: moisNum,
+          annee: anneeComplete,
+          sous_traitant,
+          chantierId: chantierIdSuivi,
+          montantPaye: nouveauMontantPaye,
+          datePaiement: datePaiementReelGlobale,
+        });
+      } else {
+        await persistMontantPayeSuivi({
+          suiviId,
+          mois: moisNum,
+          annee: anneeComplete,
+          sous_traitant,
+          chantierId: chantierIdSuivi,
+          montantPaye: nouveauMontantPaye,
+          datePaiement: datePaiementReelGlobale,
+        });
+      }
+
+      applyLocalState();
+      setSaveSuccess(true);
+      setTimeout(() => setSaveSuccess(false), 2000);
+    } catch (error) {
+      console.error("Erreur lors de l'annulation de la validation:", error);
+      setError("Erreur lors de l'annulation de la validation de la facture");
+    } finally {
+      setSaving(false);
+    }
   };
 
   // Sauvegarder la facture avec la date de paiement saisie
@@ -1203,10 +1786,19 @@ const TableauSousTraitant = () => {
         const datePaiementReelGlobale = datesPaiementFactures.length > 0
           ? new Date(Math.max(...datesPaiementFactures)).toISOString().split('T')[0]
           : datePaiementFacture;
+
+        const dateEnvoi = resolvedCurrentData?.date_envoi || datePaiementFacture;
+        const { date_paiement_prevue, ecart_paiement_reel } = computeDatesPaiementLigne(
+          dateEnvoi,
+          datePaiementReelGlobale,
+          resolvedCurrentData?.delai_paiement || 45
+        );
         
         // ✅ Sauvegarder les factures dans AgencyExpenseMonth (sans modifier amount)
         await axios.patch(`/api/agency-expenses-month/${resolvedCurrentData.agency_expense_id}/`, {
-          factures: updatedFactures
+          factures: updatedFactures,
+          date_reception_facture: dateEnvoi,
+          date_paiement_reel: datePaiementReelGlobale,
         });
         
         // ✅ Sauvegarder le montant payé dans SuiviPaiementSousTraitantMensuel
@@ -1214,13 +1806,15 @@ const TableauSousTraitant = () => {
         const [moisNum, annee2digits] = mois.split("/").map(Number);
         const anneeComplete = annee2digits < 50 ? 2000 + annee2digits : 1900 + annee2digits;
         
-        await axios.post('/api/suivi-paiements-sous-traitant-mensuel/update_or_create_suivi/', {
+        await persistMontantPayeSuivi({
+          suiviId: resolvedCurrentData?.suivi_paiement_id || null,
           mois: moisNum,
           annee: anneeComplete,
-          sous_traitant: sous_traitant,
-          chantier_id: null,  // null pour AgencyExpenseMonth
-          montant_paye_ht: nouveauMontantPaye,
-          date_paiement_reel: datePaiementReelGlobale  // Date la plus récente
+          sous_traitant,
+          chantierId: (chantierId === 0 || chantierId === null) ? null : chantierId,
+          montantPaye: nouveauMontantPaye,
+          datePaiement: datePaiementReelGlobale,
+          dateEnvoi,
         });
         
         // ✅ Mise à jour dynamique
@@ -1235,7 +1829,11 @@ const TableauSousTraitant = () => {
                 ...item,
                 factures: updatedFactures,
                 paye: nouveauMontantPaye,
-                date_paiement: datePaiementReelGlobale  // Date la plus récente
+                date_paiement: datePaiementReelGlobale,
+                date_envoi: dateEnvoi,
+                date_paiement_prevue,
+                ecart_paiement_reel,
+                ecart: (item.a_payer || 0) - nouveauMontantPaye,
               };
             }
             return item;
@@ -1293,18 +1891,27 @@ const TableauSousTraitant = () => {
         const datePaiementReelGlobale = datesPaiementFactures.length > 0
           ? new Date(Math.max(...datesPaiementFactures)).toISOString().split('T')[0]
           : datePaiementFacture;
+
+        const dateEnvoi = resolvedCurrentData?.date_envoi || datePaiementFacture;
+        const { date_paiement_prevue, ecart_paiement_reel } = computeDatesPaiementLigne(
+          dateEnvoi,
+          datePaiementReelGlobale,
+          resolvedCurrentData?.delai_paiement || 45
+        );
         
         const [moisNum, annee2digits] = mois.split("/").map(Number);
         const anneeComplete = annee2digits < 50 ? 2000 + annee2digits : 1900 + annee2digits;
         
         // Mettre à jour le montant payé dans le suivi avec la date la plus récente
-        await axios.post('/api/suivi-paiements-sous-traitant-mensuel/update_or_create_suivi/', {
+        await persistMontantPayeSuivi({
+          suiviId: resolvedCurrentData?.suivi_paiement_id || null,
           mois: moisNum,
           annee: anneeComplete,
-          sous_traitant: sous_traitant,
-          chantier_id: chantierId || null,
-          montant_paye_ht: nouveauMontantPaye,
-          date_paiement_reel: datePaiementReelGlobale  // Date la plus récente
+          sous_traitant,
+          chantierId: isAgentJournalierRow ? null : ((chantierId === 0 || chantierId === null) ? null : chantierId),
+          montantPaye: nouveauMontantPaye,
+          datePaiement: datePaiementReelGlobale,
+          dateEnvoi,
         });
         
         // ✅ Mise à jour dynamique : mettre à jour uniquement cette ligne dans data
@@ -1326,7 +1933,11 @@ const TableauSousTraitant = () => {
                 ...item,
                 factures: updatedFacturesList,
                 paye: nouveauMontantPaye,
-                date_paiement: datePaiementReelGlobale  // Date la plus récente
+                date_paiement: datePaiementReelGlobale,
+                date_envoi: dateEnvoi,
+                date_paiement_prevue,
+                ecart_paiement_reel,
+                ecart: (item.a_payer || 0) - nouveauMontantPaye,
               };
             }
             return item;
@@ -1382,6 +1993,32 @@ const TableauSousTraitant = () => {
           payee: true,
           date_paiement_facture: datePaiementFacture
         };
+
+        const datesPaiementFactures = updatedFactures
+          .filter((f) => f.payee && f.date_paiement_facture)
+          .map((f) => new Date(f.date_paiement_facture));
+        const datePaiementReelGlobale = datesPaiementFactures.length > 0
+          ? new Date(Math.max(...datesPaiementFactures)).toISOString().split('T')[0]
+          : datePaiementFacture;
+        const dateEnvoi = resolvedCurrentData?.date_envoi || datePaiementFacture;
+        const { date_paiement_prevue, ecart_paiement_reel } = computeDatesPaiementLigne(
+          dateEnvoi,
+          datePaiementReelGlobale,
+          resolvedCurrentData?.delai_paiement || 45
+        );
+
+        const [moisNumST, annee2digitsST] = mois.split("/").map(Number);
+        const anneeCompleteST = annee2digitsST < 50 ? 2000 + annee2digitsST : 1900 + annee2digitsST;
+        await persistMontantPayeSuivi({
+          suiviId: resolvedCurrentData?.suivi_paiement_id || null,
+          mois: moisNumST,
+          annee: anneeCompleteST,
+          sous_traitant,
+          chantierId: isAgentJournalierRow ? null : ((chantierId === 0 || chantierId === null) ? null : chantierId),
+          montantPaye: nouveauMontantPaye,
+          datePaiement: datePaiementReelGlobale,
+          dateEnvoi,
+        });
         
         // ✅ Mise à jour dynamique de data
         setData((prevData) => {
@@ -1402,7 +2039,11 @@ const TableauSousTraitant = () => {
                 ...item,
                 factures: updatedFactures,
                 paye: nouveauMontantPaye,
-                date_paiement: datePaiementFacture
+                date_paiement: datePaiementReelGlobale,
+                date_envoi: dateEnvoi,
+                date_paiement_prevue,
+                ecart_paiement_reel,
+                ecart: (item.a_payer || 0) - nouveauMontantPaye,
               };
             }
             return item;
@@ -1456,6 +2097,13 @@ const TableauSousTraitant = () => {
         ? new Date(Math.max(...datesPaiementFactures)).toISOString().split('T')[0]
         : datePaiementFacture;
 
+      const dateEnvoi = resolvedCurrentData?.date_envoi || datePaiementFacture;
+      const { date_paiement_prevue, ecart_paiement_reel } = computeDatesPaiementLigne(
+        dateEnvoi,
+        datePaiementReelGlobale,
+        resolvedCurrentData?.delai_paiement || 45
+      );
+
       setEditedFactures((prev) => ({
         ...prev,
         [key]: updatedFactures,
@@ -1485,15 +2133,32 @@ const TableauSousTraitant = () => {
               ...item,
               factures: updatedFactures,
               paye: nouveauMontantPaye,
-              date_paiement: datePaiementReelGlobale
+              date_paiement: datePaiementReelGlobale,
+              date_envoi: dateEnvoi,
+              date_paiement_prevue,
+              ecart_paiement_reel,
+              ecart: (item.a_payer || 0) - nouveauMontantPaye,
             };
           }
           return item;
         });
       });
 
-      if (!isAgentJournalier) {
-        savePaiement(mois, sous_traitant, chantierId, nouveauMontantPaye, updatedFactures, datePaiementReelGlobale, resolvedCurrentData?.date_envoi || null);
+      if (isAgentJournalier) {
+        const [moisNum, annee2digits] = mois.split("/").map(Number);
+        const anneeComplete = annee2digits < 50 ? 2000 + annee2digits : 1900 + annee2digits;
+        persistMontantPayeSuivi({
+          suiviId: resolvedCurrentData?.suivi_paiement_id || null,
+          mois: moisNum,
+          annee: anneeComplete,
+          sous_traitant,
+          chantierId: null,
+          montantPaye: nouveauMontantPaye,
+          datePaiement: datePaiementReelGlobale,
+          dateEnvoi,
+        }).catch((err) => console.error(err));
+      } else {
+        savePaiement(mois, sous_traitant, chantierId, nouveauMontantPaye, updatedFactures, datePaiementReelGlobale, dateEnvoi);
       }
     }
     
@@ -1502,140 +2167,79 @@ const TableauSousTraitant = () => {
     setCurrentFacturePaiement(null);
   };
 
-  // Supprimer une facture
+  // Supprimer une facture (toujours en base, pas seulement en local)
   const handleRemoveFacture = async (mois, sous_traitant, chantierId, factureIndex) => {
-    // Vérifier si c'est une ligne AgencyExpenseMonth (source_type === 'agency_expense')
+    const isAgentJournalierRow = chantierId === 0 || chantierId === null;
     const currentData = data.find(d => 
       d.mois === mois && 
       d.sous_traitant === sous_traitant && 
       d.chantier_id === chantierId
     );
-    const isAgentJournalierRow = chantierId === 0 || chantierId === null;
     const resolvedCurrentData = currentData || (
       isAgentJournalierRow
         ? data.find(d =>
             d.mois === mois &&
             d.sous_traitant === sous_traitant &&
-            d.source_type === 'agent_journalier'
+            (d.source_type === 'agent_journalier' || d.source_type === 'agency_expense')
           )
         : null
+    ) || data.find(d =>
+      d.mois === mois &&
+      d.sous_traitant === sous_traitant &&
+      d.source_type === 'agency_expense' &&
+      d.agency_expense_id
     );
     const isAgentJournalierType = resolvedCurrentData?.source_type === 'agent_journalier' || isAgentJournalierRow;
+    const isAgencyExpense =
+      resolvedCurrentData?.source_type === 'agency_expense' &&
+      !!resolvedCurrentData?.agency_expense_id;
     
-    // Si c'est une ligne AgencyExpenseMonth, supprimer via l'API
-    if (resolvedCurrentData?.source_type === 'agency_expense' && resolvedCurrentData?.agency_expense_id) {
-      try {
-        setSaving(true);
-        const currentFactures = resolvedCurrentData.factures || [];
-        const updatedFactures = currentFactures.filter((_, idx) => idx !== factureIndex);
-        
-        await axios.patch(`/api/agency-expenses-month/${resolvedCurrentData.agency_expense_id}/`, {
-          factures: updatedFactures
-        });
-        
-        // ✅ Mise à jour dynamique : mettre à jour uniquement cette ligne dans data
-        // Pour AgencyExpenseMonth, on ne synchronise PAS editedFactures
-        setData((prevData) => {
-          return prevData.map((item) => {
-            if (
-              item.mois === mois &&
-              item.sous_traitant === sous_traitant &&
-              item.chantier_id === chantierId
-            ) {
-              return {
-                ...item,
-                factures: updatedFactures
-              };
-            }
-            return item;
-          });
-        });
-        
-        setSaveSuccess(true);
-        setTimeout(() => setSaveSuccess(false), 2000);
-      } catch (error) {
-        console.error("Erreur lors de la suppression de la facture:", error);
-        alert("Erreur lors de la suppression de la facture");
-      } finally {
-        setSaving(false);
-      }
-      return;
-    }
-
-    // Pour les autres lignes
-    const key = chantierId === 0 || chantierId === null 
+    const key = isAgentJournalierRow
       ? `${mois}_${sous_traitant}_AGENT_JOURNALIER`
       : `${mois}_${sous_traitant}_${chantierId}`;
-    
-    const factures = editedFactures[key] || resolvedCurrentData?.factures || [];
-    const factureToDelete = factures[factureIndex];
-    
-    if (!factureToDelete) return;
-    
-    // Vérifier si c'est une facture de suivi
-    if (factureToDelete.id && factureToDelete.id.toString().startsWith('suivi_')) {
-      try {
-        setSaving(true);
-        const factureId = factureToDelete.id.replace('suivi_', '');
-        await axios.delete(`/api/factures-suivi-sous-traitant/${factureId}/`);
-        
-        // ✅ Mise à jour dynamique : mettre à jour uniquement cette ligne dans data
-        setData((prevData) => {
-          return prevData.map((item) => {
-            const isSameAgentGroup =
-              isAgentJournalierType &&
-              item.mois === mois &&
-              item.sous_traitant === sous_traitant &&
-              item.source_type === 'agent_journalier';
-            const isExactRow =
-              item.mois === mois &&
-              item.sous_traitant === sous_traitant &&
-              item.chantier_id === chantierId;
-            if (
-              isExactRow || isSameAgentGroup
-            ) {
-              const updatedFactures = (item.factures || []).filter((_, idx) => idx !== factureIndex);
-              return {
-                ...item,
-                factures: updatedFactures
-              };
-            }
-            return item;
-          });
-        });
-        
-        // Mettre à jour aussi editedFactures pour la cohérence
-        setEditedFactures((prev) => {
-          const updatedFactures = (prev[key] || []).filter((_, idx) => idx !== factureIndex);
-          return {
-            ...prev,
-            [key]: updatedFactures
-          };
-        });
-        
-        setSaveSuccess(true);
-        setTimeout(() => setSaveSuccess(false), 2000);
-      } catch (error) {
-        console.error("Erreur lors de la suppression de la facture:", error);
-        setError("Erreur lors de la suppression de la facture");
-      } finally {
-        setSaving(false);
-      }
-    } else {
-      // Ancienne méthode pour les factures non-suivi (rétrocompatibilité)
-      const isAgentJournalier = isAgentJournalierType;
-      
-      setEditedFactures((prev) => {
-        const currentFactures = prev[key] || factures || [];
-        const newFactures = currentFactures.filter((_, idx) => idx !== factureIndex);
-        // Sauvegarder après suppression (sauf pour les agents journaliers)
-        if (!isAgentJournalier) {
-          savePaiement(mois, sous_traitant, chantierId, editedValuesPaye[key] || 0, newFactures);
-        }
-        return { ...prev, [key]: newFactures };
-      });
 
-      // Mise à jour dynamique de data pour refléter la suppression sans rechargement
+    // Même source que l'affichage
+    let factures;
+    if (isAgencyExpense) {
+      factures = resolvedCurrentData.factures || [];
+    } else {
+      factures = editedFactures[key] !== undefined
+        ? editedFactures[key]
+        : (resolvedCurrentData?.factures || []);
+    }
+
+    const factureToDelete = factures[factureIndex];
+    if (!factureToDelete) {
+      return false;
+    }
+
+    const [moisNum, annee2digits] = mois.split("/").map(Number);
+    const anneeComplete = annee2digits < 50 ? 2000 + annee2digits : 1900 + annee2digits;
+
+    // Si la facture était validée : soustraire son montant du montant payé
+    let nouveauMontantPaye = null;
+    if (factureToDelete.payee) {
+      const montantFacture = parseFloat(factureToDelete.montant_facture) || 0;
+      const montantPayeActuel = parseFloat(
+        editedValuesPaye[key] !== undefined
+          ? editedValuesPaye[key]
+          : (resolvedCurrentData?.paye || 0)
+      ) || 0;
+      nouveauMontantPaye = Math.max(0, montantPayeActuel - montantFacture);
+    }
+
+    const remainingFactures = factures.filter((_, idx) => idx !== factureIndex);
+    const datesPaiementRestantes = remainingFactures
+      .filter((f) => f.payee && f.date_paiement_facture)
+      .map((f) => new Date(f.date_paiement_facture));
+    const datePaiementReelGlobale = datesPaiementRestantes.length > 0
+      ? new Date(Math.max(...datesPaiementRestantes)).toISOString().split('T')[0]
+      : null;
+    // Plus aucune facture sur la ligne → vider dates de réception / prévue / paiement / écart jours
+    const clearDatesLigne = remainingFactures.length === 0;
+    const clearDatePaiementSeul = !clearDatesLigne && datePaiementReelGlobale === null;
+
+    const applyLocalRemoval = (updatedFactures) => {
       setData((prevData) => {
         return prevData.map((item) => {
           const isSameAgentGroup =
@@ -1643,20 +2247,249 @@ const TableauSousTraitant = () => {
             item.mois === mois &&
             item.sous_traitant === sous_traitant &&
             item.source_type === 'agent_journalier';
+          const isSameAgency =
+            isAgencyExpense &&
+            item.mois === mois &&
+            item.sous_traitant === sous_traitant &&
+            item.source_type === 'agency_expense';
           const isExactRow =
             item.mois === mois &&
             item.sous_traitant === sous_traitant &&
             item.chantier_id === chantierId;
-          if (isExactRow || isSameAgentGroup) {
-            const newFactures = (item.factures || []).filter((_, idx) => idx !== factureIndex);
-            return {
+          if (isExactRow || isSameAgentGroup || isSameAgency) {
+            const next = {
               ...item,
-              factures: newFactures
+              factures: updatedFactures,
+              ...(nouveauMontantPaye !== null
+                ? {
+                    paye: nouveauMontantPaye,
+                    ecart: (item.a_payer || 0) - nouveauMontantPaye,
+                  }
+                : {}),
             };
+            if (clearDatesLigne) {
+              next.date_envoi = null;
+              next.date_paiement_prevue = null;
+              next.date_paiement = null;
+              next.ecart_paiement_reel = null;
+            } else if (clearDatePaiementSeul || nouveauMontantPaye !== null) {
+              next.date_paiement = datePaiementReelGlobale;
+              if (clearDatePaiementSeul) {
+                next.ecart_paiement_reel = null;
+              } else if (datePaiementReelGlobale && next.date_paiement_prevue) {
+                const prevue = new Date(next.date_paiement_prevue);
+                const reel = new Date(datePaiementReelGlobale);
+                next.ecart_paiement_reel = Math.round((reel - prevue) / (1000 * 60 * 60 * 24));
+              }
+            }
+            return next;
           }
           return item;
         });
       });
+
+      if (!isAgencyExpense) {
+        setEditedFactures((prev) => ({
+          ...prev,
+          [key]: updatedFactures
+        }));
+      }
+
+      if (nouveauMontantPaye !== null) {
+        setEditedValuesPaye((prev) => ({
+          ...prev,
+          [key]: nouveauMontantPaye,
+        }));
+      }
+    };
+
+    const persistPayeIfNeeded = async () => {
+      if (nouveauMontantPaye === null && !clearDatesLigne && !clearDatePaiementSeul) {
+        return;
+      }
+      const suiviId = resolvedCurrentData?.suivi_paiement_id || null;
+      const chantierIdSuivi = isAgentJournalierRow
+        ? null
+        : ((chantierId === 0 || chantierId === null) ? null : chantierId);
+
+      if (clearDatesLigne) {
+        const payload = {
+          date_paiement_reel: null,
+          date_envoi_facture: null,
+          ...(nouveauMontantPaye !== null
+            ? { montant_paye_ht: nouveauMontantPaye, montant_paye_saisi: true }
+            : {}),
+        };
+        if (suiviId) {
+          await axios.patch(`/api/suivi-paiements-sous-traitant-mensuel/${suiviId}/`, payload);
+        } else {
+          await axios.post('/api/suivi-paiements-sous-traitant-mensuel/update_or_create_suivi/', {
+            mois: moisNum,
+            annee: anneeComplete,
+            sous_traitant,
+            chantier_id: chantierIdSuivi,
+            ...payload,
+          });
+        }
+        return;
+      }
+
+      if (nouveauMontantPaye !== null || clearDatePaiementSeul) {
+        await persistMontantPayeSuivi({
+          suiviId,
+          mois: moisNum,
+          annee: anneeComplete,
+          sous_traitant,
+          chantierId: chantierIdSuivi,
+          montantPaye: nouveauMontantPaye !== null
+            ? nouveauMontantPaye
+            : (editedValuesPaye[key] !== undefined
+              ? editedValuesPaye[key]
+              : (resolvedCurrentData?.paye || 0)),
+          datePaiement: datePaiementReelGlobale,
+        });
+      }
+    };
+
+    try {
+      setSaving(true);
+      const updatedFactures = remainingFactures;
+      const rawId = factureToDelete.id;
+
+      // 1) AgencyExpenseMonth : factures stockées en JSON → PATCH obligatoire pour persister
+      if (isAgencyExpense) {
+        await axios.patch(`/api/agency-expenses-month/${resolvedCurrentData.agency_expense_id}/`, {
+          factures: updatedFactures
+        });
+        await persistPayeIfNeeded();
+        applyLocalRemoval(updatedFactures);
+        setSaveSuccess(true);
+        setTimeout(() => setSaveSuccess(false), 2000);
+        return true;
+      }
+
+      // 2) Facture de suivi (préfixe suivi_)
+      const deleteSuiviById = async (suiviFactureId) => {
+        if (!suiviFactureId) return false;
+        try {
+          await axios.delete(`/api/factures-suivi-sous-traitant/${suiviFactureId}/`);
+          return true;
+        } catch (err) {
+          if (err?.response?.status === 404) {
+            return true; // déjà absente
+          }
+          throw err;
+        }
+      };
+
+      const findAndDeleteSuiviByNumero = async () => {
+        const suiviId = resolvedCurrentData?.suivi_paiement_id;
+        if (!suiviId || !factureToDelete.numero_facture) {
+          return false;
+        }
+        const listResp = await axios.get(`/api/factures-suivi-sous-traitant/`, {
+          params: { suivi_paiement: suiviId }
+        });
+        const list = Array.isArray(listResp.data)
+          ? listResp.data
+          : (listResp.data?.results || []);
+        const match = list.find(
+          (f) => f.numero_facture === factureToDelete.numero_facture
+        );
+        if (!match?.id) {
+          return false;
+        }
+        return deleteSuiviById(match.id);
+      };
+
+      if (rawId && rawId.toString().startsWith('suivi_')) {
+        await deleteSuiviById(rawId.toString().replace('suivi_', ''));
+      } else {
+        // Chercher d'abord une facture de suivi au même numéro
+        await findAndDeleteSuiviByNumero();
+
+        // Id numérique = FactureSousTraitant :
+        // ne PAS supprimer la facture source (sinon la ligne / a_payer disparaissent).
+        // On la masque dans le suivi pour qu'elle ne réapparaisse plus dans la colonne.
+        if (
+          rawId != null &&
+          rawId !== '' &&
+          !Number.isNaN(Number(rawId))
+        ) {
+          const stId = Number(rawId);
+          const chantierIdSuivi = isAgentJournalierRow
+            ? null
+            : ((chantierId === 0 || chantierId === null) ? null : chantierId);
+
+          let suiviId = resolvedCurrentData?.suivi_paiement_id || null;
+          let masquees = [];
+
+          if (suiviId) {
+            try {
+              const suiviResp = await axios.get(
+                `/api/suivi-paiements-sous-traitant-mensuel/${suiviId}/`
+              );
+              masquees = Array.isArray(suiviResp.data?.factures_st_masquees)
+                ? [...suiviResp.data.factures_st_masquees]
+                : [];
+            } catch (errGet) {
+              console.warn('Lecture suivi pour masquage facture ST:', errGet);
+            }
+          }
+
+          if (!masquees.map(Number).includes(stId)) {
+            masquees.push(stId);
+          }
+
+          if (suiviId) {
+            await axios.patch(`/api/suivi-paiements-sous-traitant-mensuel/${suiviId}/`, {
+              factures_st_masquees: masquees,
+            });
+          } else {
+            await axios.post(
+              '/api/suivi-paiements-sous-traitant-mensuel/update_or_create_suivi/',
+              {
+                sous_traitant,
+                mois: moisNum,
+                annee: anneeComplete,
+                chantier_id: chantierIdSuivi,
+                factures_st_masquees: masquees,
+              }
+            );
+          }
+
+          // Retirer les paiements ST pour ne pas réinjecter le montant au calcul auto
+          try {
+            const paiementsResp = await axios.get('/api/paiements-facture-sous-traitant/', {
+              params: { facture: stId },
+            });
+            const paiements = Array.isArray(paiementsResp.data)
+              ? paiementsResp.data
+              : (paiementsResp.data?.results || []);
+            await Promise.all(
+              paiements.map((p) =>
+                axios.delete(`/api/paiements-facture-sous-traitant/${p.id}/`)
+              )
+            );
+          } catch (errPaiement) {
+            console.warn('Nettoyage paiements ST après masquage:', errPaiement);
+          }
+        }
+      }
+
+      // Toujours ajuster le montant payé + UI (même si la facture source ST reste en base)
+      await persistPayeIfNeeded();
+      applyLocalRemoval(updatedFactures);
+      setSaveSuccess(true);
+      setTimeout(() => setSaveSuccess(false), 2000);
+      return true;
+    } catch (error) {
+      console.error("Erreur lors de la suppression de la facture:", error);
+      setError("Erreur lors de la suppression de la facture");
+      alert("Erreur lors de la suppression de la facture. Elle n'a pas été supprimée en base.");
+      return false;
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -1714,7 +2547,7 @@ const TableauSousTraitant = () => {
       // Seul le montant payé peut être modifié par l'utilisateur
       const payeValue = editedValuesPaye[key] !== undefined 
         ? editedValuesPaye[key] 
-        : item.paye || 0;
+        : (item.paye ?? 0);
       const ecart = aPayerValue - payeValue;
       
       // ⚠️ CORRECTION IMPORTANTE : Pour AgencyExpenseMonth, toujours utiliser item.factures
@@ -2342,6 +3175,23 @@ const TableauSousTraitant = () => {
           >
             Actualiser
           </Button>
+
+          <Button
+            onClick={handleOpenLignesMasqueesModal}
+            variant="outlined"
+            sx={{
+              backgroundColor: "white",
+              color: "rgba(27, 120, 188, 1)",
+              borderColor: "rgba(27, 120, 188, 1)",
+              border: "1px solid rgba(27, 120, 188, 1)",
+              "&:hover": {
+                backgroundColor: "rgba(27, 120, 188, 0.1)",
+              },
+            }}
+            startIcon={<VisibilityOffIcon />}
+          >
+            Lignes masquées
+          </Button>
         </Box>
       </Box>
 
@@ -2620,6 +3470,8 @@ const TableauSousTraitant = () => {
                             </TableCell>
                           ) : null}
                           <TableCell sx={commonBodyCellStyle}>
+                            <Box sx={{ display: "flex", alignItems: "center", gap: 0.5, justifyContent: "space-between" }}>
+                              <Box sx={{ flex: 1, minWidth: 0 }}>
                             {item.isAgentJournalier && item.chantiersDetails ? (
                               <Typography
                                 sx={{
@@ -2674,6 +3526,27 @@ const TableauSousTraitant = () => {
                                 {item.chantier_name}
                               </Typography>
                             )}
+                              </Box>
+                              <Tooltip title="Masquer la ligne (hors totaux / dashboard)">
+                                <span>
+                                  <IconButton
+                                    size="small"
+                                    disabled={hidingLigne}
+                                    onClick={() => handleMasquerLigne(item)}
+                                    sx={{
+                                      padding: "2px",
+                                      color: "rgba(97, 97, 97, 0.7)",
+                                      "&:hover": {
+                                        color: "rgba(211, 47, 47, 1)",
+                                        backgroundColor: "rgba(211, 47, 47, 0.08)",
+                                      },
+                                    }}
+                                  >
+                                    <VisibilityOffIcon sx={{ fontSize: "1rem" }} />
+                                  </IconButton>
+                                </span>
+                              </Tooltip>
+                            </Box>
                           </TableCell>
                           <TableCell sx={commonBodyCellStyle}>
                             {item.source_type === 'agency_expense' && item.agency_expense_id ? (
@@ -2785,93 +3658,51 @@ const TableauSousTraitant = () => {
                             )}
                           </TableCell>
                           <TableCell sx={commonBodyCellStyle}>
-                            {item.isAgentJournalier ? (
-                              <TextField
-                                type="number"
-                                size="small"
-                                value={item.paye || ""}
-                                onChange={(e) => {
-                                  const newValue = parseFloat(e.target.value) || 0;
-                                  const key = item.keyAgentJournalier || `${row.mois}_${row.sous_traitant}_AGENT_JOURNALIER`;
-                                  setEditedValuesPaye((prev) => ({
-                                    ...prev,
-                                    [key]: newValue,
-                                  }));
-                                  // Pour les agents journaliers, on ne peut pas sauvegarder directement car il n'y a pas de chantier_id unique
-                                  // La sauvegarde devra être gérée différemment
-                                }}
-                                inputProps={{
-                                  min: 0,
-                                  step: 0.01,
-                                  style: {
-                                    textAlign: "center",
-                                    fontSize: "0.75rem",
-                                    padding: "4px 8px",
-                                    color: colorForAmount(item.paye),
-                                    fontWeight: 500,
+                            <TextField
+                              type="number"
+                              size="small"
+                              value={item.paye ?? ""}
+                              onClick={() =>
+                                handleOpenDatePaiementModal(
+                                  row.mois,
+                                  row.sous_traitant,
+                                  item.isAgentJournalier ? 0 : item.chantier_id
+                                )
+                              }
+                              InputProps={{
+                                readOnly: true,
+                              }}
+                              inputProps={{
+                                min: 0,
+                                step: 0.01,
+                                style: {
+                                  textAlign: "center",
+                                  fontSize: "0.75rem",
+                                  padding: "4px 8px",
+                                  cursor: "pointer",
+                                  textDecoration: "none",
+                                  color: colorForAmount(item.paye),
+                                  fontWeight: 500,
+                                },
+                              }}
+                              sx={{
+                                width: "100%",
+                                "& .MuiInputBase-root": {
+                                  fontSize: "0.75rem",
+                                  height: "32px",
+                                  cursor: "pointer",
+                                },
+                                "& .MuiOutlinedInput-root": {
+                                  backgroundColor: "white",
+                                  "&:hover": {
+                                    borderColor: "rgba(27, 120, 188, 1)",
                                   },
-                                }}
-                                sx={{
-                                  width: "100%",
-                                  "& .MuiInputBase-root": {
-                                    fontSize: "0.75rem",
-                                    height: "32px",
-                                  },
-                                  "& .MuiOutlinedInput-root": {
-                                    backgroundColor: "white",
-                                    "&:hover": {
-                                      borderColor: "rgba(27, 120, 188, 1)",
-                                    },
-                                  },
-                                }}
-                              />
-                            ) : (
-                              <TextField
-                                type="number"
-                                size="small"
-                                value={item.paye || ""}
-                                onClick={() =>
-                                  handleOpenDatePaiementModal(
-                                    row.mois,
-                                    row.sous_traitant,
-                                    item.chantier_id
-                                  )
-                                }
-                                InputProps={{
-                                  readOnly: true,
-                                }}
-                                inputProps={{
-                                  min: 0,
-                                  step: 0.01,
-                                  style: {
-                                    textAlign: "center",
-                                    fontSize: "0.75rem",
-                                    padding: "4px 8px",
-                                    cursor: "pointer",
-                                    textDecoration: "none",
-                                    color: colorForAmount(item.paye),
-                                    fontWeight: 500,
-                                  },
-                                }}
-                                sx={{
-                                  width: "100%",
-                                  "& .MuiInputBase-root": {
-                                    fontSize: "0.75rem",
-                                    height: "32px",
-                                    cursor: "pointer",
-                                  },
-                                  "& .MuiOutlinedInput-root": {
-                                    backgroundColor: "white",
-                                    "&:hover": {
-                                      borderColor: "rgba(27, 120, 188, 1)",
-                                    },
-                                  },
-                                  "& input": {
-                                    textDecoration: "none !important",
-                                  },
-                                }}
-                              />
-                            )}
+                                },
+                                "& input": {
+                                  textDecoration: "none !important",
+                                },
+                              }}
+                            />
                           </TableCell>
                           <TableCell 
                             sx={{ 
@@ -2952,13 +3783,29 @@ const TableauSousTraitant = () => {
                                         ) : null}
                                       </Box>
                                       {isPaid ? (
-                                        <CheckCircleIcon
-                                          sx={{
-                                            fontSize: "1.2rem",
-                                            color: "rgba(46, 125, 50, 1)",
-                                            flexShrink: 0,
+                                        <IconButton
+                                          size="small"
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            handleUnmarkFactureAsPaid(
+                                              row.mois,
+                                              row.sous_traitant,
+                                              item.isAgentJournalier ? 0 : item.chantier_id,
+                                              idx
+                                            );
                                           }}
-                                        />
+                                          sx={{
+                                            padding: "4px",
+                                            color: "rgba(46, 125, 50, 1)",
+                                            "&:hover": {
+                                              backgroundColor: "rgba(46, 125, 50, 0.1)",
+                                              color: "rgba(211, 47, 47, 1)",
+                                            },
+                                          }}
+                                          title="Annuler la validation"
+                                        >
+                                          <CheckCircleIcon sx={{ fontSize: "1.2rem" }} />
+                                        </IconButton>
                                       ) : (
                                         <IconButton
                                           size="small"
@@ -3698,14 +4545,16 @@ const TableauSousTraitant = () => {
             open={factureModalOpen}
             onClose={handleCloseFactureModal}
             onSave={handleSaveFactureModal}
-            onDelete={currentFacture?.factureIndex !== null ? () => {
-              handleRemoveFacture(
+            onDelete={currentFacture?.factureIndex !== null ? async () => {
+              const ok = await handleRemoveFacture(
                 currentFacture.mois,
                 currentFacture.sous_traitant,
                 currentFacture.chantierId,
                 currentFacture.factureIndex
               );
-              handleCloseFactureModal();
+              if (ok) {
+                handleCloseFactureModal();
+              }
             } : null}
             factureData={factureModalData}
             onFactureDataChange={setFactureModalData}
@@ -3721,7 +4570,7 @@ const TableauSousTraitant = () => {
             }}
             onSave={currentPaiement?.isMontantAPayer ? handleSaveMontantAPayer : handleSaveDatePaiement}
             datePaiement={currentPaiement?.datePaiement || null}
-            montantPaye={currentPaiement?.montantPaye || 0}
+            montantPaye={currentPaiement?.montantPaye ?? 0}
             isMontantAPayer={currentPaiement?.isMontantAPayer || false}
           />
           
@@ -3758,56 +4607,140 @@ const TableauSousTraitant = () => {
             onClose={() => {
               setConfirmFillModalOpen(false);
               setPendingFillAction(null);
+              setFillModalFactures([{ numero: "", montant: "" }]);
             }}
+            maxWidth="sm"
+            fullWidth
           >
             <DialogTitle>
               Confirmer le remplissage automatique
             </DialogTitle>
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                if (!saving) {
+                  executeFillAllSousTraitantMois();
+                }
+              }}
+            >
             <DialogContent>
-              <DialogContentText>
-                {pendingFillAction && (() => {
-                  const [moisNum, annee2digits] = pendingFillAction.mois.split("/").map(Number);
-                  const moisName = getMoisName(moisNum);
-                  const anneeComplete = annee2digits < 50 ? 2000 + annee2digits : 1900 + annee2digits;
-                  const lignesCount = data.filter(d => 
-                    d.mois === pendingFillAction.mois && 
-                    d.sous_traitant === pendingFillAction.sous_traitant
-                  ).length;
-                  
-                  return (
-                    <>
-                      Êtes-vous sûr de vouloir remplir automatiquement toutes les lignes du sous-traitant <strong>{pendingFillAction.sous_traitant}</strong> pour le mois de <strong>{moisName} {anneeComplete}</strong> ?
+              {pendingFillAction && (() => {
+                const [moisNum, annee2digits] = pendingFillAction.mois.split("/").map(Number);
+                const moisName = getMoisName(moisNum);
+                const anneeComplete = annee2digits < 50 ? 2000 + annee2digits : 1900 + annee2digits;
+                const lignesCount = data.filter(d => 
+                  d.mois === pendingFillAction.mois && 
+                  d.sous_traitant === pendingFillAction.sous_traitant
+                ).length;
+                
+                return (
+                  <>
+                    <DialogContentText sx={{ mb: 2 }}>
+                      Remplir automatiquement toutes les lignes du sous-traitant <strong>{pendingFillAction.sous_traitant}</strong> pour le mois de <strong>{moisName} {anneeComplete}</strong> ?
                       <br /><br />
                       Cette action va :
                       <ul style={{ marginTop: "8px", marginBottom: "8px" }}>
-                        <li>Remplir le montant payé avec le montant à payer pour chaque ligne ({lignesCount} ligne{lignesCount > 1 ? 's' : ''})</li>
+                        <li>Remplir le montant payé avec le montant à payer pour chaque ligne ({lignesCount} ligne{lignesCount > 1 ? "s" : ""})</li>
                         <li>Définir la date de paiement à aujourd'hui</li>
                       </ul>
-                      Cette action est irréversible.
-                    </>
-                  );
-                })()}
-              </DialogContentText>
+                    </DialogContentText>
+
+                    <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 0.5 }}>
+                      Facture(s) à créer (optionnel)
+                    </Typography>
+                    <Typography variant="caption" color="text.secondary" sx={{ display: "block", mb: 1 }}>
+                      Laissez vide si vous ne souhaitez pas créer de facture. Le montant payé sera quand même rempli.
+                    </Typography>
+                    <Box sx={{ display: "flex", flexDirection: "column", gap: 1.5 }}>
+                      {fillModalFactures.map((facture, idx) => (
+                        <Box
+                          key={idx}
+                          sx={{
+                            display: "flex",
+                            gap: 1,
+                            alignItems: "flex-start",
+                          }}
+                        >
+                          <TextField
+                            label="N° facture"
+                            size="small"
+                            value={facture.numero}
+                            onChange={(e) => {
+                              const next = [...fillModalFactures];
+                              next[idx] = { ...next[idx], numero: e.target.value };
+                              setFillModalFactures(next);
+                            }}
+                            sx={{ flex: 1.2 }}
+                          />
+                          <TextField
+                            label="Montant"
+                            type="number"
+                            size="small"
+                            value={facture.montant}
+                            onChange={(e) => {
+                              const next = [...fillModalFactures];
+                              next[idx] = { ...next[idx], montant: e.target.value };
+                              setFillModalFactures(next);
+                            }}
+                            inputProps={{ min: 0, step: 0.01 }}
+                            sx={{ flex: 1 }}
+                          />
+                          {fillModalFactures.length > 1 && (
+                            <IconButton
+                              size="small"
+                              onClick={() => {
+                                setFillModalFactures(
+                                  fillModalFactures.filter((_, i) => i !== idx)
+                                );
+                              }}
+                              sx={{ mt: 0.5 }}
+                            >
+                              <CloseIcon fontSize="small" />
+                            </IconButton>
+                          )}
+                        </Box>
+                      ))}
+                      <Button
+                        startIcon={<AddIcon />}
+                        size="small"
+                        onClick={() =>
+                          setFillModalFactures([
+                            ...fillModalFactures,
+                            { numero: "", montant: "" },
+                          ])
+                        }
+                        sx={{ alignSelf: "flex-start" }}
+                      >
+                        Ajouter une facture
+                      </Button>
+                    </Box>
+                  </>
+                );
+              })()}
             </DialogContent>
             <DialogActions>
               <Button
+                type="button"
                 onClick={() => {
                   setConfirmFillModalOpen(false);
                   setPendingFillAction(null);
+                  setFillModalFactures([{ numero: "", montant: "" }]);
                 }}
                 color="secondary"
               >
                 Annuler
               </Button>
               <Button
-                onClick={executeFillAllSousTraitantMois}
+                type="submit"
                 color="primary"
                 variant="contained"
+                disabled={saving}
                 autoFocus
               >
                 Confirmer
               </Button>
             </DialogActions>
+            </form>
           </Dialog>
 
           {/* Modal d'ajustement pour les agents journaliers */}
@@ -3830,6 +4763,14 @@ const TableauSousTraitant = () => {
                 {currentAjustement && `${String(currentAjustement.mois).padStart(2, '0')}/${currentAjustement.annee}`}
               </Typography>
             </DialogTitle>
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                if (!savingAjustement) {
+                  handleSaveAjustement();
+                }
+              }}
+            >
             <DialogContent sx={{ pt: 2 }}>
               {/* Détail par chantier */}
               {currentAjustement?.chantiersDetails && currentAjustement.chantiersDetails.length > 0 && (
@@ -3945,6 +4886,7 @@ const TableauSousTraitant = () => {
             <DialogActions sx={{ p: 2, borderTop: '1px solid #e0e0e0' }}>
               {currentAjustement?.ajustement_id && (
                 <Button
+                  type="button"
                   onClick={handleDeleteAjustement}
                   color="error"
                   disabled={savingAjustement}
@@ -3953,17 +4895,87 @@ const TableauSousTraitant = () => {
                   Supprimer l'ajustement
                 </Button>
               )}
-              <Button onClick={handleCloseAjustementModal} color="secondary">
+              <Button type="button" onClick={handleCloseAjustementModal} color="secondary">
                 Annuler
               </Button>
               <Button
-                onClick={handleSaveAjustement}
+                type="submit"
                 color="primary"
                 variant="contained"
                 disabled={savingAjustement}
               >
                 {savingAjustement ? <CircularProgress size={20} /> : 'Sauvegarder'}
               </Button>
+            </DialogActions>
+            </form>
+          </Dialog>
+
+          <Dialog
+            open={lignesMasqueesModalOpen}
+            onClose={() => setLignesMasqueesModalOpen(false)}
+            maxWidth="md"
+            fullWidth
+          >
+            <DialogTitle sx={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+              Lignes masquées
+              <IconButton size="small" onClick={() => setLignesMasqueesModalOpen(false)}>
+                <CloseIcon />
+              </IconButton>
+            </DialogTitle>
+            <DialogContent dividers>
+              <DialogContentText sx={{ mb: 2 }}>
+                Ces lignes sont exclues des totaux du tableau et du coût sous-traitance du dashboard.
+                Réaffichez-les pour les comptabiliser à nouveau.
+              </DialogContentText>
+              {loadingMasquees ? (
+                <Box display="flex" justifyContent="center" py={3}>
+                  <CircularProgress size={28} />
+                </Box>
+              ) : lignesMasquees.length === 0 ? (
+                <Typography color="text.secondary">Aucune ligne masquée{selectedAnnee ? ` pour ${selectedAnnee}` : ""}.</Typography>
+              ) : (
+                <Table size="small">
+                  <TableHead>
+                    <TableRow>
+                      <TableCell>Mois</TableCell>
+                      <TableCell>Sous-traitant</TableCell>
+                      <TableCell>Chantier</TableCell>
+                      <TableCell align="right">À payer</TableCell>
+                      <TableCell align="center">Action</TableCell>
+                    </TableRow>
+                  </TableHead>
+                  <TableBody>
+                    {lignesMasquees.map((ligne) => (
+                      <TableRow key={ligne.id} hover>
+                        <TableCell>
+                          {String(ligne.mois).padStart(2, "0")}/{ligne.annee}
+                        </TableCell>
+                        <TableCell>{ligne.sous_traitant}</TableCell>
+                        <TableCell>
+                          {ligne.source_type === "agent_journalier"
+                            ? "Agent journalier (tous chantiers)"
+                            : (ligne.chantier_name || (ligne.chantier_id ? `Chantier ${ligne.chantier_id}` : "—"))}
+                        </TableCell>
+                        <TableCell align="right">
+                          {formatNumber(ligne.a_payer || 0)} €
+                        </TableCell>
+                        <TableCell align="center">
+                          <Button
+                            size="small"
+                            startIcon={<VisibilityIcon />}
+                            onClick={() => handleReafficherLigne(ligne.id)}
+                          >
+                            Réafficher
+                          </Button>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              )}
+            </DialogContent>
+            <DialogActions>
+              <Button onClick={() => setLignesMasqueesModalOpen(false)}>Fermer</Button>
             </DialogActions>
           </Dialog>
 

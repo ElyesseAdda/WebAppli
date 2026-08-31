@@ -39,7 +39,7 @@ import ChantierCommandesTab from "./chantier/ChantierCommandesTab";
 import ChantierDocumentsTab from "./chantier/ChantierDocumentsTab";
 import ChantierInfoTab from "./chantier/ChantierInfoTab";
 import ChantierRecapFinancierTab from "./chantier/ChantierRecapFinancierTab";
-import { COLORS } from "../constants/colors";
+import GanttChantierTab from "./Gantt/GanttChantierTab";
 
 // Déplace TabPanel en dehors du composant ChantierDetail
 /** Filtres statut demandés pour la modale liste chantiers (valeurs API `state_chantier`) */
@@ -1239,7 +1239,6 @@ const ChantierDetail = () => {
                 onChange={handleTabChange}
                 aria-label="chantier tabs"
                 variant="fullWidth"
-                TabIndicatorProps={{ style: { background: COLORS.primary } }}
                 sx={{
                   flex: 1,
                   "& .MuiTab-root": {
@@ -1247,10 +1246,10 @@ const ChantierDetail = () => {
                     fontSize: "1.1rem",
                     fontWeight: 500,
                     minWidth: 120,
-                    color: COLORS.textMuted,
+                    color: "text.primary",
                     fontFamily: "Roboto, Arial, sans-serif",
                     "&.Mui-selected": {
-                      color: COLORS.primary,
+                      color: "primary.main",
                       fontWeight: 700,
                     },
                   },
@@ -1264,6 +1263,7 @@ const ChantierDetail = () => {
                 <Tab label="Documents" />
                 <Tab label="Commandes" />
                 <Tab label="Récap Financier" />
+                <Tab label="Planning Gantt" />
               </Tabs>
             </Box>
           </AppBar>
@@ -1320,6 +1320,9 @@ const ChantierDetail = () => {
                 chantierId={id}
                 isActive={selectedTab === 3}
               />
+            </TabPanel>
+            <TabPanel value={selectedTab} index={4}>
+              <GanttChantierTab chantierId={id} isActive={selectedTab === 4} />
             </TabPanel>
           </Paper>
         </Box>

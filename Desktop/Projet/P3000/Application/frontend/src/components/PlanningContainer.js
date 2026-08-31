@@ -11,6 +11,7 @@ import axios from "axios";
 import dayjs from "dayjs";
 import React, { useEffect, useState } from "react";
 import { generatePDFDrive } from "../utils/universalDriveGenerator";
+import { agentVisibleForRange, monthRangeBounds } from "../utils/agentEffectif";
 import LaborCostsSummary from "./LaborCostsSummary";
 import PlanningHebdoAgent from "./PlanningHebdoAgent";
 import AgentSelectionModal from "./AgentSelectionModal";
@@ -89,19 +90,18 @@ const PlanningContainer = () => {
     return week1Start.add(week - 1, 'week').toDate();
   };
 
-  // Fonction pour filtrer les agents selon la période (logique précise jour par jour)
+  // Fonction pour filtrer les agents selon la période (périodes d'inactivité)
   const getFilteredAgents = (agentsList, week, year) => {
     if (!week || !year) {
       return agentsList.filter(agent => agent.is_active);
     }
-    
+
     const weekStartDate = getWeekStartDate(week, year);
-    
-    return agentsList.filter(agent => {
-      // Agent actif OU désactivé après le début de la semaine
-      return agent.is_active || 
-             (agent.date_desactivation && new Date(agent.date_desactivation) > weekStartDate);
-    });
+    const weekEndDate = dayjs(weekStartDate).add(6, 'day').toDate();
+
+    return agentsList.filter((agent) =>
+      agentVisibleForRange(agent, weekStartDate, weekEndDate)
+    );
   };
 
   // Fonction pour vérifier si un agent est visible pour la période actuelle
@@ -109,10 +109,10 @@ const PlanningContainer = () => {
     if (!week || !year) {
       return agent.is_active;
     }
-    
+
     const weekStartDate = getWeekStartDate(week, year);
-    return agent.is_active || 
-           (agent.date_desactivation && new Date(agent.date_desactivation) > weekStartDate);
+    const weekEndDate = dayjs(weekStartDate).add(6, 'day').toDate();
+    return agentVisibleForRange(agent, weekStartDate, weekEndDate);
   };
 
   // Fonction pour filtrer les agents selon le mois/année (pour les rapports mensuels)
@@ -120,14 +120,9 @@ const PlanningContainer = () => {
     if (!month || !year) {
       return agentsList.filter(agent => agent.is_active);
     }
-    
-    const monthStartDate = dayjs().year(year).month(month - 1).startOf('month').toDate();
-    
-    return agentsList.filter(agent => {
-      // Agent actif OU désactivé après le début du mois
-      return agent.is_active || 
-             (agent.date_desactivation && new Date(agent.date_desactivation) > monthStartDate);
-    });
+
+    const { start, end } = monthRangeBounds(month, year);
+    return agentsList.filter((agent) => agentVisibleForRange(agent, start, end));
   };
 
   useEffect(() => {
@@ -458,35 +453,19 @@ const PlanningContainer = () => {
             >
               <MenuItem value="">--Sélectionner un agent--</MenuItem>
               {agents
-                .filter((agent) => {
-                  // Afficher seulement les agents visibles pour cette période
-                  return isAgentVisibleForPeriod(agent, selectedWeek, selectedYear);
-                })
+                .filter((agent) =>
+                  isAgentVisibleForPeriod(agent, selectedWeek, selectedYear)
+                )
                 .sort((a, b) => {
-                  // Trier par nom de famille puis par prénom
                   const nameA = `${a.surname} ${a.name}`.toLowerCase();
                   const nameB = `${b.surname} ${b.name}`.toLowerCase();
-                  return nameA.localeCompare(nameB, 'fr');
+                  return nameA.localeCompare(nameB, "fr");
                 })
-                .map((agent) => {
-                  const isActive = agent.is_active;
-                  return (
-                    <MenuItem 
-                      key={agent.id} 
-                      value={agent.id}
-                      sx={{
-                        color: isActive ? 'inherit' : 'text.secondary',
-                        fontStyle: isActive ? 'normal' : 'italic'
-                      }}
-                    >
-                      {isActive ? (
-                        `${agent.surname} ${agent.name}`
-                      ) : (
-                        `${agent.surname} ${agent.name} (Retiré de l'effectif le ${agent.date_desactivation ? new Date(agent.date_desactivation).toLocaleDateString('fr-FR') : 'N/A'})`
-                      )}
-                    </MenuItem>
-                  );
-                })}
+                .map((agent) => (
+                  <MenuItem key={agent.id} value={agent.id}>
+                    {`${agent.surname} ${agent.name}`}
+                  </MenuItem>
+                ))}
             </Select>
           </StyledFormControl>
 

@@ -181,6 +181,22 @@ const PointageRepartitionAgenceModal = ({
     await onSubmit(payload, agenceFlag);
   };
 
+  const handleFormSubmit = (e) => {
+    e.preventDefault();
+    if (!saving) {
+      void handleValidate();
+    }
+  };
+
+  const handleKeyDown = (e) => {
+    if (e.key === "Enter" && !e.shiftKey) {
+      e.preventDefault();
+      if (!saving) {
+        void handleValidate();
+      }
+    }
+  };
+
   const handleToutMainOeuvre = async () => {
     setError("");
     if (cible <= 0) {
@@ -200,7 +216,8 @@ const PointageRepartitionAgenceModal = ({
           </Typography>
         ) : null}
       </DialogTitle>
-      <DialogContent>
+      <form onSubmit={handleFormSubmit} onKeyDown={handleKeyDown}>
+        <DialogContent>
         <Typography variant="body2" sx={{ mb: 1.5 }}>
           Ventilez le montant chargé ({cible.toLocaleString("fr-FR", {
             minimumFractionDigits: 2,
@@ -292,18 +309,19 @@ const PointageRepartitionAgenceModal = ({
             € / {cible.toLocaleString("fr-FR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €
           </Typography>
         </Box>
-      </DialogContent>
-      <DialogActions sx={{ px: 3, pb: 2, flexWrap: "wrap", gap: 1 }}>
-        <Button onClick={onClose} disabled={saving}>
-          Annuler
-        </Button>
-        <Button color="secondary" onClick={handleToutMainOeuvre} disabled={saving}>
-          Tout en main d&apos;œuvre chantier
-        </Button>
-        <Button variant="contained" onClick={() => void handleValidate()} disabled={saving}>
-          {saving ? "Enregistrement…" : "Enregistrer"}
-        </Button>
-      </DialogActions>
+        </DialogContent>
+        <DialogActions sx={{ px: 3, pb: 2, flexWrap: "wrap", gap: 1 }}>
+          <Button type="button" onClick={onClose} disabled={saving}>
+            Annuler
+          </Button>
+          <Button type="button" color="secondary" onClick={handleToutMainOeuvre} disabled={saving}>
+            Tout en main d&apos;œuvre chantier
+          </Button>
+          <Button type="submit" variant="contained" disabled={saving}>
+            {saving ? "Enregistrement…" : "Enregistrer"}
+          </Button>
+        </DialogActions>
+      </form>
     </Dialog>
   );
 };

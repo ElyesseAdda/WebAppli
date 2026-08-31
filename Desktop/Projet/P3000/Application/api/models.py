@@ -588,6 +588,32 @@ class Agent(models.Model):
         return 0
 
 
+class AgentPeriodeInactivite(models.Model):
+    """Période d'inactivité d'un agent (plage de dates, éventuellement ouverte)."""
+    agent = models.ForeignKey(
+        Agent,
+        on_delete=models.CASCADE,
+        related_name='periodes_inactivite',
+    )
+    date_debut = models.DateField(help_text="Début d'inactivité (inclusif)")
+    date_fin = models.DateField(
+        null=True,
+        blank=True,
+        help_text="Fin d'inactivité (inclusive) ; null = période ouverte jusqu'à réactivation",
+    )
+    motif = models.CharField(max_length=255, blank=True, default='')
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-date_debut', '-id']
+        verbose_name = "Période d'inactivité agent"
+        verbose_name_plural = "Périodes d'inactivité agents"
+
+    def __str__(self):
+        fin = self.date_fin.isoformat() if self.date_fin else '…'
+        return f'{self.agent} inactif {self.date_debut} → {fin}'
+
+
 class MonthlyPresence(models.Model):
     agent = models.ForeignKey(Agent, on_delete=models.CASCADE)
     month = models.DateField()  # Utilisez le premier jour du mois pour représenter le mois
@@ -3447,11 +3473,17 @@ class SuiviPaiementSousTraitantMensuel(models.Model):
     # Note: chantier peut être null pour les agents journaliers regroupés ou certaines dépenses d'agence
     
     # Informations de suivi spécifiques au tableau
-    montant_paye_ht = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True, default=0)  # Montant payé saisi
+    # null = non saisi (utiliser le calcul auto des paiements) ; 0 = zéro explicite
+    montant_paye_ht = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True, default=None)
+    # True dès qu'un montant a été saisi / ajusté depuis le tableau (validation facture, modal, etc.)
+    montant_paye_saisi = models.BooleanField(default=False)
     date_paiement_reel = models.DateField(null=True, blank=True)  # Date de paiement réel saisie
     date_envoi_facture = models.DateField(null=True, blank=True)  # Date de réception de la facture
     date_paiement_prevue = models.DateField(null=True, blank=True)  # Date de paiement prévue (calculée)
     delai_paiement = models.IntegerField(default=45)  # Délai de paiement en jours (45 ou 60)
+    # IDs FactureSousTraitant masqués dans la colonne factures du tableau
+    # (la ligne / a_payer restent ; la facture n'apparaît plus dans le tableau)
+    factures_st_masquees = models.JSONField(default=list, blank=True)
     
     # Métadonnées
     created_at = models.DateTimeField(auto_now_add=True)
@@ -3475,7 +3507,7 @@ class SuiviPaiementSousTraitantMensuel(models.Model):
     def save(self, *args, **kwargs):
         # Calculer automatiquement date_paiement_prevue si date_envoi est définie
         if self.date_envoi_facture and self.delai_paiement:
-            from datetime import timedelta, date as date_type
+            from datetime import timedelta
             # Convertir en date si c'est une string
             if isinstance(self.date_envoi_facture, str):
                 from datetime import datetime
@@ -3483,6 +3515,9 @@ class SuiviPaiementSousTraitantMensuel(models.Model):
             else:
                 date_envoi = self.date_envoi_facture
             self.date_paiement_prevue = date_envoi + timedelta(days=self.delai_paiement)
+        else:
+            # Plus de date d'envoi → plus de date prévue ni d'écart cohérent
+            self.date_paiement_prevue = None
         super().save(*args, **kwargs)
     
     @property
@@ -3536,6 +3571,72 @@ class FactureSuiviSousTraitant(models.Model):
     def __str__(self):
         status = "Payée" if self.payee else "Non payée"
         return f"Facture {self.numero_facture} - {self.montant_facture_ht}€ ({status})"
+
+
+class LigneMasqueeTableauSousTraitant(models.Model):
+    """
+    Lignes masquées du tableau sous-traitant global.
+    Exclues de l'affichage, des totaux du tableau et des agrégats dashboard.
+    """
+    mois = models.IntegerField()
+    annee = models.IntegerField()
+    sous_traitant = models.CharField(max_length=255)
+    # 0 = agence / agent regroupé / sans chantier
+    chantier_id = models.IntegerField(default=0)
+    source_type = models.CharField(max_length=64, blank=True, default='')
+    chantier_name = models.CharField(max_length=255, blank=True, default='')
+    a_payer = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        verbose_name = "Ligne masquée tableau sous-traitant"
+        verbose_name_plural = "Lignes masquées tableau sous-traitant"
+        ordering = ['-annee', '-mois', 'sous_traitant']
+        constraints = [
+            models.UniqueConstraint(
+                fields=['mois', 'annee', 'sous_traitant', 'chantier_id', 'source_type'],
+                name='uniq_ligne_masquee_tableau_st',
+            ),
+        ]
+        indexes = [
+            models.Index(fields=['mois', 'annee', 'sous_traitant']),
+        ]
+
+    def __str__(self):
+        return f"Masquée {self.sous_traitant} {self.mois:02d}/{self.annee} chantier={self.chantier_id}"
+
+
+class LigneMasqueeTableauFournisseur(models.Model):
+    """
+    Lignes masquées du tableau fournisseur global.
+    Exclues de l'affichage, des totaux du tableau et des agrégats dashboard matériel.
+    """
+    mois = models.IntegerField()
+    annee = models.IntegerField()
+    fournisseur = models.CharField(max_length=255)
+    # 0 = agence / sans chantier
+    chantier_id = models.IntegerField(default=0)
+    source_type = models.CharField(max_length=64, blank=True, default='')
+    chantier_name = models.CharField(max_length=255, blank=True, default='')
+    a_payer = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        verbose_name = "Ligne masquée tableau fournisseur"
+        verbose_name_plural = "Lignes masquées tableau fournisseur"
+        ordering = ['-annee', '-mois', 'fournisseur']
+        constraints = [
+            models.UniqueConstraint(
+                fields=['mois', 'annee', 'fournisseur', 'chantier_id', 'source_type'],
+                name='uniq_ligne_masquee_tableau_fournisseur',
+            ),
+        ]
+        indexes = [
+            models.Index(fields=['mois', 'annee', 'fournisseur']),
+        ]
+
+    def __str__(self):
+        return f"Masquée {self.fournisseur} {self.mois:02d}/{self.annee} chantier={self.chantier_id}"
 
 
 class AjustementAgentJournalier(models.Model):
@@ -3605,6 +3706,8 @@ class PaiementFournisseurMateriel(models.Model):
         if self.date_envoi:
             from datetime import timedelta
             self.date_paiement_prevue = self.date_envoi + timedelta(days=45)
+        else:
+            self.date_paiement_prevue = None
         super().save(*args, **kwargs)
 
     class Meta:
@@ -3823,6 +3926,18 @@ from .models_rapport import (  # noqa: E402  (import après signaux/post_migrate
     PhotoRapport,
     assign_numero_rapport_si_absent,
     default_dates_intervention_list,
+)
+
+
+# --- Diagrammes de Gantt -------------------------------------------------
+# Modèles définis dans ``api/models_gantt.py`` et réexportés ici afin de
+# rester accessibles via ``from api.models import GanttDiagramme``.
+from .models_gantt import (  # noqa: E402  (import après signaux/post_migrate)
+    GanttDiagramme,
+    GanttElement,
+    GanttHistorique,
+    GanttDesignation,
+    normaliser_libelle,
 )
 
 

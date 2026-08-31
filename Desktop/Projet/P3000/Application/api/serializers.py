@@ -2,7 +2,7 @@ from rest_framework import serializers
 from django.db.models import Q
 from .models import (
     Chantier, Societe, Devis, Partie, SousPartie, LigneDetail, Client, 
-    Agent, Stock, Presence, StockMovement, StockHistory, Event, MonthlyHours, PointageMensuel,
+    Agent, AgentPeriodeInactivite, Stock, Presence, StockMovement, StockHistory, Event, MonthlyHours, PointageMensuel,
     Schedule, LaborCost, DevisLigne, Facture, FactureLigne, BonCommande, LigneBonCommande,
     Avenant, FactureTS, Situation, SituationLigne, SituationLigneSupplementaire, SituationLigneSpeciale,
     ChantierLigneSupplementaire, SituationLigneAvenant, AgencyExpense, AgencyExpenseOverride,
@@ -10,6 +10,7 @@ from .models import (
     PaiementFournisseurMateriel, FactureFournisseurMateriel, HistoriqueModificationPaiementFournisseur, Fournisseur, Magasin, Banque, AppelOffres, AgencyExpenseAggregate,
     Document, PaiementGlobalSousTraitant, Emetteur, FactureSousTraitant, PaiementFactureSousTraitant,
     AgentPrime, Color, LigneSpeciale, AgencyExpenseMonth, SuiviPaiementSousTraitantMensuel, FactureSuiviSousTraitant,
+    LigneMasqueeTableauSousTraitant, LigneMasqueeTableauFournisseur,
     Distributeur, DistributeurMouvement, DistributeurCell, DistributeurVente, DistributeurReapproSession, DistributeurReapproLigne, DistributeurFrais, StockProduct, StockProductBestPurchase, StockPurchase, StockPurchaseItem, StockLot, StockLoss,
     Agence
 )
@@ -715,10 +716,18 @@ class AgentPrimeSerializer(serializers.Serializer):
     description = serializers.CharField(max_length=100)
     montant = serializers.DecimalField(max_digits=10, decimal_places=2)
 
+class AgentPeriodeInactiviteSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = AgentPeriodeInactivite
+        fields = ['id', 'agent', 'date_debut', 'date_fin', 'motif', 'created_at']
+        read_only_fields = ['id', 'created_at']
+
+
 class AgentSerializer(serializers.ModelSerializer):
     heures_travail_journalieres = serializers.ReadOnlyField()
     monthly_hours = MonthlyHoursSerializer(many=True, read_only=True)
     primes = serializers.JSONField(required=False)
+    periodes_inactivite = AgentPeriodeInactiviteSerializer(many=True, read_only=True)
 
     class Meta:
         model = Agent
@@ -2341,10 +2350,12 @@ class SuiviPaiementSousTraitantMensuelSerializer(serializers.ModelSerializer):
             'chantier',
             'chantier_name',
             'montant_paye_ht',
+            'montant_paye_saisi',
             'date_paiement_reel',
             'date_envoi_facture',
             'date_paiement_prevue',
             'delai_paiement',
+            'factures_st_masquees',
             'factures_suivi',
             'mois_annee',
             'ecart_paiement_jours',
@@ -2353,6 +2364,16 @@ class SuiviPaiementSousTraitantMensuelSerializer(serializers.ModelSerializer):
         ]
         read_only_fields = ['id', 'date_paiement_prevue', 'mois_annee', 'ecart_paiement_jours', 'created_at', 'updated_at']
     
+    def update(self, instance, validated_data):
+        if 'montant_paye_ht' in validated_data and 'montant_paye_saisi' not in validated_data:
+            validated_data['montant_paye_saisi'] = True
+        return super().update(instance, validated_data)
+
+    def create(self, validated_data):
+        if 'montant_paye_ht' in validated_data and 'montant_paye_saisi' not in validated_data:
+            validated_data['montant_paye_saisi'] = True
+        return super().create(validated_data)
+
     def validate(self, data):
         """Validation des données"""
         # Vérifier que le mois est entre 1 et 12
@@ -2367,4 +2388,52 @@ class SuiviPaiementSousTraitantMensuelSerializer(serializers.ModelSerializer):
                 'annee': "L'année doit être entre 2000 et 2100"
             })
         
+        return data
+
+
+class LigneMasqueeTableauSousTraitantSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = LigneMasqueeTableauSousTraitant
+        fields = [
+            'id',
+            'mois',
+            'annee',
+            'sous_traitant',
+            'chantier_id',
+            'source_type',
+            'chantier_name',
+            'a_payer',
+            'created_at',
+        ]
+        read_only_fields = ['id', 'created_at']
+
+    def validate(self, data):
+        if data.get('chantier_id') is None:
+            data['chantier_id'] = 0
+        if not data.get('source_type'):
+            data['source_type'] = ''
+        return data
+
+
+class LigneMasqueeTableauFournisseurSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = LigneMasqueeTableauFournisseur
+        fields = [
+            'id',
+            'mois',
+            'annee',
+            'fournisseur',
+            'chantier_id',
+            'source_type',
+            'chantier_name',
+            'a_payer',
+            'created_at',
+        ]
+        read_only_fields = ['id', 'created_at']
+
+    def validate(self, data):
+        if data.get('chantier_id') is None:
+            data['chantier_id'] = 0
+        if not data.get('source_type'):
+            data['source_type'] = ''
         return data

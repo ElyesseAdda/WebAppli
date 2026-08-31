@@ -1,53 +1,69 @@
 import { Box, Button, Divider, Typography } from "@mui/material";
 import axios from "axios";
-import React, { useEffect, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import dayjs from "dayjs";
+import "dayjs/locale/fr";
 import CalendrierAgent from "./CalendrierAgent";
-import CreateAgentButton from "./CreateAgentModal"; // Assurez-vous que le chemin est correct
-import EditAgentModal from "./EditAgentModal"; // Assurez-vous que le chemin est correct
-import ReactivateAgentModal from "./ReactivateAgentModal"; // Nouveau modal pour la réactivation
+import CreateAgentButton from "./CreateAgentModal";
+import EditAgentModal from "./EditAgentModal";
+import ReactivateAgentModal from "./ReactivateAgentModal";
+import { agentVisibleForRange } from "../utils/agentEffectif";
+
+dayjs.locale("fr");
+
+const monthBounds = (dateLike) => {
+  const d = dayjs(dateLike);
+  return {
+    start: d.startOf("month").toDate(),
+    end: d.endOf("month").toDate(),
+  };
+};
 
 const CalendrierAgentContainer = () => {
   const [agents, setAgents] = useState([]);
-  const [filteredAgents, setFilteredAgents] = useState([]);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [isReactivateModalOpen, setIsReactivateModalOpen] = useState(false);
-  const [currentPeriod, setCurrentPeriod] = useState(null);
+  const [currentPeriod, setCurrentPeriod] = useState(() => monthBounds(dayjs()));
 
-  // Fonction pour filtrer les agents selon la période
-  const getFilteredAgents = (agentsList, period) => {
-    if (!period) {
-      return agentsList.filter(agent => agent.is_active);
-    }
-    
-    const periodStart = period.start.toDate();
-    
-    return agentsList.filter(agent => {
-      // Agent actif OU désactivé après le début de la période
-      return agent.is_active || 
-             (agent.date_desactivation && new Date(agent.date_desactivation) > periodStart);
+  const getFilteredAgents = useCallback((agentsList, period) => {
+    const bounds = period?.start
+      ? {
+          start: period.start?.toDate ? period.start.toDate() : period.start,
+          end: period.end?.toDate
+            ? period.end.toDate()
+            : period.end || period.start,
+        }
+      : monthBounds(dayjs());
+
+    return agentsList.filter((agent) =>
+      agentVisibleForRange(agent, bounds.start, bounds.end)
+    );
+  }, []);
+
+  const filteredAgents = useMemo(
+    () => getFilteredAgents(agents, currentPeriod),
+    [agents, currentPeriod, getFilteredAgents]
+  );
+
+  const handlePeriodChange = useCallback((startDate, endDate) => {
+    if (!startDate) return;
+    const start = dayjs(startDate).startOf("month");
+    const end = endDate
+      ? dayjs(endDate).endOf("month")
+      : start.endOf("month");
+    setCurrentPeriod((prev) => {
+      const prevStart = prev?.start ? dayjs(prev.start).format("YYYY-MM") : null;
+      const nextStart = start.format("YYYY-MM");
+      if (prevStart === nextStart) return prev;
+      return { start: start.toDate(), end: end.toDate() };
     });
-  };
-
-  // Fonction appelée quand la période change dans FullCalendar
-  const handlePeriodChange = (startDate, endDate) => {
-    const period = { start: startDate, end: endDate };
-    setCurrentPeriod(period);
-    
-    // Filtrer les agents selon la nouvelle période
-    const filtered = getFilteredAgents(agents, period);
-    setFilteredAgents(filtered);
-  };
+  }, []);
 
   const refreshAgents = () => {
-    // Récupérer tous les agents (actifs et inactifs) pour la logique temporelle
     axios
       .get("/api/agent/?include_inactive=true")
       .then((response) => {
-        setAgents(response.data);
-        // Filtrer selon la période actuelle
-        const filtered = getFilteredAgents(response.data, currentPeriod);
-        setFilteredAgents(filtered);
+        setAgents(Array.isArray(response.data) ? response.data : []);
       })
       .catch((error) => {
         console.error("Erreur lors de la récupération des agents:", error);
@@ -55,37 +71,14 @@ const CalendrierAgentContainer = () => {
   };
 
   useEffect(() => {
-    // Récupérer tous les agents (actifs et inactifs) pour la logique temporelle
-    axios
-      .get("/api/agent/?include_inactive=true")
-      .then((response) => {
-        setAgents(response.data);
-        // Filtrer selon la période actuelle
-        const filtered = getFilteredAgents(response.data, currentPeriod);
-        setFilteredAgents(filtered);
-      })
-      .catch((error) => {
-        console.error("Erreur lors de la récupération des agents:", error);
-      });
+    refreshAgents();
   }, []);
 
-  const handleOpenEditModal = () => {
-    setIsEditModalOpen(true);
-  };
+  const handleOpenEditModal = () => setIsEditModalOpen(true);
+  const handleCloseEditModal = () => setIsEditModalOpen(false);
+  const handleOpenReactivateModal = () => setIsReactivateModalOpen(true);
+  const handleCloseReactivateModal = () => setIsReactivateModalOpen(false);
 
-  const handleCloseEditModal = () => {
-    setIsEditModalOpen(false);
-  };
-
-  const handleOpenReactivateModal = () => {
-    setIsReactivateModalOpen(true);
-  };
-
-  const handleCloseReactivateModal = () => {
-    setIsReactivateModalOpen(false);
-  };
-
-  // Séparer les agents filtrés par type de paiement, triés alphabétiquement
   const sortAgentsAlphabetically = (list) =>
     [...list].sort((a, b) => {
       const nameA = `${a.surname || ""} ${a.name || ""}`.toLowerCase();
@@ -100,9 +93,12 @@ const CalendrierAgentContainer = () => {
     filteredAgents.filter((agent) => agent.type_paiement === "horaire")
   );
 
+  const monthKey = dayjs(currentPeriod.start).format("YYYY-MM");
+  const monthLabel = dayjs(currentPeriod.start).format("MMMM YYYY");
+  const initialDate = dayjs(currentPeriod.start).format("YYYY-MM-DD");
+
   return (
     <div>
-      {/* Section Agents Horaires */}
       {agentsHoraires.length > 0 && (
         <>
           <Box mb={2}>
@@ -117,15 +113,19 @@ const CalendrierAgentContainer = () => {
                 marginBottom: 2,
               }}
             >
-              ⏰ Agents Horaires ({agentsHoraires.length})
+              Agents Horaires ({agentsHoraires.length})
             </Typography>
-            <CalendrierAgent agents={agentsHoraires} onPeriodChange={handlePeriodChange} />
+            <CalendrierAgent
+              key={`horaires-${monthKey}`}
+              agents={agentsHoraires}
+              onPeriodChange={handlePeriodChange}
+              initialDate={initialDate}
+            />
           </Box>
           <Divider sx={{ margin: "24px 0" }} />
         </>
       )}
 
-      {/* Section Agents Journaliers */}
       {agentsJournaliers.length > 0 && (
         <>
           <Box mb={2}>
@@ -140,18 +140,26 @@ const CalendrierAgentContainer = () => {
                 marginBottom: 2,
               }}
             >
-              👷‍♂️ Agents Journaliers ({agentsJournaliers.length})
+              Agents Journaliers ({agentsJournaliers.length})
             </Typography>
-            <CalendrierAgent agents={agentsJournaliers} onPeriodChange={handlePeriodChange} />
+            <CalendrierAgent
+              key={`journaliers-${monthKey}`}
+              agents={agentsJournaliers}
+              onPeriodChange={handlePeriodChange}
+              initialDate={initialDate}
+            />
           </Box>
         </>
       )}
 
-      {/* Message si aucun agent */}
       {filteredAgents.length === 0 && (
         <Box textAlign="center" py={4}>
           <Typography variant="h6" color="textSecondary">
-            Aucun agent trouvé pour cette période
+            Aucun agent visible pour {monthLabel}
+          </Typography>
+          <Typography variant="body2" color="textSecondary" sx={{ mt: 1 }}>
+            Naviguez vers un autre mois pour voir les agents hors période
+            d&apos;inactivité.
           </Typography>
         </Box>
       )}
