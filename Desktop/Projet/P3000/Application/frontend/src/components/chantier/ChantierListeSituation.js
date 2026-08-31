@@ -1,9 +1,11 @@
+import DeleteIcon from "@mui/icons-material/Delete";
 import {
   Alert,
   Button,
   Dialog,
   DialogActions,
   DialogContent,
+  DialogContentText,
   DialogTitle,
   IconButton,
   Menu,
@@ -125,6 +127,8 @@ const ChantierListeSituation = ({
   const [editNumeroDialogOpen, setEditNumeroDialogOpen] = useState(false);
   const [situationToEditNumero, setSituationToEditNumero] = useState(null);
   const [newNumeroValue, setNewNumeroValue] = useState("");
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [situationToDelete, setSituationToDelete] = useState(null);
 
   useEffect(() => {
     if (!isLoaded && chantierData?.id) {
@@ -396,6 +400,52 @@ const ChantierListeSituation = ({
     }
   };
 
+  const handleDeleteClick = () => {
+    if (selectedSituation) {
+      setSituationToDelete(selectedSituation);
+      setDeleteDialogOpen(true);
+    }
+    handleClose();
+  };
+
+  const handleDeleteConfirm = async () => {
+    if (!situationToDelete) return;
+
+    try {
+      await axios.delete(`/api/situations/${situationToDelete.id}/`);
+
+      setSituations((prev) =>
+        prev.filter((s) => s.id !== situationToDelete.id)
+      );
+      setFilteredSituations((prev) =>
+        prev.filter((s) => s.id !== situationToDelete.id)
+      );
+
+      if (loadSituations) {
+        loadSituations();
+      }
+
+      setDeleteDialogOpen(false);
+      setSituationToDelete(null);
+      setSnackbar({
+        open: true,
+        message: "Situation supprimée avec succès",
+        severity: "success",
+      });
+    } catch (error) {
+      const msg =
+        error.response?.data?.error ||
+        error.response?.data?.detail ||
+        "Erreur lors de la suppression de la situation";
+      setSnackbar({ open: true, message: msg, severity: "error" });
+    }
+  };
+
+  const handleDeleteCancel = () => {
+    setDeleteDialogOpen(false);
+    setSituationToDelete(null);
+  };
+
   return (
     <div
       style={{
@@ -546,7 +596,7 @@ const ChantierListeSituation = ({
                       {formatStatusLabel(situation.statut || "brouillon")}
                     </Typography>
                   </CenteredTableCell>
-                  <CenteredTableCell sx={{ width: "180px", padding: "0 8px" }}>
+                  <CenteredTableCell sx={{ width: "210px", padding: "0 8px" }}>
                     <div style={{ display: "flex", gap: "8px", alignItems: "center", justifyContent: "center" }}>
                       {/* Bouton de téléchargement PDF */}
                       <IconButton
@@ -580,6 +630,24 @@ const ChantierListeSituation = ({
                       <IconButton onClick={(e) => handleMenuClick(e, situation)} size="small">
                         <TfiMore size={16} color="#666" />
                       </IconButton>
+                      {/* Bouton de suppression */}
+                      <IconButton
+                        onClick={() => {
+                          setSituationToDelete(situation);
+                          setDeleteDialogOpen(true);
+                        }}
+                        size="small"
+                        sx={{
+                          color: "error.main",
+                          "&:hover": {
+                            backgroundColor: "error.light",
+                            color: "white",
+                          },
+                        }}
+                        title="Supprimer la situation"
+                      >
+                        <DeleteIcon />
+                      </IconButton>
                     </div>
                   </CenteredTableCell>
                 </TableRow>
@@ -604,7 +672,37 @@ const ChantierListeSituation = ({
       >
         <MenuItem onClick={handleEditNumeroClick}>Modifier le numéro</MenuItem>
         <MenuItem onClick={handleChangeStatus}>Modifier le statut</MenuItem>
+        <MenuItem onClick={handleDeleteClick} sx={{ color: "error.main" }}>
+          Supprimer
+        </MenuItem>
       </Menu>
+
+      <Dialog
+        open={deleteDialogOpen}
+        onClose={handleDeleteCancel}
+        aria-labelledby="delete-situation-dialog-title"
+        aria-describedby="delete-situation-dialog-description"
+      >
+        <DialogTitle id="delete-situation-dialog-title">
+          Confirmer la suppression
+        </DialogTitle>
+        <DialogContent>
+          <DialogContentText id="delete-situation-dialog-description">
+            Êtes-vous sûr de vouloir supprimer la situation{" "}
+            <strong>{situationToDelete?.numero_situation}</strong> ?
+            <br />
+            Cette action est irréversible.
+          </DialogContentText>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={handleDeleteCancel} color="primary">
+            Annuler
+          </Button>
+          <Button onClick={handleDeleteConfirm} color="error" autoFocus>
+            Supprimer
+          </Button>
+        </DialogActions>
+      </Dialog>
 
       <Dialog
         open={editNumeroDialogOpen}

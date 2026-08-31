@@ -180,20 +180,19 @@ const MouvementReapproPage = ({
       onClose();
     } catch (error) {
       console.error("Erreur terminaison mouvement:", error);
-      const data = error.response?.data;
-      if (data?.insuffisant && Array.isArray(data.insuffisant)) {
-        setErrorModal({
-          open: true,
-          error: data.error || "Stock insuffisant.",
-          insuffisant: data.insuffisant,
-        });
-      } else {
-        setErrorModal({
-          open: true,
-          error: data?.error || "Erreur lors de l'enregistrement",
-          insuffisant: [],
-        });
-      }
+      const data = error.response?.data || {};
+      const insuffisant = Array.isArray(data.insuffisant)
+        ? data.insuffisant.filter(Boolean)
+        : [];
+      const errorMessage =
+        (typeof data.error === "string" && data.error) ||
+        (typeof data.detail === "string" && data.detail) ||
+        "Erreur lors de l'enregistrement";
+      setErrorModal({
+        open: true,
+        error: errorMessage,
+        insuffisant,
+      });
     } finally {
       setTerminating(false);
     }
@@ -629,29 +628,49 @@ const MouvementReapproPage = ({
         PaperProps={{ sx: { borderRadius: "16px" } }}
       >
         <DialogTitle sx={{ fontWeight: 700, color: "error.main" }}>
-          Stock insuffisant
+          {errorModal.insuffisant?.length > 0 ? "Stock insuffisant" : "Erreur"}
         </DialogTitle>
         <DialogContent>
           <Typography sx={{ mb: 2 }}>
             {errorModal.error}
           </Typography>
-          {errorModal.insuffisant?.length > 0 && (
+          {errorModal.insuffisant?.length > 0 ? (
             <Box sx={{ mb: 2 }}>
               <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 1 }}>
-                Détail par produit :
+                Produit(s) manquant(s) :
               </Typography>
               <Box component="ul" sx={{ m: 0, pl: 2.5 }}>
-                {errorModal.insuffisant.map((i, idx) => (
-                  <Typography component="li" key={idx} sx={{ mb: 0.5 }}>
-                    <strong>{i.produit}</strong> — demandé : {i.requis}, disponible : {i.disponible}
-                  </Typography>
-                ))}
+                {errorModal.insuffisant.map((i, idx) => {
+                  const nom =
+                    i.produit ||
+                    i.nom ||
+                    i.nom_produit ||
+                    (Array.isArray(i.cellules) && i.cellules[0]) ||
+                    "Produit non identifié";
+                  const requis = i.requis ?? i.demande ?? "—";
+                  const disponible = i.disponible ?? i.stock ?? "—";
+                  return (
+                    <Typography component="li" key={idx} sx={{ mb: 0.75 }}>
+                      <strong>{nom}</strong>
+                      {" — "}
+                      demandé : {requis}, disponible : {disponible}
+                    </Typography>
+                  );
+                })}
               </Box>
             </Box>
+          ) : (
+            <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+              Le détail du produit n&apos;a pas pu être déterminé. Vérifiez le
+              stock de chaque produit du mouvement avant de revalider.
+            </Typography>
           )}
-          <Typography variant="body2" color="text.secondary">
-            Faites un achat (onglet Stock) avant de valider le mouvement.
-          </Typography>
+          {errorModal.insuffisant?.length > 0 && (
+            <Typography variant="body2" color="text.secondary">
+              Faites un achat (onglet Stock) pour ces produits, puis revalidez
+              le mouvement.
+            </Typography>
+          )}
         </DialogContent>
         <DialogActions sx={{ p: 2 }}>
           <Button

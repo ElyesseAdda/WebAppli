@@ -391,7 +391,10 @@ const ListeGantt = () => {
 
       <Dialog
         open={dialogOuvert}
-        onClose={() => setDialogOuvert(false)}
+        onClose={(_, reason) => {
+          if (reason === "backdropClick") return;
+          setDialogOuvert(false);
+        }}
         fullWidth
         maxWidth="sm"
       >
