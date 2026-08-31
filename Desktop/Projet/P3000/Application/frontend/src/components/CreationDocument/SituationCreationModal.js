@@ -2395,54 +2395,6 @@ const SituationCreationModal = ({
     }
   }, [open, chantier, existingSituation, mois, annee, numeroSituation]);
 
-  // Fonction de calcul existante
-  const calculateMontants = () => {
-    if (!structure.length) return;
-
-    // Calcul du montant HT du mois
-    let montantHtMois = 0;
-    structure.forEach((partie) => {
-      partie.sous_parties.forEach((sousPartie) => {
-        sousPartie.lignes.forEach((ligne) => {
-          const montant = parseFloat(ligne.total_ht || 0);
-          const pourcentage = parseFloat(ligne.pourcentage_actuel || 0);
-          montantHtMois += (montant * pourcentage) / 100;
-        });
-      });
-    });
-
-    const cumulPrecedent = calculerCumulPrecedent();
-    const retenueGarantie = montantHtMois * (parseFloat(tauxRetenueGarantie) / 100);
-    const montantProrata = montantHtMois * (parseFloat(tauxProrata) / 100);
-    const montantApresRetenues =
-      montantHtMois -
-      retenueGarantie -
-      montantProrata -
-      parseFloat(retenueCIE || 0);
-    const tva = montantApresRetenues * (tvaRate / 100);
-    const montantTotal = montantHtMois + parseFloat(cumulPrecedent);
-    const pourcentageAvancement =
-      totalHT > 0 ? (montantTotal / totalHT) * 100 : 0;
-
-    setCalculatedValues({
-      montant_ht_mois: montantHtMois.toFixed(2),
-      montant_precedent: montantHtMois.toFixed(2),
-      cumul_precedent: cumulPrecedent.toFixed(2),
-      retenue_garantie: retenueGarantie.toFixed(2),
-      montant_prorata: montantProrata.toFixed(2),
-      retenue_cie: retenueCIE || "0.00",
-      montant_apres_retenues: montantApresRetenues.toFixed(2),
-      montant_total: montantTotal.toFixed(2),
-      pourcentage_avancement: pourcentageAvancement.toFixed(2),
-      tva: tva.toFixed(2),
-    });
-  };
-
-  // Utiliser useEffect pour recalculer quand les données changent
-  useEffect(() => {
-    calculateMontants();
-  }, [structure, avenants, tauxProrata, retenueCIE, lignesSupplementaires, tvaRate]);
-
   // Fonction pour calculer le cumul des mois précédents
   const calculerCumulPrecedent = () => {
     // Si on a une situation précédente, utiliser son montant_total_cumul_ht
@@ -2868,6 +2820,8 @@ const SituationCreationModal = ({
   }, [
     structure,
     avenants,
+    totalHT,
+    montantTotalAvenants,
     tauxProrata,
     tauxRetenueGarantie,
     retenueCIE,
