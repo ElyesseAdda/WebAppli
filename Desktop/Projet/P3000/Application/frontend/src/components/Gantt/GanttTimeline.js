@@ -4,7 +4,8 @@ import { calculerLayout, formatDateFr, libelleDatesPlage } from "./ganttLayout";
 
 const LARGEUR_LIBELLES = 220;
 const LARGEUR_DUREE = 40;
-const HAUTEUR_LIGNE = 34;
+const HAUTEUR_LIGNE = 42;
+const HAUTEUR_BARRE = 14;
 
 const stylesColonneFixe = {
   borderRight: "1px solid #e0e0e0",
@@ -41,7 +42,8 @@ const GanttTimeline = ({
     [elements, echelle]
   );
 
-  const hauteurLigne = compact ? 26 : HAUTEUR_LIGNE;
+  const hauteurLigne = compact ? 32 : HAUTEUR_LIGNE;
+  const hauteurBarre = compact ? 10 : HAUTEUR_BARRE;
   const largeurDuree = compact ? 36 : LARGEUR_DUREE;
   const largeurLibelles = compact ? 200 : LARGEUR_LIBELLES;
 
@@ -162,6 +164,7 @@ const GanttTimeline = ({
                 display: "flex",
                 minHeight: hauteurLigne,
                 borderBottom: "1px solid #f0f0f0",
+                overflow: "visible",
                 backgroundColor: estSelectionnee
                   ? "rgba(25, 118, 210, 0.08)"
                   : ligne.estTitre
@@ -218,6 +221,7 @@ const GanttTimeline = ({
                   position: "relative",
                   display: "flex",
                   alignItems: "center",
+                  overflow: "visible",
                 }}
               >
                 {/* Trame verticale */}
@@ -246,16 +250,49 @@ const GanttTimeline = ({
                       position: "absolute",
                       left: `${ligne.barre.gauche}%`,
                       width: `${ligne.barre.largeur}%`,
-                      height: ligne.estTitre ? 8 : hauteurLigne - 14,
-                      backgroundColor: ligne.couleur || "#1976d2",
-                      borderRadius: ligne.estTitre ? "2px" : "3px",
-                      opacity: ligne.estTitre ? 0.55 : 1,
-                      boxSizing: "border-box",
+                      top: 0,
+                      bottom: 0,
+                      display: "flex",
+                      flexDirection: "column",
+                      alignItems: "flex-start",
+                      justifyContent: "center",
+                      overflow: "visible",
+                      pointerEvents: "none",
+                      zIndex: 1,
                     }}
                     title={`${ligne.libelle} : ${formatDateFr(
                       ligne.date_debut
                     )} au ${formatDateFr(ligne.date_fin)}`}
-                  />
+                  >
+                    <Box
+                      component="span"
+                      sx={{
+                        fontSize: compact ? 9 : 10,
+                        lineHeight: 1.15,
+                        color: ligne.estTitre ? "#1a2b4c" : "text.secondary",
+                        fontWeight: ligne.estTitre ? 700 : 500,
+                        whiteSpace: "nowrap",
+                        width: "max-content",
+                        maxWidth: "none",
+                        overflow: "visible",
+                        mb: 0.25,
+                        position: "relative",
+                        zIndex: 2,
+                      }}
+                    >
+                      {ligne.libelle || "(sans désignation)"}
+                    </Box>
+                    <Box
+                      sx={{
+                        width: "100%",
+                        height: ligne.estTitre ? 6 : hauteurBarre,
+                        backgroundColor: ligne.couleur || "#1976d2",
+                        borderRadius: ligne.estTitre ? "2px" : "3px",
+                        opacity: ligne.estTitre ? 0.55 : 1,
+                        flexShrink: 0,
+                      }}
+                    />
+                  </Box>
                 )}
               </Box>
             </Box>

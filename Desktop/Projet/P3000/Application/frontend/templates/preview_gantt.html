@@ -70,7 +70,7 @@
         width: 100%;
         border: 1px solid #d5d9e0;
         border-radius: 3px;
-        overflow: hidden;
+        overflow: visible;
       }
 
       .rangee {
@@ -79,6 +79,7 @@
         border-bottom: 1px solid #eceff3;
         page-break-inside: avoid;
         break-inside: avoid;
+        overflow: visible;
       }
 
       .rangee:last-child {
@@ -133,8 +134,9 @@
       .zone-barres {
         flex: 1;
         position: relative;
-        min-height: 22px;
+        min-height: 28px;
         display: flex;
+        overflow: visible;
       }
 
       .cellule {
@@ -146,21 +148,47 @@
         border-right: none;
       }
 
-      .barre {
+      .barre-bloc {
         position: absolute;
-        top: 4px;
+        top: 2px;
+        display: flex;
+        flex-direction: column;
+        align-items: flex-start;
+        justify-content: center;
+        overflow: visible;
+        max-height: 100%;
+        z-index: 1;
+      }
+
+      .barre-libelle {
+        font-size: 8px;
+        line-height: 1.15;
+        color: #555;
+        white-space: nowrap;
+        overflow: visible;
+        width: max-content;
+        max-width: none;
+        margin-bottom: 1px;
+        position: relative;
+        z-index: 2;
+      }
+
+      .barre-libelle.titre {
+        font-weight: bold;
+        color: #1a2b4c;
+      }
+
+      .barre {
+        position: relative;
+        left: auto;
+        top: auto;
+        width: 100%;
         height: 14px;
         border-radius: 3px;
-        color: #fff;
-        font-size: 9px;
-        line-height: 14px;
-        padding: 0 4px;
-        white-space: nowrap;
-        overflow: hidden;
+        flex-shrink: 0;
       }
 
       .barre-titre {
-        top: 8px;
         height: 6px;
         opacity: 0.55;
       }
@@ -271,9 +299,17 @@
           {% endfor %}
           {% if ligne.barre %}
           <div
-            class="barre {% if ligne.est_titre %}barre-titre{% endif %}"
-            style="left: {{ ligne.barre.gauche }}%; width: {{ ligne.barre.largeur }}%; background-color: {{ ligne.couleur }};"
-          ></div>
+            class="barre-bloc"
+            style="left: {{ ligne.barre.gauche }}%; width: {{ ligne.barre.largeur }}%;"
+          >
+            <div class="barre-libelle {% if ligne.est_titre %}titre{% endif %}">
+              {{ ligne.libelle|default:"(sans désignation)" }}
+            </div>
+            <div
+              class="barre {% if ligne.est_titre %}barre-titre{% endif %}"
+              style="background-color: {{ ligne.couleur }};"
+            ></div>
+          </div>
           {% endif %}
         </div>
       </div>
