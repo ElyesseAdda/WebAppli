@@ -765,10 +765,28 @@ class AgentSerializer(serializers.ModelSerializer):
     monthly_hours = MonthlyHoursSerializer(many=True, read_only=True)
     primes = serializers.JSONField(required=False)
     periodes_inactivite = AgentPeriodeInactiviteSerializer(many=True, read_only=True)
+    photo_url = serializers.SerializerMethodField()
 
     class Meta:
         model = Agent
         fields = '__all__'
+
+    def to_representation(self, instance):
+        data = super().to_representation(instance)
+        data['photo_url'] = self.get_photo_url(instance)
+        return data
+
+    def get_photo_url(self, obj):
+        if not obj.photo_s3_key:
+            return ''
+        try:
+            from .utils import generate_presigned_url_for_display, is_s3_available
+
+            if not is_s3_available():
+                return ''
+            return generate_presigned_url_for_display(obj.photo_s3_key, expires_in=3600)
+        except Exception:
+            return ''
 
 
 class PointageMensuelSerializer(serializers.ModelSerializer):

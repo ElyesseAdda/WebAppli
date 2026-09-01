@@ -538,7 +538,11 @@ class Agent(models.Model):
         ('horaire', 'Horaire'),
         ('journalier', 'Journalier'),
     ]
-    
+    TYPE_CONTRAT_CHOICES = [
+        ('cdi', 'CDI'),
+        ('cdd', 'CDD'),
+    ]
+
     name = models.CharField(max_length=25)
     surname = models.CharField(max_length=25)
     email = models.EmailField(max_length=254, blank=True, null=True)
@@ -565,6 +569,40 @@ class Agent(models.Model):
     # Champs pour la gestion de l'effectif
     is_active = models.BooleanField(default=True, help_text="Agent actif dans l'effectif")
     date_desactivation = models.DateField(null=True, blank=True, help_text="Date de retrait de l'effectif")
+
+    # Informations contractuelles (carte agent)
+    type_contrat = models.CharField(
+        max_length=10,
+        choices=TYPE_CONTRAT_CHOICES,
+        blank=True,
+        null=True,
+        help_text="Type de contrat (CDI ou CDD)",
+    )
+    fin_periode_essai = models.DateField(
+        null=True,
+        blank=True,
+        help_text="Date de fin de période d'essai",
+    )
+    date_debut_contrat = models.DateField(
+        null=True,
+        blank=True,
+        help_text="Date de début du contrat",
+    )
+    date_fin_contrat = models.DateField(
+        null=True,
+        blank=True,
+        help_text="Date de fin du contrat (CDD uniquement)",
+    )
+    carte_btp = models.BooleanField(
+        default=False,
+        help_text="Possède une carte BTP",
+    )
+    photo_s3_key = models.CharField(
+        max_length=500,
+        blank=True,
+        null=True,
+        verbose_name="Clé S3 de la photo agent",
+    )
 
     def __str__(self):
         return f'{self.name} {self.surname}'

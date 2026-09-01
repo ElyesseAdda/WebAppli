@@ -2162,6 +2162,103 @@ class AgentViewSet(viewsets.ModelViewSet):
         sync_agent_status(agent)
         return Response(AgentPeriodeInactiviteSerializer(periode).data)
 
+    @action(detail=True, methods=['post'], url_path='upload_photo')
+    def upload_photo(self, request, pk=None):
+        """Enregistre la photo de l'agent sur S3."""
+        import uuid as _uuid
+        from io import BytesIO
+
+        agent = self.get_object()
+        fichier = request.FILES.get('photo')
+        if not fichier:
+            return Response({'error': 'Fichier photo requis'}, status=status.HTTP_400_BAD_REQUEST)
+        try:
+            from PIL import Image
+
+            from .utils import (
+                generate_presigned_url_for_display,
+                get_s3_bucket_name,
+                get_s3_client,
+                is_s3_available,
+            )
+
+            if not is_s3_available():
+                return Response({'error': 'S3 non disponible'}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
+
+            contenu = fichier.read()
+            image = Image.open(BytesIO(contenu))
+            if image.mode in ('RGBA', 'LA', 'P'):
+                image = image.convert('RGBA')
+            elif image.mode != 'RGB':
+                image = image.convert('RGB')
+
+            largeur, hauteur = image.size
+            max_dim = 512
+            if max(largeur, hauteur) > max_dim:
+                ratio = max_dim / max(largeur, hauteur)
+                image = image.resize(
+                    (int(largeur * ratio), int(hauteur * ratio)),
+                    Image.Resampling.LANCZOS,
+                )
+
+            sortie = BytesIO()
+            if image.mode == 'RGBA':
+                image.save(sortie, format='PNG', optimize=True)
+                contenu, content_type, ext = sortie.getvalue(), 'image/png', 'png'
+            else:
+                image.save(sortie, format='JPEG', quality=85, optimize=True)
+                contenu, content_type, ext = sortie.getvalue(), 'image/jpeg', 'jpg'
+
+            s3_key = f"agents/photos/{agent.id}_{_uuid.uuid4().hex[:8]}.{ext}"
+            s3_client = get_s3_client()
+            bucket_name = get_s3_bucket_name()
+
+            if agent.photo_s3_key:
+                try:
+                    s3_client.delete_object(Bucket=bucket_name, Key=agent.photo_s3_key)
+                except Exception:
+                    pass
+
+            s3_client.put_object(
+                Bucket=bucket_name,
+                Key=s3_key,
+                Body=contenu,
+                ContentType=content_type,
+            )
+            agent.photo_s3_key = s3_key
+            agent.save(update_fields=['photo_s3_key'])
+            photo_url = generate_presigned_url_for_display(s3_key, expires_in=3600)
+            return Response({
+                'success': True,
+                'photo_s3_key': s3_key,
+                'photo_url': photo_url,
+            })
+        except Exception as e:
+            return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+    @action(detail=True, methods=['delete'], url_path='delete_photo')
+    def delete_photo(self, request, pk=None):
+        """Supprime la photo de l'agent."""
+        agent = self.get_object()
+        if not agent.photo_s3_key:
+            return Response({'error': 'Aucune photo'}, status=status.HTTP_400_BAD_REQUEST)
+        try:
+            from .utils import get_s3_bucket_name, get_s3_client, is_s3_available
+
+            if is_s3_available():
+                s3_client = get_s3_client()
+                bucket_name = get_s3_bucket_name()
+                try:
+                    s3_client.delete_object(Bucket=bucket_name, Key=agent.photo_s3_key)
+                except Exception:
+                    pass
+
+            agent.photo_s3_key = None
+            agent.save(update_fields=['photo_s3_key'])
+            return Response({'success': True, 'photo_s3_key': None, 'photo_url': ''})
+        except Exception as e:
+            return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
     def create(self, request):
         serializer = self.get_serializer(data=request.data)
         if serializer.is_valid():
