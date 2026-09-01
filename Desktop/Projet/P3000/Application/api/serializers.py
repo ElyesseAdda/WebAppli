@@ -2,7 +2,7 @@ from rest_framework import serializers
 from django.db.models import Q
 from .models import (
     Chantier, Societe, Devis, Partie, SousPartie, LigneDetail, Client, 
-    Agent, AgentPeriodeInactivite, Stock, Presence, StockMovement, StockHistory, Event, MonthlyHours, PointageMensuel,
+    Agent, AgentContrat, AgentPeriodeInactivite, Stock, Presence, StockMovement, StockHistory, Event, MonthlyHours, PointageMensuel,
     Schedule, LaborCost, DevisLigne, Facture, FactureLigne, BonCommande, LigneBonCommande,
     Avenant, FactureTS, Situation, SituationLigne, SituationLigneSupplementaire, SituationLigneSpeciale,
     ChantierLigneSupplementaire, SituationLigneAvenant, AgencyExpense, AgencyExpenseOverride,
@@ -760,11 +760,34 @@ class AgentPeriodeInactiviteSerializer(serializers.ModelSerializer):
         read_only_fields = ['id', 'created_at']
 
 
+class AgentContratSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = AgentContrat
+        fields = [
+            'id',
+            'agent',
+            'libelle',
+            'type_contrat',
+            'fin_periode_essai',
+            'date_debut_contrat',
+            'date_fin_contrat',
+            'carte_btp',
+            'created_at',
+        ]
+        read_only_fields = ['id', 'agent', 'created_at']
+
+    def validate_type_contrat(self, value):
+        if value in (None, ''):
+            return None
+        return value
+
+
 class AgentSerializer(serializers.ModelSerializer):
     heures_travail_journalieres = serializers.ReadOnlyField()
     monthly_hours = MonthlyHoursSerializer(many=True, read_only=True)
     primes = serializers.JSONField(required=False)
     periodes_inactivite = AgentPeriodeInactiviteSerializer(many=True, read_only=True)
+    contrats = AgentContratSerializer(many=True, read_only=True)
     photo_url = serializers.SerializerMethodField()
 
     class Meta:

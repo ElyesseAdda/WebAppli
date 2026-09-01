@@ -1932,7 +1932,7 @@ class ClientViewSet(viewsets.ModelViewSet):
         return queryset
 
 class AgentViewSet(viewsets.ModelViewSet):
-    queryset = Agent.objects.all().prefetch_related('periodes_inactivite')
+    queryset = Agent.objects.all().prefetch_related('periodes_inactivite', 'contrats')
     serializer_class = AgentSerializer
     permission_classes = [AllowAny]
 
@@ -1941,7 +1941,7 @@ class AgentViewSet(viewsets.ModelViewSet):
         from calendar import monthrange
         from .agent_effectif import filter_agents_visible_for_range
 
-        queryset = Agent.objects.all().prefetch_related('periodes_inactivite')
+        queryset = Agent.objects.all().prefetch_related('periodes_inactivite', 'contrats')
 
         # Détail / actions : toujours accessible (actifs et inactifs)
         if getattr(self, 'action', None) not in (None, 'list'):
@@ -2081,7 +2081,7 @@ class AgentViewSet(viewsets.ModelViewSet):
         """Récupérer la liste des agents inactifs"""
         queryset = (
             Agent.objects.filter(is_active=False)
-            .prefetch_related('periodes_inactivite')
+            .prefetch_related('periodes_inactivite', 'contrats')
             .order_by('-date_desactivation')
         )
         serializer = self.get_serializer(queryset, many=True)
@@ -2161,6 +2161,57 @@ class AgentViewSet(viewsets.ModelViewSet):
         periode.save()
         sync_agent_status(agent)
         return Response(AgentPeriodeInactiviteSerializer(periode).data)
+
+    @action(detail=True, methods=['get', 'post'], url_path='contrats')
+    def contrats(self, request, pk=None):
+        """Liste ou crée un contrat pour un agent."""
+        from .models import AgentContrat
+        from .serializers import AgentContratSerializer
+
+        agent = self.get_object()
+
+        if request.method == 'GET':
+            qs = agent.contrats.all()
+            return Response(AgentContratSerializer(qs, many=True).data)
+
+        serializer = AgentContratSerializer(data={**request.data, 'agent': agent.id})
+        if serializer.is_valid():
+            contrat = serializer.save(agent=agent)
+            return Response(
+                AgentContratSerializer(contrat).data,
+                status=status.HTTP_201_CREATED,
+            )
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+    @action(
+        detail=True,
+        methods=['put', 'patch', 'delete'],
+        url_path=r'contrats/(?P<contrat_id>[^/.]+)',
+    )
+    def contrat_detail(self, request, pk=None, contrat_id=None):
+        """Modifie ou supprime un contrat agent."""
+        from .models import AgentContrat
+        from .serializers import AgentContratSerializer
+
+        agent = self.get_object()
+        try:
+            contrat = AgentContrat.objects.get(pk=contrat_id, agent=agent)
+        except AgentContrat.DoesNotExist:
+            return Response({'error': 'Contrat non trouvé'}, status=status.HTTP_404_NOT_FOUND)
+
+        if request.method == 'DELETE':
+            contrat.delete()
+            return Response(status=status.HTTP_204_NO_CONTENT)
+
+        serializer = AgentContratSerializer(
+            contrat,
+            data=request.data,
+            partial=True,
+        )
+        if serializer.is_valid():
+            contrat = serializer.save()
+            return Response(AgentContratSerializer(contrat).data)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
     @action(detail=True, methods=['post'], url_path='upload_photo')
     def upload_photo(self, request, pk=None):

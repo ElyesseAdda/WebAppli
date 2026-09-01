@@ -6,7 +6,6 @@ import "dayjs/locale/fr";
 import CalendrierAgent from "./CalendrierAgent";
 import CreateAgentButton from "./CreateAgentModal";
 import EditAgentModal from "./EditAgentModal";
-import AgentCarteModal from "./AgentCarteModal";
 import ReactivateAgentModal from "./ReactivateAgentModal";
 import { agentVisibleForRange } from "../utils/agentEffectif";
 
@@ -23,7 +22,6 @@ const monthBounds = (dateLike) => {
 const CalendrierAgentContainer = () => {
   const [agents, setAgents] = useState([]);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
-  const [isCarteModalOpen, setIsCarteModalOpen] = useState(false);
   const [isReactivateModalOpen, setIsReactivateModalOpen] = useState(false);
   const [currentPeriod, setCurrentPeriod] = useState(() => monthBounds(dayjs()));
 
@@ -78,8 +76,6 @@ const CalendrierAgentContainer = () => {
 
   const handleOpenEditModal = () => setIsEditModalOpen(true);
   const handleCloseEditModal = () => setIsEditModalOpen(false);
-  const handleOpenCarteModal = () => setIsCarteModalOpen(true);
-  const handleCloseCarteModal = () => setIsCarteModalOpen(false);
   const handleOpenReactivateModal = () => setIsReactivateModalOpen(true);
   const handleCloseReactivateModal = () => setIsReactivateModalOpen(false);
 
@@ -184,13 +180,6 @@ const CalendrierAgentContainer = () => {
           Modifier Agent
         </Button>
         <Button
-          variant="contained"
-          color="primary"
-          onClick={handleOpenCarteModal}
-        >
-          Carte Agent
-        </Button>
-        <Button
           variant="outlined"
           color="warning"
           onClick={handleOpenReactivateModal}
@@ -200,12 +189,6 @@ const CalendrierAgentContainer = () => {
         <EditAgentModal
           isOpen={isEditModalOpen}
           handleClose={handleCloseEditModal}
-          refreshAgents={refreshAgents}
-          agents={agents || []}
-        />
-        <AgentCarteModal
-          isOpen={isCarteModalOpen}
-          handleClose={handleCloseCarteModal}
           refreshAgents={refreshAgents}
           agents={agents || []}
         />

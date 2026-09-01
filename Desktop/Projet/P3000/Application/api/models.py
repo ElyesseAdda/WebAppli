@@ -626,6 +626,43 @@ class Agent(models.Model):
         return 0
 
 
+class AgentContrat(models.Model):
+    """Historique des contrats d'un agent (CDD, CDI, renouvellements…)."""
+    TYPE_CONTRAT_CHOICES = Agent.TYPE_CONTRAT_CHOICES
+
+    agent = models.ForeignKey(
+        Agent,
+        on_delete=models.CASCADE,
+        related_name='contrats',
+    )
+    libelle = models.CharField(
+        max_length=80,
+        blank=True,
+        default='',
+        help_text="Libellé affiché dans l'onglet (ex. CDD 2024, CDI)",
+    )
+    type_contrat = models.CharField(
+        max_length=10,
+        choices=TYPE_CONTRAT_CHOICES,
+        blank=True,
+        null=True,
+    )
+    fin_periode_essai = models.DateField(null=True, blank=True)
+    date_debut_contrat = models.DateField(null=True, blank=True)
+    date_fin_contrat = models.DateField(null=True, blank=True)
+    carte_btp = models.BooleanField(default=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-date_debut_contrat', '-created_at']
+        verbose_name = 'Contrat agent'
+        verbose_name_plural = 'Contrats agents'
+
+    def __str__(self):
+        label = self.libelle or (self.type_contrat or '').upper() or 'Contrat'
+        return f'{self.agent} — {label}'
+
+
 class AgentPeriodeInactivite(models.Model):
     """Période d'inactivité d'un agent (plage de dates, éventuellement ouverte)."""
     agent = models.ForeignKey(
