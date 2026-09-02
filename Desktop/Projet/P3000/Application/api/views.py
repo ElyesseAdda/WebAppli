@@ -2310,7 +2310,6 @@ class AgentViewSet(viewsets.ModelViewSet):
     @action(detail=True, methods=['post'], url_path='upload_photo')
     def upload_photo(self, request, pk=None):
         """Enregistre la photo de l'agent sur S3."""
-        import uuid as _uuid
         from io import BytesIO
 
         agent = self.get_object()
@@ -2321,6 +2320,7 @@ class AgentViewSet(viewsets.ModelViewSet):
             from PIL import Image
 
             from .utils import (
+                build_agent_photo_s3_key,
                 generate_presigned_url_for_display,
                 get_s3_bucket_name,
                 get_s3_client,
@@ -2354,7 +2354,7 @@ class AgentViewSet(viewsets.ModelViewSet):
                 image.save(sortie, format='JPEG', quality=85, optimize=True)
                 contenu, content_type, ext = sortie.getvalue(), 'image/jpeg', 'jpg'
 
-            s3_key = f"agents/photos/{agent.id}_{_uuid.uuid4().hex[:8]}.{ext}"
+            s3_key = build_agent_photo_s3_key(agent.id, ext)
             s3_client = get_s3_client()
             bucket_name = get_s3_bucket_name()
 

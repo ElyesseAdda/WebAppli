@@ -138,6 +138,11 @@ class StorageManager:
                 meta = items_meta.get(file_item['name'], {})
                 file_item['modified_by'] = meta.get('modified_by', None)
                 file_item['modified_at'] = meta.get('modified_at', None)
+
+            from ..utils import filter_drive_listing
+
+            parent_path = prefix.rstrip('/')
+            folders, files = filter_drive_listing(folders, files, parent_path=parent_path)
             
             return {
                 'folders': folders,
@@ -425,6 +430,8 @@ class StorageManager:
             Dict avec files et folders trouvés
         """
         try:
+            from ..utils import is_agent_photo_s3_path, is_drive_hidden_path
+
             folders = []
             files = []
             search_lower = search_term.lower()
@@ -452,6 +459,8 @@ class StorageManager:
             def add_folder_if_matches(folder_path, folder_name=None):
                 """Ajoute un dossier s'il correspond à la recherche"""
                 if folder_path in seen_folders:
+                    return False
+                if is_drive_hidden_path(folder_path.rstrip('/')):
                     return False
                     
                 # Normaliser le chemin
@@ -481,6 +490,9 @@ class StorageManager:
                     
                 for obj in page['Contents']:
                     key = obj['Key']
+
+                    if is_agent_photo_s3_path(key):
+                        continue
                     
                     # Arrêter tôt si on a assez de résultats
                     if len(folders) >= max_results:

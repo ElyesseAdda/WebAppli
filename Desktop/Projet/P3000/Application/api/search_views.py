@@ -10,7 +10,7 @@ from rest_framework.permissions import AllowAny
 import json
 import boto3
 from botocore.exceptions import ClientError
-from .utils import get_s3_client, get_s3_bucket_name
+from .utils import get_s3_client, get_s3_bucket_name, is_agent_photo_s3_path, is_drive_hidden_folder
 
 
 @api_view(['GET'])
@@ -60,6 +60,11 @@ def search_in_drive(request):
                         prefix = prefix_info['Prefix']
                         folder_name = prefix.rstrip('/').split('/')[-1]
                         
+                        parent_parts = prefix.rstrip('/').split('/')[:-1]
+                        parent_path = '/'.join(parent_parts)
+                        if is_drive_hidden_folder(parent_path, folder_name):
+                            continue
+
                         # Vérifier si le nom du dossier correspond à la recherche
                         if query.lower() in folder_name.lower():
                             results['folders'].append({
@@ -72,6 +77,9 @@ def search_in_drive(request):
                 if 'Contents' in page:
                     for obj in page['Contents']:
                         key = obj['Key']
+
+                        if is_agent_photo_s3_path(key):
+                            continue
                         
                         # Ignorer les objets qui se terminent par / (dossiers)
                         if key.endswith('/'):
