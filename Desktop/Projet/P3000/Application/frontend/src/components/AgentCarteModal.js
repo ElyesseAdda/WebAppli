@@ -8,6 +8,12 @@ import {
 
   Dialog,
 
+  DialogActions,
+
+  DialogContent,
+
+  DialogTitle,
+
   IconButton,
 
   MenuItem,
@@ -398,6 +404,8 @@ const AgentCarteModal = ({ isOpen, handleClose, refreshAgents, agents = [] }) =>
 
   const [message, setMessage] = useState({ type: "", text: "" });
 
+  const [contratDeleteIndex, setContratDeleteIndex] = useState(null);
+
 
 
   const activeContrat = contrats[activeContratIndex] || null;
@@ -444,6 +452,10 @@ const AgentCarteModal = ({ isOpen, handleClose, refreshAgents, agents = [] }) =>
         ? agent.jours_travail.split(",").map((j) => j.trim())
         : [],
       photo_url: agent.photo_url || "",
+      phone_Number:
+        agent.phone_Number != null && agent.phone_Number !== ""
+          ? String(agent.phone_Number)
+          : "",
     });
     setContrats(buildContratsFromAgent(agent));
     setActiveContratIndex(0);
@@ -487,6 +499,8 @@ const AgentCarteModal = ({ isOpen, handleClose, refreshAgents, agents = [] }) =>
       setAgentDropdownOpen(false);
 
       setMessage({ type: "", text: "" });
+
+      setContratDeleteIndex(null);
 
     }
 
@@ -583,6 +597,34 @@ const AgentCarteModal = ({ isOpen, handleClose, refreshAgents, agents = [] }) =>
       return prev;
 
     });
+
+  };
+
+
+
+  const requestDeleteContrat = (index) => {
+
+    setContratDeleteIndex(index);
+
+  };
+
+
+
+  const cancelDeleteContrat = () => {
+
+    setContratDeleteIndex(null);
+
+  };
+
+
+
+  const confirmDeleteContrat = () => {
+
+    if (contratDeleteIndex === null) return;
+
+    handleDeleteContrat(contratDeleteIndex);
+
+    setContratDeleteIndex(null);
 
   };
 
@@ -818,6 +860,8 @@ const AgentCarteModal = ({ isOpen, handleClose, refreshAgents, agents = [] }) =>
 
     setActiveContratIndex(0);
 
+    await axios.post(`/api/agent/${agentId}/sync-effectif/`);
+
   };
 
 
@@ -854,7 +898,7 @@ const AgentCarteModal = ({ isOpen, handleClose, refreshAgents, agents = [] }) =>
 
         address: agentData.address,
 
-        phone_Number: String(agentData.phone_Number),
+        phone_Number: String(agentData.phone_Number).trim(),
 
         type_paiement: agentData.type_paiement || "horaire",
 
@@ -1304,6 +1348,8 @@ const AgentCarteModal = ({ isOpen, handleClose, refreshAgents, agents = [] }) =>
 
   return (
 
+    <>
+
     <Dialog
 
       open={isOpen}
@@ -1604,7 +1650,11 @@ const AgentCarteModal = ({ isOpen, handleClose, refreshAgents, agents = [] }) =>
 
                   {renderField("Adresse", "address", "text", null, { fullWidth: true })}
 
-                  {renderField("Téléphone", "phone_Number")}
+                  {renderField("Téléphone", "phone_Number", "tel", null, {
+                    fieldProps: {
+                      inputMode: "tel",
+                    },
+                  })}
 
 
 
@@ -1700,7 +1750,7 @@ const AgentCarteModal = ({ isOpen, handleClose, refreshAgents, agents = [] }) =>
 
                                   e.stopPropagation();
 
-                                  handleDeleteContrat(index);
+                                  requestDeleteContrat(index);
 
                                 }}
 
@@ -1712,7 +1762,7 @@ const AgentCarteModal = ({ isOpen, handleClose, refreshAgents, agents = [] }) =>
 
                                     e.stopPropagation();
 
-                                    handleDeleteContrat(index);
+                                    requestDeleteContrat(index);
 
                                   }
 
@@ -2045,6 +2095,98 @@ const AgentCarteModal = ({ isOpen, handleClose, refreshAgents, agents = [] }) =>
       </form>
 
     </Dialog>
+
+
+
+    <Dialog
+
+      open={contratDeleteIndex !== null}
+
+      onClose={cancelDeleteContrat}
+
+      maxWidth="xs"
+
+      fullWidth
+
+    >
+
+      <DialogTitle>Supprimer ce contrat ?</DialogTitle>
+
+      <DialogContent>
+
+        {contratDeleteIndex !== null && (
+
+          <>
+
+            <Typography>
+
+              Voulez-vous supprimer le contrat{" "}
+
+              <strong>
+
+                {getContratTabLabel(contrats[contratDeleteIndex], contratDeleteIndex)}
+
+              </strong>
+
+              {getContratTabDates(contrats[contratDeleteIndex]) && (
+
+                <>
+
+                  {" "}
+
+                  ({getContratTabDates(contrats[contratDeleteIndex])})
+
+                </>
+
+              )}
+
+              {" "}?
+
+            </Typography>
+
+            <Typography variant="body2" color="text.secondary" sx={{ mt: 1.5 }}>
+
+              Les avenants associés seront également supprimés. La suppression
+
+              sera définitive après enregistrement de la carte agent.
+
+            </Typography>
+
+          </>
+
+        )}
+
+      </DialogContent>
+
+      <DialogActions sx={{ px: 3, pb: 2 }}>
+
+        <Button type="button" onClick={cancelDeleteContrat}>
+
+          Annuler
+
+        </Button>
+
+        <Button
+
+          type="button"
+
+          variant="contained"
+
+          color="error"
+
+          onClick={confirmDeleteContrat}
+
+        >
+
+          Supprimer
+
+        </Button>
+
+      </DialogActions>
+
+    </Dialog>
+
+  </>
 
   );
 

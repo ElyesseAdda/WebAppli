@@ -1,8 +1,6 @@
 /**
- * Visibilité agents selon périodes d'inactivité.
- * Règle : visible s'il existe au moins un jour actif dans [start, end]
- * (ex. inactif jusqu'au 31/08 → visible en semaine 36 car mardi = 01/09).
- * Fallback legacy : is_active / date_desactivation.
+ * Visibilité agents : contrats (carte agent) ou périodes d'inactivité (legacy).
+ * Règle contrats : visible si la plage chevauche au moins un contrat (début inclus, fin CDD incluse).
  */
 
 function toDateStr(value) {
@@ -21,6 +19,48 @@ function toDateStr(value) {
     return toDateStr(value.toDate());
   }
   return String(value).slice(0, 10);
+}
+
+/** True si l'agent a au moins un contrat avec date de début (nouveau système). */
+export function agentUsesContratVisibility(agent) {
+  return (
+    Array.isArray(agent?.contrats) &&
+    agent.contrats.some((c) => c.date_debut_contrat)
+  );
+}
+
+/** Fin CDD effective (avenants ou date initiale). */
+export function getContratFinEffective(contrat) {
+  const avenants = contrat?.avenants || [];
+  if (avenants.length > 0) {
+    const withDate = avenants.filter((a) => a.date_fin_contrat);
+    if (withDate.length > 0) {
+      return [...withDate].sort((a, b) =>
+        String(b.date_fin_contrat).localeCompare(String(a.date_fin_contrat))
+      )[0].date_fin_contrat;
+    }
+  }
+  return contrat?.date_fin_effective || contrat?.date_fin_contrat || null;
+}
+
+function contratOverlapsRange(contrat, rangeStart, rangeEnd) {
+  const debut = toDateStr(contrat?.date_debut_contrat);
+  const start = toDateStr(rangeStart);
+  const end = toDateStr(rangeEnd);
+  if (!debut || !start || !end) return false;
+
+  let finEff = '9999-12-31';
+  if (contrat.type_contrat === 'cdd') {
+    const fin = toDateStr(getContratFinEffective(contrat));
+    if (fin) finEff = fin;
+  }
+
+  return debut <= end && finEff >= start;
+}
+
+export function agentVisibleForRangeViaContrats(agent, rangeStart, rangeEnd) {
+  const contrats = agent?.contrats || [];
+  return contrats.some((c) => contratOverlapsRange(c, rangeStart, rangeEnd));
 }
 
 /** True si la période d'inactivité couvre le jour donné (inclusif). */
@@ -52,13 +92,21 @@ function isInactiveOnDay(periods, dayStr) {
 
 /**
  * Agent visible sur la plage [start, end] ?
- * - Avec périodes : oui s'il existe au moins un jour non couvert par une inactivité
- * - Sinon fallback : is_active || date_desactivation >= start
+ * - Contrats (si dates) : chevauchement avec au moins un contrat
+ * - Sinon périodes d'inactivité / is_active legacy
  */
 export function agentVisibleForRange(agent, rangeStart, rangeEnd) {
   if (!agent) return false;
   const start = toDateStr(rangeStart);
   const end = toDateStr(rangeEnd);
+
+  if (agentUsesContratVisibility(agent)) {
+    if (!start || !end) {
+      return agent.is_active === true || agent.is_active === undefined;
+    }
+    return agentVisibleForRangeViaContrats(agent, rangeStart, rangeEnd);
+  }
+
   if (!start || !end) {
     return agent.is_active === true || agent.is_active === undefined;
   }
@@ -82,11 +130,7 @@ export function agentVisibleForRange(agent, rangeStart, rangeEnd) {
 
   if (agent.is_active === true || agent.is_active === undefined) return true;
   const dd = toDateStr(agent.date_desactivation);
-  // Legacy : visible tant que la désactivation n'est pas antérieure au début de plage
-  // et qu'il reste des jours après la désactivation dans la plage n'est pas modélisé ;
-  // avec périodes backfillées, ce chemin est rare.
   if (dd && dd >= start && dd <= end) {
-    // Désactivé en cours de plage → encore présent une partie de la plage
     return true;
   }
   if (dd && dd > end) return true;

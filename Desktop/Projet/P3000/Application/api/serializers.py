@@ -813,6 +813,12 @@ class AgentSerializer(serializers.ModelSerializer):
         model = Agent
         fields = '__all__'
 
+    def validate_phone_Number(self, value):
+        phone = str(value).strip()
+        if not phone:
+            raise serializers.ValidationError('Le numéro de téléphone est requis.')
+        return phone
+
     def to_representation(self, instance):
         data = super().to_representation(instance)
         data['photo_url'] = self.get_photo_url(instance)

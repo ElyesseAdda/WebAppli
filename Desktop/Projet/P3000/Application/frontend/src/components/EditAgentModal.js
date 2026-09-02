@@ -2,14 +2,14 @@ import { Box, Button, MenuItem, Select, TextField, Alert, Dialog, DialogTitle, D
 import DeleteIcon from "@mui/icons-material/Delete";
 import axios from "axios";
 import React, { useEffect, useRef, useState } from "react";
-import { formatPeriodeInactivite } from "../utils/agentEffectif";
+import { formatPeriodeInactivite, agentUsesContratVisibility, agentVisibleForRange, monthRangeBounds } from "../utils/agentEffectif";
 
 const EditAgentModal = ({ isOpen, handleClose, refreshAgents, agents = [] }) => {
-  // Agents dans l'effectif uniquement (exclure retirés de l'effectif)
-  const agentsEffectif = React.useMemo(
-    () => agents.filter((a) => a.is_active !== false),
-    [agents]
-  );
+  const agentsEffectif = React.useMemo(() => {
+    const now = new Date();
+    const { start, end } = monthRangeBounds(now.getMonth() + 1, now.getFullYear());
+    return agents.filter((a) => agentVisibleForRange(a, start, end));
+  }, [agents]);
 
   const [agentSearchQuery, setAgentSearchQuery] = useState("");
   const [agentDropdownOpen, setAgentDropdownOpen] = useState(false);
@@ -34,6 +34,7 @@ const EditAgentModal = ({ isOpen, handleClose, refreshAgents, agents = [] }) => 
     is_active: true,
     date_desactivation: null,
     periodes_inactivite: [],
+    contrats: [],
   });
   
   const [showDesactivationDialog, setShowDesactivationDialog] = React.useState(false);
@@ -67,34 +68,47 @@ const EditAgentModal = ({ isOpen, handleClose, refreshAgents, agents = [] }) => 
     }
   };
 
-  const handleAgentSelect = (selectedAgent) => {
-    if (selectedAgent) {
-      setAgentData({
-        ...selectedAgent,
-        heure_debut: selectedAgent.heure_debut
-          ? selectedAgent.heure_debut.slice(0, 5)
-          : "",
-        heure_fin: selectedAgent.heure_fin
-          ? selectedAgent.heure_fin.slice(0, 5)
-          : "",
-        heure_pause_debut: selectedAgent.heure_pause_debut
-          ? selectedAgent.heure_pause_debut.slice(0, 5)
-          : "",
-        heure_pause_fin: selectedAgent.heure_pause_fin
-          ? selectedAgent.heure_pause_fin.slice(0, 5)
-          : "",
-        jours_travail: selectedAgent.jours_travail
-          ? selectedAgent.jours_travail.split(",").map((j) => j.trim())
-          : [],
-        is_active: selectedAgent.is_active !== undefined ? selectedAgent.is_active : true,
-        date_desactivation: selectedAgent.date_desactivation || null,
-        periodes_inactivite: selectedAgent.periodes_inactivite || [],
-      });
-      setAgentSearchQuery("");
-      setAgentDropdownOpen(false);
-      setNouvellePeriode({ date_debut: "", date_fin: "", motif: "" });
-      setDateReactivation("");
+  const handleAgentSelect = async (selectedAgent) => {
+    if (!selectedAgent) return;
+
+    let agent = selectedAgent;
+    try {
+      const response = await axios.get(`/api/agent/${selectedAgent.id}/`);
+      agent = response.data;
+    } catch (error) {
+      console.error("Erreur chargement agent:", error);
     }
+
+    setAgentData({
+      ...agent,
+      heure_debut: agent.heure_debut
+        ? agent.heure_debut.slice(0, 5)
+        : "",
+      heure_fin: agent.heure_fin
+        ? agent.heure_fin.slice(0, 5)
+        : "",
+      heure_pause_debut: agent.heure_pause_debut
+        ? agent.heure_pause_debut.slice(0, 5)
+        : "",
+      heure_pause_fin: agent.heure_pause_fin
+        ? agent.heure_pause_fin.slice(0, 5)
+        : "",
+      jours_travail: agent.jours_travail
+        ? agent.jours_travail.split(",").map((j) => j.trim())
+        : [],
+      is_active: agent.is_active !== undefined ? agent.is_active : true,
+      date_desactivation: agent.date_desactivation || null,
+      periodes_inactivite: agent.periodes_inactivite || [],
+      contrats: agent.contrats || [],
+      phone_Number:
+        agent.phone_Number != null && agent.phone_Number !== ""
+          ? String(agent.phone_Number)
+          : "",
+    });
+    setAgentSearchQuery("");
+    setAgentDropdownOpen(false);
+    setNouvellePeriode({ date_debut: "", date_fin: "", motif: "" });
+    setDateReactivation("");
   };
 
   // Fermer la liste au clic à l'extérieur
@@ -148,7 +162,7 @@ const EditAgentModal = ({ isOpen, handleClose, refreshAgents, agents = [] }) => 
         surname: agentData.surname,
         email: agentData.email || null,
         address: agentData.address,
-        phone_Number: String(agentData.phone_Number),
+        phone_Number: String(agentData.phone_Number).trim(),
         type_paiement: agentData.type_paiement || "horaire",
         taux_Horaire: agentData.taux_Horaire
           ? parseFloat(agentData.taux_Horaire)
@@ -353,7 +367,8 @@ const EditAgentModal = ({ isOpen, handleClose, refreshAgents, agents = [] }) => 
               Agent
             </Typography>
             <input
-              type="text"
+              type="tel"
+            inputMode="tel"
               placeholder="Rechercher un agent..."
               value={
                 agentData.id
@@ -382,6 +397,7 @@ const EditAgentModal = ({ isOpen, handleClose, refreshAgents, agents = [] }) => 
                     is_active: true,
                     date_desactivation: null,
                     periodes_inactivite: [],
+                    contrats: [],
                   });
                 }
                 setAgentDropdownOpen(true);
@@ -465,32 +481,46 @@ const EditAgentModal = ({ isOpen, handleClose, refreshAgents, agents = [] }) => 
           {/* Statut de l'agent */}
           {agentData.id && (
             <Box sx={{ mb: 2, p: 2, bgcolor: agentData.is_active ? '#e8f5e8' : '#ffebee', borderRadius: 1 }}>
-              <Typography variant="body2" color={agentData.is_active ? 'success.main' : 'error.main'}>
-                <strong>Statut :</strong> {agentData.is_active ? 'Actif dans l\'effectif' : 'Retiré de l\'effectif'}
-              </Typography>
-              {!agentData.is_active && agentData.date_desactivation && (
-                <Typography variant="body2" color="error.main">
-                  <strong>Date de désactivation :</strong> {new Date(agentData.date_desactivation).toLocaleDateString('fr-FR')}
-                </Typography>
-              )}
-              {!agentData.is_active && (
-                <TextField
-                  label="Date de reprise (optionnel)"
-                  type="date"
-                  value={dateReactivation}
-                  onChange={(e) => setDateReactivation(e.target.value)}
-                  fullWidth
-                  margin="normal"
-                  size="small"
-                  InputLabelProps={{ shrink: true }}
-                  helperText="Laissez vide pour reprendre aujourd'hui"
-                />
+              {agentUsesContratVisibility(agentData) ? (
+                <>
+                  <Typography variant="body2" color="text.secondary">
+                    <strong>Effectif :</strong> géré par les dates de contrat (carte agent).
+                  </Typography>
+                  <Typography variant="body2" color={agentData.is_active ? 'success.main' : 'error.main'} sx={{ mt: 0.5 }}>
+                    <strong>Aujourd&apos;hui :</strong>{' '}
+                    {agentData.is_active ? 'Actif (contrat en cours)' : 'Hors contrat'}
+                  </Typography>
+                </>
+              ) : (
+                <>
+                  <Typography variant="body2" color={agentData.is_active ? 'success.main' : 'error.main'}>
+                    <strong>Statut :</strong> {agentData.is_active ? 'Actif dans l\'effectif' : 'Retiré de l\'effectif'}
+                  </Typography>
+                  {!agentData.is_active && agentData.date_desactivation && (
+                    <Typography variant="body2" color="error.main">
+                      <strong>Date de désactivation :</strong> {new Date(agentData.date_desactivation).toLocaleDateString('fr-FR')}
+                    </Typography>
+                  )}
+                  {!agentData.is_active && (
+                    <TextField
+                      label="Date de reprise (optionnel)"
+                      type="date"
+                      value={dateReactivation}
+                      onChange={(e) => setDateReactivation(e.target.value)}
+                      fullWidth
+                      margin="normal"
+                      size="small"
+                      InputLabelProps={{ shrink: true }}
+                      helperText="Laissez vide pour reprendre aujourd'hui"
+                    />
+                  )}
+                </>
               )}
             </Box>
           )}
 
-          {/* Périodes d'inactivité */}
-          {agentData.id && (
+          {/* Périodes d'inactivité (legacy — masqué si contrats avec dates) */}
+          {agentData.id && !agentUsesContratVisibility(agentData) && (
             <Box sx={{ mb: 2, p: 2, border: '1px solid #e0e0e0', borderRadius: 1 }}>
               <Typography variant="subtitle2" sx={{ mb: 1 }}>
                 Périodes d&apos;inactivité
@@ -608,6 +638,8 @@ const EditAgentModal = ({ isOpen, handleClose, refreshAgents, agents = [] }) => 
           <TextField
             label="Numéro de téléphone"
             name="phone_Number"
+            type="tel"
+            inputProps={{ inputMode: "tel" }}
             value={agentData.phone_Number}
             onChange={handleChange}
             fullWidth
@@ -718,7 +750,7 @@ const EditAgentModal = ({ isOpen, handleClose, refreshAgents, agents = [] }) => 
         <DialogActions>
           <Box sx={{ display: 'flex', gap: 2, width: '100%', justifyContent: 'space-between' }}>
             <Box>
-              {agentData.id && (
+              {agentData.id && !agentUsesContratVisibility(agentData) && (
                 <>
                   {agentData.is_active ? (
                     <Button 

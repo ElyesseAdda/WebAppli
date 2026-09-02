@@ -547,7 +547,7 @@ class Agent(models.Model):
     surname = models.CharField(max_length=25)
     email = models.EmailField(max_length=254, blank=True, null=True)
     address = models.CharField(max_length=100, blank=True, null=True)
-    phone_Number = models.IntegerField()
+    phone_Number = models.CharField(max_length=20)
     taux_Horaire = models.FloatField(null=True, blank=True)
     conge = models.FloatField(null=True, blank=True)
     

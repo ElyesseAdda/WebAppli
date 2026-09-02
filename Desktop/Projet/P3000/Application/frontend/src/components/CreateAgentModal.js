@@ -81,7 +81,7 @@ const CreateAgentModal = ({ isOpen, handleClose, refreshAgents }) => {
         surname: agentData.surname,
         email: agentData.email || null,
         address: agentData.address,
-        phone_Number: String(agentData.phone_Number),
+        phone_Number: String(agentData.phone_Number).trim(),
         type_paiement: agentData.type_paiement || "horaire",
         taux_Horaire: agentData.taux_Horaire
           ? parseFloat(agentData.taux_Horaire)
@@ -195,6 +195,8 @@ const CreateAgentModal = ({ isOpen, handleClose, refreshAgents }) => {
         <TextField
           label="Numéro de téléphone"
           name="phone_Number"
+          type="tel"
+          inputProps={{ inputMode: "tel" }}
           value={agentData.phone_Number}
           onChange={handleChange}
           fullWidth

@@ -1932,7 +1932,9 @@ class ClientViewSet(viewsets.ModelViewSet):
         return queryset
 
 class AgentViewSet(viewsets.ModelViewSet):
-    queryset = Agent.objects.all().prefetch_related('periodes_inactivite', 'contrats')
+    queryset = Agent.objects.all().prefetch_related(
+        'periodes_inactivite', 'contrats__avenants'
+    )
     serializer_class = AgentSerializer
     permission_classes = [AllowAny]
 
@@ -1941,7 +1943,9 @@ class AgentViewSet(viewsets.ModelViewSet):
         from calendar import monthrange
         from .agent_effectif import filter_agents_visible_for_range
 
-        queryset = Agent.objects.all().prefetch_related('periodes_inactivite', 'contrats')
+        queryset = Agent.objects.all().prefetch_related(
+            'periodes_inactivite', 'contrats__avenants'
+        )
 
         # Détail / actions : toujours accessible (actifs et inactifs)
         if getattr(self, 'action', None) not in (None, 'list'):
@@ -2081,7 +2085,7 @@ class AgentViewSet(viewsets.ModelViewSet):
         """Récupérer la liste des agents inactifs"""
         queryset = (
             Agent.objects.filter(is_active=False)
-            .prefetch_related('periodes_inactivite', 'contrats')
+            .prefetch_related('periodes_inactivite', 'contrats__avenants')
             .order_by('-date_desactivation')
         )
         serializer = self.get_serializer(queryset, many=True)
@@ -2177,6 +2181,8 @@ class AgentViewSet(viewsets.ModelViewSet):
         serializer = AgentContratSerializer(data={**request.data, 'agent': agent.id})
         if serializer.is_valid():
             contrat = serializer.save(agent=agent)
+            from .agent_effectif import after_agent_contrats_changed
+            after_agent_contrats_changed(agent)
             return Response(
                 AgentContratSerializer(contrat).data,
                 status=status.HTTP_201_CREATED,
@@ -2201,6 +2207,8 @@ class AgentViewSet(viewsets.ModelViewSet):
 
         if request.method == 'DELETE':
             contrat.delete()
+            from .agent_effectif import after_agent_contrats_changed
+            after_agent_contrats_changed(agent)
             return Response(status=status.HTTP_204_NO_CONTENT)
 
         serializer = AgentContratSerializer(
@@ -2210,6 +2218,8 @@ class AgentViewSet(viewsets.ModelViewSet):
         )
         if serializer.is_valid():
             contrat = serializer.save()
+            from .agent_effectif import after_agent_contrats_changed
+            after_agent_contrats_changed(agent)
             return Response(AgentContratSerializer(contrat).data)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
@@ -2244,6 +2254,8 @@ class AgentViewSet(viewsets.ModelViewSet):
         )
         if serializer.is_valid():
             avenant = serializer.save(contrat=contrat)
+            from .agent_effectif import after_agent_contrats_changed
+            after_agent_contrats_changed(agent)
             return Response(
                 AgentContratAvenantSerializer(avenant).data,
                 status=status.HTTP_201_CREATED,
@@ -2269,6 +2281,8 @@ class AgentViewSet(viewsets.ModelViewSet):
 
         if request.method == 'DELETE':
             avenant.delete()
+            from .agent_effectif import after_agent_contrats_changed
+            after_agent_contrats_changed(agent)
             return Response(status=status.HTTP_204_NO_CONTENT)
 
         serializer = AgentContratAvenantSerializer(
@@ -2278,8 +2292,20 @@ class AgentViewSet(viewsets.ModelViewSet):
         )
         if serializer.is_valid():
             avenant = serializer.save()
+            from .agent_effectif import after_agent_contrats_changed
+            after_agent_contrats_changed(agent)
             return Response(AgentContratAvenantSerializer(avenant).data)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+    @action(detail=True, methods=['post'], url_path='sync-effectif')
+    def sync_effectif(self, request, pk=None):
+        """Recalcule is_active depuis les contrats (après saisie carte agent)."""
+        from .agent_effectif import after_agent_contrats_changed
+
+        agent = self.get_object()
+        agent = after_agent_contrats_changed(agent)
+        serializer = self.get_serializer(agent)
+        return Response(serializer.data)
 
     @action(detail=True, methods=['post'], url_path='upload_photo')
     def upload_photo(self, request, pk=None):

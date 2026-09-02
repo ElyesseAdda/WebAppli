@@ -93,7 +93,8 @@ const PlanningContainer = () => {
   // Fonction pour filtrer les agents selon la période (périodes d'inactivité)
   const getFilteredAgents = (agentsList, week, year) => {
     if (!week || !year) {
-      return agentsList.filter(agent => agent.is_active);
+      const { start, end } = monthRangeBounds(dayjs().month() + 1, dayjs().year());
+      return agentsList.filter((agent) => agentVisibleForRange(agent, start, end));
     }
 
     const weekStartDate = getWeekStartDate(week, year);
@@ -107,7 +108,8 @@ const PlanningContainer = () => {
   // Fonction pour vérifier si un agent est visible pour la période actuelle
   const isAgentVisibleForPeriod = (agent, week, year) => {
     if (!week || !year) {
-      return agent.is_active;
+      const { start, end } = monthRangeBounds(dayjs().month() + 1, dayjs().year());
+      return agentVisibleForRange(agent, start, end);
     }
 
     const weekStartDate = getWeekStartDate(week, year);
@@ -118,7 +120,8 @@ const PlanningContainer = () => {
   // Fonction pour filtrer les agents selon le mois/année (pour les rapports mensuels)
   const getFilteredAgentsForMonth = (agentsList, month, year) => {
     if (!month || !year) {
-      return agentsList.filter(agent => agent.is_active);
+      const { start, end } = monthRangeBounds(dayjs().month() + 1, dayjs().year());
+      return agentsList.filter((agent) => agentVisibleForRange(agent, start, end));
     }
 
     const { start, end } = monthRangeBounds(month, year);
