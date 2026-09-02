@@ -73,22 +73,38 @@ const CreateAgentModal = ({ isOpen, handleClose, refreshAgents }) => {
 
   const handleSubmit = async () => {
     try {
-      // Préparer les données selon le type d'agent
+      const jours_travail_uniques = Array.from(
+        new Set(agentData.jours_travail.map((j) => j.trim()))
+      );
       const agentDataToSubmit = {
-        ...agentData,
-        jours_travail: agentData.jours_travail.join(", "),
+        name: agentData.name,
+        surname: agentData.surname,
+        email: agentData.email || null,
+        address: agentData.address,
+        phone_Number: String(agentData.phone_Number),
+        type_paiement: agentData.type_paiement || "horaire",
+        taux_Horaire: agentData.taux_Horaire
+          ? parseFloat(agentData.taux_Horaire)
+          : null,
+        taux_journalier: agentData.taux_journalier
+          ? parseFloat(agentData.taux_journalier)
+          : null,
+        conge: agentData.conge ? agentData.conge : null,
+        heure_debut: agentData.heure_debut || null,
+        heure_fin: agentData.heure_fin || null,
+        heure_pause_debut: agentData.heure_pause_debut || null,
+        heure_pause_fin: agentData.heure_pause_fin || null,
+        jours_travail: jours_travail_uniques.join(","),
       };
 
-      // Pour les agents journaliers, ne pas envoyer les champs d'horaires et taux_Horaire
       if (agentData.type_paiement === "journalier") {
-        delete agentDataToSubmit.heure_debut;
-        delete agentDataToSubmit.heure_fin;
-        delete agentDataToSubmit.heure_pause_debut;
-        delete agentDataToSubmit.heure_pause_fin;
-        delete agentDataToSubmit.taux_Horaire;
+        agentDataToSubmit.taux_Horaire = null;
+        agentDataToSubmit.heure_debut = null;
+        agentDataToSubmit.heure_fin = null;
+        agentDataToSubmit.heure_pause_debut = null;
+        agentDataToSubmit.heure_pause_fin = null;
       } else {
-        // Pour les agents horaires, ne pas envoyer taux_journalier
-        delete agentDataToSubmit.taux_journalier;
+        agentDataToSubmit.taux_journalier = null;
       }
 
       await axios.post("/api/agent/", agentDataToSubmit);
@@ -114,7 +130,7 @@ const CreateAgentModal = ({ isOpen, handleClose, refreshAgents }) => {
       handleClose();
       refreshAgents(); // Actualiser la liste des agents après la création
     } catch (error) {
-      console.error("Erreur lors de la création de l'agent", error);
+      console.error("Erreur lors de la création de l'agent", error.response?.data || error);
     }
   };
 

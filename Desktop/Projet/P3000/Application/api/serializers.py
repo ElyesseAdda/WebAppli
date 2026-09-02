@@ -2,7 +2,7 @@ from rest_framework import serializers
 from django.db.models import Q
 from .models import (
     Chantier, Societe, Devis, Partie, SousPartie, LigneDetail, Client, 
-    Agent, AgentContrat, AgentPeriodeInactivite, Stock, Presence, StockMovement, StockHistory, Event, MonthlyHours, PointageMensuel,
+    Agent, AgentContrat, AgentContratAvenant, AgentPeriodeInactivite, Stock, Presence, StockMovement, StockHistory, Event, MonthlyHours, PointageMensuel,
     Schedule, LaborCost, DevisLigne, Facture, FactureLigne, BonCommande, LigneBonCommande,
     Avenant, FactureTS, Situation, SituationLigne, SituationLigneSupplementaire, SituationLigneSpeciale,
     ChantierLigneSupplementaire, SituationLigneAvenant, AgencyExpense, AgencyExpenseOverride,
@@ -760,7 +760,24 @@ class AgentPeriodeInactiviteSerializer(serializers.ModelSerializer):
         read_only_fields = ['id', 'created_at']
 
 
+class AgentContratAvenantSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = AgentContratAvenant
+        fields = [
+            'id',
+            'contrat',
+            'numero',
+            'libelle',
+            'date_fin_contrat',
+            'created_at',
+        ]
+        read_only_fields = ['id', 'contrat', 'numero', 'created_at']
+
+
 class AgentContratSerializer(serializers.ModelSerializer):
+    avenants = AgentContratAvenantSerializer(many=True, read_only=True)
+    date_fin_effective = serializers.DateField(read_only=True)
+
     class Meta:
         model = AgentContrat
         fields = [
@@ -771,10 +788,12 @@ class AgentContratSerializer(serializers.ModelSerializer):
             'fin_periode_essai',
             'date_debut_contrat',
             'date_fin_contrat',
+            'date_fin_effective',
             'carte_btp',
+            'avenants',
             'created_at',
         ]
-        read_only_fields = ['id', 'agent', 'created_at']
+        read_only_fields = ['id', 'agent', 'created_at', 'date_fin_effective', 'avenants']
 
     def validate_type_contrat(self, value):
         if value in (None, ''):

@@ -662,6 +662,49 @@ class AgentContrat(models.Model):
         label = self.libelle or (self.type_contrat or '').upper() or 'Contrat'
         return f'{self.agent} — {label}'
 
+    @property
+    def date_fin_effective(self):
+        """Date de fin CDD effective (dernier avenant ou date initiale du contrat)."""
+        dernier = self.avenants.order_by('-numero').first()
+        if dernier and dernier.date_fin_contrat:
+            return dernier.date_fin_contrat
+        return self.date_fin_contrat
+
+
+class AgentContratAvenant(models.Model):
+    """Avenant de prolongation d'un CDD agent (nouvelle date de fin)."""
+    contrat = models.ForeignKey(
+        AgentContrat,
+        on_delete=models.CASCADE,
+        related_name='avenants',
+    )
+    numero = models.PositiveIntegerField()
+    libelle = models.CharField(max_length=80, blank=True, default='')
+    date_fin_contrat = models.DateField(
+        help_text="Nouvelle date de fin du CDD après cet avenant",
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['numero']
+        unique_together = ('contrat', 'numero')
+        verbose_name = 'Avenant contrat agent'
+        verbose_name_plural = 'Avenants contrats agents'
+
+    def __str__(self):
+        return f'Avenant n°{self.numero} — {self.contrat}'
+
+    def save(self, *args, **kwargs):
+        if not self.numero:
+            dernier = (
+                AgentContratAvenant.objects.filter(contrat=self.contrat)
+                .order_by('-numero')
+                .values_list('numero', flat=True)
+                .first()
+            )
+            self.numero = (dernier or 0) + 1
+        super().save(*args, **kwargs)
+
 
 class AgentPeriodeInactivite(models.Model):
     """Période d'inactivité d'un agent (plage de dates, éventuellement ouverte)."""

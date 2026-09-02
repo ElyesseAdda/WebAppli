@@ -72,6 +72,15 @@ const EMPTY_AGENT = {
 
 
 
+const EMPTY_AVENANT = {
+  id: null,
+  numero: null,
+  libelle: "",
+  date_fin_contrat: "",
+};
+
+
+
 const EMPTY_CONTRAT = {
 
   id: null,
@@ -89,6 +98,8 @@ const EMPTY_CONTRAT = {
   carte_btp: false,
 
   created_at: null,
+
+  avenants: [],
 
 };
 
@@ -170,24 +181,28 @@ const sortContratsDesc = (list) =>
 
 
 
+const mapAvenantFromApi = (a) => ({
+  id: a.id,
+  numero: a.numero,
+  libelle: a.libelle || "",
+  date_fin_contrat: formatDateForInput(a.date_fin_contrat),
+});
+
+
+
 const mapContratFromApi = (c) => ({
-
   id: c.id,
-
   libelle: c.libelle || "",
-
   type_contrat: c.type_contrat || "",
-
   fin_periode_essai: formatDateForInput(c.fin_periode_essai),
-
   date_debut_contrat: formatDateForInput(c.date_debut_contrat),
-
   date_fin_contrat: formatDateForInput(c.date_fin_contrat),
-
+  date_fin_effective: formatDateForInput(c.date_fin_effective),
   carte_btp: Boolean(c.carte_btp),
-
   created_at: c.created_at || null,
-
+  avenants: [...(c.avenants || []).map(mapAvenantFromApi)].sort(
+    (a, b) => (a.numero || 0) - (b.numero || 0)
+  ),
 });
 
 
@@ -274,6 +289,72 @@ const getContratTabLabel = (c, index) => {
 
 
 
+const formatDateFr = (val) => {
+
+  if (!val) return "";
+
+  const [y, m, d] = String(val).slice(0, 10).split("-");
+
+  if (!y || !m || !d) return "";
+
+  return `${d}/${m}/${y}`;
+
+};
+
+
+
+const getDateFinEffective = (contrat) => {
+
+  const avenants = contrat?.avenants || [];
+
+  if (avenants.length > 0) {
+
+    const withDate = avenants.filter((a) => a.date_fin_contrat);
+
+    if (withDate.length > 0) {
+
+      return [...withDate].sort((a, b) =>
+
+        String(b.date_fin_contrat).localeCompare(String(a.date_fin_contrat))
+
+      )[0].date_fin_contrat;
+
+    }
+
+  }
+
+  return contrat?.date_fin_effective || contrat?.date_fin_contrat || "";
+
+};
+
+
+
+const getContratTabDates = (contrat) => {
+
+  const debut = formatDateFr(contrat?.date_debut_contrat);
+
+  const fin =
+
+    contrat?.type_contrat === "cdd"
+
+      ? formatDateFr(getDateFinEffective(contrat))
+
+      : "";
+
+
+
+  if (debut && fin) return `${debut} → ${fin}`;
+
+  if (debut) return `Depuis ${debut}`;
+
+  if (fin) return `Jusqu'au ${fin}`;
+
+  return "";
+
+};
+
+
+
 const AgentCarteModal = ({ isOpen, handleClose, refreshAgents, agents = [] }) => {
 
   const getAgentLabel = (agent) =>
@@ -309,6 +390,8 @@ const AgentCarteModal = ({ isOpen, handleClose, refreshAgents, agents = [] }) =>
 
   const [deletedContratIds, setDeletedContratIds] = useState([]);
 
+  const [deletedAvenantIds, setDeletedAvenantIds] = useState([]);
+
   const [isLoading, setIsLoading] = useState(false);
 
   const [isUploadingPhoto, setIsUploadingPhoto] = useState(false);
@@ -330,6 +413,8 @@ const AgentCarteModal = ({ isOpen, handleClose, refreshAgents, agents = [] }) =>
     setActiveContratIndex(0);
 
     setDeletedContratIds([]);
+
+    setDeletedAvenantIds([]);
 
   };
 
@@ -363,6 +448,7 @@ const AgentCarteModal = ({ isOpen, handleClose, refreshAgents, agents = [] }) =>
     setContrats(buildContratsFromAgent(agent));
     setActiveContratIndex(0);
     setDeletedContratIds([]);
+    setDeletedAvenantIds([]);
     setAgentSearchQuery("");
     setAgentDropdownOpen(false);
     setMessage({ type: "", text: "" });
@@ -456,11 +542,35 @@ const AgentCarteModal = ({ isOpen, handleClose, refreshAgents, agents = [] }) =>
 
       setDeletedContratIds((prev) => [...prev, target.id]);
 
+      setDeletedAvenantIds((prev) =>
+
+        prev.filter((item) => item.contratIndex !== index)
+
+      );
+
     }
 
     const next = contrats.filter((_, i) => i !== index);
 
     setContrats(next);
+
+    setDeletedAvenantIds((prev) =>
+
+      prev.map((item) => {
+
+        if (item.contratIndex < index) return item;
+
+        if (item.contratIndex > index) {
+
+          return { ...item, contratIndex: item.contratIndex - 1 };
+
+        }
+
+        return null;
+
+      }).filter(Boolean)
+
+    );
 
     setActiveContratIndex((prev) => {
 
@@ -478,6 +588,150 @@ const AgentCarteModal = ({ isOpen, handleClose, refreshAgents, agents = [] }) =>
 
 
 
+  const updateActiveContratAvenant = (avenantIndex, field, value) => {
+
+    setContrats((prev) =>
+
+      prev.map((c, i) => {
+
+        if (i !== activeContratIndex) return c;
+
+        const avenants = (c.avenants || []).map((a, j) =>
+
+          j === avenantIndex ? { ...a, [field]: value } : a
+
+        );
+
+        return { ...c, avenants };
+
+      })
+
+    );
+
+  };
+
+
+
+  const handleAddAvenant = () => {
+
+    setContrats((prev) =>
+
+      prev.map((c, i) =>
+
+        i === activeContratIndex
+
+          ? { ...c, avenants: [...(c.avenants || []), { ...EMPTY_AVENANT }] }
+
+          : c
+
+      )
+
+    );
+
+  };
+
+
+
+  const handleDeleteAvenant = (avenantIndex) => {
+
+    const avenant = activeContrat?.avenants?.[avenantIndex];
+
+    if (avenant?.id) {
+
+      setDeletedAvenantIds((prev) => [
+
+        ...prev,
+
+        { contratIndex: activeContratIndex, avenantId: avenant.id },
+
+      ]);
+
+    }
+
+    setContrats((prev) =>
+
+      prev.map((c, i) => {
+
+        if (i !== activeContratIndex) return c;
+
+        return {
+
+          ...c,
+
+          avenants: (c.avenants || []).filter((_, j) => j !== avenantIndex),
+
+        };
+
+      })
+
+    );
+
+  };
+
+
+
+  const syncAvenantsForContrat = async (agentId, contratId, contratIndex, avenants) => {
+
+    const toDelete = deletedAvenantIds
+
+      .filter((item) => item.contratIndex === contratIndex)
+
+      .map((item) => item.avenantId);
+
+
+
+    for (const avenantId of toDelete) {
+
+      await axios.delete(
+
+        `/api/agent/${agentId}/contrats/${contratId}/avenants/${avenantId}/`
+
+      );
+
+    }
+
+
+
+    for (const avenant of avenants || []) {
+
+      if (!avenant.date_fin_contrat) continue;
+
+      const payload = {
+
+        libelle: avenant.libelle || "",
+
+        date_fin_contrat: avenant.date_fin_contrat,
+
+      };
+
+      if (avenant.id) {
+
+        await axios.patch(
+
+          `/api/agent/${agentId}/contrats/${contratId}/avenants/${avenant.id}/`,
+
+          payload
+
+        );
+
+      } else {
+
+        await axios.post(
+
+          `/api/agent/${agentId}/contrats/${contratId}/avenants/`,
+
+          payload
+
+        );
+
+      }
+
+    }
+
+  };
+
+
+
   const syncContrats = async (agentId) => {
 
     for (const id of deletedContratIds) {
@@ -488,7 +742,9 @@ const AgentCarteModal = ({ isOpen, handleClose, refreshAgents, agents = [] }) =>
 
 
 
-    for (const c of contrats) {
+    for (let contratIndex = 0; contratIndex < contrats.length; contratIndex += 1) {
+
+      const c = contrats[contratIndex];
 
       const payload = {
 
@@ -520,13 +776,25 @@ const AgentCarteModal = ({ isOpen, handleClose, refreshAgents, agents = [] }) =>
 
 
 
+      let contratId = c.id;
+
       if (c.id) {
 
         await axios.patch(`/api/agent/${agentId}/contrats/${c.id}/`, payload);
 
       } else if (hasContent) {
 
-        await axios.post(`/api/agent/${agentId}/contrats/`, payload);
+        const res = await axios.post(`/api/agent/${agentId}/contrats/`, payload);
+
+        contratId = res.data.id;
+
+      }
+
+
+
+      if (contratId && c.type_contrat === "cdd") {
+
+        await syncAvenantsForContrat(agentId, contratId, contratIndex, c.avenants);
 
       }
 
@@ -545,6 +813,8 @@ const AgentCarteModal = ({ isOpen, handleClose, refreshAgents, agents = [] }) =>
     setContrats(updated);
 
     setDeletedContratIds([]);
+
+    setDeletedAvenantIds([]);
 
     setActiveContratIndex(0);
 
@@ -962,6 +1232,76 @@ const AgentCarteModal = ({ isOpen, handleClose, refreshAgents, agents = [] }) =>
 
 
 
+  const renderAvenantField = (avenantIndex, label, field, type = "text", extra = {}) => {
+
+    const avenant = activeContrat?.avenants?.[avenantIndex];
+
+    if (!avenant) return null;
+
+    const fieldId = `carte-avenant-${avenantIndex}-${field}`;
+
+    return (
+
+      <div className={`agent-carte-field ${extra.fullWidth ? "full-width" : ""}`}>
+
+        <div className="agent-carte-field-label-row">
+
+          <label htmlFor={fieldId}>{label}</label>
+
+          {field === "libelle" && (
+
+            <IconButton
+
+              type="button"
+
+              size="small"
+
+              color="error"
+
+              onClick={() => handleDeleteAvenant(avenantIndex)}
+
+              aria-label="Supprimer l'avenant"
+
+              sx={{ p: 0.25 }}
+
+            >
+
+              <DeleteOutlineIcon sx={{ fontSize: 16 }} />
+
+            </IconButton>
+
+          )}
+
+        </div>
+
+        <TextField
+
+          id={fieldId}
+
+          type={type}
+
+          value={avenant[field] ?? ""}
+
+          onChange={(e) => updateActiveContratAvenant(avenantIndex, field, e.target.value)}
+
+          size="small"
+
+          fullWidth
+
+          placeholder={extra.placeholder}
+
+          InputLabelProps={type === "date" ? { shrink: true } : undefined}
+
+        />
+
+      </div>
+
+    );
+
+  };
+
+
+
   return (
 
     <Dialog
@@ -1320,11 +1660,25 @@ const AgentCarteModal = ({ isOpen, handleClose, refreshAgents, agents = [] }) =>
 
                           >
 
-                            <span className="agent-carte-contrat-tab-label">
+                            <div className="agent-carte-contrat-tab-main">
 
-                              {getContratTabLabel(c, index)}
+                              <span className="agent-carte-contrat-tab-label">
 
-                            </span>
+                                {getContratTabLabel(c, index)}
+
+                              </span>
+
+                              {getContratTabDates(c) && (
+
+                                <span className="agent-carte-contrat-tab-dates">
+
+                                  {getContratTabDates(c)}
+
+                                </span>
+
+                              )}
+
+                            </div>
 
                             {index === 0 && (
 
@@ -1404,6 +1758,8 @@ const AgentCarteModal = ({ isOpen, handleClose, refreshAgents, agents = [] }) =>
 
                         renderContratField("Fin contrat (CDD)", "date_fin_contrat", "date")}
 
+
+
                       {renderContratField("Carte BTP", "carte_btp", "text", [
 
                         { value: "false", label: "Non" },
@@ -1423,6 +1779,116 @@ const AgentCarteModal = ({ isOpen, handleClose, refreshAgents, agents = [] }) =>
                         },
 
                       })}
+
+
+
+                      {activeContrat?.type_contrat === "cdd" && (
+
+                        <>
+
+                          <div className="agent-carte-section-title agent-carte-avenants-header full-width">
+
+                            <span>Avenants CDD</span>
+
+                            <Button
+
+                              type="button"
+
+                              size="small"
+
+                              variant="outlined"
+
+                              startIcon={<AddIcon />}
+
+                              onClick={handleAddAvenant}
+
+                              className="agent-carte-add-contrat-btn"
+
+                            >
+
+                              Ajouter
+
+                            </Button>
+
+                          </div>
+
+
+
+                          {getDateFinEffective(activeContrat) && (
+
+                            <div className="agent-carte-avenant-effective full-width">
+
+                              <Typography variant="caption" color="text.secondary">
+
+                                Fin effective :{" "}
+
+                                <strong>
+
+                                  {formatDateFr(getDateFinEffective(activeContrat))}
+
+                                </strong>
+
+                              </Typography>
+
+                            </div>
+
+                          )}
+
+
+
+                          {(activeContrat.avenants || []).length === 0 && (
+
+                            <div className="agent-carte-no-avenant full-width">
+
+                              <Typography variant="body2" color="text.secondary">
+
+                                Aucun avenant. Ajoutez-en un pour prolonger la date de fin du CDD.
+
+                              </Typography>
+
+                            </div>
+
+                          )}
+
+
+
+                          {(activeContrat.avenants || []).map((avenant, avenantIndex) => (
+
+                            <React.Fragment key={avenant.id || `new-avenant-${avenantIndex}`}>
+
+                              {renderAvenantField(
+
+                                avenantIndex,
+
+                                `Avenant ${avenant.numero || avenantIndex + 1} — Libellé`,
+
+                                "libelle",
+
+                                "text",
+
+                                { placeholder: "Renouvellement, prolongation…" }
+
+                              )}
+
+                              {renderAvenantField(
+
+                                avenantIndex,
+
+                                `Avenant ${avenant.numero || avenantIndex + 1} — Nouvelle fin CDD`,
+
+                                "date_fin_contrat",
+
+                                "date"
+
+                              )}
+
+                            </React.Fragment>
+
+                          ))}
+
+                        </>
+
+                      )}
 
                     </>
 

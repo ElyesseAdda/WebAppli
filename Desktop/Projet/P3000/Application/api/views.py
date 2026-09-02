@@ -2213,6 +2213,74 @@ class AgentViewSet(viewsets.ModelViewSet):
             return Response(AgentContratSerializer(contrat).data)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
+    @action(
+        detail=True,
+        methods=['get', 'post'],
+        url_path=r'contrats/(?P<contrat_id>[^/.]+)/avenants',
+    )
+    def contrat_avenants(self, request, pk=None, contrat_id=None):
+        """Liste ou crée un avenant pour un contrat CDD agent."""
+        from .models import AgentContrat, AgentContratAvenant
+        from .serializers import AgentContratAvenantSerializer
+
+        agent = self.get_object()
+        try:
+            contrat = AgentContrat.objects.get(pk=contrat_id, agent=agent)
+        except AgentContrat.DoesNotExist:
+            return Response({'error': 'Contrat non trouvé'}, status=status.HTTP_404_NOT_FOUND)
+
+        if contrat.type_contrat != 'cdd':
+            return Response(
+                {'error': 'Les avenants ne sont disponibles que pour les CDD.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        if request.method == 'GET':
+            qs = contrat.avenants.all()
+            return Response(AgentContratAvenantSerializer(qs, many=True).data)
+
+        serializer = AgentContratAvenantSerializer(
+            data={**request.data, 'contrat': contrat.id},
+        )
+        if serializer.is_valid():
+            avenant = serializer.save(contrat=contrat)
+            return Response(
+                AgentContratAvenantSerializer(avenant).data,
+                status=status.HTTP_201_CREATED,
+            )
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+    @action(
+        detail=True,
+        methods=['put', 'patch', 'delete'],
+        url_path=r'contrats/(?P<contrat_id>[^/.]+)/avenants/(?P<avenant_id>[^/.]+)',
+    )
+    def contrat_avenant_detail(self, request, pk=None, contrat_id=None, avenant_id=None):
+        """Modifie ou supprime un avenant de contrat agent."""
+        from .models import AgentContrat, AgentContratAvenant
+        from .serializers import AgentContratAvenantSerializer
+
+        agent = self.get_object()
+        try:
+            contrat = AgentContrat.objects.get(pk=contrat_id, agent=agent)
+            avenant = AgentContratAvenant.objects.get(pk=avenant_id, contrat=contrat)
+        except (AgentContrat.DoesNotExist, AgentContratAvenant.DoesNotExist):
+            return Response({'error': 'Avenant non trouvé'}, status=status.HTTP_404_NOT_FOUND)
+
+        if request.method == 'DELETE':
+            avenant.delete()
+            return Response(status=status.HTTP_204_NO_CONTENT)
+
+        serializer = AgentContratAvenantSerializer(
+            avenant,
+            data=request.data,
+            partial=True,
+        )
+        if serializer.is_valid():
+            avenant = serializer.save()
+            return Response(AgentContratAvenantSerializer(avenant).data)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
     @action(detail=True, methods=['post'], url_path='upload_photo')
     def upload_photo(self, request, pk=None):
         """Enregistre la photo de l'agent sur S3."""
