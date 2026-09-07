@@ -24,7 +24,7 @@ import SISTER_APPS from "../config/sisterApps";
 import DISTRIBUTEURS_NAV from "../config/distributeursNav";
 import "./../../static/css/slideBar.css";
 
-const SlideBar = ({ toggleSidebar, isSidebarVisible, user, onOpenBonCommande }) => {
+const SlideBar = ({ toggleSidebar, isSidebarVisible, user, onOpenBonCommande, onOpenAgentCarte }) => {
   const location = useLocation();
   const [expandedCategories, setExpandedCategories] = useState({});
   const [agences, setAgences] = useState([]);
@@ -93,6 +93,7 @@ const SlideBar = ({ toggleSidebar, isSidebarVisible, user, onOpenBonCommande }) 
         icon: MdEventAvailable,
         children: [
           { label: "Gestion agent", to: "/CalendrierAgentContainer" },
+          { label: "Carte Agent", action: "openAgentCarte" },
           { label: "Planning hebdo", to: "/PlanningContainer" },
           { label: "Diagrammes de Gantt", to: "/gantt" },
         ],
@@ -392,6 +393,18 @@ const SlideBar = ({ toggleSidebar, isSidebarVisible, user, onOpenBonCommande }) 
                                     >
                                       {link.label}
                                     </a>
+                                  ) : link.action === "openAgentCarte" ? (
+                                    <a
+                                      href="#carte-agent"
+                                      onClick={(e) => {
+                                        e.preventDefault();
+                                        if (onOpenAgentCarte) {
+                                          onOpenAgentCarte();
+                                        }
+                                      }}
+                                    >
+                                      {link.label}
+                                    </a>
                                   ) : (
                                     <NavLink
                                       to={link.to}
@@ -415,6 +428,23 @@ const SlideBar = ({ toggleSidebar, isSidebarVisible, user, onOpenBonCommande }) 
                               href={child.href}
                               target="_blank"
                               rel="noopener noreferrer"
+                            >
+                              {child.label}
+                            </a>
+                          </li>
+                        );
+                      }
+                      if (child.action === "openAgentCarte") {
+                        return (
+                          <li key={`${item.key}-${child.action}`}>
+                            <a
+                              href="#carte-agent"
+                              onClick={(e) => {
+                                e.preventDefault();
+                                if (onOpenAgentCarte) {
+                                  onOpenAgentCarte();
+                                }
+                              }}
                             >
                               {child.label}
                             </a>

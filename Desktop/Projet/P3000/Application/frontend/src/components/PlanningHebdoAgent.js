@@ -1301,8 +1301,16 @@ const PlanningHebdoAgent = ({
               }}
             >
               <h2 style={{ margin: 0 }}>
-                {agents.find((agent) => agent.id === selectedAgentId)?.name} -
-                Semaine {selectedWeek} {selectedYear}
+                {agents.find((agent) => agent.id === selectedAgentId)?.name}{" "}
+                — S{String(selectedWeek).padStart(2, "0")} ·{" "}
+                {getWeekStartDate(selectedWeek, selectedYear)
+                  .locale("fr")
+                  .format("D MMM")}{" "}
+                –{" "}
+                {getWeekStartDate(selectedWeek, selectedYear)
+                  .add(6, "day")
+                  .locale("fr")
+                  .format("D MMM YYYY")}
               </h2>
               <div
                 style={{

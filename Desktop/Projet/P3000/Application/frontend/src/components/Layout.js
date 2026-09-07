@@ -1,6 +1,8 @@
-import React, { useCallback, useState } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import { useLocation } from "react-router-dom";
+import axios from "axios";
 import "./../../static/css/layout.css";
+import AgentCarteModal from "./AgentCarteModal";
 import BonCommandeForm from "./BonCommandeForm";
 import BreadcrumbHeader from "./BreadcrumbHeader";
 import Header from "./Header";
@@ -10,9 +12,28 @@ const Layout = ({ children, user, onLogout }) => {
   const location = useLocation();
   const [isSidebarVisible, setSidebarVisible] = useState(true);
   const [bonCommandeFormOpen, setBonCommandeFormOpen] = useState(false);
+  const [agentCarteOpen, setAgentCarteOpen] = useState(false);
+  const [agents, setAgents] = useState([]);
 
   const chantierIdMatch = location.pathname.match(/\/ChantierDetail\/(\d+)/);
   const chantierId = chantierIdMatch ? chantierIdMatch[1] : undefined;
+
+  const refreshAgents = useCallback(() => {
+    axios
+      .get("/api/agent/?include_inactive=true")
+      .then((response) => {
+        setAgents(Array.isArray(response.data) ? response.data : []);
+      })
+      .catch((error) => {
+        console.error("Erreur lors de la récupération des agents:", error);
+      });
+  }, []);
+
+  useEffect(() => {
+    if (agentCarteOpen) {
+      refreshAgents();
+    }
+  }, [agentCarteOpen, refreshAgents]);
 
   const handleOpenBonCommande = useCallback(() => {
     setBonCommandeFormOpen(true);
@@ -20,6 +41,14 @@ const Layout = ({ children, user, onLogout }) => {
 
   const handleCloseBonCommande = useCallback(() => {
     setBonCommandeFormOpen(false);
+  }, []);
+
+  const handleOpenAgentCarte = useCallback(() => {
+    setAgentCarteOpen(true);
+  }, []);
+
+  const handleCloseAgentCarte = useCallback(() => {
+    setAgentCarteOpen(false);
   }, []);
 
   const toggleSidebar = () => {
@@ -56,6 +85,7 @@ const Layout = ({ children, user, onLogout }) => {
         isSidebarVisible={isSidebarVisible}
         user={user}
         onOpenBonCommande={handleOpenBonCommande}
+        onOpenAgentCarte={handleOpenAgentCarte}
       />
       <div className="main-content">
         <BreadcrumbHeader user={user} onLogout={onLogout} />
@@ -69,6 +99,12 @@ const Layout = ({ children, user, onLogout }) => {
           onClose={handleCloseBonCommande}
         />
       )}
+      <AgentCarteModal
+        isOpen={agentCarteOpen}
+        handleClose={handleCloseAgentCarte}
+        refreshAgents={refreshAgents}
+        agents={agents}
+      />
     </div>
   );
 };

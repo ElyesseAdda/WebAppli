@@ -2,7 +2,7 @@ from rest_framework import serializers
 from django.db.models import Q
 from .models import (
     Chantier, Societe, Devis, Partie, SousPartie, LigneDetail, Client, 
-    Agent, AgentPeriodeInactivite, Stock, Presence, StockMovement, StockHistory, Event, MonthlyHours, PointageMensuel,
+    Agent, AgentContrat, AgentContratAvenant, AgentPeriodeInactivite, Stock, Presence, StockMovement, StockHistory, Event, MonthlyHours, PointageMensuel,
     Schedule, LaborCost, DevisLigne, Facture, FactureLigne, BonCommande, LigneBonCommande,
     Avenant, FactureTS, Situation, SituationLigne, SituationLigneSupplementaire, SituationLigneSpeciale,
     ChantierLigneSupplementaire, SituationLigneAvenant, AgencyExpense, AgencyExpenseOverride,
@@ -760,15 +760,96 @@ class AgentPeriodeInactiviteSerializer(serializers.ModelSerializer):
         read_only_fields = ['id', 'created_at']
 
 
+class AgentContratAvenantSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = AgentContratAvenant
+        fields = [
+            'id',
+            'contrat',
+            'numero',
+            'libelle',
+            'date_fin_contrat',
+            'created_at',
+        ]
+        read_only_fields = ['id', 'contrat', 'numero', 'created_at']
+
+
+class AgentContratSerializer(serializers.ModelSerializer):
+    avenants = AgentContratAvenantSerializer(many=True, read_only=True)
+    date_fin_effective = serializers.DateField(read_only=True)
+    date_fin_contrat = serializers.DateField(required=False, allow_null=True)
+
+    class Meta:
+        model = AgentContrat
+        fields = [
+            'id',
+            'agent',
+            'libelle',
+            'type_contrat',
+            'fin_periode_essai',
+            'date_debut_contrat',
+            'date_fin_contrat',
+            'date_fin_effective',
+            'carte_btp',
+            'avenants',
+            'created_at',
+        ]
+        read_only_fields = ['id', 'agent', 'created_at', 'date_fin_effective', 'avenants']
+
+    def validate_type_contrat(self, value):
+        if value in (None, ''):
+            return None
+        return value
+
+    def validate_date_fin_contrat(self, value):
+        if value in (None, ''):
+            return None
+        return value
+
+    def to_internal_value(self, data):
+        if hasattr(data, 'copy'):
+            data = data.copy()
+        else:
+            data = dict(data)
+        if data.get('date_fin_contrat') == '':
+            data['date_fin_contrat'] = None
+        return super().to_internal_value(data)
+
+
 class AgentSerializer(serializers.ModelSerializer):
     heures_travail_journalieres = serializers.ReadOnlyField()
     monthly_hours = MonthlyHoursSerializer(many=True, read_only=True)
     primes = serializers.JSONField(required=False)
     periodes_inactivite = AgentPeriodeInactiviteSerializer(many=True, read_only=True)
+    contrats = AgentContratSerializer(many=True, read_only=True)
+    photo_url = serializers.SerializerMethodField()
 
     class Meta:
         model = Agent
         fields = '__all__'
+
+    def validate_phone_Number(self, value):
+        phone = str(value).strip()
+        if not phone:
+            raise serializers.ValidationError('Le numéro de téléphone est requis.')
+        return phone
+
+    def to_representation(self, instance):
+        data = super().to_representation(instance)
+        data['photo_url'] = self.get_photo_url(instance)
+        return data
+
+    def get_photo_url(self, obj):
+        if not obj.photo_s3_key:
+            return ''
+        try:
+            from .utils import generate_presigned_url_for_display, is_s3_available
+
+            if not is_s3_available():
+                return ''
+            return generate_presigned_url_for_display(obj.photo_s3_key, expires_in=3600)
+        except Exception:
+            return ''
 
 
 class PointageMensuelSerializer(serializers.ModelSerializer):

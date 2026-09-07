@@ -1,3 +1,5 @@
+import ChevronLeftIcon from "@mui/icons-material/ChevronLeft";
+import ChevronRightIcon from "@mui/icons-material/ChevronRight";
 import {
   Button,
   FormControl,
@@ -5,10 +7,17 @@ import {
   InputLabel,
   MenuItem,
   Select,
+  TextField,
 } from "@mui/material";
 import { styled } from "@mui/material/styles";
+import { AdapterDayjs } from "@mui/x-date-pickers/AdapterDayjs";
+import { DatePicker } from "@mui/x-date-pickers/DatePicker";
+import { LocalizationProvider } from "@mui/x-date-pickers/LocalizationProvider";
+import { PickersDay } from "@mui/x-date-pickers/PickersDay";
 import axios from "axios";
 import dayjs from "dayjs";
+import "dayjs/locale/fr";
+import isoWeek from "dayjs/plugin/isoWeek";
 import React, { useEffect, useState } from "react";
 import { generatePDFDrive } from "../utils/universalDriveGenerator";
 import { agentVisibleForRange, monthRangeBounds } from "../utils/agentEffectif";
@@ -17,9 +26,18 @@ import PlanningHebdoAgent from "./PlanningHebdoAgent";
 import AgentSelectionModal from "./AgentSelectionModal";
 import PrimeModal from "./PrimeModal";
 
+dayjs.extend(isoWeek);
+dayjs.locale("fr");
+
 const StyledFormControl = styled(FormControl)({
   minWidth: 150,
   marginRight: "20px",
+});
+
+const WeekNavigator = styled("div")({
+  display: "flex",
+  alignItems: "center",
+  gap: "4px",
 });
 
 const ControlsContainer = styled("div")({
@@ -38,12 +56,168 @@ const SelectGroup = styled("div")({
   display: "flex",
   gap: "20px",
   marginRight: "40px",
+  alignItems: "center",
 });
 
 const ButtonGroup = styled("div")({
   display: "flex",
   gap: "10px",
 });
+
+const formatWeekRangeLabel = (week, year, getStartDate) => {
+  const start = dayjs(getStartDate(week, year)).locale("fr");
+  const end = start.add(6, "day");
+  const weekNum = String(week).padStart(2, "0");
+  let range;
+  if (start.month() === end.month() && start.year() === end.year()) {
+    range = `${start.format("D")} – ${end.format("D MMMM YYYY")}`;
+  } else if (start.year() === end.year()) {
+    range = `${start.format("D MMM")} – ${end.format("D MMM YYYY")}`;
+  } else {
+    range = `${start.format("D MMM YYYY")} – ${end.format("D MMM YYYY")}`;
+  }
+  return `S${weekNum} · ${range}`;
+};
+
+const WeekSelector = ({
+  week,
+  year,
+  onChange,
+  getWeekStartDate,
+  label = "Semaine",
+  showNavigation = true,
+}) => {
+  const weekStart = dayjs(getWeekStartDate(week, year));
+  const weekEnd = weekStart.add(6, "day");
+  const now = dayjs();
+  const isCurrentWeek =
+    week === now.isoWeek() && year === now.isoWeekYear();
+
+  const applyDate = (date) => {
+    if (!date) return;
+    const d = dayjs(date);
+    onChange(d.isoWeek(), d.isoWeekYear());
+  };
+
+  return (
+    <LocalizationProvider dateAdapter={AdapterDayjs} adapterLocale="fr">
+      <WeekNavigator>
+        {showNavigation && (
+          <IconButton
+            aria-label="Semaine précédente"
+            onClick={() => applyDate(weekStart.subtract(1, "week"))}
+            size="small"
+          >
+            <ChevronLeftIcon />
+          </IconButton>
+        )}
+        <DatePicker
+          label={label}
+          value={weekStart}
+          onChange={applyDate}
+          showDaysOutsideCurrentMonth
+          minDate={dayjs().year(2023).startOf("year")}
+          maxDate={dayjs().add(2, "year").endOf("year")}
+          renderDay={(day, _selectedDays, pickersDayProps) => {
+            const { key, ...dayProps } = pickersDayProps;
+            const current = dayjs(day);
+            const isInSelectedWeek =
+              !current.isBefore(weekStart, "day") &&
+              !current.isAfter(weekEnd, "day");
+            const isRangeStart = current.isSame(weekStart, "day");
+            const isRangeEnd = current.isSame(weekEnd, "day");
+            return (
+              <PickersDay
+                key={key}
+                {...dayProps}
+                selected={isInSelectedWeek}
+                disableMargin
+                sx={{
+                  ...(isInSelectedWeek && {
+                    backgroundColor: "rgba(27, 120, 188, 0.18)",
+                    color: "#0d47a1",
+                    fontWeight: 600,
+                    borderRadius: 0,
+                    "&:hover": {
+                      backgroundColor: "rgba(27, 120, 188, 0.32)",
+                    },
+                    "&.Mui-selected": {
+                      backgroundColor: "rgba(27, 120, 188, 0.18)",
+                      color: "#0d47a1",
+                      "&:hover": {
+                        backgroundColor: "rgba(27, 120, 188, 0.32)",
+                      },
+                    },
+                  }),
+                  ...(isRangeStart && {
+                    borderTopLeftRadius: "50%",
+                    borderBottomLeftRadius: "50%",
+                    backgroundColor: "rgba(27, 120, 188, 1)",
+                    color: "#fff",
+                    "&.Mui-selected": {
+                      backgroundColor: "rgba(27, 120, 188, 1)",
+                      color: "#fff",
+                    },
+                  }),
+                  ...(isRangeEnd && {
+                    borderTopRightRadius: "50%",
+                    borderBottomRightRadius: "50%",
+                    backgroundColor: "rgba(27, 120, 188, 1)",
+                    color: "#fff",
+                    "&.Mui-selected": {
+                      backgroundColor: "rgba(27, 120, 188, 1)",
+                      color: "#fff",
+                    },
+                  }),
+                }}
+              />
+            );
+          }}
+          renderInput={(params) => (
+            <TextField
+              {...params}
+              sx={{ minWidth: 280, width: showNavigation ? 300 : "100%" }}
+              inputProps={{
+                ...params.inputProps,
+                readOnly: true,
+                value: formatWeekRangeLabel(week, year, getWeekStartDate),
+              }}
+            />
+          )}
+        />
+        {showNavigation && (
+          <>
+            <IconButton
+              aria-label="Semaine suivante"
+              onClick={() => applyDate(weekStart.add(1, "week"))}
+              size="small"
+            >
+              <ChevronRightIcon />
+            </IconButton>
+            <Button
+              variant="outlined"
+              size="small"
+              disabled={isCurrentWeek}
+              onClick={() => applyDate(now)}
+              sx={{
+                whiteSpace: "nowrap",
+                textTransform: "none",
+                borderColor: "rgba(27, 120, 188, 1)",
+                color: "rgba(27, 120, 188, 1)",
+                "&:hover": {
+                  borderColor: "rgba(27, 120, 188, 0.8)",
+                  backgroundColor: "rgba(27, 120, 188, 0.06)",
+                },
+              }}
+            >
+              Cette semaine
+            </Button>
+          </>
+        )}
+      </WeekNavigator>
+    </LocalizationProvider>
+  );
+};
 
 const PlanningContainer = () => {
   // Utiliser isoWeekYear() pour obtenir l'année ISO correcte (gère les semaines qui chevauchent les années)
@@ -93,7 +267,8 @@ const PlanningContainer = () => {
   // Fonction pour filtrer les agents selon la période (périodes d'inactivité)
   const getFilteredAgents = (agentsList, week, year) => {
     if (!week || !year) {
-      return agentsList.filter(agent => agent.is_active);
+      const { start, end } = monthRangeBounds(dayjs().month() + 1, dayjs().year());
+      return agentsList.filter((agent) => agentVisibleForRange(agent, start, end));
     }
 
     const weekStartDate = getWeekStartDate(week, year);
@@ -107,7 +282,8 @@ const PlanningContainer = () => {
   // Fonction pour vérifier si un agent est visible pour la période actuelle
   const isAgentVisibleForPeriod = (agent, week, year) => {
     if (!week || !year) {
-      return agent.is_active;
+      const { start, end } = monthRangeBounds(dayjs().month() + 1, dayjs().year());
+      return agentVisibleForRange(agent, start, end);
     }
 
     const weekStartDate = getWeekStartDate(week, year);
@@ -118,7 +294,8 @@ const PlanningContainer = () => {
   // Fonction pour filtrer les agents selon le mois/année (pour les rapports mensuels)
   const getFilteredAgentsForMonth = (agentsList, month, year) => {
     if (!month || !year) {
-      return agentsList.filter(agent => agent.is_active);
+      const { start, end } = monthRangeBounds(dayjs().month() + 1, dayjs().year());
+      return agentsList.filter((agent) => agentVisibleForRange(agent, start, end));
     }
 
     const { start, end } = monthRangeBounds(month, year);
@@ -174,10 +351,6 @@ const PlanningContainer = () => {
 
   const handleTargetAgentChange = (e) => {
     setTargetAgentId(Number(e.target.value));
-  };
-
-  const generateWeeks = () => {
-    return Array.from({ length: 53 }, (_, i) => i + 1);
   };
 
   const generateYears = () => {
@@ -469,47 +642,14 @@ const PlanningContainer = () => {
             </Select>
           </StyledFormControl>
 
-          <StyledFormControl>
-            <InputLabel>Semaine</InputLabel>
-            <Select
-              value={selectedWeek}
-              onChange={(e) =>
-                handleSelectionChange(
-                  selectedAgentId,
-                  Number(e.target.value),
-                  selectedYear
-                )
-              }
-              label="Semaine"
-            >
-              {Array.from({ length: 53 }, (_, i) => (
-                <MenuItem key={i + 1} value={i + 1}>
-                  Semaine {i + 1}
-                </MenuItem>
-              ))}
-            </Select>
-          </StyledFormControl>
-
-          <StyledFormControl>
-            <InputLabel>Année</InputLabel>
-            <Select
-              value={selectedYear}
-              onChange={(e) =>
-                handleSelectionChange(
-                  selectedAgentId,
-                  selectedWeek,
-                  Number(e.target.value)
-                )
-              }
-              label="Année"
-            >
-              {generateYears().map((year) => (
-                <MenuItem key={year} value={year}>
-                  {year}
-                </MenuItem>
-              ))}
-            </Select>
-          </StyledFormControl>
+          <WeekSelector
+            week={selectedWeek}
+            year={selectedYear}
+            getWeekStartDate={getWeekStartDate}
+            onChange={(week, year) =>
+              handleSelectionChange(selectedAgentId, week, year)
+            }
+          />
         </SelectGroup>
 
         <ButtonGroup>
@@ -742,7 +882,7 @@ const PlanningContainer = () => {
       {/* Modal pour copier le planning */}
       {isCopyModalOpen && (
         <div className="modal">
-          <div className="modal-content">
+          <div className="modal-content" style={{ width: 520 }}>
             <h2>Copier le Planning vers un Autre Agent</h2>
             <label htmlFor="target-agent-select">
               Sélectionner un agent cible :
@@ -762,36 +902,22 @@ const PlanningContainer = () => {
                   </option>
                 ))}
             </select>
-            <label htmlFor="target-year-select" style={{ marginTop: "10px" }}>
-              Sélectionner une année cible :
-            </label>
-            <select
-              id="target-year-select"
-              value={targetYear}
-              onChange={(e) => setTargetYear(Number(e.target.value))}
-              style={{ width: "100%", padding: "8px", marginTop: "5px" }}
-            >
-              {generateYears().map((year) => (
-                <option key={year} value={year}>
-                  {year}
-                </option>
-              ))}
-            </select>
-            <label htmlFor="target-week-select" style={{ marginTop: "10px" }}>
+            <label style={{ marginTop: "10px", display: "block" }}>
               Sélectionner une semaine cible :
             </label>
-            <select
-              id="target-week-select"
-              value={targetWeek}
-              onChange={(e) => setTargetWeek(Number(e.target.value))}
-              style={{ width: "100%", padding: "8px", marginTop: "5px" }}
-            >
-              {generateWeeks().map((week) => (
-                <option key={week} value={week}>
-                  Semaine {week}
-                </option>
-              ))}
-            </select>
+            <div style={{ marginTop: "8px" }}>
+              <WeekSelector
+                week={targetWeek}
+                year={targetYear}
+                getWeekStartDate={getWeekStartDate}
+                label="Semaine cible"
+                showNavigation={false}
+                onChange={(week, year) => {
+                  setTargetWeek(week);
+                  setTargetYear(year);
+                }}
+              />
+            </div>
             <div
               style={{
                 marginTop: "15px",
@@ -840,6 +966,7 @@ const PlanningContainer = () => {
         setSelectedAgents={setSelectedAgentsForPDF}
         week={selectedWeek}
         year={selectedYear}
+        weekLabel={formatWeekRangeLabel(selectedWeek, selectedYear, getWeekStartDate)}
       />
 
       {/* Modal de gestion des primes */}

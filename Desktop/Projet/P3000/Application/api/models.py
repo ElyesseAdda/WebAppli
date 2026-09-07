@@ -538,12 +538,16 @@ class Agent(models.Model):
         ('horaire', 'Horaire'),
         ('journalier', 'Journalier'),
     ]
-    
+    TYPE_CONTRAT_CHOICES = [
+        ('cdi', 'CDI'),
+        ('cdd', 'CDD'),
+    ]
+
     name = models.CharField(max_length=25)
     surname = models.CharField(max_length=25)
     email = models.EmailField(max_length=254, blank=True, null=True)
     address = models.CharField(max_length=100, blank=True, null=True)
-    phone_Number = models.IntegerField()
+    phone_Number = models.CharField(max_length=20)
     taux_Horaire = models.FloatField(null=True, blank=True)
     conge = models.FloatField(null=True, blank=True)
     
@@ -566,6 +570,40 @@ class Agent(models.Model):
     is_active = models.BooleanField(default=True, help_text="Agent actif dans l'effectif")
     date_desactivation = models.DateField(null=True, blank=True, help_text="Date de retrait de l'effectif")
 
+    # Informations contractuelles (carte agent)
+    type_contrat = models.CharField(
+        max_length=10,
+        choices=TYPE_CONTRAT_CHOICES,
+        blank=True,
+        null=True,
+        help_text="Type de contrat (CDI ou CDD)",
+    )
+    fin_periode_essai = models.DateField(
+        null=True,
+        blank=True,
+        help_text="Date de fin de période d'essai",
+    )
+    date_debut_contrat = models.DateField(
+        null=True,
+        blank=True,
+        help_text="Date de début du contrat",
+    )
+    date_fin_contrat = models.DateField(
+        null=True,
+        blank=True,
+        help_text="Date de fin du contrat (CDD) ou date de sortie (CDI)",
+    )
+    carte_btp = models.BooleanField(
+        default=False,
+        help_text="Possède une carte BTP",
+    )
+    photo_s3_key = models.CharField(
+        max_length=500,
+        blank=True,
+        null=True,
+        verbose_name="Clé S3 de la photo agent",
+    )
+
     def __str__(self):
         return f'{self.name} {self.surname}'
 
@@ -586,6 +624,90 @@ class Agent(models.Model):
 
             return max(0, heures_travail)  # S'assurer que le résultat n'est pas négatif
         return 0
+
+
+class AgentContrat(models.Model):
+    """Historique des contrats d'un agent (CDD, CDI, renouvellements…)."""
+    TYPE_CONTRAT_CHOICES = Agent.TYPE_CONTRAT_CHOICES
+
+    agent = models.ForeignKey(
+        Agent,
+        on_delete=models.CASCADE,
+        related_name='contrats',
+    )
+    libelle = models.CharField(
+        max_length=80,
+        blank=True,
+        default='',
+        help_text="Libellé affiché dans l'onglet (ex. CDD 2024, CDI)",
+    )
+    type_contrat = models.CharField(
+        max_length=10,
+        choices=TYPE_CONTRAT_CHOICES,
+        blank=True,
+        null=True,
+    )
+    fin_periode_essai = models.DateField(null=True, blank=True)
+    date_debut_contrat = models.DateField(null=True, blank=True)
+    date_fin_contrat = models.DateField(
+        null=True,
+        blank=True,
+        help_text="Date de fin du CDD, ou date de sortie si CDI",
+    )
+    carte_btp = models.BooleanField(default=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-date_debut_contrat', '-created_at']
+        verbose_name = 'Contrat agent'
+        verbose_name_plural = 'Contrats agents'
+
+    def __str__(self):
+        label = self.libelle or (self.type_contrat or '').upper() or 'Contrat'
+        return f'{self.agent} — {label}'
+
+    @property
+    def date_fin_effective(self):
+        """Date de fin effective (dernier avenant CDD, fin CDD, ou sortie CDI)."""
+        dernier = self.avenants.order_by('-numero').first()
+        if dernier and dernier.date_fin_contrat:
+            return dernier.date_fin_contrat
+        return self.date_fin_contrat
+
+
+class AgentContratAvenant(models.Model):
+    """Avenant de prolongation d'un CDD agent (nouvelle date de fin)."""
+    contrat = models.ForeignKey(
+        AgentContrat,
+        on_delete=models.CASCADE,
+        related_name='avenants',
+    )
+    numero = models.PositiveIntegerField()
+    libelle = models.CharField(max_length=80, blank=True, default='')
+    date_fin_contrat = models.DateField(
+        help_text="Nouvelle date de fin du CDD après cet avenant",
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['numero']
+        unique_together = ('contrat', 'numero')
+        verbose_name = 'Avenant contrat agent'
+        verbose_name_plural = 'Avenants contrats agents'
+
+    def __str__(self):
+        return f'Avenant n°{self.numero} — {self.contrat}'
+
+    def save(self, *args, **kwargs):
+        if not self.numero:
+            dernier = (
+                AgentContratAvenant.objects.filter(contrat=self.contrat)
+                .order_by('-numero')
+                .values_list('numero', flat=True)
+                .first()
+            )
+            self.numero = (dernier or 0) + 1
+        super().save(*args, **kwargs)
 
 
 class AgentPeriodeInactivite(models.Model):
