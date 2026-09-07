@@ -32,6 +32,8 @@ import DeleteOutlineIcon from "@mui/icons-material/DeleteOutline";
 
 import AddIcon from "@mui/icons-material/Add";
 
+import PersonAddIcon from "@mui/icons-material/PersonAdd";
+
 import axios from "axios";
 
 import React, { useEffect, useRef, useState } from "react";
@@ -406,6 +408,8 @@ const AgentCarteModal = ({ isOpen, handleClose, refreshAgents, agents = [] }) =>
 
   const [contratDeleteIndex, setContratDeleteIndex] = useState(null);
 
+  const [isCreating, setIsCreating] = useState(false);
+
 
 
   const activeContrat = contrats[activeContratIndex] || null;
@@ -423,6 +427,26 @@ const AgentCarteModal = ({ isOpen, handleClose, refreshAgents, agents = [] }) =>
     setDeletedContratIds([]);
 
     setDeletedAvenantIds([]);
+
+  };
+
+
+
+  const handleStartCreate = () => {
+
+    resetAgentSelection();
+
+    setContrats([{ ...EMPTY_CONTRAT }]);
+
+    setActiveContratIndex(0);
+
+    setIsCreating(true);
+
+    setAgentSearchQuery("");
+
+    setAgentDropdownOpen(false);
+
+    setMessage({ type: "", text: "" });
 
   };
 
@@ -463,6 +487,7 @@ const AgentCarteModal = ({ isOpen, handleClose, refreshAgents, agents = [] }) =>
     setDeletedAvenantIds([]);
     setAgentSearchQuery("");
     setAgentDropdownOpen(false);
+    setIsCreating(false);
     setMessage({ type: "", text: "" });
   };
 
@@ -501,6 +526,8 @@ const AgentCarteModal = ({ isOpen, handleClose, refreshAgents, agents = [] }) =>
       setMessage({ type: "", text: "" });
 
       setContratDeleteIndex(null);
+
+      setIsCreating(false);
 
     }
 
@@ -868,9 +895,31 @@ const AgentCarteModal = ({ isOpen, handleClose, refreshAgents, agents = [] }) =>
 
   const handleSubmit = async () => {
 
-    if (!agentData.id) {
+    if (!agentData.id && !isCreating) {
 
       setMessage({ type: "error", text: "Veuillez sélectionner un agent." });
+
+      return;
+
+    }
+
+    const name = String(agentData.name || "").trim();
+
+    const surname = String(agentData.surname || "").trim();
+
+    const phone = String(agentData.phone_Number || "").trim();
+
+    if (!name || !surname) {
+
+      setMessage({ type: "error", text: "Le nom et le prénom sont requis." });
+
+      return;
+
+    }
+
+    if (!phone) {
+
+      setMessage({ type: "error", text: "Le numéro de téléphone est requis." });
 
       return;
 
@@ -884,21 +933,21 @@ const AgentCarteModal = ({ isOpen, handleClose, refreshAgents, agents = [] }) =>
 
       const joursTravailUniques = Array.from(
 
-        new Set(agentData.jours_travail.map((j) => j.trim()))
+        new Set((agentData.jours_travail || []).map((j) => j.trim()))
 
       );
 
       const payload = {
 
-        name: agentData.name,
+        name,
 
-        surname: agentData.surname,
+        surname,
 
         email: agentData.email || null,
 
         address: agentData.address,
 
-        phone_Number: String(agentData.phone_Number).trim(),
+        phone_Number: phone,
 
         type_paiement: agentData.type_paiement || "horaire",
 
@@ -950,11 +999,35 @@ const AgentCarteModal = ({ isOpen, handleClose, refreshAgents, agents = [] }) =>
 
 
 
-      await axios.put(`/api/agent/${agentData.id}/`, payload);
+      const isNew = !agentData.id;
 
-      await syncContrats(agentData.id);
+      let agentId = agentData.id;
 
-      setMessage({ type: "success", text: "Carte agent enregistrée." });
+      if (isNew) {
+
+        const res = await axios.post("/api/agent/", payload);
+
+        agentId = res.data.id;
+
+      } else {
+
+        await axios.put(`/api/agent/${agentId}/`, payload);
+
+      }
+
+      await syncContrats(agentId);
+
+      if (isNew) {
+
+        await handleAgentSelect({ id: agentId });
+
+        setMessage({ type: "success", text: "Agent créé." });
+
+      } else {
+
+        setMessage({ type: "success", text: "Carte agent enregistrée." });
+
+      }
 
       refreshAgents();
 
@@ -1128,7 +1201,7 @@ const AgentCarteModal = ({ isOpen, handleClose, refreshAgents, agents = [] }) =>
 
           fullWidth
 
-          disabled={!agentData.id}
+          disabled={!agentData.id && !isCreating}
 
           {...extra.fieldProps}
 
@@ -1164,7 +1237,7 @@ const AgentCarteModal = ({ isOpen, handleClose, refreshAgents, agents = [] }) =>
 
           fullWidth
 
-          disabled={!agentData.id}
+          disabled={!agentData.id && !isCreating}
 
           InputLabelProps={type === "date" || type === "time" ? { shrink: true } : undefined}
 
@@ -1420,7 +1493,11 @@ const AgentCarteModal = ({ isOpen, handleClose, refreshAgents, agents = [] }) =>
 
               <div className="agent-carte-header-subtitle">
 
-                Informations contractuelles et identité
+                {isCreating && !agentData.id
+
+                  ? "Création d'un nouvel agent"
+
+                  : "Informations contractuelles et identité"}
 
               </div>
 
@@ -1458,7 +1535,7 @@ const AgentCarteModal = ({ isOpen, handleClose, refreshAgents, agents = [] }) =>
 
 
 
-              <Box ref={agentDropdownRef} sx={{ position: "relative", mb: 2 }}>
+              <Box sx={{ position: "relative", mb: 2 }}>
 
                 <Typography
 
@@ -1468,9 +1545,13 @@ const AgentCarteModal = ({ isOpen, handleClose, refreshAgents, agents = [] }) =>
 
                 >
 
-                  Sélectionner un agent
+                  {isCreating && !agentData.id ? "Nouvel agent" : "Sélectionner un agent"}
 
                 </Typography>
+
+                <div className="agent-carte-search-row">
+
+                <Box ref={agentDropdownRef} className="agent-carte-search-field">
 
                 <input
 
@@ -1480,9 +1561,17 @@ const AgentCarteModal = ({ isOpen, handleClose, refreshAgents, agents = [] }) =>
 
                   value={
 
-                    agentData.id
+                    agentDropdownOpen
+
+                      ? agentSearchQuery
+
+                      : agentData.id
 
                       ? getAgentLabel(agentData)
+
+                      : isCreating
+
+                      ? "Nouvel agent"
 
                       : agentSearchQuery
 
@@ -1492,17 +1581,21 @@ const AgentCarteModal = ({ isOpen, handleClose, refreshAgents, agents = [] }) =>
 
                     setAgentSearchQuery(e.target.value);
 
-                    if (agentData.id) {
+                    setAgentDropdownOpen(true);
 
-                      resetAgentSelection();
+                  }}
+
+                  onFocus={() => {
+
+                    if (agentData.id || isCreating) {
+
+                      setAgentSearchQuery("");
 
                     }
 
                     setAgentDropdownOpen(true);
 
                   }}
-
-                  onFocus={() => setAgentDropdownOpen(true)}
 
                   style={{
 
@@ -1570,6 +1663,42 @@ const AgentCarteModal = ({ isOpen, handleClose, refreshAgents, agents = [] }) =>
 
                 )}
 
+                </Box>
+
+                <Button
+
+                  type="button"
+
+                  variant={isCreating && !agentData.id ? "contained" : "outlined"}
+
+                  startIcon={<PersonAddIcon />}
+
+                  onClick={handleStartCreate}
+
+                  className="agent-carte-new-agent-btn"
+
+                  sx={{
+
+                    whiteSpace: "nowrap",
+
+                    textTransform: "none",
+
+                    fontWeight: 600,
+
+                    minHeight: 46,
+
+                    px: 1.75,
+
+                  }}
+
+                >
+
+                  Nouvel agent
+
+                </Button>
+
+                </div>
+
               </Box>
 
             </div>
@@ -1578,7 +1707,7 @@ const AgentCarteModal = ({ isOpen, handleClose, refreshAgents, agents = [] }) =>
 
           <div className="agent-carte-content">
 
-            {agentData.id && (
+            {(agentData.id || isCreating) && (
 
               <div className="agent-carte-body">
 
@@ -1588,9 +1717,23 @@ const AgentCarteModal = ({ isOpen, handleClose, refreshAgents, agents = [] }) =>
 
                     className="agent-carte-photo"
 
-                    onClick={() => photoInputRef.current?.click()}
+                    onClick={() => {
 
-                    title="Cliquer pour ajouter ou modifier la photo"
+                      if (!agentData.id) return;
+
+                      photoInputRef.current?.click();
+
+                    }}
+
+                    title={
+
+                      agentData.id
+
+                        ? "Cliquer pour ajouter ou modifier la photo"
+
+                        : "Enregistrez l'agent pour ajouter une photo"
+
+                    }
 
                   >
 
@@ -1604,7 +1747,7 @@ const AgentCarteModal = ({ isOpen, handleClose, refreshAgents, agents = [] }) =>
 
                         <PhotoCameraIcon sx={{ fontSize: 36 }} />
 
-                        <span>Ajouter une photo</span>
+                        <span>{agentData.id ? "Ajouter une photo" : "Après création"}</span>
 
                       </div>
 
@@ -1638,7 +1781,7 @@ const AgentCarteModal = ({ isOpen, handleClose, refreshAgents, agents = [] }) =>
 
                       onClick={() => photoInputRef.current?.click()}
 
-                      disabled={isUploadingPhoto}
+                      disabled={isUploadingPhoto || !agentData.id}
 
                       type="button"
 
@@ -2096,13 +2239,13 @@ const AgentCarteModal = ({ isOpen, handleClose, refreshAgents, agents = [] }) =>
 
 
 
-            {!agentData.id && (
+            {!agentData.id && !isCreating && (
 
               <Box sx={{ p: 4, textAlign: "center", color: "text.secondary" }}>
 
                 <Typography variant="body1">
 
-                  Sélectionnez un agent pour afficher et modifier sa carte.
+                  Sélectionnez un agent ou créez-en un nouveau.
 
                 </Typography>
 
@@ -2130,11 +2273,19 @@ const AgentCarteModal = ({ isOpen, handleClose, refreshAgents, agents = [] }) =>
 
               color="primary"
 
-              disabled={!agentData.id || isLoading}
+              disabled={(!agentData.id && !isCreating) || isLoading}
 
             >
 
-              {isLoading ? "Enregistrement..." : "Enregistrer"}
+              {isLoading
+
+                ? "Enregistrement..."
+
+                : isCreating && !agentData.id
+
+                ? "Créer l'agent"
+
+                : "Enregistrer"}
 
             </Button>
 

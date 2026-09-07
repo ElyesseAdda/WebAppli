@@ -418,8 +418,16 @@
   background: #fff;
 }
 
-.agent-carte-search.is-open {
-  padding-bottom: 220px;
+.agent-carte-search-row {
+  display: flex;
+  align-items: stretch;
+  gap: 8px;
+}
+
+.agent-carte-search-field {
+  flex: 1;
+  min-width: 0;
+  position: relative;
 }
 
 .agent-carte-footer {
