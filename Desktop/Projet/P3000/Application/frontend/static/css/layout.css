@@ -1,17 +1,29 @@
 .layout {
   display: flex; /* Utiliser flexbox pour aligner les éléments */
+  width: 100%;
+  max-width: 100%;
+  overflow-x: hidden;
 }
 
 .main-content {
-  transition: margin-left 0.5s ease; /* Transition fluide */
+  transition: margin-left 0.5s ease, width 0.5s ease; /* Transition fluide */
   margin-left: 0; /* Valeur par défaut */
   width: 100%; /* Prendre toute la largeur disponible */
+  max-width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+  overflow-x: hidden; /* Empêche le décalage horizontal global */
 }
 
 .sidebar-visible .main-content {
-  margin-left: 250px; /* Décalage lorsque la barre latérale est visible */
+  /* Sidebar fixe = 280px : largeur restante, pas 100% + marge */
+  margin-left: 280px;
+  width: calc(100% - 280px);
+  max-width: calc(100% - 280px);
 }
 
 .sidebar-hidden .main-content {
   margin-left: 0; /* Pas de décalage lorsque la barre latérale est cachée */
+  width: 100%;
+  max-width: 100%;
 }
