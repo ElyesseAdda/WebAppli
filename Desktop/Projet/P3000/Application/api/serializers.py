@@ -777,6 +777,7 @@ class AgentContratAvenantSerializer(serializers.ModelSerializer):
 class AgentContratSerializer(serializers.ModelSerializer):
     avenants = AgentContratAvenantSerializer(many=True, read_only=True)
     date_fin_effective = serializers.DateField(read_only=True)
+    date_fin_contrat = serializers.DateField(required=False, allow_null=True)
 
     class Meta:
         model = AgentContrat
@@ -799,6 +800,20 @@ class AgentContratSerializer(serializers.ModelSerializer):
         if value in (None, ''):
             return None
         return value
+
+    def validate_date_fin_contrat(self, value):
+        if value in (None, ''):
+            return None
+        return value
+
+    def to_internal_value(self, data):
+        if hasattr(data, 'copy'):
+            data = data.copy()
+        else:
+            data = dict(data)
+        if data.get('date_fin_contrat') == '':
+            data['date_fin_contrat'] = None
+        return super().to_internal_value(data)
 
 
 class AgentSerializer(serializers.ModelSerializer):

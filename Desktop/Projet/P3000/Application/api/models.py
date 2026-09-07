@@ -591,7 +591,7 @@ class Agent(models.Model):
     date_fin_contrat = models.DateField(
         null=True,
         blank=True,
-        help_text="Date de fin du contrat (CDD uniquement)",
+        help_text="Date de fin du contrat (CDD) ou date de sortie (CDI)",
     )
     carte_btp = models.BooleanField(
         default=False,
@@ -649,7 +649,11 @@ class AgentContrat(models.Model):
     )
     fin_periode_essai = models.DateField(null=True, blank=True)
     date_debut_contrat = models.DateField(null=True, blank=True)
-    date_fin_contrat = models.DateField(null=True, blank=True)
+    date_fin_contrat = models.DateField(
+        null=True,
+        blank=True,
+        help_text="Date de fin du CDD, ou date de sortie si CDI",
+    )
     carte_btp = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
 
@@ -664,7 +668,7 @@ class AgentContrat(models.Model):
 
     @property
     def date_fin_effective(self):
-        """Date de fin CDD effective (dernier avenant ou date initiale du contrat)."""
+        """Date de fin effective (dernier avenant CDD, fin CDD, ou sortie CDI)."""
         dernier = self.avenants.order_by('-numero').first()
         if dernier and dernier.date_fin_contrat:
             return dernier.date_fin_contrat

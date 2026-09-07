@@ -24,7 +24,10 @@ def agent_uses_contrat_visibility(agent: Agent) -> bool:
 
 
 def get_contrat_fin_effective(contrat) -> Optional[date]:
-    """Fin CDD effective (avenants ou date initiale). CDI / sans fin → None."""
+    """Fin effective (avenants CDD, fin CDD, ou date de sortie CDI). Sans date → None."""
+    if getattr(contrat, 'type_contrat', None) != 'cdd':
+        fin = contrat.date_fin_contrat
+        return _as_date(fin) if fin else None
     fin = contrat.date_fin_effective
     if fin is None:
         return None
@@ -38,10 +41,9 @@ def contrat_covers_day(contrat, on_date: date) -> bool:
     debut = _as_date(contrat.date_debut_contrat)
     if on_date < debut:
         return False
-    if contrat.type_contrat == 'cdd':
-        fin = get_contrat_fin_effective(contrat)
-        if fin is not None and on_date > fin:
-            return False
+    fin = get_contrat_fin_effective(contrat)
+    if fin is not None and on_date > fin:
+        return False
     return True
 
 
@@ -65,11 +67,8 @@ def is_visible_for_range_via_contrats(agent: Agent, start, end) -> bool:
         if not contrat.date_debut_contrat:
             continue
         debut = _as_date(contrat.date_debut_contrat)
-        if contrat.type_contrat == 'cdd':
-            fin = get_contrat_fin_effective(contrat)
-            fin_eff = fin if fin is not None else date.max
-        else:
-            fin_eff = date.max
+        fin = get_contrat_fin_effective(contrat)
+        fin_eff = fin if fin is not None else date.max
         if debut <= end and fin_eff >= start:
             return True
     return False

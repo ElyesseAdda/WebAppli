@@ -311,6 +311,12 @@ const formatDateFr = (val) => {
 
 const getDateFinEffective = (contrat) => {
 
+  if (contrat?.type_contrat !== "cdd") {
+
+    return contrat?.date_fin_contrat || "";
+
+  }
+
   const avenants = contrat?.avenants || [];
 
   if (avenants.length > 0) {
@@ -339,13 +345,7 @@ const getContratTabDates = (contrat) => {
 
   const debut = formatDateFr(contrat?.date_debut_contrat);
 
-  const fin =
-
-    contrat?.type_contrat === "cdd"
-
-      ? formatDateFr(getDateFinEffective(contrat))
-
-      : "";
+  const fin = formatDateFr(getDateFinEffective(contrat));
 
 
 
@@ -798,9 +798,7 @@ const AgentCarteModal = ({ isOpen, handleClose, refreshAgents, agents = [] }) =>
 
         date_debut_contrat: c.date_debut_contrat || null,
 
-        date_fin_contrat:
-
-          c.type_contrat === "cdd" ? c.date_fin_contrat || null : null,
+        date_fin_contrat: c.date_fin_contrat || null,
 
         carte_btp: Boolean(c.carte_btp),
 
@@ -813,6 +811,8 @@ const AgentCarteModal = ({ isOpen, handleClose, refreshAgents, agents = [] }) =>
         payload.type_contrat ||
 
         payload.date_debut_contrat ||
+
+        payload.date_fin_contrat ||
 
         payload.fin_periode_essai;
 
@@ -1198,11 +1198,53 @@ const AgentCarteModal = ({ isOpen, handleClose, refreshAgents, agents = [] }) =>
 
     const fieldId = `carte-contrat-${name}`;
 
+    const fieldValue = extra.fieldProps?.value ?? activeContrat[name] ?? "";
+
+    const showClear = Boolean(extra.clearable && fieldValue);
+
     return (
 
       <div className={`agent-carte-field ${extra.fullWidth ? "full-width" : ""}`}>
 
-        <label htmlFor={fieldId}>{label}</label>
+        <div className="agent-carte-field-label-row">
+
+          <label htmlFor={fieldId}>{label}</label>
+
+          {showClear && (
+
+            <Button
+
+              type="button"
+
+              size="small"
+
+              onClick={() => updateActiveContrat(name, "")}
+
+              sx={{
+
+                minWidth: "auto",
+
+                px: 0.75,
+
+                py: 0,
+
+                textTransform: "none",
+
+                fontSize: "0.75rem",
+
+                color: "#64748b",
+
+              }}
+
+            >
+
+              Effacer
+
+            </Button>
+
+          )}
+
+        </div>
 
         {options ? (
 
@@ -1807,6 +1849,14 @@ const AgentCarteModal = ({ isOpen, handleClose, refreshAgents, agents = [] }) =>
                       {activeContrat?.type_contrat === "cdd" &&
 
                         renderContratField("Fin contrat (CDD)", "date_fin_contrat", "date")}
+
+                      {activeContrat?.type_contrat === "cdi" &&
+
+                        renderContratField("Date de sortie", "date_fin_contrat", "date", null, {
+
+                          clearable: true,
+
+                        })}
 
 
 

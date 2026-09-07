@@ -1,6 +1,7 @@
 /**
  * Visibilité agents : contrats (carte agent) ou périodes d'inactivité (legacy).
- * Règle contrats : visible si la plage chevauche au moins un contrat (début inclus, fin CDD incluse).
+ * Règle contrats : visible si la plage chevauche au moins un contrat
+ * (début inclus, fin CDD / date de sortie CDI incluse).
  */
 
 function toDateStr(value) {
@@ -29,8 +30,11 @@ export function agentUsesContratVisibility(agent) {
   );
 }
 
-/** Fin CDD effective (avenants ou date initiale). */
+/** Fin effective : avenants CDD, fin CDD, ou date de sortie CDI. */
 export function getContratFinEffective(contrat) {
+  if (contrat?.type_contrat !== 'cdd') {
+    return contrat?.date_fin_contrat || null;
+  }
   const avenants = contrat?.avenants || [];
   if (avenants.length > 0) {
     const withDate = avenants.filter((a) => a.date_fin_contrat);
@@ -50,10 +54,8 @@ function contratOverlapsRange(contrat, rangeStart, rangeEnd) {
   if (!debut || !start || !end) return false;
 
   let finEff = '9999-12-31';
-  if (contrat.type_contrat === 'cdd') {
-    const fin = toDateStr(getContratFinEffective(contrat));
-    if (fin) finEff = fin;
-  }
+  const fin = toDateStr(getContratFinEffective(contrat));
+  if (fin) finEff = fin;
 
   return debut <= end && finEff >= start;
 }
