@@ -23,7 +23,8 @@ const AgentSelectionModal = ({
   selectedAgents = [], 
   setSelectedAgents,
   week,
-  year 
+  year,
+  weekLabel,
 }) => {
   const [localSelectedAgents, setLocalSelectedAgents] = useState([]);
 
@@ -90,7 +91,7 @@ const AgentSelectionModal = ({
             Sélectionner les agents pour le planning
           </Typography>
           <Typography variant="body2" color="text.secondary">
-            Semaine {week} - {year}
+            {weekLabel || `Semaine ${week} - ${year}`}
           </Typography>
         </Box>
         <IconButton onClick={handleCancel} size="small">

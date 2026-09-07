@@ -33,6 +33,7 @@ import {
   AccountCircle as AccountCircleIcon,
 } from "@mui/icons-material";
 import axios from "axios";
+import { agentVisibleForRange, monthRangeBounds } from "../utils/agentEffectif";
 
 const PrimeModal = ({ isOpen, onClose, month, year }) => {
   const [agents, setAgents] = useState([]);
@@ -88,10 +89,12 @@ const PrimeModal = ({ isOpen, onClose, month, year }) => {
 
   const loadAgents = async () => {
     try {
-      const response = await axios.get("/api/agent/");
-      setAgents(response.data);
+      const response = await axios.get("/api/agent/", {
+        params: { include_inactive: true },
+      });
+      setAgents(Array.isArray(response.data) ? response.data : []);
       const initialNewPrimes = {};
-      response.data.forEach((agent) => {
+      (response.data || []).forEach((agent) => {
         initialNewPrimes[agent.id] = {
           montant: "",
           description: "",
@@ -232,6 +235,16 @@ const PrimeModal = ({ isOpen, onClose, month, year }) => {
     setExpandedAgent(isExpanded ? agentId : null);
   };
 
+  const agentsForMonth = useMemo(() => {
+    if (!month || !year) return [];
+    const { start, end } = monthRangeBounds(month, year);
+    return agents.filter((agent) => {
+      if (agentVisibleForRange(agent, start, end)) return true;
+      const primes = existingPrimes[agent.id];
+      return Array.isArray(primes) && primes.length > 0;
+    });
+  }, [agents, existingPrimes, month, year]);
+
   const getTotalPrimesAgent = (agentId) => {
     const primes = existingPrimes[agentId] || [];
     return primes.reduce((sum, prime) => sum + parseFloat(prime.montant), 0);
@@ -293,12 +306,12 @@ const PrimeModal = ({ isOpen, onClose, month, year }) => {
           <Alert severity="error" sx={{ m: 2 }}>{error}</Alert>
         ) : (
           <Box sx={{ p: 1 }}>
-            {agents.length === 0 ? (
+            {agentsForMonth.length === 0 ? (
               <Alert severity="info" sx={{ m: 2 }}>
-                Aucun agent disponible. Veuillez d'abord créer des agents.
+                Aucun agent en contrat sur {monthNames[month - 1]} {year}.
               </Alert>
             ) : (
-              agents
+              agentsForMonth
                 .sort((a, b) => {
                   const nameA = `${a.surname} ${a.name}`.toLowerCase();
                   const nameB = `${b.surname} ${b.name}`.toLowerCase();

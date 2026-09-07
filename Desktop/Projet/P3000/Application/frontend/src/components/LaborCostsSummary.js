@@ -1,3 +1,5 @@
+import ChevronLeftIcon from "@mui/icons-material/ChevronLeft";
+import ChevronRightIcon from "@mui/icons-material/ChevronRight";
 import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
 import {
   Accordion,
@@ -5,13 +7,12 @@ import {
   AccordionSummary,
   AppBar,
   Box,
+  Button,
   Dialog,
   DialogContent,
   DialogTitle,
   Divider,
   IconButton,
-  MenuItem,
-  Select,
   Tab,
   Table,
   TableBody,
@@ -19,14 +20,29 @@ import {
   TableHead,
   TableRow,
   Tabs,
+  TextField,
   Toolbar,
   Typography,
 } from "@mui/material";
+import { AdapterDayjs } from "@mui/x-date-pickers/AdapterDayjs";
+import { DatePicker } from "@mui/x-date-pickers/DatePicker";
+import { LocalizationProvider } from "@mui/x-date-pickers/LocalizationProvider";
 import axios from "axios";
 import dayjs from "dayjs";
+import "dayjs/locale/fr";
 import React, { useEffect, useState } from "react";
 import { FaTimes } from "react-icons/fa";
 import "./../../static/css/laborCostSummary.css";
+
+dayjs.locale("fr");
+
+const MONTH_MIN = () => dayjs().subtract(12, "month").startOf("month");
+const MONTH_MAX = () => dayjs().add(12, "month").startOf("month");
+
+const formatMonthLabel = (monthKey) => {
+  const label = dayjs(`${monthKey}-01`).locale("fr").format("MMMM YYYY");
+  return label.charAt(0).toUpperCase() + label.slice(1);
+};
 
 const LaborCostsSummary = ({ isOpen, onClose, agentId, chantierId }) => {
   const [selectedMonth, setSelectedMonth] = useState(dayjs().format("YYYY-MM"));
@@ -90,14 +106,18 @@ const LaborCostsSummary = ({ isOpen, onClose, agentId, chantierId }) => {
     onClose();
   };
 
-  const getSelectableMonths = () => {
-    const months = [];
-    let d = dayjs().subtract(12, "month");
-    for (let i = 0; i < 25; i++) {
-      months.push(d.format("YYYY-MM"));
-      d = d.add(1, "month");
+  const minMonth = MONTH_MIN();
+  const maxMonth = MONTH_MAX();
+  const currentMonthDate = dayjs(`${selectedMonth}-01`);
+  const isCurrentMonth = selectedMonth === dayjs().format("YYYY-MM");
+
+  const applyMonth = (date) => {
+    if (!date) return;
+    const next = dayjs(date).startOf("month");
+    if (next.isBefore(minMonth, "month") || next.isAfter(maxMonth, "month")) {
+      return;
     }
-    return months;
+    setSelectedMonth(next.format("YYYY-MM"));
   };
 
   // Agrégation par agent côté frontend
@@ -249,19 +269,71 @@ const LaborCostsSummary = ({ isOpen, onClose, agentId, chantierId }) => {
         </IconButton>
       </DialogTitle>
       <DialogContent>
-        <Box mb={2} display="flex" alignItems="center" gap={2}>
-          <Typography variant="body1">Mois :</Typography>
-          <Select
-            value={selectedMonth}
-            onChange={(e) => setSelectedMonth(e.target.value)}
-            size="small"
-          >
-            {getSelectableMonths().map((m) => (
-              <MenuItem key={m} value={m}>
-                {dayjs(m + "-01").format("MMMM YYYY")}
-              </MenuItem>
-            ))}
-          </Select>
+        <Box mb={2} display="flex" alignItems="center" gap={1} flexWrap="wrap">
+          <LocalizationProvider dateAdapter={AdapterDayjs} adapterLocale="fr">
+            <IconButton
+              aria-label="Mois précédent"
+              size="small"
+              disabled={currentMonthDate.isSame(minMonth, "month")}
+              onClick={() => applyMonth(currentMonthDate.subtract(1, "month"))}
+            >
+              <ChevronLeftIcon />
+            </IconButton>
+            <DatePicker
+              label="Mois"
+              views={["year", "month"]}
+              openTo="month"
+              value={currentMonthDate}
+              onChange={applyMonth}
+              minDate={minMonth}
+              maxDate={maxMonth}
+              inputFormat="MMMM YYYY"
+              toolbarTitle="Choisir un mois"
+              closeOnSelect
+              PopperProps={{
+                placement: "bottom-start",
+                sx: { zIndex: 2000 },
+              }}
+              renderInput={(params) => (
+                <TextField
+                  {...params}
+                  size="small"
+                  sx={{ minWidth: 200 }}
+                  inputProps={{
+                    ...params.inputProps,
+                    readOnly: true,
+                    value: formatMonthLabel(selectedMonth),
+                  }}
+                />
+              )}
+            />
+            <IconButton
+              aria-label="Mois suivant"
+              size="small"
+              disabled={currentMonthDate.isSame(maxMonth, "month")}
+              onClick={() => applyMonth(currentMonthDate.add(1, "month"))}
+            >
+              <ChevronRightIcon />
+            </IconButton>
+            <Button
+              variant="outlined"
+              size="small"
+              disabled={isCurrentMonth}
+              onClick={() => applyMonth(dayjs())}
+              sx={{
+                textTransform: "none",
+                whiteSpace: "nowrap",
+                borderColor: "rgba(27, 120, 188, 1)",
+                color: "rgba(27, 120, 188, 1)",
+                "&:hover": {
+                  borderColor: "rgba(27, 120, 188, 0.8)",
+                  backgroundColor: "rgba(27, 120, 188, 0.06)",
+                },
+              }}
+            >
+              Ce mois
+            </Button>
+          </LocalizationProvider>
         </Box>
         <Box>
           {loading ? (

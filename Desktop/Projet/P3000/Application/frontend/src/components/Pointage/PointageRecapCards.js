@@ -147,6 +147,10 @@ const PointageRecapCards = ({
       mb: 2,
       p: 0,
       backgroundColor: "transparent",
+      width: "100%",
+      maxWidth: "100%",
+      minWidth: 0,
+      overflow: "hidden",
     }}
     elevation={0}
   >
@@ -208,8 +212,11 @@ const PointageRecapCards = ({
     <Box
       sx={{
         display: "grid",
-        gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))",
+        gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 260px), 1fr))",
         gap: 2,
+        width: "100%",
+        maxWidth: "100%",
+        minWidth: 0,
       }}
     >
       <RecapNetSalariesSplitCard

@@ -1932,7 +1932,9 @@ class ClientViewSet(viewsets.ModelViewSet):
         return queryset
 
 class AgentViewSet(viewsets.ModelViewSet):
-    queryset = Agent.objects.all().prefetch_related('periodes_inactivite')
+    queryset = Agent.objects.all().prefetch_related(
+        'periodes_inactivite', 'contrats__avenants'
+    )
     serializer_class = AgentSerializer
     permission_classes = [AllowAny]
 
@@ -1941,7 +1943,9 @@ class AgentViewSet(viewsets.ModelViewSet):
         from calendar import monthrange
         from .agent_effectif import filter_agents_visible_for_range
 
-        queryset = Agent.objects.all().prefetch_related('periodes_inactivite')
+        queryset = Agent.objects.all().prefetch_related(
+            'periodes_inactivite', 'contrats__avenants'
+        )
 
         # Détail / actions : toujours accessible (actifs et inactifs)
         if getattr(self, 'action', None) not in (None, 'list'):
@@ -2081,7 +2085,7 @@ class AgentViewSet(viewsets.ModelViewSet):
         """Récupérer la liste des agents inactifs"""
         queryset = (
             Agent.objects.filter(is_active=False)
-            .prefetch_related('periodes_inactivite')
+            .prefetch_related('periodes_inactivite', 'contrats__avenants')
             .order_by('-date_desactivation')
         )
         serializer = self.get_serializer(queryset, many=True)
@@ -2161,6 +2165,244 @@ class AgentViewSet(viewsets.ModelViewSet):
         periode.save()
         sync_agent_status(agent)
         return Response(AgentPeriodeInactiviteSerializer(periode).data)
+
+    @action(detail=True, methods=['get', 'post'], url_path='contrats')
+    def contrats(self, request, pk=None):
+        """Liste ou crée un contrat pour un agent."""
+        from .models import AgentContrat
+        from .serializers import AgentContratSerializer
+
+        agent = self.get_object()
+
+        if request.method == 'GET':
+            qs = agent.contrats.all()
+            return Response(AgentContratSerializer(qs, many=True).data)
+
+        serializer = AgentContratSerializer(data={**request.data, 'agent': agent.id})
+        if serializer.is_valid():
+            contrat = serializer.save(agent=agent)
+            from .agent_effectif import after_agent_contrats_changed
+            after_agent_contrats_changed(agent)
+            return Response(
+                AgentContratSerializer(contrat).data,
+                status=status.HTTP_201_CREATED,
+            )
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+    @action(
+        detail=True,
+        methods=['put', 'patch', 'delete'],
+        url_path=r'contrats/(?P<contrat_id>[^/.]+)',
+    )
+    def contrat_detail(self, request, pk=None, contrat_id=None):
+        """Modifie ou supprime un contrat agent."""
+        from .models import AgentContrat
+        from .serializers import AgentContratSerializer
+
+        agent = self.get_object()
+        try:
+            contrat = AgentContrat.objects.get(pk=contrat_id, agent=agent)
+        except AgentContrat.DoesNotExist:
+            return Response({'error': 'Contrat non trouvé'}, status=status.HTTP_404_NOT_FOUND)
+
+        if request.method == 'DELETE':
+            contrat.delete()
+            from .agent_effectif import after_agent_contrats_changed
+            after_agent_contrats_changed(agent)
+            return Response(status=status.HTTP_204_NO_CONTENT)
+
+        serializer = AgentContratSerializer(
+            contrat,
+            data=request.data,
+            partial=True,
+        )
+        if serializer.is_valid():
+            contrat = serializer.save()
+            from .agent_effectif import after_agent_contrats_changed
+            after_agent_contrats_changed(agent)
+            return Response(AgentContratSerializer(contrat).data)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+    @action(
+        detail=True,
+        methods=['get', 'post'],
+        url_path=r'contrats/(?P<contrat_id>[^/.]+)/avenants',
+    )
+    def contrat_avenants(self, request, pk=None, contrat_id=None):
+        """Liste ou crée un avenant pour un contrat CDD agent."""
+        from .models import AgentContrat, AgentContratAvenant
+        from .serializers import AgentContratAvenantSerializer
+
+        agent = self.get_object()
+        try:
+            contrat = AgentContrat.objects.get(pk=contrat_id, agent=agent)
+        except AgentContrat.DoesNotExist:
+            return Response({'error': 'Contrat non trouvé'}, status=status.HTTP_404_NOT_FOUND)
+
+        if contrat.type_contrat != 'cdd':
+            return Response(
+                {'error': 'Les avenants ne sont disponibles que pour les CDD.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        if request.method == 'GET':
+            qs = contrat.avenants.all()
+            return Response(AgentContratAvenantSerializer(qs, many=True).data)
+
+        serializer = AgentContratAvenantSerializer(
+            data={**request.data, 'contrat': contrat.id},
+        )
+        if serializer.is_valid():
+            avenant = serializer.save(contrat=contrat)
+            from .agent_effectif import after_agent_contrats_changed
+            after_agent_contrats_changed(agent)
+            return Response(
+                AgentContratAvenantSerializer(avenant).data,
+                status=status.HTTP_201_CREATED,
+            )
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+    @action(
+        detail=True,
+        methods=['put', 'patch', 'delete'],
+        url_path=r'contrats/(?P<contrat_id>[^/.]+)/avenants/(?P<avenant_id>[^/.]+)',
+    )
+    def contrat_avenant_detail(self, request, pk=None, contrat_id=None, avenant_id=None):
+        """Modifie ou supprime un avenant de contrat agent."""
+        from .models import AgentContrat, AgentContratAvenant
+        from .serializers import AgentContratAvenantSerializer
+
+        agent = self.get_object()
+        try:
+            contrat = AgentContrat.objects.get(pk=contrat_id, agent=agent)
+            avenant = AgentContratAvenant.objects.get(pk=avenant_id, contrat=contrat)
+        except (AgentContrat.DoesNotExist, AgentContratAvenant.DoesNotExist):
+            return Response({'error': 'Avenant non trouvé'}, status=status.HTTP_404_NOT_FOUND)
+
+        if request.method == 'DELETE':
+            avenant.delete()
+            from .agent_effectif import after_agent_contrats_changed
+            after_agent_contrats_changed(agent)
+            return Response(status=status.HTTP_204_NO_CONTENT)
+
+        serializer = AgentContratAvenantSerializer(
+            avenant,
+            data=request.data,
+            partial=True,
+        )
+        if serializer.is_valid():
+            avenant = serializer.save()
+            from .agent_effectif import after_agent_contrats_changed
+            after_agent_contrats_changed(agent)
+            return Response(AgentContratAvenantSerializer(avenant).data)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+    @action(detail=True, methods=['post'], url_path='sync-effectif')
+    def sync_effectif(self, request, pk=None):
+        """Recalcule is_active depuis les contrats (après saisie carte agent)."""
+        from .agent_effectif import after_agent_contrats_changed
+
+        agent = self.get_object()
+        agent = after_agent_contrats_changed(agent)
+        serializer = self.get_serializer(agent)
+        return Response(serializer.data)
+
+    @action(detail=True, methods=['post'], url_path='upload_photo')
+    def upload_photo(self, request, pk=None):
+        """Enregistre la photo de l'agent sur S3."""
+        from io import BytesIO
+
+        agent = self.get_object()
+        fichier = request.FILES.get('photo')
+        if not fichier:
+            return Response({'error': 'Fichier photo requis'}, status=status.HTTP_400_BAD_REQUEST)
+        try:
+            from PIL import Image
+
+            from .utils import (
+                build_agent_photo_s3_key,
+                generate_presigned_url_for_display,
+                get_s3_bucket_name,
+                get_s3_client,
+                is_s3_available,
+            )
+
+            if not is_s3_available():
+                return Response({'error': 'S3 non disponible'}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
+
+            contenu = fichier.read()
+            image = Image.open(BytesIO(contenu))
+            if image.mode in ('RGBA', 'LA', 'P'):
+                image = image.convert('RGBA')
+            elif image.mode != 'RGB':
+                image = image.convert('RGB')
+
+            largeur, hauteur = image.size
+            max_dim = 512
+            if max(largeur, hauteur) > max_dim:
+                ratio = max_dim / max(largeur, hauteur)
+                image = image.resize(
+                    (int(largeur * ratio), int(hauteur * ratio)),
+                    Image.Resampling.LANCZOS,
+                )
+
+            sortie = BytesIO()
+            if image.mode == 'RGBA':
+                image.save(sortie, format='PNG', optimize=True)
+                contenu, content_type, ext = sortie.getvalue(), 'image/png', 'png'
+            else:
+                image.save(sortie, format='JPEG', quality=85, optimize=True)
+                contenu, content_type, ext = sortie.getvalue(), 'image/jpeg', 'jpg'
+
+            s3_key = build_agent_photo_s3_key(agent.id, ext)
+            s3_client = get_s3_client()
+            bucket_name = get_s3_bucket_name()
+
+            if agent.photo_s3_key:
+                try:
+                    s3_client.delete_object(Bucket=bucket_name, Key=agent.photo_s3_key)
+                except Exception:
+                    pass
+
+            s3_client.put_object(
+                Bucket=bucket_name,
+                Key=s3_key,
+                Body=contenu,
+                ContentType=content_type,
+            )
+            agent.photo_s3_key = s3_key
+            agent.save(update_fields=['photo_s3_key'])
+            photo_url = generate_presigned_url_for_display(s3_key, expires_in=3600)
+            return Response({
+                'success': True,
+                'photo_s3_key': s3_key,
+                'photo_url': photo_url,
+            })
+        except Exception as e:
+            return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+    @action(detail=True, methods=['delete'], url_path='delete_photo')
+    def delete_photo(self, request, pk=None):
+        """Supprime la photo de l'agent."""
+        agent = self.get_object()
+        if not agent.photo_s3_key:
+            return Response({'error': 'Aucune photo'}, status=status.HTTP_400_BAD_REQUEST)
+        try:
+            from .utils import get_s3_bucket_name, get_s3_client, is_s3_available
+
+            if is_s3_available():
+                s3_client = get_s3_client()
+                bucket_name = get_s3_bucket_name()
+                try:
+                    s3_client.delete_object(Bucket=bucket_name, Key=agent.photo_s3_key)
+                except Exception:
+                    pass
+
+            agent.photo_s3_key = None
+            agent.save(update_fields=['photo_s3_key'])
+            return Response({'success': True, 'photo_s3_key': None, 'photo_url': ''})
+        except Exception as e:
+            return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
     def create(self, request):
         serializer = self.get_serializer(data=request.data)

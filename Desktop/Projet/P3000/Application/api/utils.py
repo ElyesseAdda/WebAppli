@@ -39,6 +39,80 @@ import unicodedata
 # Dossier local pour le stockage de test (sans importer settings)
 LOCAL_STORAGE_PATH = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'local_storage')
 
+# Photos carte agent — stockage S3 (masquées dans le Drive utilisateur)
+AGENT_PHOTO_S3_PREFIX = 'Agents/Photos_Agents/'
+LEGACY_AGENT_PHOTO_S3_PREFIX = 'agents/photos/'
+
+
+def build_agent_photo_s3_key(agent_id, ext):
+    """Construit la clé S3 pour une photo agent (carte agent)."""
+    import uuid
+    return f"{AGENT_PHOTO_S3_PREFIX}{agent_id}_{uuid.uuid4().hex[:8]}.{ext}"
+
+
+def _normalize_s3_path(path):
+    return (path or '').replace('\\', '/').strip('/')
+
+
+def is_agent_photo_s3_path(path):
+    """True si le chemin S3 correspond à une photo carte agent."""
+    normalized = _normalize_s3_path(path)
+    if not normalized:
+        return False
+    lower = normalized.lower()
+    return (
+        lower.startswith(LEGACY_AGENT_PHOTO_S3_PREFIX.lower())
+        or lower.startswith(AGENT_PHOTO_S3_PREFIX.lower())
+    )
+
+
+def is_drive_hidden_path(folder_path):
+    """
+    True si le dossier ne doit pas apparaître dans la navigation Drive.
+    - agents/… : ancien emplacement minuscule (legacy)
+    - Agents/Photos_Agents/… : photos système carte agent
+    """
+    normalized = _normalize_s3_path(folder_path)
+    if not normalized:
+        return False
+    parts = [p for p in normalized.split('/') if p]
+    if not parts:
+        return False
+    if parts[0] == 'agents':
+        return True
+    if len(parts) >= 2 and parts[0] == 'Agents' and parts[1] == 'Photos_Agents':
+        return True
+    return False
+
+
+def is_drive_hidden_folder(parent_path, folder_name):
+    """True si un sous-dossier doit être masqué dans le listing Drive."""
+    parent = _normalize_s3_path(parent_path)
+    name = (folder_name or '').strip('/')
+    if not name:
+        return False
+    if not parent and name == 'agents':
+        return True
+    if parent == 'Agents' and name == 'Photos_Agents':
+        return True
+    return False
+
+
+def filter_drive_listing(folders, files, parent_path=''):
+    """Filtre dossiers/fichiers système (photos carte agent) du Drive."""
+    if is_drive_hidden_path(parent_path):
+        return [], []
+    filtered_folders = [
+        f for f in folders
+        if not is_drive_hidden_folder(parent_path, f.get('name', ''))
+    ]
+    filtered_files = [
+        f for f in files
+        if not is_agent_photo_s3_path(f.get('path', ''))
+    ]
+    return filtered_folders, filtered_files
+
+
 def custom_slugify(text):
     """
     Slugification personnalisée qui préserve les majuscules au début des mots
@@ -634,6 +708,7 @@ def list_s3_folder_content(folder_path=""):
                         'type': 'file'
                     })
         
+        folders, files = filter_drive_listing(folders, files, parent_path=folder_path.rstrip('/'))
         return {
             'folders': folders,
             'files': files

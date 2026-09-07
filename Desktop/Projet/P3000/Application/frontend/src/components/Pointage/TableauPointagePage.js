@@ -87,34 +87,82 @@ const formatWorkedTime = (hoursValue, agentTypePaiement) => {
   return `${formatHours(hours)} h`;
 };
 
+const headerLabelSx = {
+  fontSize: "0.68rem",
+  fontWeight: 700,
+  lineHeight: 1.15,
+  color: "inherit",
+  display: "inline",
+};
+
 const headerCellSx = {
   fontWeight: 700,
   backgroundColor: "#1976d2",
   color: "#fff",
   textAlign: "center",
+  fontSize: "0.68rem",
+  lineHeight: 1.15,
+  padding: "8px 4px",
+  whiteSpace: "normal",
+  wordBreak: "break-word",
+  verticalAlign: "middle",
+  "& span": headerLabelSx,
 };
 
 const compactNumberColumnSx = {
   ...headerCellSx,
-  width: 130,
-  minWidth: 130,
-  maxWidth: 130,
+  width: "7.5%",
+};
+
+const nameColumnSx = {
+  ...headerCellSx,
+  width: "9%",
+};
+
+const agenceColumnSx = {
+  ...headerCellSx,
+  width: "5.5%",
+};
+
+const textColumnSx = {
+  ...headerCellSx,
+  width: "10%",
+};
+
+const hoursColumnSx = {
+  ...headerCellSx,
+  width: "6%",
 };
 
 const commonBodyCellStyle = {
-  padding: "6px 8px",
+  padding: "4px 4px",
   whiteSpace: "normal",
-  wordWrap: "break-word",
+  wordBreak: "break-word",
+  overflowWrap: "anywhere",
   textAlign: "center",
   verticalAlign: "middle",
+  fontSize: "0.78rem",
+};
+
+const truncatableTextSx = {
+  textAlign: "left",
+  fontSize: "0.75rem",
+  lineHeight: 1.2,
+  overflow: "hidden",
+  textOverflow: "ellipsis",
+  display: "-webkit-box",
+  WebkitLineClamp: 2,
+  WebkitBoxOrient: "vertical",
+  wordBreak: "break-word",
 };
 
 const clickableValueSx = {
   cursor: "pointer",
-  px: 1,
-  py: 0.75,
+  px: 0.5,
+  py: 0.5,
   borderRadius: 1,
   border: "1px solid transparent",
+  minWidth: 0,
   "&:hover": {
     backgroundColor: "rgba(27, 120, 188, 0.08)",
     borderColor: "rgba(27, 120, 188, 0.3)",
@@ -122,16 +170,18 @@ const clickableValueSx = {
 };
 
 const readOnlyValueSx = {
-  px: 1,
-  py: 0.75,
+  px: 0.5,
+  py: 0.5,
   borderRadius: 1,
+  minWidth: 0,
 };
 
 const amountTextSx = {
   textAlign: "right",
   fontWeight: 500,
-  fontSize: "0.8rem",
+  fontSize: "0.75rem",
   lineHeight: 1.2,
+  whiteSpace: "nowrap",
 };
 
 const getPaiementCellSx = (paiementValue, datePaiementValue) => {
@@ -893,7 +943,16 @@ const TableauPointagePage = () => {
   };
 
   return (
-    <Box sx={{ p: 2 }}>
+    <Box
+      sx={{
+        p: 2,
+        width: "100%",
+        maxWidth: "100%",
+        minWidth: 0,
+        boxSizing: "border-box",
+        overflowX: "hidden",
+      }}
+    >
       <Box
         sx={{
           display: "flex",
@@ -961,7 +1020,8 @@ const TableauPointagePage = () => {
             sx={{
               borderRadius: 2,
               maxWidth: "100%",
-              overflowX: "auto",
+              minWidth: 0,
+              overflowX: "hidden",
               width: "100%",
               height: "auto",
               maxHeight: "none",
@@ -972,7 +1032,7 @@ const TableauPointagePage = () => {
             <Table
               size="small"
               sx={{
-                tableLayout: "auto",
+                tableLayout: "fixed",
                 width: "100%",
               }}
             >
@@ -985,16 +1045,37 @@ const TableauPointagePage = () => {
                 }}
               >
                 <TableRow>
-                  <TableCell sx={headerCellSx}>Prenom</TableCell>
-                  <TableCell sx={headerCellSx}>Nom</TableCell>
-                  <TableCell sx={compactNumberColumnSx}>
-                    Salaire net initiale hors prime
+                  <TableCell sx={nameColumnSx}>
+                    <span>
+                      Nom
+                      <br />
+                      Prénom
+                    </span>
                   </TableCell>
-                  <TableCell sx={compactNumberColumnSx}>Paiement</TableCell>
-                  <TableCell sx={compactNumberColumnSx}>Date de paiement</TableCell>
-                  <TableCell sx={compactNumberColumnSx}>Montant prévisionnel</TableCell>
-                  <TableCell sx={compactNumberColumnSx}>Montant charge</TableCell>
-                  <TableCell sx={headerCellSx}>
+                  <TableCell sx={compactNumberColumnSx}>
+                    <Tooltip title="Salaire net initial hors prime">
+                      <span>Salaire net init.</span>
+                    </Tooltip>
+                  </TableCell>
+                  <TableCell sx={compactNumberColumnSx}>
+                    <span>Paiement</span>
+                  </TableCell>
+                  <TableCell sx={compactNumberColumnSx}>
+                    <Tooltip title="Date de paiement">
+                      <span>Date paiement</span>
+                    </Tooltip>
+                  </TableCell>
+                  <TableCell sx={compactNumberColumnSx}>
+                    <Tooltip title="Montant prévisionnel">
+                      <span>Montant prév.</span>
+                    </Tooltip>
+                  </TableCell>
+                  <TableCell sx={compactNumberColumnSx}>
+                    <Tooltip title="Montant charge">
+                      <span>Montant charge</span>
+                    </Tooltip>
+                  </TableCell>
+                  <TableCell sx={agenceColumnSx}>
                     <Tooltip
                       title={
                         "Case : cocher pour ouvrir la répartition, décocher pour tout imputer à la main d'œuvre chantier. Icône : ouvrir le détail de répartition."
@@ -1003,12 +1084,20 @@ const TableauPointagePage = () => {
                       <span>Agence</span>
                     </Tooltip>
                   </TableCell>
-                  <TableCell sx={compactNumberColumnSx}>Accompte</TableCell>
-                  <TableCell sx={compactNumberColumnSx}>Prime</TableCell>
-                  <TableCell sx={headerCellSx}>Adresse mail</TableCell>
-                  <TableCell sx={headerCellSx}>Commentaire</TableCell>
-                  <TableCell align="right" sx={headerCellSx}>
-                    Total heures
+                  <TableCell sx={compactNumberColumnSx}>
+                    <span>Accompte</span>
+                  </TableCell>
+                  <TableCell sx={compactNumberColumnSx}>
+                    <span>Prime</span>
+                  </TableCell>
+                  <TableCell sx={textColumnSx}>
+                    <span>Email</span>
+                  </TableCell>
+                  <TableCell sx={textColumnSx}>
+                    <span>Commentaire</span>
+                  </TableCell>
+                  <TableCell align="right" sx={hoursColumnSx}>
+                    <span>Total</span>
                   </TableCell>
                 </TableRow>
               </TableHead>
@@ -1017,7 +1106,7 @@ const TableauPointagePage = () => {
                   <React.Fragment key={group.key}>
                     <TableRow>
                       <TableCell
-                        colSpan={13}
+                        colSpan={12}
                         sx={{
                           backgroundColor: "rgba(27, 120, 188, 0.12)",
                           color: "rgba(27, 120, 188, 1)",
@@ -1045,8 +1134,43 @@ const TableauPointagePage = () => {
                           "&:hover": { backgroundColor: "#f5f5f5" },
                         }}
                       >
-                        <TableCell sx={commonBodyCellStyle}>{row.prenom}</TableCell>
-                        <TableCell sx={commonBodyCellStyle}>{row.nom}</TableCell>
+                        <TableCell sx={{ ...commonBodyCellStyle, textAlign: "center" }}>
+                          <Box
+                            sx={{
+                              display: "flex",
+                              flexDirection: "column",
+                              alignItems: "center",
+                              justifyContent: "center",
+                              gap: 0.15,
+                              minWidth: 0,
+                              width: "100%",
+                            }}
+                          >
+                            <Typography
+                              sx={{
+                                fontSize: "0.78rem",
+                                fontWeight: 700,
+                                lineHeight: 1.2,
+                                wordBreak: "break-word",
+                                textAlign: "center",
+                              }}
+                            >
+                              {row.nom || "-"}
+                            </Typography>
+                            <Typography
+                              sx={{
+                                fontSize: "0.75rem",
+                                fontWeight: 500,
+                                lineHeight: 1.2,
+                                color: "text.secondary",
+                                wordBreak: "break-word",
+                                textAlign: "center",
+                              }}
+                            >
+                              {row.prenom || "-"}
+                            </Typography>
+                          </Box>
+                        </TableCell>
                         <TableCell sx={commonBodyCellStyle}>
                           <Box sx={clickableValueSx} onClick={() => openEditor(row, "salaireInitial")}>
                             <Typography sx={amountTextSx}>
@@ -1091,11 +1215,14 @@ const TableauPointagePage = () => {
                               display: "flex",
                               alignItems: "center",
                               justifyContent: "center",
-                              gap: 0.25,
+                              gap: 0,
+                              flexWrap: "nowrap",
+                              minWidth: 0,
                             }}
                           >
                             <Tooltip title="Cocher pour répartir (modal) ; décocher pour tout en main d'œuvre chantier">
                               <Checkbox
+                                size="small"
                                 checked={isAgenceChargeChecked(row)}
                                 onChange={(_e, checked) => {
                                   if (rowPointageSavingBusy(row.id)) return;
@@ -1106,6 +1233,7 @@ const TableauPointagePage = () => {
                                   }
                                 }}
                                 disabled={rowPointageSavingBusy(row.id)}
+                                sx={{ p: 0.25 }}
                               />
                             </Tooltip>
                             <Tooltip title="Répartition détaillée (agences / chantier)">
@@ -1119,7 +1247,7 @@ const TableauPointagePage = () => {
                                     setRepartitionModalRow(row);
                                   }}
                                   disabled={rowPointageSavingBusy(row.id)}
-                                  sx={{ color: "rgba(27, 120, 188, 0.9)" }}
+                                  sx={{ color: "rgba(27, 120, 188, 0.9)", p: 0.25 }}
                                 >
                                   <PieChartOutline fontSize="small" />
                                 </IconButton>
@@ -1139,19 +1267,26 @@ const TableauPointagePage = () => {
                         </TableCell>
                         <TableCell sx={commonBodyCellStyle}>
                           <Box sx={clickableValueSx} onClick={() => openEditor(row, "email")}>
-                            <Typography sx={{ textAlign: "left" }}>
-                              {row.email || "-"}
-                            </Typography>
+                            <Tooltip title={row.email || ""} disableHoverListener={!row.email}>
+                              <Typography sx={truncatableTextSx}>
+                                {row.email || "-"}
+                              </Typography>
+                            </Tooltip>
                           </Box>
                         </TableCell>
                         <TableCell sx={commonBodyCellStyle}>
                           <Box sx={clickableValueSx} onClick={() => openEditor(row, "commentaire")}>
-                            <Typography sx={{ textAlign: "left" }}>
-                              {row.commentaire || "-"}
-                            </Typography>
+                            <Tooltip
+                              title={row.commentaire || ""}
+                              disableHoverListener={!row.commentaire}
+                            >
+                              <Typography sx={truncatableTextSx}>
+                                {row.commentaire || "-"}
+                              </Typography>
+                            </Tooltip>
                           </Box>
                         </TableCell>
-                        <TableCell align="right" sx={commonBodyCellStyle}>
+                        <TableCell align="right" sx={{ ...commonBodyCellStyle, whiteSpace: "nowrap" }}>
                           {formatWorkedTime(row.totalHeures, agents.find((a) => a.id === row.id)?.type_paiement)}
                         </TableCell>
                       </TableRow>
