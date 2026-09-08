@@ -257,6 +257,66 @@ class DriveV2ViewSet(viewsets.ViewSet):
                 {'error': str(e)},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
+
+    @action(detail=False, methods=['get'], url_path='folder-download-manifest')
+    def folder_download_manifest(self, request):
+        """
+        Manifeste des fichiers d'un dossier (URLs S3 présignées) pour un ZIP côté client.
+        """
+        try:
+            folder_path = request.query_params.get('folder_path')
+            if not folder_path:
+                return Response(
+                    {'error': 'folder_path est requis'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            expires_in = int(request.query_params.get('expires_in', 7200))
+            manifest = self.drive_manager.get_folder_download_manifest(folder_path, expires_in)
+            return Response(manifest, status=status.HTTP_200_OK)
+        except Exception as e:
+            return Response(
+                {'error': str(e)},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+    @action(detail=False, methods=['get'], url_path='stream-file')
+    def stream_file(self, request):
+        """
+        Stream brut d'un fichier S3 (repli si CORS S3 indisponible).
+        """
+        try:
+            file_path = request.query_params.get('file_path')
+            if not file_path:
+                return Response(
+                    {'error': 'file_path est requis'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
+            s3_obj = self.drive_manager.storage.s3_client.get_object(
+                Bucket=self.drive_manager.storage.bucket_name,
+                Key=file_path,
+            )
+
+            def generate():
+                for chunk in s3_obj['Body'].iter_chunks(8 * 1024 * 1024):
+                    if chunk:
+                        yield chunk
+
+            response = StreamingHttpResponse(
+                generate(),
+                content_type='application/octet-stream',
+            )
+            content_length = s3_obj.get('ContentLength')
+            if content_length is not None:
+                response['Content-Length'] = content_length
+            response['X-Accel-Buffering'] = 'no'
+            response['Cache-Control'] = 'no-cache'
+            return response
+        except Exception as e:
+            return Response(
+                {'error': str(e)},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
     
     @action(detail=False, methods=['get'], url_path='display-url')
     def get_display_url(self, request):
