@@ -64,6 +64,41 @@ const ButtonGroup = styled("div")({
   gap: "10px",
 });
 
+const MonthlyControlsRow = styled("div")({
+  display: "flex",
+  alignItems: "flex-start",
+  gap: "16px",
+  marginTop: "20px",
+  marginBottom: "20px",
+  flexWrap: "wrap",
+});
+
+const SelectedAgentPhotoPanel = styled("div")({
+  flex: "0 0 auto",
+  width: 136,
+  height: 168,
+  borderRadius: "4px",
+  overflow: "hidden",
+  backgroundColor: "#e8eef5",
+  "& img": {
+    width: "100%",
+    height: "100%",
+    objectFit: "cover",
+    display: "block",
+    border: "none",
+  },
+  "& .placeholder": {
+    width: "100%",
+    height: "100%",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    fontSize: "1.4rem",
+    fontWeight: 700,
+    color: "#1b78bc",
+  },
+});
+
 const formatWeekRangeLabel = (week, year, getStartDate) => {
   const start = dayjs(getStartDate(week, year)).locale("fr");
   const end = start.add(6, "day");
@@ -684,8 +719,9 @@ const PlanningContainer = () => {
         </ButtonGroup>
       </ControlsContainer>
 
-      {/* Section pour le rapport mensuel */}
-      <ControlsContainer>
+      {/* Section pour le rapport mensuel + photos agents (carte agent) */}
+      <MonthlyControlsRow>
+      <ControlsContainer style={{ marginTop: 0, marginBottom: 0 }}>
         <SelectGroup>
           <StyledFormControl>
             <InputLabel>Mois</InputLabel>
@@ -761,6 +797,28 @@ const PlanningContainer = () => {
           </IconButton>
         </ButtonGroup>
       </ControlsContainer>
+
+      {(() => {
+        const selectedAgent = agents.find((agent) => agent.id === selectedAgentId);
+        const label = selectedAgent
+          ? `${selectedAgent.surname || ""} ${selectedAgent.name || ""}`.trim()
+          : "Photo agent";
+
+        return (
+          <SelectedAgentPhotoPanel title={label}>
+            {selectedAgent?.photo_url ? (
+              <img src={selectedAgent.photo_url} alt={label} />
+            ) : (
+              <span className="placeholder">
+                {selectedAgent
+                  ? `${(selectedAgent.surname || "?")[0]}${(selectedAgent.name || "?")[0]}`.toUpperCase()
+                  : "—"}
+              </span>
+            )}
+          </SelectedAgentPhotoPanel>
+        );
+      })()}
+      </MonthlyControlsRow>
 
       {selectedAgentId ? (
         (() => {

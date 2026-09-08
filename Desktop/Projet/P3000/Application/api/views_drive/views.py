@@ -12,11 +12,68 @@ from django.views.decorators.clickjacking import xframe_options_exempt
 from django.utils.decorators import method_decorator
 from rest_framework.permissions import AllowAny
 from django.http import StreamingHttpResponse, JsonResponse, HttpResponse
+import json
+import queue as queue_module
+import threading
 import requests
 from .manager import DriveManager, normalize_filename
 from .onlyoffice import OnlyOfficeManager
 from ..utils import encode_filename_for_content_disposition
 import io
+
+
+def _stream_progress_operation(operation):
+    """
+    Exécute une opération S3 (rename/move) et streame la progression en NDJSON.
+    L'UI peut afficher une barre de progression sans attendre la fin.
+    """
+    events = queue_module.Queue()
+
+    def progress_callback(processed, total, current=''):
+        percent = int(processed * 100 / total) if total else 0
+        events.put({
+            'status': 'running',
+            'processed': processed,
+            'total': total,
+            'progress': percent,
+            'current': current or '',
+        })
+
+    def run():
+        try:
+            result = operation(progress_callback)
+            payload = {'status': 'completed', 'success': True}
+            if isinstance(result, dict):
+                payload.update(result)
+                payload['status'] = 'completed'
+            events.put(payload)
+        except ValueError as e:
+            events.put({'status': 'failed', 'error': str(e)})
+        except Exception as e:
+            events.put({'status': 'failed', 'error': str(e)})
+        finally:
+            events.put(None)
+
+    threading.Thread(target=run, daemon=True).start()
+
+    def generate():
+        yield json.dumps({
+            'status': 'running',
+            'processed': 0,
+            'total': 0,
+            'progress': 0,
+            'current': 'Préparation...',
+        }, ensure_ascii=False) + '\n'
+        while True:
+            event = events.get()
+            if event is None:
+                break
+            yield json.dumps(event, ensure_ascii=False) + '\n'
+
+    response = StreamingHttpResponse(generate(), content_type='application/x-ndjson')
+    response['X-Accel-Buffering'] = 'no'
+    response['Cache-Control'] = 'no-cache'
+    return response
 
 
 class DriveV2ViewSet(viewsets.ViewSet):
@@ -185,14 +242,14 @@ class DriveV2ViewSet(viewsets.ViewSet):
                     status=status.HTTP_400_BAD_REQUEST
                 )
             
-            # Créer le ZIP avec tous les fichiers du dossier
-            zip_content, zip_filename = self.drive_manager.download_folder_as_zip(folder_path)
-            
-            # Créer la réponse HTTP avec le ZIP
-            response = HttpResponse(zip_content, content_type='application/zip')
+            zip_filename = self.drive_manager.get_folder_zip_filename(folder_path)
+            response = StreamingHttpResponse(
+                self.drive_manager.stream_folder_as_zip(folder_path),
+                content_type='application/zip',
+            )
             response['Content-Disposition'] = encode_filename_for_content_disposition(zip_filename, 'attachment')
-            response['Content-Length'] = len(zip_content)
-            
+            response['X-Accel-Buffering'] = 'no'
+            response['Cache-Control'] = 'no-cache'
             return response
             
         except Exception as e:
@@ -325,8 +382,14 @@ class DriveV2ViewSet(viewsets.ViewSet):
                 )
             
             modified_by = self._get_modified_by(request)
-            result = self.drive_manager.move_item(source_path, dest_path, modified_by=modified_by)
-            return Response(result, status=status.HTTP_200_OK)
+            return _stream_progress_operation(
+                lambda progress_callback: self.drive_manager.move_item(
+                    source_path,
+                    dest_path,
+                    modified_by=modified_by,
+                    progress_callback=progress_callback,
+                )
+            )
             
         except Exception as e:
             return Response(
@@ -354,8 +417,14 @@ class DriveV2ViewSet(viewsets.ViewSet):
                 )
             
             modified_by = self._get_modified_by(request)
-            result = self.drive_manager.rename_item(old_path, new_name, modified_by=modified_by)
-            return Response(result, status=status.HTTP_200_OK)
+            return _stream_progress_operation(
+                lambda progress_callback: self.drive_manager.rename_item(
+                    old_path,
+                    new_name,
+                    modified_by=modified_by,
+                    progress_callback=progress_callback,
+                )
+            )
             
         except ValueError as e:
             # Erreur de conflit de nom (message clair pour l'utilisateur)

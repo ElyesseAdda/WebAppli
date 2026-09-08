@@ -6,6 +6,11 @@
   box-shadow: none;
 }
 
+/* Laisser le dropdown agents dépasser le cadre de la carte */
+.agent-carte-modal:has(.agent-carte-search.is-open) .MuiDialog-paper {
+  overflow: visible;
+}
+
 .agent-carte-form {
   display: block;
   height: 100%;
@@ -25,11 +30,17 @@
   flex-direction: column;
 }
 
+.agent-carte:has(.agent-carte-search.is-open) {
+  overflow: visible;
+}
+
 .agent-carte-content {
   flex: 1 1 auto;
   overflow-y: auto;
   min-height: 0;
   overscroll-behavior: contain;
+  position: relative;
+  z-index: 1;
 }
 
 .agent-carte-content::-webkit-scrollbar {
@@ -56,6 +67,8 @@
   align-items: center;
   justify-content: space-between;
   flex-shrink: 0;
+  position: relative;
+  z-index: 1;
 }
 .agent-carte-header-title {
   font-size: 1.1rem;
@@ -354,7 +367,7 @@
   border: 2px solid #1b78bc;
   border-radius: 8px;
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.18);
-  z-index: 50;
+  z-index: 120;
 }
 
 .agent-carte-agent-dropdown-item {
@@ -418,6 +431,10 @@
   background: #fff;
 }
 
+.agent-carte-search.is-open {
+  z-index: 40;
+}
+
 .agent-carte-search-row {
   display: flex;
   align-items: stretch;
@@ -433,13 +450,25 @@
 .agent-carte-footer {
   padding: 12px 24px 20px;
   display: flex;
-  justify-content: flex-end;
+  justify-content: space-between;
+  align-items: center;
   gap: 12px;
   border-top: 1px solid #eee;
   flex-shrink: 0;
   background: #fff;
   position: relative;
   z-index: 5;
+}
+
+.agent-carte-footer-left,
+.agent-carte-footer-right {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.agent-carte-footer-right {
+  margin-left: auto;
 }
 @media (max-width: 640px) {
   .agent-carte-body {
