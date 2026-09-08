@@ -25,6 +25,7 @@ import {
   InputAdornment,
   Divider,
   Backdrop,
+  LinearProgress,
 } from '@mui/material';
 import {
   Folder as FolderIcon,
@@ -36,6 +37,7 @@ import {
 import { styled } from '@mui/material/styles';
 import axios from 'axios';
 import { displayFilename } from './DriveExplorer';
+import { drivePostWithProgress } from './utils/driveOperations';
 
 const API_BASE_URL = '/api/drive-v2';
 
@@ -72,6 +74,7 @@ const MoveDialog = ({ open, onClose, itemsToMove, onMoveComplete, onNavigate }) 
   const [isSearching, setIsSearching] = useState(false);
   const [showSearchResults, setShowSearchResults] = useState(false);
   const [isTransferring, setIsTransferring] = useState(false);
+  const [transferProgress, setTransferProgress] = useState(null);
   
   // Cache pour les dossiers visités (améliore les performances)
   const [folderCache, setFolderCache] = useState(new Map());
@@ -278,34 +281,33 @@ const MoveDialog = ({ open, onClose, itemsToMove, onMoveComplete, onNavigate }) 
     setLoading(true);
     setIsTransferring(true);
     setError(null);
+    setTransferProgress({
+      title: 'Déplacement en cours...',
+      current: 'Préparation...',
+      processed: 0,
+      total: 0,
+      progress: 0,
+    });
 
     try {
-      const movePromises = itemsToMove.map(async (item) => {
-        const fileName = item.name;
-        const destPath = selectedDestination + fileName + (item.type === 'folder' ? '/' : '');
-        
-        const response = await fetch('/api/drive-v2/move-item/', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'X-CSRFToken': getCookie('csrftoken'),
-          },
-          credentials: 'include',
-          body: JSON.stringify({
-            source_path: item.path,
-            dest_path: destPath,
-          }),
+      for (let i = 0; i < itemsToMove.length; i += 1) {
+        const item = itemsToMove[i];
+        const destPath = selectedDestination + item.name + (item.type === 'folder' ? '/' : '');
+        await drivePostWithProgress('/api/drive-v2/move-item/', {
+          source_path: item.path,
+          dest_path: destPath,
+        }, (event) => {
+          setTransferProgress({
+            title: itemsToMove.length > 1
+              ? `Déplacement ${i + 1}/${itemsToMove.length}`
+              : 'Déplacement en cours...',
+            current: event.current || displayFilename(item.name),
+            processed: event.processed || 0,
+            total: event.total || 0,
+            progress: event.progress || 0,
+          });
         });
-
-        if (!response.ok) {
-          const error = await response.json();
-          throw new Error(error.error || 'Erreur lors du déplacement');
-        }
-
-        return response.json();
-      });
-
-      await Promise.all(movePromises);
+      }
       
       // Naviguer vers le dossier de destination
       if (onNavigate && selectedDestination !== null) {
@@ -321,6 +323,7 @@ const MoveDialog = ({ open, onClose, itemsToMove, onMoveComplete, onNavigate }) 
     } finally {
       setLoading(false);
       setIsTransferring(false);
+      setTransferProgress(null);
     }
   };
 
@@ -531,15 +534,33 @@ const MoveDialog = ({ open, onClose, itemsToMove, onMoveComplete, onNavigate }) 
           display: 'flex',
           flexDirection: 'column',
           gap: 2,
+          px: 3,
         })}
       >
-        <CircularProgress color="inherit" />
         <Typography variant="body1" fontWeight={600}>
-          Transfert en cours...
+          {transferProgress?.title || 'Transfert en cours...'}
         </Typography>
-        <Typography variant="body2">
-          Déplacement de {itemsToMove.length} élément{itemsToMove.length > 1 ? 's' : ''} en cours
-        </Typography>
+        {transferProgress?.current ? (
+          <Typography variant="body2" noWrap sx={{ maxWidth: 420 }}>
+            {transferProgress.current}
+          </Typography>
+        ) : (
+          <Typography variant="body2">
+            Déplacement de {itemsToMove.length} élément{itemsToMove.length > 1 ? 's' : ''}
+          </Typography>
+        )}
+        <Box sx={{ width: 360, maxWidth: '80vw' }}>
+          <LinearProgress
+            variant={transferProgress?.total > 0 ? 'determinate' : 'indeterminate'}
+            value={transferProgress?.progress || 0}
+            sx={{ height: 8, borderRadius: 4, backgroundColor: 'rgba(255,255,255,0.25)' }}
+          />
+          {transferProgress?.total > 0 && (
+            <Typography variant="caption" display="block" textAlign="center" sx={{ mt: 1 }}>
+              {transferProgress.processed} / {transferProgress.total} fichiers • {transferProgress.progress}%
+            </Typography>
+          )}
+        </Box>
       </Backdrop>
     </Dialog>
   );

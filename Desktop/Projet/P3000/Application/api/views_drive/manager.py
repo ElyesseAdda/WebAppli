@@ -2,11 +2,10 @@
 Drive Manager - Gestionnaire principal du Drive V2
 """
 
-from typing import Dict, List, Optional, Tuple
+from typing import Callable, Dict, Generator, List, Optional, Tuple
 from .storage import StorageManager
 import re
 import zipfile
-import io
 from datetime import datetime
 from ..utils import encode_filename_for_content_disposition
 
@@ -35,6 +34,46 @@ def normalize_filename(filename: str) -> str:
     normalized = normalized.replace('/', '∕')
     
     return normalized
+
+
+class _ZipStreamBuffer:
+    """Buffer non seekable pour streamer un ZIP au fur et à mesure de son écriture."""
+
+    def __init__(self):
+        self._chunks = []
+        self._written = 0
+
+    def write(self, data):
+        if isinstance(data, str):
+            data = data.encode('utf-8')
+        if data:
+            chunk = bytes(data)
+            self._chunks.append(chunk)
+            self._written += len(chunk)
+            return len(chunk)
+        return 0
+
+    def tell(self):
+        return self._written
+
+    def seek(self, *args, **kwargs):
+        raise OSError('not seekable')
+
+    def seekable(self):
+        return False
+
+    def flush(self):
+        pass
+
+    def close(self):
+        pass
+
+    def drain(self) -> bytes:
+        if not self._chunks:
+            return b''
+        data = b''.join(self._chunks)
+        self._chunks.clear()
+        return data
 
 
 def denormalize_filename(normalized_filename: str) -> str:
@@ -507,7 +546,8 @@ class DriveManager:
         self,
         source_path: str,
         dest_path: str,
-        modified_by: Optional[str] = None
+        modified_by: Optional[str] = None,
+        progress_callback: Optional[Callable[[int, int, str], None]] = None
     ) -> Dict:
         """
         Déplace un fichier ou dossier
@@ -516,6 +556,7 @@ class DriveManager:
             source_path: Chemin source
             dest_path: Chemin destination (peut contenir le nom du fichier)
             modified_by: Nom de l'utilisateur qui déplace
+            progress_callback: Callback (processed, total, current_name)
             
         Returns:
             Dict avec le résultat
@@ -535,7 +576,11 @@ class DriveManager:
             if is_folder:
                 old_item_name += '/'
             
-            success = self.storage.move_object(source_path, dest_path_normalized)
+            success = self.storage.move_object(
+                source_path,
+                dest_path_normalized,
+                progress_callback=progress_callback,
+            )
             
             if success:
                 # Supprimer l'entrée du .metadata.json source
@@ -571,7 +616,8 @@ class DriveManager:
         self,
         old_path: str,
         new_name: str,
-        modified_by: Optional[str] = None
+        modified_by: Optional[str] = None,
+        progress_callback: Optional[Callable[[int, int, str], None]] = None
     ) -> Dict:
         """
         Renomme un fichier ou dossier
@@ -580,6 +626,7 @@ class DriveManager:
             old_path: Ancien chemin
             new_name: Nouveau nom
             modified_by: Nom de l'utilisateur qui renomme
+            progress_callback: Callback (processed, total, current_name)
             
         Returns:
             Dict avec le résultat
@@ -617,7 +664,11 @@ class DriveManager:
                 if new_path in existing_files and new_path != old_path:
                     raise ValueError(f"Un fichier avec le nom '{new_name}' existe déjà")
             
-            success = self.storage.move_object(old_path, new_path)
+            success = self.storage.move_object(
+                old_path,
+                new_path,
+                progress_callback=progress_callback,
+            )
             
             if success:
                 # Mettre à jour le .metadata.json : supprimer l'ancien nom, ajouter le nouveau
@@ -671,57 +722,84 @@ class DriveManager:
         
         return breadcrumb
     
+    def get_folder_zip_filename(self, folder_path: str) -> str:
+        """Retourne le nom du ZIP pour un dossier."""
+        normalized_path = self.normalize_path(folder_path)
+        folder_name = normalized_path.rstrip('/').split('/')[-1] if normalized_path.rstrip('/') else 'dossier'
+        return f"{folder_name}.zip"
+
+    def stream_folder_as_zip(self, folder_path: str) -> Generator[bytes, None, None]:
+        """
+        Stream un ZIP du dossier : le téléchargement démarre dès le premier fichier.
+        """
+        normalized_path = self.normalize_path(folder_path)
+        buffer = _ZipStreamBuffer()
+
+        with zipfile.ZipFile(
+            buffer,
+            mode='w',
+            compression=zipfile.ZIP_DEFLATED,
+            allowZip64=True,
+            compresslevel=1,
+        ) as zip_file:
+            paginator = self.storage.s3_client.get_paginator('list_objects_v2')
+            for page in paginator.paginate(
+                Bucket=self.storage.bucket_name,
+                Prefix=normalized_path,
+            ):
+                for obj in page.get('Contents') or []:
+                    key = obj['Key']
+                    if (
+                        key.endswith('/')
+                        or key.endswith('/.keep')
+                        or key.endswith('/.metadata.json')
+                        or key == normalized_path
+                    ):
+                        continue
+
+                    relative_path = key[len(normalized_path):]
+                    if not relative_path:
+                        continue
+
+                    info = zipfile.ZipInfo(relative_path.replace('\\', '/'))
+                    info.compress_type = zipfile.ZIP_DEFLATED
+                    info.flag_bits |= 0x800
+                    last_modified = obj.get('LastModified')
+                    if last_modified:
+                        info.date_time = last_modified.timetuple()[:6]
+
+                    try:
+                        s3_obj = self.storage.s3_client.get_object(
+                            Bucket=self.storage.bucket_name,
+                            Key=key,
+                        )
+                        with zip_file.open(info, 'w') as dest:
+                            for chunk in s3_obj['Body'].iter_chunks(256 * 1024):
+                                dest.write(chunk)
+                                data = buffer.drain()
+                                if data:
+                                    yield data
+                        data = buffer.drain()
+                        if data:
+                            yield data
+                    except Exception as e:
+                        print(f"Erreur lors du téléchargement de {key}: {str(e)}")
+                        continue
+
+        data = buffer.drain()
+        if data:
+            yield data
+
     def download_folder_as_zip(
         self,
         folder_path: str
     ) -> Tuple[bytes, str]:
         """
-        Télécharge un dossier et tous ses fichiers dans un ZIP
-        
-        Args:
-            folder_path: Chemin du dossier à télécharger
-            
-        Returns:
-            Tuple (contenu_zip, nom_fichier_zip)
+        Construit un ZIP complet en mémoire (compatibilité).
+        Préférer stream_folder_as_zip pour les gros dossiers.
         """
-        try:
-            # Normaliser le chemin du dossier
-            normalized_path = self.normalize_path(folder_path)
-            
-            # Récupérer le nom du dossier pour le nom du ZIP
-            folder_name = normalized_path.rstrip('/').split('/')[-1] if normalized_path.rstrip('/') else 'dossier'
-            zip_filename = f"{folder_name}.zip"
-            
-            # Créer un ZIP en mémoire
-            zip_buffer = io.BytesIO()
-            
-            with zipfile.ZipFile(zip_buffer, 'w', zipfile.ZIP_DEFLATED) as zip_file:
-                # Récupérer récursivement tous les fichiers du dossier
-                all_files = self._get_all_files_recursive(normalized_path)
-                
-                # Télécharger chaque fichier et l'ajouter au ZIP
-                for file_info in all_files:
-                    try:
-                        # Télécharger le fichier depuis S3
-                        file_content = self.storage.download_file_content(file_info['path'])
-                        
-                        # Calculer le chemin relatif dans le ZIP
-                        # Enlever le préfixe du dossier parent pour garder la structure relative
-                        relative_path = file_info['path'][len(normalized_path):]
-                        
-                        # Ajouter le fichier au ZIP avec son chemin relatif
-                        zip_file.writestr(relative_path, file_content)
-                    except Exception as e:
-                        # Continuer même si un fichier échoue
-                        print(f"Erreur lors du téléchargement de {file_info['path']}: {str(e)}")
-                        continue
-            
-            # Retourner le contenu du ZIP
-            zip_buffer.seek(0)
-            return zip_buffer.read(), zip_filename
-            
-        except Exception as e:
-            raise Exception(f"Erreur lors de la création du ZIP: {str(e)}")
+        zip_filename = self.get_folder_zip_filename(folder_path)
+        return b''.join(self.stream_folder_as_zip(folder_path)), zip_filename
     
     def _get_all_files_recursive(self, folder_path: str) -> List[Dict]:
         """

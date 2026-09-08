@@ -87,6 +87,8 @@ import MoveDialog from './MoveDialog';
 import { useUpload } from './hooks/useUpload';
 import { normalizeFilename } from './services/pathNormalizationService';
 import { isSystemJunkFileName, isSystemJunkFolderName } from './utils/systemJunkFiles';
+import DriveOperationSnackbar from './DriveOperationSnackbar';
+import { drivePostWithProgress, startNativeFolderDownload } from './utils/driveOperations';
 
 const ExplorerContainer = styled(Box)(({ theme, isDragOver }) => ({
   flex: 1,
@@ -222,6 +224,8 @@ const DriveExplorer = ({
   const [downloadingFolder, setDownloadingFolder] = useState(null);
   const [isMovingItems, setIsMovingItems] = useState(false);
   const [moveTargetLabel, setMoveTargetLabel] = useState('');
+  const [driveOperation, setDriveOperation] = useState(null);
+  const [optimisticRename, setOptimisticRename] = useState(null);
   const [sortConfig, setSortConfig] = useState({
     key: 'name',
     direction: 'asc',
@@ -299,6 +303,24 @@ const DriveExplorer = ({
 
   const sortedFolders = useMemo(() => [...folders].sort(compareBySort), [folders, compareBySort]);
   const sortedFiles = useMemo(() => [...files].sort(compareBySort), [files, compareBySort]);
+
+  const visibleFolders = useMemo(() => {
+    if (!optimisticRename || optimisticRename.type !== 'folder') return sortedFolders;
+    return sortedFolders.map((folder) => (
+      folder.path === optimisticRename.oldPath
+        ? { ...folder, name: optimisticRename.newName, path: optimisticRename.newPath }
+        : folder
+    ));
+  }, [sortedFolders, optimisticRename]);
+
+  const visibleFiles = useMemo(() => {
+    if (!optimisticRename || optimisticRename.type !== 'file') return sortedFiles;
+    return sortedFiles.map((file) => (
+      file.path === optimisticRename.oldPath
+        ? { ...file, name: optimisticRename.newName, path: optimisticRename.newPath }
+        : file
+    ));
+  }, [sortedFiles, optimisticRename]);
 
   // Gérer les touches clavier (Escape pour désélectionner, Ctrl+C pour copier)
   useEffect(() => {
@@ -680,36 +702,36 @@ const DriveExplorer = ({
     try {
       setMoveTargetLabel(displayFilename(targetFolder.name));
       setIsMovingItems(true);
-      const movePromises = draggedItems.map(async (item) => {
-        const fileName = item.name;
-        const destPath = targetPath + fileName + (item.type === 'folder' ? '/' : '');
-        
-        const response = await fetch('/api/drive-v2/move-item/', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'X-CSRFToken': getCookie('csrftoken'),
-          },
-          credentials: 'include',
-          body: JSON.stringify({
-            source_path: item.path,
-            dest_path: destPath,
-          }),
-        });
-
-        if (!response.ok) {
-          const error = await response.json();
-          throw new Error(error.error || 'Erreur lors du déplacement');
-        }
-
-        return response.json();
+      setDriveOperation({
+        mode: 'move',
+        title: `Déplacement vers « ${displayFilename(targetFolder.name)} »`,
+        current: 'Préparation...',
+        processed: 0,
+        total: 0,
+        progress: 0,
       });
 
-      await Promise.all(movePromises);
+      for (let i = 0; i < draggedItems.length; i += 1) {
+        const item = draggedItems[i];
+        const destPath = targetPath + item.name + (item.type === 'folder' ? '/' : '');
+        await drivePostWithProgress('/api/drive-v2/move-item/', {
+          source_path: item.path,
+          dest_path: destPath,
+        }, (event) => {
+          setDriveOperation((prev) => (prev ? {
+            ...prev,
+            ...event,
+            current: event.current || displayFilename(item.name),
+            title: draggedItems.length > 1
+              ? `Déplacement ${i + 1}/${draggedItems.length} vers « ${displayFilename(targetFolder.name)} »`
+              : prev.title,
+          } : prev));
+        });
+      }
+
       setSelectedFiles(new Set());
       setDraggedItems(null);
       
-      // Notifier le parent que le drag est terminé
       if (onDraggedItemsChange) {
         onDraggedItemsChange(null);
       }
@@ -721,6 +743,7 @@ const DriveExplorer = ({
     } finally {
       setIsMovingItems(false);
       setMoveTargetLabel('');
+      setDriveOperation(null);
     }
   }, [draggedItems, onRefresh]);
 
@@ -1092,72 +1115,14 @@ const DriveExplorer = ({
     // Extraire le nom du dossier une seule fois
     const folderName = displayFilename(folderToDownload.name || folderToDownload.path?.split('/').filter(Boolean).pop() || 'dossier');
 
-    // Afficher l'indicateur de chargement immédiatement
-    setDownloadingFolder(folderName);
-
-    try {
-      // Afficher un message de chargement
-      const loadingMessage = `Téléchargement du dossier "${folderName}" en cours...`;
-      console.log(loadingMessage);
-
-      // S'assurer que le path se termine par '/' pour un dossier
-      let folderPath = folderToDownload.path;
-      if (folderPath && !folderPath.endsWith('/')) {
-        folderPath = folderPath + '/';
-      }
-      
-      console.log('Téléchargement du dossier:', { folderPath, folderToDownload });
-      
-      const response = await fetch(
-        `/api/drive-v2/download-folder/?folder_path=${encodeURIComponent(folderPath)}`,
-        {
-          credentials: 'include',
-          method: 'GET',
-        }
-      );
-      
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({ error: 'Erreur inconnue' }));
-        throw new Error(errorData.error || `Erreur HTTP ${response.status}`);
-      }
-
-      // Récupérer le contenu du ZIP
-      const blob = await response.blob();
-      
-      // Extraire le nom du fichier depuis le header Content-Disposition
-      const contentDisposition = response.headers.get('Content-Disposition');
-      let zipFilename = `${folderName}.zip`;
-      if (contentDisposition) {
-        const filenameMatch = contentDisposition.match(/filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/);
-        if (filenameMatch && filenameMatch[1]) {
-          zipFilename = filenameMatch[1].replace(/['"]/g, '');
-          // Décoder l'URL si nécessaire
-          try {
-            zipFilename = decodeURIComponent(zipFilename);
-          } catch (e) {
-            // Si le décodage échoue, utiliser le nom tel quel
-          }
-        }
-      }
-
-      // Créer un lien temporaire pour télécharger le ZIP
-      const url = window.URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.href = url;
-      link.download = zipFilename;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      window.URL.revokeObjectURL(url);
-
-      console.log(`✅ Dossier "${folderName}" téléchargé avec succès`);
-    } catch (error) {
-      console.error('Erreur lors du téléchargement du dossier:', error);
-      alert(`Erreur lors du téléchargement du dossier: ${error.message}`);
-    } finally {
-      // Masquer l'indicateur de chargement
-      setDownloadingFolder(null);
+    let folderPath = folderToDownload.path;
+    if (folderPath && !folderPath.endsWith('/')) {
+      folderPath = `${folderPath}/`;
     }
+
+    setDownloadingFolder(folderName);
+    startNativeFolderDownload(folderPath, folderName);
+    setTimeout(() => setDownloadingFolder(null), 2500);
   };
 
   const handlePrint = async (item = null) => {
@@ -1610,88 +1575,100 @@ const DriveExplorer = ({
   const performRename = async (nameToUse) => {
     if (!selectedItem) return;
 
+    const isFolder = selectedItem.type === 'folder' || selectedItem.path?.endsWith('/');
+    const cleanPath = selectedItem.path.replace(/\/$/, '');
+    const slashIndex = cleanPath.lastIndexOf('/');
+    const parentPath = slashIndex >= 0 ? `${cleanPath.slice(0, slashIndex)}/` : '';
+    const normalizedNewName = normalizeFilename(nameToUse);
+    const newPath = `${parentPath}${normalizedNewName}${isFolder ? '/' : ''}`;
+    const displayName = displayFilename(selectedItem.name);
+
+    setRenameDialogOpen(false);
+    setNewName('');
+    setRenameConflict(null);
+    setOptimisticRename({
+      oldPath: selectedItem.path,
+      newName: normalizedNewName,
+      newPath,
+      type: isFolder ? 'folder' : 'file',
+    });
+    setDriveOperation({
+      mode: 'rename',
+      title: `Renommage de « ${displayName} »`,
+      current: 'Préparation...',
+      processed: 0,
+      total: 0,
+      progress: 0,
+    });
+
     try {
-      const response = await fetch('/api/drive-v2/rename-item/', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'X-CSRFToken': getCookie('csrftoken'),
-        },
-        credentials: 'include',
-        body: JSON.stringify({
-          old_path: selectedItem.path,
-          new_name: nameToUse,
-        }),
+      await drivePostWithProgress('/api/drive-v2/rename-item/', {
+        old_path: selectedItem.path,
+        new_name: nameToUse,
+      }, (event) => {
+        setDriveOperation((prev) => (prev ? {
+          ...prev,
+          processed: event.processed ?? prev.processed,
+          total: event.total ?? prev.total,
+          progress: event.progress ?? prev.progress,
+          current: event.current || prev.current,
+        } : prev));
       });
 
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({ error: 'Erreur inconnue' }));
-        const errorMessage = errorData.error || `Erreur HTTP ${response.status}`;
-        
-        // Vérifier si l'erreur indique un conflit de nom
-        if (errorMessage.includes('existe déjà') || 
-            errorMessage.includes('already exists') ||
-            errorMessage.includes('déjà')) {
-          // C'est un conflit de nom, afficher le message de conflit
-          const parentPath = selectedItem.path.substring(0, selectedItem.path.lastIndexOf('/') + 1);
-          const isFolder = selectedItem.type === 'folder';
-          let suggestedName;
-          
-          if (isFolder) {
-            // Pour les dossiers, créer un nom avec numéro entre parenthèses
-            const normalizedBaseName = normalizeFilename(nameToUse);
-            for (let i = 1; i <= 1000; i++) {
-              const candidateName = `${normalizedBaseName}_(${i})`;
-              const candidatePath = parentPath + candidateName + '/';
-              // Vérifier si ce nom existe déjà
-              const checkResponse = await fetch(
-                `/api/drive-v2/list-content/?folder_path=${encodeURIComponent(parentPath)}`,
-                {
-                  credentials: 'include',
-                  headers: { 'Content-Type': 'application/json' },
-                }
-              );
-              if (checkResponse.ok) {
-                const checkData = await checkResponse.json();
-                const exists = (checkData.folders || []).some(f => f.path === candidatePath);
-                if (!exists) {
-                  suggestedName = `${nameToUse}_(${i})`;
-                  break;
-                }
-              }
-            }
-            if (!suggestedName) {
-              const timestamp = Date.now();
-              suggestedName = `${nameToUse}_(${timestamp})`;
-            }
-          } else {
-            // Pour les fichiers, utiliser findAvailableFileName
-            suggestedName = await findAvailableFileName(nameToUse, parentPath);
-          }
-          
-          setRenameConflict({
-            exists: true,
-            suggestedName: suggestedName,
-          });
-          return;
-        }
-        
-        throw new Error(errorMessage);
-      }
-
-      // Succès
-      setRenameDialogOpen(false);
-      setNewName('');
-      setRenameConflict(null);
+      setDriveOperation(null);
+      setOptimisticRename(null);
       onRefresh();
     } catch (error) {
       console.error('Erreur lors du renommage:', error);
-      // Ne pas afficher d'alerte si c'est un conflit (déjà géré ci-dessus)
-      if (!error.message.includes('existe déjà') && 
-          !error.message.includes('already exists') &&
-          !error.message.includes('déjà')) {
-        alert(`Erreur lors du renommage: ${error.message}`);
+      setDriveOperation(null);
+      setOptimisticRename(null);
+
+      const errorMessage = error.message || '';
+      if (errorMessage.includes('existe déjà') ||
+          errorMessage.includes('already exists') ||
+          errorMessage.includes('déjà')) {
+        setRenameDialogOpen(true);
+        setNewName(nameToUse);
+        const isFolderItem = selectedItem.type === 'folder';
+        let suggestedName;
+
+        if (isFolderItem) {
+          const normalizedBaseName = normalizeFilename(nameToUse);
+          for (let i = 1; i <= 1000; i++) {
+            const candidateName = `${normalizedBaseName}_(${i})`;
+            const candidatePath = parentPath + candidateName + '/';
+            const checkResponse = await fetch(
+              `/api/drive-v2/list-content/?folder_path=${encodeURIComponent(parentPath)}`,
+              {
+                credentials: 'include',
+                headers: { 'Content-Type': 'application/json' },
+              }
+            );
+            if (checkResponse.ok) {
+              const checkData = await checkResponse.json();
+              const exists = (checkData.folders || []).some(f => f.path === candidatePath);
+              if (!exists) {
+                suggestedName = `${nameToUse}_(${i})`;
+                break;
+              }
+            }
+          }
+          if (!suggestedName) {
+            suggestedName = `${nameToUse}_(${Date.now()})`;
+          }
+        } else {
+          suggestedName = await findAvailableFileName(nameToUse, parentPath);
+        }
+
+        setRenameConflict({
+          exists: true,
+          suggestedName,
+        });
+        return;
       }
+
+      alert(`Erreur lors du renommage: ${errorMessage}`);
+      onRefresh();
     }
   };
 
@@ -1894,7 +1871,7 @@ const DriveExplorer = ({
       {/* Liste */}
       <List sx={{ p: 0, width: '100%', maxWidth: '100%', overflow: 'hidden' }}>
         {/* Dossiers */}
-        {sortedFolders.map((folder) => {
+        {visibleFolders.map((folder) => {
           const folderItem = { ...folder, type: 'folder' };
           const isSelected = selectedFiles.has(folder.path);
           const isDragOverFolder = dragOverFolder === folder.path;
@@ -2032,7 +2009,7 @@ const DriveExplorer = ({
         })}
 
         {/* Fichiers */}
-        {sortedFiles.map((file) => {
+        {visibleFiles.map((file) => {
           const fileItem = { ...file, type: 'file' };
           const isSelected = selectedFiles.has(file.path);
           const isDragging = draggedItems?.some(item => item.path === file.path) || false;
@@ -2372,38 +2349,41 @@ const DriveExplorer = ({
         </DialogActions>
       </Dialog>
 
-      {/* Snackbar pour l'indicateur de chargement du téléchargement de dossier */}
+      {/* Snackbar : le navigateur gère ensuite le téléchargement nativement */}
       <Snackbar
         open={downloadingFolder !== null}
+        autoHideDuration={2500}
+        onClose={() => setDownloadingFolder(null)}
         anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
-        sx={{
-          '& .MuiSnackbar-root': {
-            pointerEvents: 'none',
-          },
-        }}
       >
         <Alert
-          severity="info"
-          icon={<CircularProgress size={20} color="inherit" />}
+          severity="success"
           sx={{
             minWidth: '300px',
             display: 'flex',
             alignItems: 'center',
             gap: 2,
-            '& .MuiAlert-icon': {
-              alignItems: 'center',
-            },
           }}
         >
           <Typography variant="body2">
-            Téléchargement de "{downloadingFolder}" en cours...
+            Téléchargement de "{downloadingFolder}" lancé dans le navigateur
           </Typography>
         </Alert>
       </Snackbar>
 
+      <DriveOperationSnackbar
+        open={driveOperation !== null}
+        title={driveOperation?.title}
+        currentItem={driveOperation?.current}
+        processed={driveOperation?.processed}
+        total={driveOperation?.total}
+        progress={driveOperation?.progress}
+        mode={driveOperation?.mode || 'rename'}
+      />
+
       {/* Modal de chargement pendant le déplacement d'éléments */}
       <Backdrop
-        open={isMovingItems}
+        open={isMovingItems && !driveOperation}
         sx={(theme) => ({
           color: '#fff',
           zIndex: theme.zIndex.modal + 1,

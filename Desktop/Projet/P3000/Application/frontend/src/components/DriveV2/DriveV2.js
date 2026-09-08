@@ -38,6 +38,8 @@ import DriveExplorer, { displayFilename } from './DriveExplorer';
 import DriveUploader from './DriveUploader';
 import DriveSearch from './DriveSearch';
 import PasteProgressModal from './PasteProgressModal';
+import DriveOperationSnackbar from './DriveOperationSnackbar';
+import { drivePostWithProgress } from './utils/driveOperations';
 import { useDrive } from './hooks/useDrive';
 import { usePaste } from './hooks/usePaste';
 import { useDriveCopy } from './hooks/useDriveCopy';
@@ -123,6 +125,7 @@ const DriveV2 = () => {
   const [pasteProgressData, setPasteProgressData] = useState(null);
   const [isBreadcrumbMoving, setIsBreadcrumbMoving] = useState(false);
   const [breadcrumbMoveTarget, setBreadcrumbMoveTarget] = useState('');
+  const [driveOperation, setDriveOperation] = useState(null);
   const cancelPasteRef = useRef(false);
 
   // Historique de navigation : retour / avant (max 50 entrées)
@@ -520,33 +523,33 @@ const DriveV2 = () => {
         : 'Racine';
       setBreadcrumbMoveTarget(targetLabel);
       setIsBreadcrumbMoving(true);
-
-      const movePromises = draggedItemsFromExplorer.map(async (item) => {
-        const fileName = item.name;
-        const destPath = targetPath + fileName + (item.type === 'folder' ? '/' : '');
-        
-        const response = await fetch('/api/drive-v2/move-item/', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'X-CSRFToken': getCookie('csrftoken'),
-          },
-          credentials: 'include',
-          body: JSON.stringify({
-            source_path: item.path,
-            dest_path: destPath,
-          }),
-        });
-
-        if (!response.ok) {
-          const error = await response.json();
-          throw new Error(error.error || 'Erreur lors du déplacement');
-        }
-
-        return response.json();
+      setDriveOperation({
+        mode: 'move',
+        title: `Déplacement vers « ${targetLabel} »`,
+        current: 'Préparation...',
+        processed: 0,
+        total: 0,
+        progress: 0,
       });
 
-      await Promise.all(movePromises);
+      for (let i = 0; i < draggedItemsFromExplorer.length; i += 1) {
+        const item = draggedItemsFromExplorer[i];
+        const destPath = targetPath + item.name + (item.type === 'folder' ? '/' : '');
+        await drivePostWithProgress('/api/drive-v2/move-item/', {
+          source_path: item.path,
+          dest_path: destPath,
+        }, (event) => {
+          setDriveOperation((prev) => (prev ? {
+            ...prev,
+            ...event,
+            current: event.current || displayFilename(item.name),
+            title: draggedItemsFromExplorer.length > 1
+              ? `Déplacement ${i + 1}/${draggedItemsFromExplorer.length} vers « ${targetLabel} »`
+              : prev.title,
+          } : prev));
+        });
+      }
+
       setDraggedItemsFromExplorer(null);
       setSnackbar({
         open: true,
@@ -564,6 +567,7 @@ const DriveV2 = () => {
     } finally {
       setIsBreadcrumbMoving(false);
       setBreadcrumbMoveTarget('');
+      setDriveOperation(null);
     }
   }, [draggedItemsFromExplorer, refreshContent]);
 
@@ -988,9 +992,18 @@ const DriveV2 = () => {
         onCancel={pasteProgressData?.phase === 'upload' ? handleCancelUpload : handleCancelPaste}
       />
 
-      {/* Modal de chargement pour les déplacements via breadcrumb */}
+      {/* Progression non bloquante pour les déplacements via fil d'Ariane */}
+      <DriveOperationSnackbar
+        open={driveOperation !== null}
+        title={driveOperation?.title}
+        currentItem={driveOperation?.current}
+        processed={driveOperation?.processed}
+        total={driveOperation?.total}
+        progress={driveOperation?.progress}
+        mode="move"
+      />
       <Backdrop
-        open={isBreadcrumbMoving}
+        open={isBreadcrumbMoving && !driveOperation}
         sx={(theme) => ({
           color: '#fff',
           zIndex: theme.zIndex.modal + 1,

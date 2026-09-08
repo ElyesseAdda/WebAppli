@@ -4,10 +4,16 @@ Storage Manager - Abstraction pour S3 avec les mêmes credentials
 
 import os
 import json
+import threading
+from concurrent.futures import ThreadPoolExecutor, as_completed
+from typing import Optional, Dict, List, BinaryIO, Callable
+
 import boto3
-from typing import Optional, Dict, List, BinaryIO
 from datetime import datetime, timedelta
 import mimetypes
+
+S3_MOVE_WORKERS = 8
+S3_DELETE_BATCH_SIZE = 1000
 
 # Mapping personnalisé pour les types MIME non reconnus par mimetypes
 CUSTOM_MIME_TYPES = {
@@ -311,6 +317,38 @@ class StorageManager:
         except Exception as e:
             return False
     
+    def _copy_s3_object(self, source_key: str, dest_key: str) -> None:
+        """Copie un objet S3 (multipart automatique pour les gros fichiers)."""
+        if source_key == dest_key:
+            return
+        self.s3_client.copy(
+            {'Bucket': self.bucket_name, 'Key': source_key},
+            self.bucket_name,
+            dest_key,
+        )
+
+    def _delete_keys(self, keys: List[str]) -> None:
+        """Supprime des clés S3 par lots de 1000."""
+        for i in range(0, len(keys), S3_DELETE_BATCH_SIZE):
+            batch = keys[i:i + S3_DELETE_BATCH_SIZE]
+            if not batch:
+                continue
+            self.s3_client.delete_objects(
+                Bucket=self.bucket_name,
+                Delete={
+                    'Objects': [{'Key': key} for key in batch],
+                    'Quiet': True,
+                }
+            )
+
+    def _list_all_objects(self, prefix: str) -> List[Dict]:
+        """Liste paginée de tous les objets sous un préfixe."""
+        objects = []
+        paginator = self.s3_client.get_paginator('list_objects_v2')
+        for page in paginator.paginate(Bucket=self.bucket_name, Prefix=prefix):
+            objects.extend(page.get('Contents') or [])
+        return objects
+
     def copy_object(self, source_key: str, dest_key: str) -> bool:
         """
         Copie un objet dans S3
@@ -323,93 +361,99 @@ class StorageManager:
             True si succès
         """
         try:
-            copy_source = {
-                'Bucket': self.bucket_name,
-                'Key': source_key
-            }
-            
-            self.s3_client.copy_object(
-                CopySource=copy_source,
-                Bucket=self.bucket_name,
-                Key=dest_key
-            )
-            
+            self._copy_s3_object(source_key, dest_key)
             return True
-            
-        except Exception as e:
+        except Exception:
             return False
     
-    def move_object(self, source_key: str, dest_key: str) -> bool:
+    def move_object(
+        self,
+        source_key: str,
+        dest_key: str,
+        progress_callback: Optional[Callable[[int, int, str], None]] = None
+    ) -> bool:
         """
-        Déplace un objet dans S3 (fichier ou dossier)
-        
-        Args:
-            source_key: Clé source
-            dest_key: Clé destination
-            
-        Returns:
-            True si succès
+        Déplace un objet dans S3 (fichier ou dossier).
+
+        Pour un dossier : pagination complète, copies parallèles, puis
+        suppression des sources uniquement si toutes les copies ont réussi.
         """
-        try:
-            # Si c'est un dossier (se termine par /), déplacer tous les objets du dossier
-            if source_key.endswith('/'):
-                # S'assurer que dest_key se termine aussi par /
-                if not dest_key.endswith('/'):
-                    dest_key += '/'
-                
-                # Lister tous les objets dans le dossier source
-                response = self.s3_client.list_objects_v2(
+        if source_key.endswith('/'):
+            if not dest_key.endswith('/'):
+                dest_key += '/'
+
+            if progress_callback:
+                progress_callback(0, 0, 'Inventaire des fichiers...')
+
+            objects_to_copy = self._list_all_objects(source_key)
+
+            if not objects_to_copy:
+                self.s3_client.put_object(
                     Bucket=self.bucket_name,
-                    Prefix=source_key
+                    Key=f"{dest_key}.keep",
+                    Body=b''
                 )
-                
-                if 'Contents' not in response:
-                    # Dossier vide, créer juste le .keep
-                    self.s3_client.put_object(
-                        Bucket=self.bucket_name,
-                        Key=f"{dest_key}.keep",
-                        Body=b''
-                    )
-                    # Supprimer l'ancien .keep
+                try:
                     self.s3_client.delete_object(
                         Bucket=self.bucket_name,
                         Key=f"{source_key}.keep"
                     )
-                    return True
-                
-                # Copier tous les objets
-                objects_to_copy = response['Contents']
-                for obj in objects_to_copy:
-                    old_key = obj['Key']
-                    # Remplacer le préfixe source par le préfixe destination
-                    new_key = old_key.replace(source_key, dest_key, 1)
-                    
-                    # Copier l'objet
-                    copy_source = {
-                        'Bucket': self.bucket_name,
-                        'Key': old_key
-                    }
-                    self.s3_client.copy_object(
-                        CopySource=copy_source,
-                        Bucket=self.bucket_name,
-                        Key=new_key
-                    )
-                
-                # Supprimer tous les anciens objets
-                objects_to_delete = [{'Key': obj['Key']} for obj in objects_to_copy]
-                self.s3_client.delete_objects(
-                    Bucket=self.bucket_name,
-                    Delete={'Objects': objects_to_delete}
-                )
-                
+                except Exception:
+                    pass
+                if progress_callback:
+                    progress_callback(1, 1, dest_key.rstrip('/').split('/')[-1])
                 return True
-            else:
-                # C'est un fichier, copier puis supprimer
-                if self.copy_object(source_key, dest_key):
-                    return self.delete_object(source_key)
-                return False
-            
-        except Exception as e:
+
+            total = len(objects_to_copy)
+            if progress_callback:
+                progress_callback(0, total, 'Déplacement...')
+
+            copied_keys = []
+            errors = []
+            processed = 0
+            progress_lock = threading.Lock()
+
+            def copy_one(obj):
+                old_key = obj['Key']
+                new_key = dest_key + old_key[len(source_key):]
+                self._copy_s3_object(old_key, new_key)
+                return old_key
+
+            workers = min(S3_MOVE_WORKERS, max(1, total))
+            with ThreadPoolExecutor(max_workers=workers) as executor:
+                futures = [executor.submit(copy_one, obj) for obj in objects_to_copy]
+                for future in as_completed(futures):
+                    try:
+                        old_key = future.result()
+                        copied_keys.append(old_key)
+                    except Exception as e:
+                        errors.append(str(e))
+                        old_key = ''
+                    with progress_lock:
+                        processed += 1
+                        if progress_callback:
+                            current_name = old_key.rsplit('/', 1)[-1] if old_key else 'fichier'
+                            progress_callback(processed, total, current_name)
+
+            if errors:
+                raise Exception(
+                    f"{len(errors)} fichier(s) n'ont pas pu être déplacés. "
+                    "L'ancien dossier a été conservé."
+                )
+
+            self._delete_keys(copied_keys)
+            return True
+
+        try:
+            if progress_callback:
+                progress_callback(0, 1, source_key.rsplit('/', 1)[-1])
+            if self.copy_object(source_key, dest_key):
+                deleted = self.delete_object(source_key)
+                if progress_callback:
+                    progress_callback(1, 1, dest_key.rsplit('/', 1)[-1])
+                return deleted
+            return False
+        except Exception:
             return False
     
     def search_objects(
