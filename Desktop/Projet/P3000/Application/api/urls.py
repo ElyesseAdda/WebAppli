@@ -549,6 +549,12 @@ urlpatterns += [
     path('drive-v2/download-folder/', DriveV2ViewSet.as_view({
         'get': 'download_folder'
     }), name='drive-v2-download-folder'),
+    path('drive-v2/folder-download-manifest/', DriveV2ViewSet.as_view({
+        'get': 'folder_download_manifest'
+    }), name='drive-v2-folder-download-manifest'),
+    path('drive-v2/stream-file/', DriveV2ViewSet.as_view({
+        'get': 'stream_file'
+    }), name='drive-v2-stream-file'),
     path('drive-v2/display-url/', DriveV2ViewSet.as_view({
         'get': 'get_display_url'
     }), name='drive-v2-display-url'),

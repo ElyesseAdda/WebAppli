@@ -68,6 +68,51 @@ class StorageManager:
                 s3={'addressing_style': 'virtual'}  # Style d'adressage virtuel
             )
         )
+        self._download_cors_ensured = False
+
+    def ensure_browser_download_cors(self) -> None:
+        """
+        Autorise le GET navigateur des URLs présignées (téléchargement direct S3).
+        Fusionne avec les règles CORS existantes pour ne pas casser OnlyOffice.
+        """
+        if self._download_cors_ensured:
+            return
+        self._download_cors_ensured = True
+        try:
+            rules = []
+            try:
+                current = self.s3_client.get_bucket_cors(Bucket=self.bucket_name)
+                rules = list(current.get('CORSRules') or [])
+            except Exception:
+                rules = []
+
+            already = any(
+                'GET' in (rule.get('AllowedMethods') or [])
+                and '*' in (rule.get('AllowedOrigins') or [])
+                for rule in rules
+            )
+            if already:
+                return
+
+            rules.append({
+                'AllowedOrigins': ['*'],
+                'AllowedMethods': ['GET', 'HEAD'],
+                'AllowedHeaders': ['*'],
+                'ExposeHeaders': [
+                    'ETag',
+                    'Content-Length',
+                    'Content-Type',
+                    'Accept-Ranges',
+                    'Content-Range',
+                ],
+                'MaxAgeSeconds': 3600,
+            })
+            self.s3_client.put_bucket_cors(
+                Bucket=self.bucket_name,
+                CORSConfiguration={'CORSRules': rules},
+            )
+        except Exception:
+            pass
     
     def list_objects(
         self,

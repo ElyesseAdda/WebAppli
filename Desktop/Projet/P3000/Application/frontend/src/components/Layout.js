@@ -3,6 +3,7 @@ import { useLocation } from "react-router-dom";
 import axios from "axios";
 import "./../../static/css/layout.css";
 import AgentCarteModal from "./AgentCarteModal";
+import FolderDownloadIndicator from "./DriveV2/FolderDownloadIndicator";
 import BonCommandeForm from "./BonCommandeForm";
 import BreadcrumbHeader from "./BreadcrumbHeader";
 import Header from "./Header";
@@ -105,6 +106,7 @@ const Layout = ({ children, user, onLogout }) => {
         refreshAgents={refreshAgents}
         agents={agents}
       />
+      <FolderDownloadIndicator />
     </div>
   );
 };
