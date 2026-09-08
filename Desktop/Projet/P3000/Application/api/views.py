@@ -2080,6 +2080,184 @@ class AgentViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
 
+    @action(detail=True, methods=['get'])
+    def delete_preview(self, request, pk=None):
+        """Aperçu des éléments liés avant suppression définitive d'un agent."""
+        from .models import AjustementAgentJournalier, AgentContrat
+
+        agent = self.get_object()
+
+        schedule_count = Schedule.objects.filter(agent=agent).count()
+        chantiers_planning = list(
+            Schedule.objects.filter(agent=agent, chantier__isnull=False)
+            .values_list('chantier__chantier_name', flat=True)
+            .distinct()
+            .order_by('chantier__chantier_name')
+        )
+
+        labor_count = LaborCost.objects.filter(agent=agent).count()
+        chantiers_labor = list(
+            LaborCost.objects.filter(agent=agent)
+            .values_list('chantier__chantier_name', flat=True)
+            .distinct()
+            .order_by('chantier__chantier_name')
+        )
+
+        presence_count = Presence.objects.filter(agent=agent).count()
+        chantiers_presence = list(
+            Presence.objects.filter(agent=agent, chantier__isnull=False)
+            .values_list('chantier__chantier_name', flat=True)
+            .distinct()
+            .order_by('chantier__chantier_name')
+        )
+
+        event_count = Event.objects.filter(agent=agent).count()
+        pointage_count = PointageMensuel.objects.filter(agent=agent).count()
+        monthly_hours_count = MonthlyHours.objects.filter(agent=agent).count()
+        monthly_presence_count = MonthlyPresence.objects.filter(agent=agent).count()
+        primes_count = AgentPrime.objects.filter(agent=agent).count()
+        contrats_count = AgentContrat.objects.filter(agent=agent).count()
+        periodes_count = agent.periodes_inactivite.count()
+        ajustements_count = AjustementAgentJournalier.objects.filter(agent=agent).count()
+
+        # FK optionnelles en CASCADE : on détache plutôt que supprimer
+        bons_count = BonCommande.objects.filter(agent=agent).count()
+        bons_contact_count = BonCommande.objects.filter(contact_agent=agent).count()
+        expenses_count = AgencyExpense.objects.filter(agent=agent).count()
+        expenses_month_count = AgencyExpenseMonth.objects.filter(agent=agent).count()
+
+        will_delete = []
+        if schedule_count:
+            will_delete.append({
+                'key': 'schedules',
+                'label': 'Assignations planning',
+                'count': schedule_count,
+                'chantiers': chantiers_planning,
+            })
+        if labor_count:
+            will_delete.append({
+                'key': 'labor_costs',
+                'label': 'Lignes coûts main d\'œuvre (tableaux)',
+                'count': labor_count,
+                'chantiers': chantiers_labor,
+            })
+        if presence_count:
+            will_delete.append({
+                'key': 'presences',
+                'label': 'Présences chantier',
+                'count': presence_count,
+                'chantiers': chantiers_presence,
+            })
+        if event_count:
+            will_delete.append({
+                'key': 'events',
+                'label': 'Événements (absences, école, etc.)',
+                'count': event_count,
+            })
+        if pointage_count:
+            will_delete.append({
+                'key': 'pointages',
+                'label': 'Pointages mensuels',
+                'count': pointage_count,
+            })
+        if monthly_hours_count:
+            will_delete.append({
+                'key': 'monthly_hours',
+                'label': 'Heures mensuelles',
+                'count': monthly_hours_count,
+            })
+        if monthly_presence_count:
+            will_delete.append({
+                'key': 'monthly_presence',
+                'label': 'Présences mensuelles',
+                'count': monthly_presence_count,
+            })
+        if primes_count:
+            will_delete.append({
+                'key': 'primes',
+                'label': 'Primes',
+                'count': primes_count,
+            })
+        if contrats_count:
+            will_delete.append({
+                'key': 'contrats',
+                'label': 'Contrats (et avenants)',
+                'count': contrats_count,
+            })
+        if periodes_count:
+            will_delete.append({
+                'key': 'periodes_inactivite',
+                'label': 'Périodes d\'inactivité',
+                'count': periodes_count,
+            })
+        if ajustements_count:
+            will_delete.append({
+                'key': 'ajustements',
+                'label': 'Ajustements journaliers',
+                'count': ajustements_count,
+            })
+
+        will_detach = []
+        if bons_count:
+            will_detach.append({
+                'key': 'bons_commande',
+                'label': 'Bons de commande (créateur)',
+                'count': bons_count,
+            })
+        if bons_contact_count:
+            will_detach.append({
+                'key': 'bons_commande_contact',
+                'label': 'Bons de commande (contact réception)',
+                'count': bons_contact_count,
+            })
+        if expenses_count:
+            will_detach.append({
+                'key': 'agency_expenses',
+                'label': 'Dépenses agence',
+                'count': expenses_count,
+            })
+        if expenses_month_count:
+            will_detach.append({
+                'key': 'agency_expenses_month',
+                'label': 'Dépenses agence mensuelles',
+                'count': expenses_month_count,
+            })
+
+        return Response({
+            'agent': {
+                'id': agent.id,
+                'name': agent.name,
+                'surname': agent.surname,
+            },
+            'will_delete': will_delete,
+            'will_detach': will_detach,
+            'has_related': bool(will_delete or will_detach),
+        })
+
+    def destroy(self, request, *args, **kwargs):
+        """Supprime l'agent après détachement des FK optionnelles (BC, dépenses)."""
+        agent = self.get_object()
+        agent_label = f'{agent.name} {agent.surname}'.strip()
+
+        try:
+            with transaction.atomic():
+                # Éviter la cascade destructive sur des documents métier indépendants
+                BonCommande.objects.filter(agent=agent).update(agent=None)
+                BonCommande.objects.filter(contact_agent=agent).update(contact_agent=None)
+                AgencyExpense.objects.filter(agent=agent).update(agent=None)
+                AgencyExpenseMonth.objects.filter(agent=agent).update(agent=None)
+                agent.delete()
+            return Response(
+                {'message': f'Agent {agent_label} supprimé avec succès.'},
+                status=status.HTTP_200_OK,
+            )
+        except Exception as e:
+            logger.exception('Erreur suppression agent %s: %s', agent.id, e)
+            return Response(
+                {'error': f'Erreur lors de la suppression: {str(e)}'},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
+
     @action(detail=False, methods=['get'])
     def inactifs(self, request):
         """Récupérer la liste des agents inactifs"""

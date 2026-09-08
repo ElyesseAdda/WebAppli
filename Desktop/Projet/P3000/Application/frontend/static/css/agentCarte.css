@@ -450,13 +450,25 @@
 .agent-carte-footer {
   padding: 12px 24px 20px;
   display: flex;
-  justify-content: flex-end;
+  justify-content: space-between;
+  align-items: center;
   gap: 12px;
   border-top: 1px solid #eee;
   flex-shrink: 0;
   background: #fff;
   position: relative;
   z-index: 5;
+}
+
+.agent-carte-footer-left,
+.agent-carte-footer-right {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.agent-carte-footer-right {
+  margin-left: auto;
 }
 @media (max-width: 640px) {
   .agent-carte-body {

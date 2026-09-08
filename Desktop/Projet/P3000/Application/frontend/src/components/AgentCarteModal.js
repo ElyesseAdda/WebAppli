@@ -410,6 +410,14 @@ const AgentCarteModal = ({ isOpen, handleClose, refreshAgents, agents = [] }) =>
 
   const [isCreating, setIsCreating] = useState(false);
 
+  const [agentDeleteOpen, setAgentDeleteOpen] = useState(false);
+
+  const [agentDeletePreview, setAgentDeletePreview] = useState(null);
+
+  const [isLoadingDeletePreview, setIsLoadingDeletePreview] = useState(false);
+
+  const [isDeletingAgent, setIsDeletingAgent] = useState(false);
+
 
 
   const activeContrat = contrats[activeContratIndex] || null;
@@ -652,6 +660,114 @@ const AgentCarteModal = ({ isOpen, handleClose, refreshAgents, agents = [] }) =>
     handleDeleteContrat(contratDeleteIndex);
 
     setContratDeleteIndex(null);
+
+  };
+
+
+
+  const requestDeleteAgent = async () => {
+
+    if (!agentData.id || isCreating) return;
+
+    setAgentDeleteOpen(true);
+
+    setAgentDeletePreview(null);
+
+    setIsLoadingDeletePreview(true);
+
+    try {
+
+      const res = await axios.get(`/api/agent/${agentData.id}/delete_preview/`);
+
+      setAgentDeletePreview(res.data);
+
+    } catch (error) {
+
+      setAgentDeletePreview(null);
+
+      setMessage({
+
+        type: "error",
+
+        text:
+
+          error.response?.data?.error ||
+
+          "Impossible de charger l'aperçu de suppression.",
+
+      });
+
+      setAgentDeleteOpen(false);
+
+    } finally {
+
+      setIsLoadingDeletePreview(false);
+
+    }
+
+  };
+
+
+
+  const cancelDeleteAgent = () => {
+
+    if (isDeletingAgent) return;
+
+    setAgentDeleteOpen(false);
+
+    setAgentDeletePreview(null);
+
+  };
+
+
+
+  const confirmDeleteAgent = async () => {
+
+    if (!agentData.id || isDeletingAgent) return;
+
+    setIsDeletingAgent(true);
+
+    try {
+
+      await axios.delete(`/api/agent/${agentData.id}/`);
+
+      setAgentDeleteOpen(false);
+
+      setAgentDeletePreview(null);
+
+      resetAgentSelection();
+
+      setIsCreating(false);
+
+      setAgentSearchQuery("");
+
+      setMessage({ type: "success", text: "Agent supprimé avec succès." });
+
+      if (typeof refreshAgents === "function") {
+
+        await refreshAgents();
+
+      }
+
+    } catch (error) {
+
+      setMessage({
+
+        type: "error",
+
+        text:
+
+          error.response?.data?.error ||
+
+          "Erreur lors de la suppression de l'agent.",
+
+      });
+
+    } finally {
+
+      setIsDeletingAgent(false);
+
+    }
 
   };
 
@@ -2272,35 +2388,67 @@ const AgentCarteModal = ({ isOpen, handleClose, refreshAgents, agents = [] }) =>
 
           <div className="agent-carte-footer">
 
-            <Button type="button" onClick={handleClose}>
+            <div className="agent-carte-footer-left">
 
-              Fermer
+              {agentData.id && !isCreating && (
 
-            </Button>
+                <Button
 
-            <Button
+                  type="button"
 
-              type="submit"
+                  color="error"
 
-              variant="contained"
+                  variant="outlined"
 
-              color="primary"
+                  startIcon={<DeleteOutlineIcon />}
 
-              disabled={(!agentData.id && !isCreating) || isLoading}
+                  onClick={requestDeleteAgent}
 
-            >
+                  disabled={isLoading || isDeletingAgent}
 
-              {isLoading
+                >
 
-                ? "Enregistrement..."
+                  Supprimer l'agent
 
-                : isCreating && !agentData.id
+                </Button>
 
-                ? "Créer l'agent"
+              )}
 
-                : "Enregistrer"}
+            </div>
 
-            </Button>
+            <div className="agent-carte-footer-right">
+
+              <Button type="button" onClick={handleClose}>
+
+                Fermer
+
+              </Button>
+
+              <Button
+
+                type="submit"
+
+                variant="contained"
+
+                color="primary"
+
+                disabled={(!agentData.id && !isCreating) || isLoading}
+
+              >
+
+                {isLoading
+
+                  ? "Enregistrement..."
+
+                  : isCreating && !agentData.id
+
+                  ? "Créer l'agent"
+
+                  : "Enregistrer"}
+
+              </Button>
+
+            </div>
 
           </div>
 
@@ -2393,6 +2541,206 @@ const AgentCarteModal = ({ isOpen, handleClose, refreshAgents, agents = [] }) =>
         >
 
           Supprimer
+
+        </Button>
+
+      </DialogActions>
+
+    </Dialog>
+
+
+
+    <Dialog
+
+      open={agentDeleteOpen}
+
+      onClose={cancelDeleteAgent}
+
+      maxWidth="sm"
+
+      fullWidth
+
+    >
+
+      <DialogTitle>Supprimer cet agent ?</DialogTitle>
+
+      <DialogContent>
+
+        <Typography gutterBottom>
+
+          Vous êtes sur le point de supprimer définitivement{" "}
+
+          <strong>
+
+            {getAgentLabel(agentData) || "cet agent"}
+
+          </strong>
+
+          .
+
+        </Typography>
+
+
+
+        {isLoadingDeletePreview && (
+
+          <Typography variant="body2" color="text.secondary" sx={{ mt: 2 }}>
+
+            Analyse des éléments liés...
+
+          </Typography>
+
+        )}
+
+
+
+        {!isLoadingDeletePreview && agentDeletePreview && (
+
+          <>
+
+            {agentDeletePreview.will_delete?.length > 0 && (
+
+              <Alert severity="error" sx={{ mt: 2 }}>
+
+                <Typography variant="body2" fontWeight="bold" gutterBottom>
+
+                  Cette action supprimera définitivement :
+
+                </Typography>
+
+                <Box component="ul" sx={{ pl: 2, m: 0 }}>
+
+                  {agentDeletePreview.will_delete.map((item) => (
+
+                    <Box component="li" key={item.key} sx={{ mb: 0.75 }}>
+
+                      <Typography variant="body2">
+
+                        {item.label} ({item.count})
+
+                      </Typography>
+
+                      {item.chantiers?.length > 0 && (
+
+                        <Typography
+
+                          variant="caption"
+
+                          color="text.secondary"
+
+                          component="div"
+
+                        >
+
+                          Chantiers : {item.chantiers.join(", ")}
+
+                        </Typography>
+
+                      )}
+
+                    </Box>
+
+                  ))}
+
+                </Box>
+
+              </Alert>
+
+            )}
+
+
+
+            {agentDeletePreview.will_detach?.length > 0 && (
+
+              <Alert severity="warning" sx={{ mt: 2 }}>
+
+                <Typography variant="body2" fontWeight="bold" gutterBottom>
+
+                  Ces éléments seront détachés (conservés) :
+
+                </Typography>
+
+                <Box component="ul" sx={{ pl: 2, m: 0 }}>
+
+                  {agentDeletePreview.will_detach.map((item) => (
+
+                    <Box component="li" key={item.key} sx={{ mb: 0.5 }}>
+
+                      <Typography variant="body2">
+
+                        {item.label} ({item.count})
+
+                      </Typography>
+
+                    </Box>
+
+                  ))}
+
+                </Box>
+
+              </Alert>
+
+            )}
+
+
+
+            {!agentDeletePreview.has_related && (
+
+              <Typography variant="body2" color="text.secondary" sx={{ mt: 2 }}>
+
+                Aucun élément lié détecté pour cet agent.
+
+              </Typography>
+
+            )}
+
+          </>
+
+        )}
+
+
+
+        <Typography variant="body2" color="text.secondary" sx={{ mt: 2 }}>
+
+          Cette action est irréversible. Pour un retrait temporaire de
+
+          l&apos;effectif, utilisez plutôt la désactivation.
+
+        </Typography>
+
+      </DialogContent>
+
+      <DialogActions sx={{ px: 3, pb: 2 }}>
+
+        <Button
+
+          type="button"
+
+          onClick={cancelDeleteAgent}
+
+          disabled={isDeletingAgent}
+
+        >
+
+          Annuler
+
+        </Button>
+
+        <Button
+
+          type="button"
+
+          variant="contained"
+
+          color="error"
+
+          onClick={confirmDeleteAgent}
+
+          disabled={isLoadingDeletePreview || isDeletingAgent}
+
+        >
+
+          {isDeletingAgent ? "Suppression..." : "Supprimer définitivement"}
 
         </Button>
 
