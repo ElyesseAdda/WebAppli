@@ -14,8 +14,18 @@ import {
 import {
   DriveFileRenameOutline as RenameIcon,
   DriveFileMove as MoveIcon,
+  Download as DownloadIcon,
   Close as CloseIcon,
 } from '@mui/icons-material';
+
+const formatBytes = (bytes) => {
+  if (!bytes && bytes !== 0) return '';
+  if (bytes === 0) return '0 B';
+  const units = ['B', 'KB', 'MB', 'GB', 'TB'];
+  const index = Math.min(units.length - 1, Math.floor(Math.log(bytes) / Math.log(1024)));
+  const value = bytes / (1024 ** index);
+  return `${value >= 10 || index === 0 ? value.toFixed(0) : value.toFixed(1)} ${units[index]}`;
+};
 
 const DriveOperationSnackbar = ({
   open,
@@ -24,11 +34,19 @@ const DriveOperationSnackbar = ({
   processed = 0,
   total = 0,
   progress = 0,
+  loaded = 0,
   mode = 'rename',
+  status = '',
+  hint = '',
   onClose,
 }) => {
-  const percent = total > 0 ? Math.min(100, progress || Math.round((processed / total) * 100)) : 0;
+  const percent = total > 0
+    ? Math.min(100, progress || Math.round(((mode === 'download' ? loaded : processed) / total) * 100))
+    : 0;
   const determinate = total > 0;
+  const Icon = mode === 'move' ? MoveIcon : mode === 'download' ? DownloadIcon : RenameIcon;
+  const isDone = status === 'completed';
+  const isError = status === 'error' || status === 'cancelled';
 
   return (
     <Snackbar
@@ -46,7 +64,7 @@ const DriveOperationSnackbar = ({
         }}
       >
         <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 1.5, mb: 1.5 }}>
-          {mode === 'move' ? <MoveIcon color="primary" /> : <RenameIcon color="primary" />}
+          <Icon color={isError ? 'error' : isDone ? 'success' : 'primary'} />
           <Box sx={{ flex: 1, minWidth: 0 }}>
             <Typography variant="subtitle2" fontWeight={600}>
               {title}
@@ -54,6 +72,11 @@ const DriveOperationSnackbar = ({
             {currentItem ? (
               <Typography variant="caption" color="text.secondary" noWrap display="block">
                 {currentItem}
+              </Typography>
+            ) : null}
+            {hint ? (
+              <Typography variant="caption" color="primary" display="block">
+                {hint}
               </Typography>
             ) : null}
           </Box>
@@ -71,9 +94,13 @@ const DriveOperationSnackbar = ({
         />
 
         <Typography variant="caption" color="text.secondary">
-          {determinate
-            ? `${processed} / ${total} fichier${total > 1 ? 's' : ''} • ${percent}%`
-            : 'Préparation...'}
+          {mode === 'download'
+            ? (determinate
+              ? `${formatBytes(loaded)} / ${formatBytes(total)} • ${percent}%`
+              : 'Préparation...')
+            : (determinate
+              ? `${processed} / ${total} fichier${total > 1 ? 's' : ''} • ${percent}%`
+              : 'Préparation...')}
         </Typography>
       </Paper>
     </Snackbar>

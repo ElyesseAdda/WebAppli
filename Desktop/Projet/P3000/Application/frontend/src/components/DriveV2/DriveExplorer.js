@@ -89,6 +89,8 @@ import { normalizeFilename } from './services/pathNormalizationService';
 import { isSystemJunkFileName, isSystemJunkFolderName } from './utils/systemJunkFiles';
 import DriveOperationSnackbar from './DriveOperationSnackbar';
 import { drivePostWithProgress, startNativeFolderDownload } from './utils/driveOperations';
+import { canSaveToDisk, pickZipSaveHandle } from './utils/zipStoreWriter';
+import { startFolderDownload } from './utils/folderDownloadManager';
 
 const ExplorerContainer = styled(Box)(({ theme, isDragOver }) => ({
   flex: 1,
@@ -1118,6 +1120,24 @@ const DriveExplorer = ({
     let folderPath = folderToDownload.path;
     if (folderPath && !folderPath.endsWith('/')) {
       folderPath = `${folderPath}/`;
+    }
+
+    if (canSaveToDisk()) {
+      try {
+        const handle = await pickZipSaveHandle(`${folderName}.zip`);
+        startFolderDownload({
+          fileHandle: handle,
+          folderPath,
+          folderName,
+        });
+      } catch (error) {
+        if (error?.name === 'AbortError') {
+          return;
+        }
+        console.error('Téléchargement de dossier:', error);
+        alert(error.message || 'Impossible de démarrer le téléchargement');
+      }
+      return;
     }
 
     setDownloadingFolder(folderName);
@@ -2378,6 +2398,7 @@ const DriveExplorer = ({
         processed={driveOperation?.processed}
         total={driveOperation?.total}
         progress={driveOperation?.progress}
+        loaded={driveOperation?.loaded}
         mode={driveOperation?.mode || 'rename'}
       />
 

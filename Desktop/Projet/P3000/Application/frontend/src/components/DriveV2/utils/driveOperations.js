@@ -89,3 +89,129 @@ export function startNativeFolderDownload(folderPath, folderName) {
   link.click();
   document.body.removeChild(link);
 }
+
+const streamFileFallback = (filePath, signal) => fetch(
+  `/api/drive-v2/stream-file/?file_path=${encodeURIComponent(filePath)}`,
+  { credentials: 'include', signal }
+);
+
+export async function downloadFolderToDisk({
+  folderPath,
+  zipFilename,
+  onProgress,
+  signal,
+  writable,
+}) {
+  const manifestResponse = await fetch(
+    `/api/drive-v2/folder-download-manifest/?folder_path=${encodeURIComponent(folderPath)}`,
+    { credentials: 'include', signal }
+  );
+  if (!manifestResponse.ok) {
+    const errorData = await manifestResponse.json().catch(() => ({ error: 'Impossible de préparer le téléchargement' }));
+    throw new Error(errorData.error || `Erreur HTTP ${manifestResponse.status}`);
+  }
+
+  const manifest = await manifestResponse.json();
+  const files = manifest.files || [];
+  const total = manifest.total_size || files.reduce((sum, file) => sum + (file.size || 0), 0);
+  onProgress?.({
+    loaded: 0,
+    total,
+    current: files.length ? 'Connexion au stockage...' : 'Dossier vide',
+    fileCount: files.length,
+  });
+
+  const { createZipStoreWriter } = await import('./zipStoreWriter');
+  const zipWriter = createZipStoreWriter(writable);
+  let loaded = 0;
+  let useDirectS3 = true;
+  let reportedS3 = null;
+  let lastProgressAt = 0;
+
+  const reportProgress = (payload) => {
+    const now = Date.now();
+    const isFinal = payload.phase === 'finalizing';
+    if (!isFinal && now - lastProgressAt < 250 && payload.loaded !== payload.total) {
+      return;
+    }
+    lastProgressAt = now;
+    onProgress?.(payload);
+  };
+
+  const fetchFile = async (file) => {
+    if (useDirectS3 && file.download_url) {
+      try {
+        const response = await fetch(file.download_url, {
+          mode: 'cors',
+          credentials: 'omit',
+          signal,
+        });
+        if (response.ok) {
+          if (reportedS3 !== true) {
+            reportedS3 = true;
+            reportProgress({ loaded, total, current: file.relative_path, viaS3: true });
+          }
+          return response;
+        }
+      } catch (error) {
+        if (error?.name === 'AbortError') throw error;
+      }
+      useDirectS3 = false;
+      if (reportedS3 !== false) {
+        reportedS3 = false;
+        reportProgress({ loaded, total, current: file.relative_path, viaS3: false });
+      }
+    }
+    const response = await streamFileFallback(file.path, signal);
+    if (!response.ok) {
+      throw new Error(`Impossible de télécharger ${file.relative_path}`);
+    }
+    return response;
+  };
+
+  for (let i = 0; i < files.length; i += 1) {
+    if (signal?.aborted) {
+      throw new DOMException('Téléchargement annulé', 'AbortError');
+    }
+
+    const file = files[i];
+    reportProgress({
+      loaded,
+      total,
+      current: file.relative_path,
+      fileIndex: i + 1,
+      fileCount: files.length,
+      viaS3: reportedS3,
+    });
+
+    const response = await fetchFile(file);
+
+    await zipWriter.addFile({
+      name: file.relative_path,
+      lastModified: file.last_modified,
+      stream: response.body,
+      sizeHint: file.size || 0,
+      onChunk: (byteLength) => {
+        loaded += byteLength;
+        reportProgress({
+          loaded,
+          total,
+          current: file.relative_path,
+          fileIndex: i + 1,
+          fileCount: files.length,
+          viaS3: reportedS3,
+        });
+      },
+    });
+  }
+
+  reportProgress({
+    loaded,
+    total: total || loaded,
+    current: 'Écriture du fichier sur le disque…',
+    phase: 'finalizing',
+    viaS3: reportedS3,
+  });
+  await zipWriter.finalize();
+  return manifest;
+}

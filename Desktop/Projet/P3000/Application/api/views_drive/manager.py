@@ -4,8 +4,7 @@ Drive Manager - Gestionnaire principal du Drive V2
 
 from typing import Callable, Dict, Generator, List, Optional, Tuple
 from .storage import StorageManager
-import re
-import zipfile
+from .zip_stream import iter_s3_folder_zip, _should_skip_key
 from datetime import datetime
 from ..utils import encode_filename_for_content_disposition
 
@@ -34,46 +33,6 @@ def normalize_filename(filename: str) -> str:
     normalized = normalized.replace('/', '∕')
     
     return normalized
-
-
-class _ZipStreamBuffer:
-    """Buffer non seekable pour streamer un ZIP au fur et à mesure de son écriture."""
-
-    def __init__(self):
-        self._chunks = []
-        self._written = 0
-
-    def write(self, data):
-        if isinstance(data, str):
-            data = data.encode('utf-8')
-        if data:
-            chunk = bytes(data)
-            self._chunks.append(chunk)
-            self._written += len(chunk)
-            return len(chunk)
-        return 0
-
-    def tell(self):
-        return self._written
-
-    def seek(self, *args, **kwargs):
-        raise OSError('not seekable')
-
-    def seekable(self):
-        return False
-
-    def flush(self):
-        pass
-
-    def close(self):
-        pass
-
-    def drain(self) -> bytes:
-        if not self._chunks:
-            return b''
-        data = b''.join(self._chunks)
-        self._chunks.clear()
-        return data
 
 
 def denormalize_filename(normalized_filename: str) -> str:
@@ -728,67 +687,55 @@ class DriveManager:
         folder_name = normalized_path.rstrip('/').split('/')[-1] if normalized_path.rstrip('/') else 'dossier'
         return f"{folder_name}.zip"
 
+    def get_folder_download_manifest(self, folder_path: str, expires_in: int = 7200) -> Dict:
+        """
+        Liste les fichiers d'un dossier avec URLs S3 présignées pour un ZIP côté client.
+        """
+        self.storage.ensure_browser_download_cors()
+        normalized_path = self.normalize_path(folder_path)
+        files = []
+        total_size = 0
+        paginator = self.storage.s3_client.get_paginator('list_objects_v2')
+        for page in paginator.paginate(
+            Bucket=self.storage.bucket_name,
+            Prefix=normalized_path,
+        ):
+            for obj in page.get('Contents') or []:
+                key = obj['Key']
+                if _should_skip_key(key, normalized_path):
+                    continue
+                relative_path = key[len(normalized_path):]
+                if not relative_path:
+                    continue
+                size = int(obj.get('Size') or 0)
+                total_size += size
+                last_modified = obj.get('LastModified')
+                files.append({
+                    'path': key,
+                    'relative_path': relative_path.replace('\\', '/'),
+                    'size': size,
+                    'last_modified': last_modified.isoformat() if last_modified else None,
+                    'download_url': self.storage.get_presigned_url(key, expires_in=expires_in),
+                })
+
+        return {
+            'folder_name': self.get_folder_zip_filename(folder_path)[:-4],
+            'zip_filename': self.get_folder_zip_filename(folder_path),
+            'file_count': len(files),
+            'total_size': total_size,
+            'files': files,
+        }
+
     def stream_folder_as_zip(self, folder_path: str) -> Generator[bytes, None, None]:
         """
-        Stream un ZIP du dossier : le téléchargement démarre dès le premier fichier.
+        Stream un ZIP store+ZIP64 (sans compression) pour les gros fichiers.
         """
         normalized_path = self.normalize_path(folder_path)
-        buffer = _ZipStreamBuffer()
-
-        with zipfile.ZipFile(
-            buffer,
-            mode='w',
-            compression=zipfile.ZIP_DEFLATED,
-            allowZip64=True,
-            compresslevel=1,
-        ) as zip_file:
-            paginator = self.storage.s3_client.get_paginator('list_objects_v2')
-            for page in paginator.paginate(
-                Bucket=self.storage.bucket_name,
-                Prefix=normalized_path,
-            ):
-                for obj in page.get('Contents') or []:
-                    key = obj['Key']
-                    if (
-                        key.endswith('/')
-                        or key.endswith('/.keep')
-                        or key.endswith('/.metadata.json')
-                        or key == normalized_path
-                    ):
-                        continue
-
-                    relative_path = key[len(normalized_path):]
-                    if not relative_path:
-                        continue
-
-                    info = zipfile.ZipInfo(relative_path.replace('\\', '/'))
-                    info.compress_type = zipfile.ZIP_DEFLATED
-                    info.flag_bits |= 0x800
-                    last_modified = obj.get('LastModified')
-                    if last_modified:
-                        info.date_time = last_modified.timetuple()[:6]
-
-                    try:
-                        s3_obj = self.storage.s3_client.get_object(
-                            Bucket=self.storage.bucket_name,
-                            Key=key,
-                        )
-                        with zip_file.open(info, 'w') as dest:
-                            for chunk in s3_obj['Body'].iter_chunks(256 * 1024):
-                                dest.write(chunk)
-                                data = buffer.drain()
-                                if data:
-                                    yield data
-                        data = buffer.drain()
-                        if data:
-                            yield data
-                    except Exception as e:
-                        print(f"Erreur lors du téléchargement de {key}: {str(e)}")
-                        continue
-
-        data = buffer.drain()
-        if data:
-            yield data
+        yield from iter_s3_folder_zip(
+            self.storage.s3_client,
+            self.storage.bucket_name,
+            normalized_path,
+        )
 
     def download_folder_as_zip(
         self,
