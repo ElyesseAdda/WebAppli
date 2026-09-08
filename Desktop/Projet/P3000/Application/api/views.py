@@ -2311,13 +2311,35 @@ class AgentViewSet(viewsets.ModelViewSet):
     def upload_photo(self, request, pk=None):
         """Enregistre la photo de l'agent sur S3."""
         from io import BytesIO
+        import os
 
         agent = self.get_object()
         fichier = request.FILES.get('photo')
         if not fichier:
             return Response({'error': 'Fichier photo requis'}, status=status.HTTP_400_BAD_REQUEST)
+
+        formats_acceptes = 'JPG, JPEG, PNG, GIF, WebP, BMP, TIFF, HEIC, HEIF, ICO'
+        extensions_ok = {
+            '.jpg', '.jpeg', '.png', '.gif', '.webp', '.bmp',
+            '.tif', '.tiff', '.heic', '.heif', '.ico',
+        }
+        content_types_ok = {
+            'image/jpeg', 'image/png', 'image/gif', 'image/webp', 'image/bmp',
+            'image/tiff', 'image/heic', 'image/heif', 'image/x-icon',
+            'image/vnd.microsoft.icon', 'image/x-ms-bmp', 'image/x-bmp',
+            'application/octet-stream',
+        }
+        nom = (fichier.name or '').lower()
+        ext_fichier = os.path.splitext(nom)[1]
+        content_type_fichier = (fichier.content_type or '').lower()
+        if ext_fichier and ext_fichier not in extensions_ok and content_type_fichier not in content_types_ok:
+            return Response(
+                {'error': f'Format non supporté. Formats acceptés : {formats_acceptes}.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
         try:
-            from PIL import Image
+            from PIL import Image, ImageOps, UnidentifiedImageError
 
             from .utils import (
                 build_agent_photo_s3_key,
@@ -2330,8 +2352,25 @@ class AgentViewSet(viewsets.ModelViewSet):
             if not is_s3_available():
                 return Response({'error': 'S3 non disponible'}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
 
+            # HEIC/HEIF (photos iPhone) si pillow-heif est installé
+            try:
+                from pillow_heif import register_heif_opener
+                register_heif_opener()
+            except ImportError:
+                pass
+
             contenu = fichier.read()
-            image = Image.open(BytesIO(contenu))
+            try:
+                image = Image.open(BytesIO(contenu))
+                image.load()
+            except UnidentifiedImageError:
+                return Response(
+                    {'error': f'Image illisible. Formats acceptés : {formats_acceptes}.'},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
+            image = ImageOps.exif_transpose(image)
+
             if image.mode in ('RGBA', 'LA', 'P'):
                 image = image.convert('RGBA')
             elif image.mode != 'RGB':

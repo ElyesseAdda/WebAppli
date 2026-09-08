@@ -1075,6 +1075,19 @@ const AgentCarteModal = ({ isOpen, handleClose, refreshAgents, agents = [] }) =>
 
     if (!file || !agentData.id) return;
 
+    const allowedExt = /\.(jpe?g|png|gif|webp|bmp|tiff?|heic|heif|ico)$/i;
+    const allowedMimePrefix = /^image\//;
+    const nameOk = allowedExt.test(file.name || "");
+    const mimeOk = !file.type || allowedMimePrefix.test(file.type);
+    if (!nameOk && !mimeOk) {
+      setMessage({
+        type: "error",
+        text: "Format non supporté. Formats acceptés : JPG, PNG, GIF, WebP, BMP, TIFF, HEIC.",
+      });
+      if (photoInputRef.current) photoInputRef.current.value = "";
+      return;
+    }
+
     setIsUploadingPhoto(true);
 
     try {
@@ -1761,7 +1774,7 @@ const AgentCarteModal = ({ isOpen, handleClose, refreshAgents, agents = [] }) =>
 
                     type="file"
 
-                    accept="image/*"
+                    accept=".jpg,.jpeg,.png,.gif,.webp,.bmp,.tif,.tiff,.heic,.heif,.ico,image/jpeg,image/png,image/gif,image/webp,image/bmp,image/tiff,image/heic,image/heif,image/x-icon"
 
                     style={{ display: "none" }}
 
