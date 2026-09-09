@@ -7,12 +7,19 @@ import {
   MdConstruction,
   MdEventAvailable,
   MdFolderOpen,
+  MdAutoAwesome,
   MdFolderShared,
   MdTableChart,
 } from "react-icons/md";
 import { SiGoogledrive } from "react-icons/si";
 import { matchPath, useLocation, useParams } from "react-router-dom";
+import {
+  hasUnseenPatchNotes,
+  openPatchNotes,
+  PATCH_NOTES_SEEN_EVENT,
+} from "../config/patchNotes";
 import "./../../static/css/breadcrumb.css";
+import "./../../static/css/patchNotes.css";
 
 /** Routes du breadcrumb — les chemins les plus spécifiques en premier. */
 const BREADCRUMB_ROUTES = [
@@ -111,6 +118,7 @@ const BreadcrumbHeader = ({ user, onLogout }) => {
     return matchedRoute.page;
   }, [matchedRoute, agenceName]);
 
+  const [hasNewNotes, setHasNewNotes] = useState(() => hasUnseenPatchNotes());
   const [chantierName, setChantierName] = useState("");
   const chantierId = matchedRoute?.chantierContext
     ? params.id || pathname.split("/")[2]
@@ -147,6 +155,12 @@ const BreadcrumbHeader = ({ user, onLogout }) => {
       cancelled = true;
     };
   }, [chantierId]);
+
+  useEffect(() => {
+    const syncSeen = () => setHasNewNotes(hasUnseenPatchNotes());
+    window.addEventListener(PATCH_NOTES_SEEN_EVENT, syncSeen);
+    return () => window.removeEventListener(PATCH_NOTES_SEEN_EVENT, syncSeen);
+  }, []);
 
   const handleLogout = () => {
     if (onLogout) onLogout();
@@ -189,6 +203,16 @@ const BreadcrumbHeader = ({ user, onLogout }) => {
       {user && (
         <div className="breadcrumb-right">
           <div className="user-section">
+            <button
+              type="button"
+              className={`patch-notes-open-btn${hasNewNotes ? " has-unseen" : ""}`}
+              onClick={openPatchNotes}
+              title="Voir les notes de patch"
+            >
+              {hasNewNotes && <span className="patch-notes-dot" />}
+              <MdAutoAwesome />
+              <span className="pn-btn-label">Note de Patch</span>
+            </button>
             <span className="user-name">
               {user.first_name || user.username || "Utilisateur"}
             </span>

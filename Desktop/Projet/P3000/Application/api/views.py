@@ -10638,6 +10638,14 @@ class AgencyExpenseMonthViewSet(viewsets.ModelViewSet):
             queryset = queryset.filter(category=category)
         if agence_id:
             queryset = queryset.filter(agence_id=int(agence_id))
+
+        if year:
+            from .models import purge_stale_pointage_agency_expenses
+            purge_stale_pointage_agency_expenses(
+                year=int(year),
+                month=int(month) if month else None,
+                agence_id=agence_id,
+            )
         
         return queryset.order_by('year', 'month', 'description')
 
@@ -10650,6 +10658,13 @@ class AgencyExpenseMonthViewSet(viewsets.ModelViewSet):
         
         if not month or not year:
             return Response({"error": "Month and year are required"}, status=status.HTTP_400_BAD_REQUEST)
+
+        from .models import purge_stale_pointage_agency_expenses
+        purge_stale_pointage_agency_expenses(
+            year=int(year),
+            month=int(month),
+            agence_id=agence_id,
+        )
         
         expenses = self.queryset.filter(
             month=int(month),
@@ -10687,6 +10702,8 @@ class AgencyExpenseMonthViewSet(viewsets.ModelViewSet):
         if not year:
             return Response({"error": "year is required"}, status=status.HTTP_400_BAD_REQUEST)
         year = int(year)
+        from .models import purge_stale_pointage_agency_expenses
+        purge_stale_pointage_agency_expenses(year=year, agence_id=agence_id)
         expenses = self.queryset.filter(year=year).exclude(is_recurring_template=True)
         if agence_id:
             expenses = expenses.filter(agence_id=int(agence_id))
