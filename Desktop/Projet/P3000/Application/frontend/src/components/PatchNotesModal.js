@@ -1,14 +1,4 @@
 import React, { useCallback, useEffect, useState } from "react";
-import {
-  MdAdd,
-  MdApps,
-  MdDelete,
-  MdDownload,
-  MdFolder,
-  MdPersonAdd,
-  MdVisibilityOff,
-  MdWarningAmber,
-} from "react-icons/md";
 import PATCH_NOTES, {
   PATCH_NOTES_OPEN_EVENT,
   hasUnseenPatchNotes,
@@ -16,181 +6,32 @@ import PATCH_NOTES, {
 } from "../config/patchNotes";
 import "../../static/css/patchNotes.css";
 
-const VisualAgentCard = () => (
+const VisualPointageAgence = () => (
   <div className="pn-screen">
-    <div className="pn-screen-bar">Carte Agent</div>
-    <div className="pn-btn-row">
-      <span className="pn-app-btn pn-app-btn-outline">
-        <MdPersonAdd />
-        Nouvel agent
-      </span>
-      <span className="pn-hit pn-app-btn pn-app-btn-outline" data-label="Créer un contrat">
-        <MdAdd />
-        Ajouter
-      </span>
-      <span className="pn-app-btn pn-app-btn-red">
-        <MdDelete />
-        Supprimer
-      </span>
-    </div>
-    <div className="pn-row">
-      <span className="pn-doc">CDI — 01/03/2026</span>
-    </div>
-    <p className="pn-caption">
-      Menu Agent & Planning → Carte Agent. « Ajouter » crée un contrat, « Supprimer » retire l’agent.
-    </p>
-  </div>
-);
-
-const VisualContratDates = () => (
-  <div className="pn-screen">
-    <div className="pn-screen-bar">Planning, gestion agent, pointage</div>
-    <div className="pn-row">
-      <span className="pn-doc">Martin Dupont</span>
-      <span className="pn-pill pn-pill-ok">Contrat en cours</span>
+    <div className="pn-screen-bar">Agence — dépenses du mois</div>
+    <div className="pn-row is-muted">
+      <span className="pn-doc">Planning hebdo — Agent</span>
+      <span className="pn-pill">Masqué</span>
     </div>
     <div className="pn-row is-muted">
-      <span className="pn-doc">Léa Bernard</span>
-      <span className="pn-pill">Hors contrat</span>
-    </div>
-    <p className="pn-caption">
-      Valable dans Planning hebdo, Gestion agent et Tableau de pointage.
-    </p>
-  </div>
-);
-
-const VisualHideRow = () => (
-  <div className="pn-screen">
-    <div className="pn-screen-bar">Tableau Fournisseur / Sous-Traitant</div>
-    <button type="button" className="pn-app-btn pn-app-btn-outline">
-      <MdVisibilityOff />
-      Lignes masquées
-    </button>
-    <div className="pn-row">
-      <span className="pn-doc">Fournisseur Martin</span>
-      <span className="pn-hit" data-label="Masquer cette ligne">
-        <MdVisibilityOff />
-      </span>
-    </div>
-    <div className="pn-row is-muted">
-      <span className="pn-doc">FAC-12-26 — 1 250 €</span>
-    </div>
-    <p className="pn-caption">
-      L’œil barré est à droite de la ligne. « Lignes masquées » est en haut du tableau.
-    </p>
-  </div>
-);
-
-const VisualGantt = () => (
-  <div className="pn-screen">
-    <div className="pn-screen-bar">Diagrammes de Gantt</div>
-    <div className="pn-gantt">
-      <div className="pn-gantt-line">
-        <span>Préparation</span>
-        <i className="pn-gantt-bar" style={{ width: "38%" }} />
-      </div>
-      <div className="pn-gantt-line">
-        <span>Travaux</span>
-        <i className="pn-gantt-bar pn-gantt-bar-2" style={{ width: "55%", marginLeft: "18%" }} />
-      </div>
-      <div className="pn-gantt-line">
-        <span>Livraison</span>
-        <i className="pn-gantt-bar pn-gantt-bar-3" style={{ width: "22%", marginLeft: "68%" }} />
-      </div>
-    </div>
-    <p className="pn-caption">
-      Menu Agent & Planning → Diagrammes de Gantt. Chaque barre est une étape.
-    </p>
-  </div>
-);
-
-const VisualSidebarApps = () => (
-  <div className="pn-screen">
-    <div className="pn-screen-bar">Menu Applications</div>
-    <div className="pn-sidebar-list">
-      <span className="pn-sidebar-item">
-        <MdApps /> Applications
-      </span>
-      <span className="pn-hit pn-sidebar-sub" data-label="Ouvre l’autre logiciel">
-        Elekable
-      </span>
-      <span className="pn-sidebar-sub">MJR Services</span>
-    </div>
-    <p className="pn-caption">
-      Cliquez d’abord sur Applications dans la barre de gauche, puis sur Elekable ou MJR Services.
-    </p>
-  </div>
-);
-
-const VisualRecapZero = () => (
-  <div className="pn-screen">
-    <div className="pn-screen-bar">Récap Financier</div>
-    <div className="pn-btn-row">
-      <span className="pn-status-refused">Refusé</span>
+      <span className="pn-doc">Ajustement sous-traitant</span>
+      <span className="pn-pill">Masqué</span>
     </div>
     <div className="pn-row">
-      <span>Total chantier</span>
-      <strong className="pn-zero">0 €</strong>
+      <span className="pn-doc pn-hit" data-label="Compte dans l’agence">
+        Pointage — montant chargé
+      </span>
+      <span className="pn-pill pn-pill-ok">Conservé</span>
     </div>
     <p className="pn-caption">
-      Dans le chantier, onglet Récap Financier. Le devis se change dans Documents → Devis.
-    </p>
-  </div>
-);
-
-const VisualFactureAlerte = () => (
-  <div className="pn-screen">
-    <div className="pn-screen-bar">Devis</div>
-    <div className="pn-alert">
-      <MdWarningAmber />
-      <span>Une facture existe déjà pour ce devis. Voulez-vous vraiment en créer une nouvelle ?</span>
-    </div>
-    <div className="pn-btn-row">
-      <span className="pn-app-btn pn-app-btn-outline">Annuler</span>
-      <span className="pn-hit pn-app-btn pn-app-btn-blue" data-label="Continuer quand même">
-        Créer
-      </span>
-    </div>
-    <p className="pn-caption">
-      Trois points du devis → « Éditer en facture ». Un message s’affiche si une facture existe déjà.
-    </p>
-  </div>
-);
-
-const VisualDriveDownload = () => (
-  <div className="pn-screen">
-    <div className="pn-screen-bar">Drive</div>
-    <div className="pn-row">
-      <span className="pn-doc">
-        <MdFolder className="pn-folder" />
-        Dossier chantier
-      </span>
-      <span className="pn-hit" data-label="Télécharger">
-        <MdDownload />
-      </span>
-    </div>
-    <div className="pn-progress-box">
-      <strong>Téléchargement en cours…</strong>
-      <div className="pn-progress">
-        <i style={{ width: "68%" }} />
-      </div>
-      <span>Plus rapide, vous pouvez changer de page.</span>
-    </div>
-    <p className="pn-caption">
-      Menu Drive : l’icône de téléchargement est à droite du fichier ou du dossier.
+      Dès que le montant chargé est imputé à l’agence, il remplace le planning et les ajustements.
+      S’il est retiré, ceux-ci réapparaissent.
     </p>
   </div>
 );
 
 const VISUALS = {
-  "agent-card": VisualAgentCard,
-  "contrat-dates": VisualContratDates,
-  "hide-row": VisualHideRow,
-  gantt: VisualGantt,
-  "sidebar-apps": VisualSidebarApps,
-  "recap-zero": VisualRecapZero,
-  "facture-alerte": VisualFactureAlerte,
-  "drive-download": VisualDriveDownload,
+  "pointage-agence": VisualPointageAgence,
 };
 
 const PatchNotesModal = () => {

@@ -10,13 +10,45 @@ from django.db.models import Q
 from ..models import Schedule
 
 
-def planning_montant_chantier_periode(chantier_id: int, date_start: date, date_end: date) -> float:
+def _creneau_montant(s, date_creneau, fr_holidays) -> float:
+    is_journalier = s.agent.type_paiement == "journalier"
+    if is_journalier:
+        heures_increment = 4
+        taux_horaire = (s.agent.taux_journalier or 0) / 8
+    else:
+        heures_increment = 1
+        taux_horaire = s.agent.taux_Horaire or 0
+
+    has_overtime = s.overtime_hours and s.overtime_hours > 0
+    total_m = 0.0
+
+    if is_journalier:
+        if not has_overtime:
+            total_m += float(taux_horaire * heures_increment)
+    else:
+        if not has_overtime:
+            if date_creneau in fr_holidays:
+                total_m += float(taux_horaire * heures_increment * 1.5)
+            elif s.day == "Samedi":
+                total_m += float(taux_horaire * heures_increment * 1.25)
+            elif s.day == "Dimanche":
+                total_m += float(taux_horaire * heures_increment * 1.5)
+            else:
+                total_m += float(taux_horaire * heures_increment)
+    if has_overtime:
+        overtime_hours = float(s.overtime_hours)
+        total_m += float(taux_horaire * overtime_hours * 1.25)
+    return total_m
+
+
+def planning_montants_par_agent_mois(chantier_id: int, date_start: date, date_end: date):
     """
-    Somme des montants planning (créneaux Schedule) pour un chantier donné,
-    sur l'intervalle [date_start, date_end] inclus (même formules que l'écran Agences).
+    {(agent_id, year, month): montant} pour les créneaux Schedule d'un chantier agence
+    sur [date_start, date_end] inclus.
     """
+    result = {}
     if not chantier_id or not date_start or not date_end:
-        return 0.0
+        return result
 
     years = list(range(date_start.year, date_end.year + 1))
     fr_holidays = holidays.country_holidays("FR", years=years)
@@ -42,7 +74,6 @@ def planning_montant_chantier_periode(chantier_id: int, date_start: date, date_e
         .select_related("agent", "chantier")
     )
 
-    total_m = 0.0
     for s in schedules:
         if not s.chantier_id:
             continue
@@ -52,32 +83,14 @@ def planning_montant_chantier_periode(chantier_id: int, date_start: date, date_e
             continue
         if date_creneau < date_start or date_creneau > date_end:
             continue
+        key = (s.agent_id, date_creneau.year, date_creneau.month)
+        result[key] = result.get(key, 0.0) + _creneau_montant(s, date_creneau, fr_holidays)
+    return result
 
-        is_journalier = s.agent.type_paiement == "journalier"
-        if is_journalier:
-            heures_increment = 4
-            taux_horaire = (s.agent.taux_journalier or 0) / 8
-        else:
-            heures_increment = 1
-            taux_horaire = s.agent.taux_Horaire or 0
 
-        has_overtime = s.overtime_hours and s.overtime_hours > 0
-
-        if is_journalier:
-            if not has_overtime:
-                total_m += float(taux_horaire * heures_increment)
-        else:
-            if not has_overtime:
-                if date_creneau in fr_holidays:
-                    total_m += float(taux_horaire * heures_increment * 1.5)
-                elif s.day == "Samedi":
-                    total_m += float(taux_horaire * heures_increment * 1.25)
-                elif s.day == "Dimanche":
-                    total_m += float(taux_horaire * heures_increment * 1.5)
-                else:
-                    total_m += float(taux_horaire * heures_increment)
-        if has_overtime:
-            overtime_hours = float(s.overtime_hours)
-            total_m += float(taux_horaire * overtime_hours * 1.25)
-
-    return total_m
+def planning_montant_chantier_periode(chantier_id: int, date_start: date, date_end: date) -> float:
+    """
+    Somme des montants planning (créneaux Schedule) pour un chantier donné,
+    sur l'intervalle [date_start, date_end] inclus (même formules que l'écran Agences).
+    """
+    return float(sum(planning_montants_par_agent_mois(chantier_id, date_start, date_end).values()))
