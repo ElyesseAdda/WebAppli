@@ -4,6 +4,7 @@ import {
   AccordionSummary,
   Box,
   Button,
+  InputAdornment,
   LinearProgress,
   Paper,
   Table,
@@ -14,9 +15,11 @@ import {
   TableHead,
   TableRow,
   TextField,
+  ToggleButton,
+  ToggleButtonGroup,
   Typography,
 } from "@mui/material";
-import { ExpandMore as ExpandMoreIcon } from "@mui/icons-material";
+import { ExpandMore as ExpandMoreIcon, Search as SearchIcon } from "@mui/icons-material";
 
 import {
   formatDate,
@@ -65,6 +68,9 @@ const TableauFacturationTable = ({
   onDownloadFacturePdf,
 }) => {
   const [showCumulColumn, setShowCumulColumn] = useState(false);
+  const [recapSearch, setRecapSearch] = useState("");
+  const [recapSort, setRecapSort] = useState("montant");
+  const [recapSortDir, setRecapSortDir] = useState("desc");
 
   const hasNoEcart = (montantAttendu, montantRecu) =>
     Math.abs((parseFloat(montantRecu) || 0) - (parseFloat(montantAttendu) || 0)) < 0.01;
@@ -92,7 +98,11 @@ const TableauFacturationTable = ({
         : parseFloat(item.montant_reel_ht) || 0;
 
       if (!parChantier[chantierName]) {
-        parChantier[chantierName] = { montantHT: 0, montantRecu: 0, ecart: 0 };
+        parChantier[chantierName] = { montantHT: 0, montantRecu: 0, ecart: 0, clientName: "" };
+      }
+      const clientName = item.client_name || item.chantier?.maitre_ouvrage_nom_societe || item.chantier?.societe?.nom_societe || "";
+      if (clientName && !parChantier[chantierName].clientName) {
+        parChantier[chantierName].clientName = clientName;
       }
       parChantier[chantierName].montantHT += montantHT;
       parChantier[chantierName].montantRecu += montantRecu;
@@ -103,6 +113,60 @@ const TableauFacturationTable = ({
     const sorted = Object.keys(parChantier).sort((a, b) => parChantier[b].montantHT - parChantier[a].montantHT);
     return { parChantier, totalHT, sorted };
   }, [situationsAvecSousTotaux, totaux]);
+
+  const getDefaultRecapSortDir = (sort) => (sort === "alphabetique" ? "asc" : "desc");
+
+  const handleRecapSortChange = (_, value) => {
+    if (value === null) {
+      setRecapSortDir((dir) => (dir === "desc" ? "asc" : "desc"));
+      return;
+    }
+    setRecapSort(value);
+    setRecapSortDir(getDefaultRecapSortDir(value));
+  };
+
+  const getRecapSortLabel = (sort) => {
+    if (recapSort !== sort) {
+      if (sort === "montant") return "Plus gros montants";
+      if (sort === "avancement") return "% d'avancement";
+      return "Ordre alphabétique";
+    }
+    if (sort === "montant") {
+      return recapSortDir === "desc" ? "Plus gros montants" : "Plus petits montants";
+    }
+    if (sort === "avancement") {
+      return recapSortDir === "desc" ? "% avancement ↓" : "% avancement ↑";
+    }
+    return recapSortDir === "asc" ? "A → Z" : "Z → A";
+  };
+
+  const recapChantiersSorted = useMemo(() => {
+    const { parChantier, sorted } = recapParChantier;
+    const q = recapSearch.trim().toLowerCase();
+    let list = sorted.filter((chantier) => {
+      if (!q) return true;
+      const ch = parChantier[chantier] || {};
+      return (
+        chantier.toLowerCase().includes(q) ||
+        String(ch.clientName || "").toLowerCase().includes(q)
+      );
+    });
+    return [...list].sort((a, b) => {
+      const chA = parChantier[a];
+      const chB = parChantier[b];
+      let cmp = 0;
+      if (recapSort === "alphabetique") {
+        cmp = a.localeCompare(b, "fr");
+      } else if (recapSort === "avancement") {
+        const pctA = chA.montantHT ? (chA.montantRecu / chA.montantHT) * 100 : 0;
+        const pctB = chB.montantHT ? (chB.montantRecu / chB.montantHT) * 100 : 0;
+        cmp = pctA - pctB;
+      } else {
+        cmp = (chA.montantHT || 0) - (chB.montantHT || 0);
+      }
+      return recapSortDir === "asc" ? cmp : -cmp;
+    });
+  }, [recapParChantier, recapSearch, recapSort, recapSortDir]);
 
   // Calculer le nombre de lignes par mois (sans les sous-totaux) pour la fusion des cellules
   const calculerLignesParMois = () => {
@@ -783,8 +847,85 @@ const TableauFacturationTable = ({
           </Box>
         </Paper>
 
+        <Paper
+          sx={{
+            p: 2,
+            mb: 2,
+            backgroundColor: "white",
+            border: "1px solid rgba(27, 120, 188, 0.25)",
+          }}
+        >
+          <Box
+            sx={{
+              display: "flex",
+              flexWrap: "wrap",
+              gap: 2,
+              alignItems: "center",
+              justifyContent: "space-between",
+            }}
+          >
+            <TextField
+              placeholder="Rechercher par chantier ou client (ex. ZoniaHub, 0233322)…"
+              value={recapSearch}
+              onChange={(e) => setRecapSearch(e.target.value)}
+              size="small"
+              InputProps={{
+                startAdornment: (
+                  <InputAdornment position="start">
+                    <SearchIcon sx={{ color: "rgba(27, 120, 188, 0.7)" }} />
+                  </InputAdornment>
+                ),
+              }}
+              sx={{
+                flex: 1,
+                minWidth: 240,
+                "& .MuiOutlinedInput-root": { backgroundColor: "#fafafa" },
+              }}
+            />
+            <ToggleButtonGroup
+              value={recapSort}
+              exclusive
+              onChange={handleRecapSortChange}
+              size="small"
+              sx={{
+                flexWrap: "wrap",
+                "& .MuiToggleButton-root": {
+                  textTransform: "none",
+                  fontSize: "0.8rem",
+                  px: 1.5,
+                  borderColor: "rgba(27, 120, 188, 0.4)",
+                  color: "rgba(27, 120, 188, 1)",
+                  "&.Mui-selected": {
+                    backgroundColor: "rgba(27, 120, 188, 1)",
+                    color: "white",
+                    "&:hover": { backgroundColor: "rgba(27, 120, 188, 0.85)" },
+                  },
+                },
+              }}
+            >
+              <ToggleButton value="montant">{getRecapSortLabel("montant")}</ToggleButton>
+              <ToggleButton value="avancement">{getRecapSortLabel("avancement")}</ToggleButton>
+              <ToggleButton value="alphabetique">{getRecapSortLabel("alphabetique")}</ToggleButton>
+            </ToggleButtonGroup>
+          </Box>
+          {recapSearch.trim() && (
+            <Typography sx={{ fontSize: "0.75rem", color: "text.secondary", mt: 1.5 }}>
+              {recapChantiersSorted.length} chantier{recapChantiersSorted.length > 1 ? "s" : ""} affiché
+              {recapChantiersSorted.length > 1 ? "s" : ""}
+              {` pour « ${recapSearch.trim()} »`}
+            </Typography>
+          )}
+        </Paper>
+
         <Box sx={{ display: "flex", flexDirection: "column", gap: 1 }}>
-          {recapParChantier.sorted.map((chantier) => {
+          {recapChantiersSorted.length === 0 ? (
+            <Paper sx={{ p: 3, textAlign: "center" }}>
+              <Typography color="text.secondary">
+                Aucun chantier ne correspond à votre recherche.
+              </Typography>
+            </Paper>
+          ) : (
+          recapChantiersSorted.map((chantier) => {
             const ch = recapParChantier.parChantier[chantier];
             const isPayeComplet = Math.abs(ch.montantHT - ch.montantRecu) < 0.01;
             const pctCA = recapParChantier.totalHT
@@ -797,6 +938,7 @@ const TableauFacturationTable = ({
             return (
               <Accordion
                 key={chantier}
+                defaultExpanded={!!recapSearch.trim()}
                 sx={{ backgroundColor: "white", "&:before": { display: "none" }, boxShadow: 2 }}
               >
                 <AccordionSummary
@@ -915,7 +1057,8 @@ const TableauFacturationTable = ({
                 </AccordionDetails>
               </Accordion>
             );
-          })}
+          })
+          )}
         </Box>
       </Box>
     )}

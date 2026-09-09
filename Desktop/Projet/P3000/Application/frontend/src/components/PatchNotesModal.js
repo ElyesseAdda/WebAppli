@@ -30,8 +30,54 @@ const VisualPointageAgence = () => (
   </div>
 );
 
+const VisualDecoupageAgence = () => (
+  <div className="pn-screen">
+    <div className="pn-screen-bar">Tableau Fournisseur — récap du mois</div>
+    <div className="pn-row">
+      <span className="pn-doc">Récap mars</span>
+      <span className="pn-hit" data-label="Cliquez ici">
+        4 100,00 €
+      </span>
+    </div>
+    <div className="pn-split">
+      <div className="pn-split-col">
+        <span className="pn-split-title">Agence</span>
+        <span className="pn-split-amount">4 000,00 €</span>
+      </div>
+      <div className="pn-split-col is-chantier">
+        <span className="pn-split-title">Chantiers</span>
+        <span className="pn-split-amount">100,00 €</span>
+      </div>
+    </div>
+    <p className="pn-caption">
+      Un clic sur le montant sépare l’agence du reste. Sur l’année, chaque chantier est regroupé.
+    </p>
+  </div>
+);
+
+const VisualRechercheFacturation = () => (
+  <div className="pn-screen">
+    <div className="pn-screen-bar">Tableau Facturation — récapitulatif</div>
+    <div className="pn-search-bar">
+      <span className="pn-hit pn-search-field" data-label="Tapez un nom">
+        Rechercher un chantier…
+      </span>
+    </div>
+    <div className="pn-btn-row">
+      <span className="pn-app-btn pn-app-btn-blue">Plus gros montants</span>
+      <span className="pn-app-btn pn-app-btn-outline">% d’avancement</span>
+      <span className="pn-app-btn pn-app-btn-outline">A → Z</span>
+    </div>
+    <p className="pn-caption">
+      Cherchez un chantier ou un client, puis triez la liste comme dans les autres tableaux.
+    </p>
+  </div>
+);
+
 const VISUALS = {
   "pointage-agence": VisualPointageAgence,
+  "decoupage-agence": VisualDecoupageAgence,
+  "recherche-facturation": VisualRechercheFacturation,
 };
 
 const PatchNotesModal = () => {
