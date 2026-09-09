@@ -1,13 +1,15 @@
 import {
+  Autocomplete,
   Box,
   Button,
+  Checkbox,
+  Collapse,
   Dialog,
   DialogActions,
   DialogContent,
   DialogTitle,
-  IconButton,
   FormControlLabel,
-  Checkbox,
+  IconButton,
   MenuItem,
   Paper,
   Select,
@@ -21,6 +23,7 @@ import {
   TextField,
   Typography,
 } from "@mui/material";
+import { createFilterOptions } from "@mui/material/Autocomplete";
 import axios from "axios";
 import React, { useEffect, useMemo, useState } from "react";
 import { useParams } from "react-router-dom";
@@ -91,6 +94,135 @@ const chantierIdForExpense = (e, scopedToAgence, agenceChantierById) => {
   return agenceChantierById[String(e.agence)] ?? null;
 };
 
+const SYSTEM_CATEGORIES = [
+  "Planning agence",
+  "Pointage",
+  "Ajustement Sous-traitant",
+];
+
+const CUSTOM_CATEGORIES_STORAGE_KEY = "p3000_agency_expense_custom_categories";
+
+const filterCategoryOptions = createFilterOptions({
+  stringify: (option) =>
+    typeof option === "string" ? option : option?.inputValue || option?.title || "",
+});
+
+const MONTH_LABELS_FR = Array.from({ length: 12 }, (_, i) =>
+  new Date(2000, i)
+    .toLocaleString("fr-FR", { month: "long" })
+    .replace(/^./, (c) => c.toUpperCase())
+);
+
+const loadStoredCustomCategories = () => {
+  try {
+    const raw = JSON.parse(localStorage.getItem(CUSTOM_CATEGORIES_STORAGE_KEY) || "[]");
+    if (!Array.isArray(raw)) return [];
+    return raw.map((c) => String(c || "").trim()).filter(Boolean);
+  } catch {
+    return [];
+  }
+};
+
+const persistCustomCategories = (list) => {
+  try {
+    localStorage.setItem(CUSTOM_CATEGORIES_STORAGE_KEY, JSON.stringify(list));
+  } catch {
+    /* ignore quota / private mode */
+  }
+};
+
+const uniquePreserveOrder = (items) => {
+  const seen = new Set();
+  const out = [];
+  (items || []).forEach((item) => {
+    const v = String(item || "").trim();
+    if (!v) return;
+    const key = v.toLowerCase();
+    if (seen.has(key)) return;
+    seen.add(key);
+    out.push(v);
+  });
+  return out;
+};
+
+const normalizeCategoryName = (value) => String(value || "").trim().slice(0, 50);
+
+const designationKey = (description) =>
+  (description || "").trim().toLowerCase() || "(sans désignation)";
+
+const stripInternalExpenseIds = (text) =>
+  String(text || "")
+    .replace(/\s*\[POINTAGE_ID:[^\]]+\]\s*/gi, "")
+    .replace(/\s*\[PRIME_ID:\d+\]\s*/gi, "")
+    .replace(/\s*\[AGENCE:[^\]]+\]\s*/gi, "")
+    .replace(/\s*—\s*Pointage\s*/gi, "")
+    .replace(/\s*—\s*$/g, "")
+    .trim();
+
+const AGENT_DETAIL_CATEGORIES = new Set([
+  "Pointage",
+  "Prime",
+  "Ajustement Sous-traitant",
+  "Planning agence",
+]);
+
+const expenseDesignationLabel = (expense) => {
+  if (!expense) return "Sans désignation";
+  if (expense.agent_name) return String(expense.agent_name).trim();
+  const cleaned = stripInternalExpenseIds(expense.description);
+  if (AGENT_DETAIL_CATEGORIES.has(expense.category)) {
+    return cleaned.split("—")[0].split(" - ")[0].trim() || "Agent";
+  }
+  return cleaned || "Sans désignation";
+};
+
+const groupExpensesByDesignation = (expenses) => {
+  const map = {};
+  (expenses || []).forEach((e) => {
+    if (!e || e.is_recurring_template) return;
+    const label = expenseDesignationLabel(e);
+    const key =
+      e.agent != null && e.agent !== ""
+        ? `agent-${e.agent}`
+        : designationKey(label);
+    if (!map[key]) {
+      map[key] = {
+        key,
+        label,
+        lines: [],
+        total: 0,
+      };
+    }
+    map[key].lines.push(e);
+    map[key].total += expenseLineAmount(e);
+  });
+  Object.values(map).forEach((group) => {
+    const byMonth = {};
+    group.lines.forEach((line) => {
+      const monthNum = Number(line.month) || 0;
+      if (!byMonth[monthNum]) {
+        byMonth[monthNum] = {
+          ...line,
+          description: group.label,
+          amount: 0,
+          montant_paye: 0,
+        };
+      }
+      const amt = expenseLineAmount(line);
+      byMonth[monthNum].amount = Number(byMonth[monthNum].amount || 0) + amt;
+      if (line.commentaire && !byMonth[monthNum].commentaire) {
+        byMonth[monthNum].commentaire = line.commentaire;
+      }
+    });
+    group.lines = Object.values(byMonth).sort(
+      (a, b) => Number(a.month || 0) - Number(b.month || 0)
+    );
+  });
+  return Object.values(map).sort(
+    (a, b) => b.total - a.total || a.label.localeCompare(b.label, "fr")
+  );
+};
+
 const buildAgenceChantierMap = (agences) => {
   const map = {};
   (agences || []).forEach((ag) => {
@@ -135,7 +267,7 @@ const AgencyExpenses = () => {
   const [newExpense, setNewExpense] = useState({
     description: "",
     amount: "",
-    category: "Salaire",
+    category: "",
   });
   const [loading, setLoading] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
@@ -165,30 +297,67 @@ const AgencyExpenses = () => {
   const [yearlyRefresh, setYearlyRefresh] = useState(0);
   const triggerYearlyRefresh = () => setYearlyRefresh((n) => n + 1);
   const [expandedAgentGroups, setExpandedAgentGroups] = useState({});
-
-  // Catégories de dépenses
-  const categories = [
-    "Salaire",
-    "Prime",
-    "Loyer",
-    "Fournitures",
-    "Fournisseur",
-    "Équipement",
-    "Assurance",
-    "Services",
-    "Formation",
-    "Sous-traitant",
-    "Autres",
-  ];
-
-  /** Uniquement pour le filtre du tableau (lignes issues du planning / pointage, non saisissables à la main) */
-  const categoriesWithPlanning = [...categories, "Planning agence", "Pointage"];
+  const [customCategories, setCustomCategories] = useState(loadStoredCustomCategories);
+  const [categoryDetail, setCategoryDetail] = useState({
+    open: false,
+    cat: "",
+    total: 0,
+    loading: false,
+    groups: [],
+  });
+  const [expandedDesignations, setExpandedDesignations] = useState({});
+  const [yearlySchedMonths, setYearlySchedMonths] = useState([]);
+  const [yearlyPointageList, setYearlyPointageList] = useState([]);
 
   const agenceParam = agenceId ? `&agence_id=${agenceId}` : "";
   const scheduleParam = agenceChantierId
     ? `&agence=1&chantier_id=${agenceChantierId}`
     : "&agence=1";
   const scheduleReady = !agenceId || !!agenceChantierId;
+
+  const rememberCategory = (cat) => {
+    const name = normalizeCategoryName(cat);
+    if (!name) return name;
+    const isSystem = SYSTEM_CATEGORIES.some(
+      (c) => c.toLowerCase() === name.toLowerCase()
+    );
+    if (isSystem) return name;
+    setCustomCategories((prev) => {
+      if (prev.some((c) => c.toLowerCase() === name.toLowerCase())) return prev;
+      const next = [...prev, name];
+      persistCustomCategories(next);
+      return next;
+    });
+    return name;
+  };
+
+  const usedCategories = useMemo(() => {
+    const fromYear = Object.entries(yearlyCategoryTotals)
+      .filter(([, total]) => Number(total) > 0)
+      .map(([cat]) => cat);
+    const fromMonth = (originalExpenses || []).map((e) => e.category);
+    return uniquePreserveOrder([...fromYear, ...fromMonth]);
+  }, [yearlyCategoryTotals, originalExpenses]);
+
+  const formCategoryOptions = useMemo(() => {
+    const current = isEditing ? editingExpense?.category : newExpense.category;
+    return uniquePreserveOrder([
+      ...customCategories,
+      ...usedCategories,
+      current,
+    ]).filter(
+      (c) => !SYSTEM_CATEGORIES.some((s) => s.toLowerCase() === c.toLowerCase())
+    );
+  }, [customCategories, usedCategories, isEditing, editingExpense?.category, newExpense.category]);
+
+  const filterCategoryList = useMemo(() => {
+    return uniquePreserveOrder([...usedCategories, ...customCategories]);
+  }, [usedCategories, customCategories]);
+
+  const categoriesWithPlanning = useMemo(
+    () => uniquePreserveOrder([...usedCategories, ...SYSTEM_CATEGORIES, ...customCategories]),
+    [usedCategories, customCategories]
+  );
 
   useEffect(() => {
     if (!agenceId) { setAgenceChantierId(null); return; }
@@ -337,6 +506,8 @@ const AgencyExpenses = () => {
         setYearlyTotalTableau(sumTableau);
         setYearlyTotalPlanning(sumPlanning);
         setPlanningAgence(planMonthRes.data);
+        setYearlySchedMonths(schedMonths);
+        setYearlyPointageList(pointageYearList);
       } catch (e) {
         console.error("Erreur chargement données annuelles/planning:", e);
         if (!cancelled) {
@@ -345,6 +516,8 @@ const AgencyExpenses = () => {
           setYearlyTotalTableau(0);
           setYearlyTotalPlanning(0);
           setPlanningAgence(null);
+          setYearlySchedMonths([]);
+          setYearlyPointageList([]);
         }
       } finally {
         if (!cancelled) setYearlyCategoryLoading(false);
@@ -375,6 +548,10 @@ const AgencyExpenses = () => {
   const handleAddExpense = async () => {
     if (!newExpense.description || !newExpense.amount) {
       alert("Veuillez remplir tous les champs obligatoires");
+      return;
+    }
+    if (!normalizeCategoryName(newExpense.category)) {
+      alert("Veuillez renseigner une catégorie");
       return;
     }
 
@@ -408,10 +585,12 @@ const AgencyExpenses = () => {
       // Si une date de fin est spécifiée, c'est automatiquement récurrent
       const effectiveIsRecurring = isRecurring || !!endDateNormalized;
 
+      const categoryName = rememberCategory(newExpense.category);
+
       const expenseData = {
         description: newExpense.description,
         amount: parseFloat(newExpense.amount),
-        category: newExpense.category,
+        category: categoryName,
         month: startMonth + 1,
         year: startYear,
         date_paiement: startDateNormalized,
@@ -440,7 +619,7 @@ const AgencyExpenses = () => {
       setNewExpense({
         description: "",
         amount: "",
-        category: "Salaire",
+        category: "",
       });
       setIsRecurring(false);
       setRecurrenceStart("");
@@ -498,10 +677,17 @@ const AgencyExpenses = () => {
       try {
         setLoading(true);
 
+        const categoryName = rememberCategory(editingExpense.category);
+        if (!categoryName) {
+          alert("Veuillez renseigner une catégorie");
+          setLoading(false);
+          return;
+        }
+
         const updateData = {
           description: editingExpense.description,
           amount: parseFloat(editingExpense.amount),
-          category: editingExpense.category,
+          category: categoryName,
         };
 
         await axios.patch(
@@ -776,7 +962,7 @@ const AgencyExpenses = () => {
         if (total > 0) rows.push({ cat, total });
       });
     return rows;
-  }, [yearlyCategoryTotals]);
+  }, [yearlyCategoryTotals, categoriesWithPlanning]);
 
   /** Total mensuel : une seule fois chaque ligne réelle (pas les en-têtes de groupe qui dupliquent la somme). */
   const monthlyTotalDisplayed = useMemo(() => {
@@ -860,13 +1046,134 @@ const AgencyExpenses = () => {
     setExpenses(filtered);
   };
 
+  const setExpenseCategoryValue = (value) => {
+    const next = normalizeCategoryName(
+      typeof value === "string" ? value : value?.inputValue || value?.title || ""
+    );
+    if (isEditing) {
+      setEditingExpense((prev) => (prev ? { ...prev, category: next } : prev));
+    } else {
+      setNewExpense((prev) => ({ ...prev, category: next }));
+    }
+  };
+
+  const closeCategoryDetail = () => {
+    setCategoryDetail((prev) => ({ ...prev, open: false, loading: false }));
+    setExpandedDesignations({});
+  };
+
+  const openCategoryDetail = async (cat, total) => {
+    const categoryName = cat || "";
+    setExpandedDesignations({});
+    setCategoryDetail({
+      open: true,
+      cat: categoryName,
+      total: Number(total) || 0,
+      loading: true,
+      groups: [],
+    });
+
+    try {
+      let groups = [];
+      const scopedToAgence = Boolean(agenceId);
+      const agenceChantierById = buildAgenceChantierMap(agencesList);
+      const pointageCoverage = buildPointageCoverageKeys(
+        yearlyPointageList,
+        scopedToAgence,
+        agenceChantierById
+      );
+
+      if (categoryName === "Planning agence") {
+        const map = {};
+        (yearlySchedMonths || []).forEach((sm, idx) => {
+          const monthNum = Number(sm.month) || idx + 1;
+          (sm.details || []).forEach((d) => {
+            const key = yearlyPointageCoverageKey(
+              monthNum,
+              d.agent_id,
+              d.chantier_id,
+              scopedToAgence
+            );
+            if (pointageCoverage.has(key)) return;
+            const label = (d.agent_nom || "Agent").trim();
+            const groupKey = designationKey(label);
+            if (!map[groupKey]) {
+              map[groupKey] = { key: groupKey, label, lines: [], total: 0 };
+            }
+            const amount = sumMontantPlanningAgent(d);
+            map[groupKey].lines.push({
+              id: `planning-${monthNum}-${d.agent_id}-${d.chantier_id || ""}`,
+              month: monthNum,
+              amount,
+              commentaire: d.comment || "",
+              description: d.chantier_nom
+                ? `${label} — ${d.chantier_nom}`
+                : label,
+            });
+            map[groupKey].total += amount;
+          });
+        });
+        Object.values(map).forEach((group) => {
+          group.lines.sort((a, b) => Number(a.month || 0) - Number(b.month || 0));
+        });
+        groups = Object.values(map).sort(
+          (a, b) => b.total - a.total || a.label.localeCompare(b.label, "fr")
+        );
+      } else {
+        const response = await axios.get(
+          `/api/agency-expenses-month/?year=${selectedYear}&category=${encodeURIComponent(
+            categoryName
+          )}${agenceParam}`
+        );
+        let list = asExpenseList(response.data);
+        if (categoryName === "Ajustement Sous-traitant") {
+          list = list.filter((e) => {
+            if (!isAjustementSousTraitant(e)) return true;
+            const key = yearlyPointageCoverageKey(
+              e.month,
+              e.agent,
+              chantierIdForExpense(e, scopedToAgence, agenceChantierById),
+              scopedToAgence
+            );
+            return !pointageCoverage.has(key);
+          });
+        }
+        groups = groupExpensesByDesignation(list);
+      }
+
+      setCategoryDetail({
+        open: true,
+        cat: categoryName,
+        total: groups.reduce((acc, g) => acc + g.total, 0),
+        loading: false,
+        groups,
+      });
+    } catch (error) {
+      console.error("Erreur lors du chargement du détail catégorie:", error);
+      setCategoryDetail({
+        open: true,
+        cat: categoryName,
+        total: Number(total) || 0,
+        loading: false,
+        groups: [],
+      });
+    }
+  };
+
   return (
     <Box sx={{ p: 3 }}>
       <Box sx={{ display: "flex", justifyContent: "space-between", mb: 3 }}>
         <Typography sx={{ fontWeight: "bold", color: "white" }} variant="h5">
           Dépenses {agenceName ? `- ${agenceName}` : "de l'Agence"} (Système Mensuel)
         </Typography>
-        <Button variant="contained" onClick={() => setOpenDialog(true)}>
+        <Button
+          variant="contained"
+          onClick={() => {
+            setIsEditing(false);
+            setEditingExpense(null);
+            setOpenDialog(true);
+          }}
+        >
           Ajouter une dépense
         </Button>
       </Box>
@@ -930,31 +1237,44 @@ const AgencyExpenses = () => {
                 />
               </FilterCell>
               <FilterCell>
-                <StyledTextField
-                  select
+                <Autocomplete
                   size="small"
                   fullWidth
-                  value={filters.category}
-                  onChange={handleFilterChange("category")}
-                  sx={{
-                    "& .MuiInputBase-input": {
-                      textAlign: "center",
-                    },
+                  options={uniquePreserveOrder(["Tous", filters.category, ...filterCategoryList])}
+                  value={filters.category || "Tous"}
+                  disableClearable
+                  autoHighlight
+                  selectOnFocus
+                  handleHomeEndKeys
+                  onChange={(_, value) =>
+                    handleFilterChange("category")({
+                      target: { value: value || "Tous" },
+                    })
+                  }
+                  filterOptions={(options, state) => {
+                    const q = (state.inputValue || "").trim().toLowerCase();
+                    if (!q) return options;
+                    return options.filter((o) =>
+                      String(o).toLowerCase().includes(q)
+                    );
                   }}
-                >
-                  <MenuItem sx={{ textAlign: "center" }} value="Tous">
-                    Tous
-                  </MenuItem>
-                  {categoriesWithPlanning.map((cat) => (
-                    <MenuItem
-                      sx={{ textAlign: "center" }}
-                      key={cat}
-                      value={cat}
-                    >
-                      {cat.charAt(0).toUpperCase() + cat.slice(1)}
-                    </MenuItem>
-                  ))}
-                </StyledTextField>
+                  renderInput={(params) => (
+                    <StyledTextField
+                      {...params}
+                      size="small"
+                      placeholder="Catégorie..."
+                      sx={{
+                        "& .MuiInputBase-input": {
+                          textAlign: "center",
+                          color: "white",
+                        },
+                        "& .MuiSvgIcon-root": {
+                          color: "white",
+                        },
+                      }}
+                    />
+                  )}
+                />
               </FilterCell>
               <FilterCell>
                 <StyledTextField
@@ -1380,7 +1700,7 @@ const AgencyExpenses = () => {
               Coût annuel par catégorie
             </Typography>
             <Typography variant="caption" sx={{ color: "text.secondary", display: "block", mt: 0.35 }}>
-              Synthèse sur les 12 mois (hors planning et ajustements remplacés par un montant chargé)
+              Synthèse sur les 12 mois — cliquez une catégorie pour voir les désignations regroupées
             </Typography>
           </Box>
           <Box
@@ -1419,6 +1739,15 @@ const AgencyExpenses = () => {
               {yearlyCategoryDisplayRows.map(({ cat, total }, index) => (
                 <Box
                   key={cat}
+                  role="button"
+                  tabIndex={0}
+                  onClick={() => openCategoryDetail(cat, total)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" || e.key === " ") {
+                      e.preventDefault();
+                      openCategoryDetail(cat, total);
+                    }
+                  }}
                   sx={{
                     display: "flex",
                     alignItems: "center",
@@ -1427,13 +1756,14 @@ const AgencyExpenses = () => {
                     py: 1.35,
                     px: 1.5,
                     borderRadius: 1,
+                    cursor: "pointer",
                     transition: "background-color 0.15s ease",
                     borderBottom:
                       index < yearlyCategoryDisplayRows.length - 1
                         ? "1px solid rgba(0, 0, 0, 0.06)"
                         : "none",
                     "&:hover": {
-                      backgroundColor: "rgba(27, 120, 188, 0.06)",
+                      backgroundColor: "rgba(27, 120, 188, 0.1)",
                     },
                   }}
                 >
@@ -1498,25 +1828,65 @@ const AgencyExpenses = () => {
               }
               fullWidth
             />
-            <Select
-              value={isEditing ? editingExpense.category : newExpense.category}
-              onChange={(e) =>
-                isEditing
-                  ? setEditingExpense({
-                      ...editingExpense,
-                      category: e.target.value,
-                    })
-                  : setNewExpense({ ...newExpense, category: e.target.value })
-              }
-              fullWidth
-              label="Catégorie"
-            >
-              {categories.map((cat) => (
-                <MenuItem key={cat} value={cat}>
-                  {cat.charAt(0).toUpperCase() + cat.slice(1)}
-                </MenuItem>
-              ))}
-            </Select>
+            <Autocomplete
+              freeSolo
+              selectOnFocus
+              clearOnBlur
+              handleHomeEndKeys
+              autoHighlight
+              options={formCategoryOptions}
+              noOptionsText="Aucune catégorie — tapez pour en créer une"
+              value={isEditing ? editingExpense?.category || "" : newExpense.category}
+              onChange={(_, newValue) => setExpenseCategoryValue(newValue)}
+              onInputChange={(event, newInputValue, reason) => {
+                if (reason === "input" || reason === "clear") {
+                  setExpenseCategoryValue(newInputValue);
+                }
+              }}
+              filterOptions={(options, params) => {
+                const filtered = filterCategoryOptions(options, params);
+                const inputValue = normalizeCategoryName(params.inputValue);
+                if (!inputValue) return filtered;
+                const exists = options.some(
+                  (option) =>
+                    String(option).toLowerCase() === inputValue.toLowerCase()
+                );
+                if (!exists) {
+                  filtered.push({
+                    inputValue,
+                    title: `Créer « ${inputValue} »`,
+                  });
+                }
+                return filtered;
+              }}
+              getOptionLabel={(option) => {
+                if (typeof option === "string") return option;
+                if (option?.inputValue) return option.inputValue;
+                return option?.title || "";
+              }}
+              isOptionEqualToValue={(option, value) => {
+                const left = typeof option === "string" ? option : option?.inputValue;
+                const right = typeof value === "string" ? value : value?.inputValue;
+                return String(left || "").toLowerCase() === String(right || "").toLowerCase();
+              }}
+              renderOption={(props, option) => {
+                const isCreate = typeof option !== "string";
+                return (
+                  <li {...props} key={isCreate ? `create-${option.inputValue}` : option}>
+                    {isCreate ? option.title : option}
+                  </li>
+                );
+              }}
+              renderInput={(params) => (
+                <TextField
+                  {...params}
+                  label="Catégorie"
+                  helperText="Choisissez une catégorie existante ou tapez-en une nouvelle"
+                  placeholder="Nouvelle catégorie…"
+                  inputProps={{ ...params.inputProps, maxLength: 50 }}
+                />
+              )}
+            />
             <TextField
               label="Montant"
               type="number"
@@ -1595,6 +1965,197 @@ const AgencyExpenses = () => {
           )}
           <Button onClick={handleSaveExpense} variant="contained">
             {isEditing ? "Modifier" : "Ajouter"}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Détail annuel d'une catégorie, regroupé par désignation */}
+      <Dialog
+        open={categoryDetail.open}
+        onClose={closeCategoryDetail}
+        maxWidth="md"
+        fullWidth
+      >
+        <DialogTitle sx={{ pb: 0.5 }}>
+          {categoryDetail.cat
+            ? `${categoryDetail.cat.charAt(0).toUpperCase()}${categoryDetail.cat.slice(1)}`
+            : "Catégorie"}
+          <Typography
+            component="span"
+            sx={{
+              display: "block",
+              fontSize: "0.85rem",
+              color: "text.secondary",
+              fontWeight: 400,
+              mt: 0.5,
+            }}
+          >
+            Désignations regroupées · {selectedYear}
+          </Typography>
+        </DialogTitle>
+        <DialogContent>
+          <Box
+            sx={{
+              mt: 1.5,
+              mb: 2,
+              p: 1.5,
+              borderRadius: 1,
+              backgroundColor: "rgba(27, 120, 188, 0.08)",
+              border: "1px solid rgba(27, 120, 188, 0.2)",
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "center",
+              gap: 2,
+              flexWrap: "wrap",
+            }}
+          >
+            <Typography variant="body2" sx={{ color: "text.secondary" }}>
+              {categoryDetail.loading
+                ? "Chargement…"
+                : `${categoryDetail.groups.length} désignation${
+                    categoryDetail.groups.length > 1 ? "s" : ""
+                  }`}
+            </Typography>
+            <Typography
+              sx={{
+                fontWeight: 800,
+                color: "rgba(27, 120, 188, 1)",
+                fontVariantNumeric: "tabular-nums",
+              }}
+            >
+              {formatMontantEuroFR(categoryDetail.total)}
+            </Typography>
+          </Box>
+
+          {categoryDetail.loading ? (
+            <Typography color="text.secondary" sx={{ py: 2 }}>
+              Chargement des dépenses…
+            </Typography>
+          ) : categoryDetail.groups.length === 0 ? (
+            <Typography color="text.secondary" sx={{ py: 2, fontStyle: "italic" }}>
+              Aucune dépense pour cette catégorie sur {selectedYear}.
+            </Typography>
+          ) : (
+            <Stack spacing={1}>
+              {categoryDetail.groups.map((group) => {
+                const isOpen = !!expandedDesignations[group.key];
+                return (
+                  <Paper
+                    key={group.key}
+                    variant="outlined"
+                    sx={{
+                      overflow: "hidden",
+                      borderColor: isOpen
+                        ? "rgba(27, 120, 188, 0.45)"
+                        : "rgba(0,0,0,0.12)",
+                    }}
+                  >
+                    <Box
+                      onClick={() =>
+                        setExpandedDesignations((prev) => ({
+                          ...prev,
+                          [group.key]: !prev[group.key],
+                        }))
+                      }
+                      sx={{
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "space-between",
+                        gap: 1.5,
+                        px: 1.5,
+                        py: 1.15,
+                        cursor: "pointer",
+                        backgroundColor: isOpen
+                          ? "rgba(27, 120, 188, 0.08)"
+                          : "transparent",
+                        "&:hover": { backgroundColor: "rgba(27, 120, 188, 0.08)" },
+                      }}
+                    >
+                      <Box sx={{ display: "flex", alignItems: "center", minWidth: 0, flex: 1 }}>
+                        {isOpen ? (
+                          <FaChevronDown style={{ marginRight: 8, fontSize: "0.7rem", flexShrink: 0 }} />
+                        ) : (
+                          <FaChevronRight style={{ marginRight: 8, fontSize: "0.7rem", flexShrink: 0 }} />
+                        )}
+                        <Typography
+                          sx={{
+                            fontWeight: 700,
+                            color: "rgba(27, 120, 188, 1)",
+                            overflow: "hidden",
+                            textOverflow: "ellipsis",
+                            whiteSpace: "nowrap",
+                          }}
+                        >
+                          {group.label}
+                        </Typography>
+                      </Box>
+                      <Typography
+                        sx={{
+                          fontWeight: 700,
+                          fontVariantNumeric: "tabular-nums",
+                          whiteSpace: "nowrap",
+                        }}
+                      >
+                        {formatMontantEuroFR(group.total)}
+                      </Typography>
+                    </Box>
+                    <Collapse in={isOpen} timeout="auto" unmountOnExit>
+                      <Box sx={{ px: 1.5, pb: 1.25 }}>
+                        {group.lines.map((line, idx) => (
+                          <Box
+                            key={line.id || `${group.key}-${idx}`}
+                            sx={{
+                              display: "flex",
+                              justifyContent: "space-between",
+                              alignItems: "flex-start",
+                              gap: 2,
+                              py: 0.7,
+                              borderTop: "1px solid rgba(0,0,0,0.06)",
+                            }}
+                          >
+                            <Box sx={{ minWidth: 0 }}>
+                              <Typography sx={{ fontSize: "0.82rem", fontWeight: 600 }}>
+                                {line.month
+                                  ? MONTH_LABELS_FR[Number(line.month) - 1] || `Mois ${line.month}`
+                                  : "—"}
+                              </Typography>
+                              {line.commentaire ? (
+                                <Typography
+                                  sx={{
+                                    fontSize: "0.75rem",
+                                    color: "text.secondary",
+                                    whiteSpace: "pre-wrap",
+                                  }}
+                                >
+                                  {line.commentaire}
+                                </Typography>
+                              ) : null}
+                            </Box>
+                            <Typography
+                              sx={{
+                                fontSize: "0.82rem",
+                                fontWeight: 600,
+                                fontVariantNumeric: "tabular-nums",
+                                whiteSpace: "nowrap",
+                              }}
+                            >
+                              {formatMontantEuroFR(
+                                expenseLineAmount(line) || Number(line.amount) || 0
+                              )}
+                            </Typography>
+                          </Box>
+                        ))}
+                      </Box>
+                    </Collapse>
+                  </Paper>
+                );
+              })}
+            </Stack>
+          )}
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={closeCategoryDetail} variant="contained">
+            Fermer
           </Button>
         </DialogActions>
       </Dialog>

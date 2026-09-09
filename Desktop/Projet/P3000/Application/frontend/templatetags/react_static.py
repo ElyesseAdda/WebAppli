@@ -13,9 +13,10 @@ def _load_manifest():
     """
     Charge le manifest React avec cache global pour optimiser les performances.
     Le manifest n'est lu qu'une seule fois par instance Python.
+    En DEBUG, on relit le fichier à chaque fois : webpack change le hash à chaque compilation.
     """
     global _ASSET_MANIFEST_CACHE
-    if _ASSET_MANIFEST_CACHE is not None:
+    if not settings.DEBUG and _ASSET_MANIFEST_CACHE is not None:
         return _ASSET_MANIFEST_CACHE
 
     # En développement, chercher d'abord dans frontend/static/frontend/
