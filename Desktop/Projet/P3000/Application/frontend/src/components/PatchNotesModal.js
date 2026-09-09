@@ -6,6 +6,31 @@ import PATCH_NOTES, {
 } from "../config/patchNotes";
 import "../../static/css/patchNotes.css";
 
+const VisualCategoriesAgence = () => (
+  <div className="pn-screen">
+    <div className="pn-screen-bar">Agence — ajouter une dépense</div>
+    <div className="pn-search-bar">
+      <span className="pn-hit pn-search-field" data-label="Tapez un nom">
+        Créer « Loyer bureau »
+      </span>
+    </div>
+    <div className="pn-screen-bar">Coût annuel par catégorie</div>
+    <div className="pn-row">
+      <span className="pn-doc">Fournisseur</span>
+      <span className="pn-hit" data-label="Cliquez ici">
+        2 000,00 €
+      </span>
+    </div>
+    <div className="pn-row">
+      <span className="pn-doc">Pringle</span>
+      <span className="pn-pill pn-pill-ok">2 000,00 €</span>
+    </div>
+    <p className="pn-caption">
+      Créez vos catégories. Un clic sur un total de l’année regroupe les mêmes noms.
+    </p>
+  </div>
+);
+
 const VisualPointageAgence = () => (
   <div className="pn-screen">
     <div className="pn-screen-bar">Agence — dépenses du mois</div>
@@ -75,6 +100,7 @@ const VisualRechercheFacturation = () => (
 );
 
 const VISUALS = {
+  "categories-agence": VisualCategoriesAgence,
   "pointage-agence": VisualPointageAgence,
   "decoupage-agence": VisualDecoupageAgence,
   "recherche-facturation": VisualRechercheFacturation,

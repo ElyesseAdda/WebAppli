@@ -12,7 +12,7 @@ export const PATCH_NOTES_STORAGE_KEY = "p3000_seen_patch_notes";
 export const PATCH_NOTES_OPEN_EVENT = "p3000:open-patch-notes";
 export const PATCH_NOTES_SEEN_EVENT = "p3000:patch-notes-seen";
 
-export const PATCH_NOTES_ID = "2026-09-09-decoupage-recherche";
+export const PATCH_NOTES_ID = "2026-09-09-categories-agence";
 
 const PATCH_NOTES = {
   id: PATCH_NOTES_ID,
@@ -20,6 +20,21 @@ const PATCH_NOTES = {
   date: "Septembre 2026",
   intro: "Voici les nouveautés de cette mise à jour.",
   features: [
+    {
+      id: "categories-agence",
+      kind: "nouveau",
+      title: "Vos propres catégories de dépenses d’agence",
+      where: "Page Agence",
+      text: "Vous n’êtes plus limités à une liste imposée. En ajoutant une dépense, vous pouvez choisir une catégorie déjà utilisée, ou en inventer une en tapant son nom. Le menu ne propose ensuite que celles qui servent vraiment. Un clic sur un total de l’année ouvre le détail : les mêmes noms (un fournisseur, un agent…) sont regroupés, avec le montant de toute l’année.",
+      steps: [
+        "Dans le menu Agence, ouvrez la page de l’agence",
+        "Cliquez sur Ajouter une dépense",
+        "Dans Catégorie, choisissez une catégorie déjà utilisée, ou tapez un nouveau nom puis validez",
+        "En bas de page, dans Coût annuel par catégorie, cliquez sur un montant (par exemple Fournisseur)",
+        "Le détail montre chaque nom une seule fois, avec le total de l’année. Un second clic déplie les mois",
+      ],
+      visual: "categories-agence",
+    },
     {
       id: "pointage-agence",
       kind: "ameliore",
