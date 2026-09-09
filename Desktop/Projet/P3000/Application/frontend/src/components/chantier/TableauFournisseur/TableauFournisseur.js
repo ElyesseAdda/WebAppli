@@ -28,6 +28,13 @@ import DatePaiementModal from "./DatePaiementModal";
 import DateEnvoiModal from "./DateEnvoiModal";
 import DatePaiementFactureModal from "./DatePaiementFactureModal";
 import RecapFournisseur from "./RecapFournisseur";
+import DecoupageAgenceModal, { ClickableAmount } from "../DecoupageAgenceModal";
+import {
+  buildAgenceIndex,
+  collectItems,
+  collectAllItemsForMois,
+  formatMoisKeyLabel,
+} from "../decoupageAgenceUtils";
 import { Add as AddIcon, Close as CloseIcon, CheckCircle as CheckCircleIcon, VisibilityOff as VisibilityOffIcon, Visibility as VisibilityIcon } from "@mui/icons-material";
 import axios from "axios";
 import React, { useEffect, useState, useRef, useCallback, useMemo } from "react";
@@ -138,6 +145,8 @@ const TableauFournisseur = () => {
   const [lignesMasqueesModalOpen, setLignesMasqueesModalOpen] = useState(false);
   const [loadingMasquees, setLoadingMasquees] = useState(false);
   const [hidingLigne, setHidingLigne] = useState(false);
+  const [agenceIndex, setAgenceIndex] = useState({ chantierIds: new Set(), names: new Set(["agence"]) });
+  const [decoupageModal, setDecoupageModal] = useState(null);
   
   // Timer pour la sauvegarde automatique
   const saveTimerRef = useRef(null);
@@ -177,6 +186,16 @@ const TableauFournisseur = () => {
 
   useEffect(() => {
     fetchData();
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    axios.get("/api/agences/").then((res) => {
+      if (!cancelled) setAgenceIndex(buildAgenceIndex(res.data));
+    }).catch(() => {
+      if (!cancelled) setAgenceIndex({ chantierIds: new Set(), names: new Set(["agence"]) });
+    });
+    return () => { cancelled = true; };
   }, []);
 
   const parseMoisAnnee = (moisKey) => {
@@ -2110,6 +2129,18 @@ const TableauFournisseur = () => {
     [data, selectedAnnee, editedValuesPaye, editedFactures]
   );
 
+  const openDecoupageFournisseur = (title, entityNames, moisKeys, focusField, subtitle) => {
+    setDecoupageModal({
+      title,
+      subtitle: subtitle || (moisKeys?.length === 1 ? formatMoisKeyLabel(moisKeys[0]) : ""),
+      items: entityNames
+        ? collectItems(organized, entityNames, moisKeys)
+        : collectAllItemsForMois(organized, moisKeys?.[0]),
+      focusField,
+      groupByChantier: !(moisKeys?.length === 1),
+    });
+  };
+
   // Styles communs pour les cellules (identique à TableauFacturation)
   const commonBodyCellStyle = {
     maxWidth: "150px",
@@ -2520,30 +2551,50 @@ const TableauFournisseur = () => {
                             <Typography sx={{ color: "#ffffff" }}>-</Typography>
                           </TableCell>
                           <TableCell sx={commonBodyCellStyle}>
-                            <Typography
-                              sx={{
-                                fontWeight: "bold",
-                                fontSize: "0.9rem",
-                                color: row.totaux.totalAPayer !== 0 
-                                  ? colorForAmount(row.totaux.totalAPayer) 
-                                  : "#ffffff",
-                              }}
+                            <ClickableAmount
+                              onClick={() => openDecoupageFournisseur(
+                                `Récap ${moisName} ${anneeComplete}`,
+                                null,
+                                [row.mois],
+                                "a_payer",
+                                `Tous les fournisseurs · ${moisName} ${anneeComplete}`
+                              )}
                             >
-                              {formatNumber(row.totaux.totalAPayer)} €
-                            </Typography>
+                              <Typography
+                                sx={{
+                                  fontWeight: "bold",
+                                  fontSize: "0.9rem",
+                                  color: row.totaux.totalAPayer !== 0 
+                                    ? colorForAmount(row.totaux.totalAPayer) 
+                                    : "#ffffff",
+                                }}
+                              >
+                                {formatNumber(row.totaux.totalAPayer)} €
+                              </Typography>
+                            </ClickableAmount>
                           </TableCell>
                           <TableCell sx={commonBodyCellStyle}>
-                            <Typography
-                              sx={{
-                                fontWeight: "bold",
-                                fontSize: "0.9rem",
-                                color: row.totaux.totalPaye !== 0
-                                  ? colorForAmount(row.totaux.totalPaye)
-                                  : "#ffffff",
-                              }}
+                            <ClickableAmount
+                              onClick={() => openDecoupageFournisseur(
+                                `Récap ${moisName} ${anneeComplete}`,
+                                null,
+                                [row.mois],
+                                "paye",
+                                `Tous les fournisseurs · ${moisName} ${anneeComplete}`
+                              )}
                             >
-                              {formatNumber(row.totaux.totalPaye)} €
-                            </Typography>
+                              <Typography
+                                sx={{
+                                  fontWeight: "bold",
+                                  fontSize: "0.9rem",
+                                  color: row.totaux.totalPaye !== 0
+                                    ? colorForAmount(row.totaux.totalPaye)
+                                    : "#ffffff",
+                                }}
+                              >
+                                {formatNumber(row.totaux.totalPaye)} €
+                              </Typography>
+                            </ClickableAmount>
                           </TableCell>
                           <TableCell sx={commonBodyCellStyle}>
                             <Typography sx={{ color: "#ffffff" }}>-</Typography>
@@ -2704,15 +2755,24 @@ const TableauFournisseur = () => {
                             </Box>
                           </TableCell>
                           <TableCell sx={commonBodyCellStyle}>
-                            <Typography
-                              sx={{
-                                fontSize: "0.8rem",
-                                color: colorForAmount(item.a_payer),
-                                textAlign: "center",
-                              }}
+                            <ClickableAmount
+                              onClick={() => openDecoupageFournisseur(
+                                row.fournisseur,
+                                [row.fournisseur],
+                                [row.mois],
+                                "a_payer"
+                              )}
                             >
-                              {formatNumber(item.a_payer)} €
-                            </Typography>
+                              <Typography
+                                sx={{
+                                  fontSize: "0.8rem",
+                                  color: colorForAmount(item.a_payer),
+                                  textAlign: "center",
+                                }}
+                              >
+                                {formatNumber(item.a_payer)} €
+                              </Typography>
+                            </ClickableAmount>
                           </TableCell>
                           <TableCell sx={commonBodyCellStyle}>
                             <TextField
@@ -3250,6 +3310,17 @@ const TableauFournisseur = () => {
               moisSorted={moisSorted}
             />
           )}
+
+          <DecoupageAgenceModal
+            open={!!decoupageModal}
+            onClose={() => setDecoupageModal(null)}
+            title={decoupageModal?.title}
+            subtitle={decoupageModal?.subtitle}
+            items={decoupageModal?.items || []}
+            agenceIndex={agenceIndex}
+            focusField={decoupageModal?.focusField}
+            groupByChantier={decoupageModal?.groupByChantier}
+          />
 
           {/* Modal pour ajouter/modifier une facture */}
           <FactureModal

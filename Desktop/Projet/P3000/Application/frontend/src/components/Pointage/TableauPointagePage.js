@@ -614,14 +614,19 @@ const TableauPointagePage = () => {
       } else if (field === "montant_charge") {
         const mcNew = toNumber(value);
         payload.montant_charge = mcNew;
-        const rep = agentDraft.repartition_montant_charge;
-        if (
-          Array.isArray(rep) &&
-          rep.length > 0 &&
-          !repartitionSumMatchesMontant(rep, mcNew)
-        ) {
+        if (mcNew <= 0) {
           payload.repartition_montant_charge = [];
           payload.agence = false;
+        } else {
+          const rep = agentDraft.repartition_montant_charge;
+          if (
+            Array.isArray(rep) &&
+            rep.length > 0 &&
+            !repartitionSumMatchesMontant(rep, mcNew)
+          ) {
+            payload.repartition_montant_charge = [];
+            payload.agence = false;
+          }
         }
       } else {
         payload[field] = toNumber(value);

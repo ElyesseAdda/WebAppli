@@ -38,6 +38,13 @@ import { Add as AddIcon, Close as CloseIcon, CheckCircle as CheckCircleIcon, Add
 import axios from "axios";
 import React, { useEffect, useState, useRef, useCallback, useMemo } from "react";
 import { FaSync } from "react-icons/fa";
+import DecoupageAgenceModal, { ClickableAmount } from "../DecoupageAgenceModal";
+import {
+  buildAgenceIndex,
+  collectItems,
+  collectAllItemsForMois,
+  formatMoisKeyLabel,
+} from "../decoupageAgenceUtils";
 
 /** Clé de regroupement : "CAP PEINTURE - 0233322" → "CAP PEINTURE" */
 const getSousTraitantGroupKey = (name) => {
@@ -91,6 +98,8 @@ const TableauSousTraitant = () => {
   const [lignesMasqueesModalOpen, setLignesMasqueesModalOpen] = useState(false);
   const [loadingMasquees, setLoadingMasquees] = useState(false);
   const [hidingLigne, setHidingLigne] = useState(false);
+  const [agenceIndex, setAgenceIndex] = useState({ chantierIds: new Set(), names: new Set(["agence"]) });
+  const [decoupageModal, setDecoupageModal] = useState(null);
   
   // Timer pour la sauvegarde automatique
   const saveTimerRef = useRef(null);
@@ -181,6 +190,16 @@ const TableauSousTraitant = () => {
 
   useEffect(() => {
     fetchData();
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    axios.get("/api/agences/").then((res) => {
+      if (!cancelled) setAgenceIndex(buildAgenceIndex(res.data));
+    }).catch(() => {
+      if (!cancelled) setAgenceIndex({ chantierIds: new Set(), names: new Set(["agence"]) });
+    });
+    return () => { cancelled = true; };
   }, []);
 
   const parseMoisAnnee = (moisKey) => {
@@ -2740,6 +2759,18 @@ const TableauSousTraitant = () => {
   
   const { organized, moisSorted } = organizedData;
 
+  const openDecoupageSousTraitant = (title, entityNames, moisKeys, focusField, subtitle) => {
+    setDecoupageModal({
+      title,
+      subtitle: subtitle || (moisKeys?.length === 1 ? formatMoisKeyLabel(moisKeys[0]) : `Année ${selectedAnnee}`),
+      items: entityNames
+        ? collectItems(organized, entityNames, moisKeys)
+        : collectAllItemsForMois(organized, moisKeys?.[0]),
+      focusField,
+      groupByChantier: !(moisKeys?.length === 1),
+    });
+  };
+
   // Styles communs pour les cellules (identique à TableauFacturation)
   const commonBodyCellStyle = {
     maxWidth: "150px",
@@ -3054,8 +3085,10 @@ const TableauSousTraitant = () => {
     });
   }, [recapTotaux, recapSearch, recapSort, recapSortDir]);
 
-  const renderRecapVariantTable = (totaux) => {
+  const renderRecapVariantTable = (totaux, entityName) => {
     const moisST = trierMoisRecap(Object.keys(totaux.mois));
+    const entityNames = Array.isArray(entityName) ? entityName : [entityName];
+    const label = entityNames.length === 1 ? entityNames[0] : entityNames.join(" · ");
     return (
       <TableContainer component={Paper} variant="outlined">
         <Table size="small">
@@ -3074,6 +3107,7 @@ const TableauSousTraitant = () => {
               const moisName = getMoisName(moisNum);
               const anneeComplete = annee2d < 50 ? 2000 + annee2d : 1900 + annee2d;
               const tm = totaux.mois[mois];
+              const openMois = (focusField) => openDecoupageSousTraitant(label, entityNames, [mois], focusField);
               return (
                 <TableRow key={mois} hover>
                   <TableCell>
@@ -3081,35 +3115,59 @@ const TableauSousTraitant = () => {
                       {moisName} {anneeComplete}
                     </Typography>
                   </TableCell>
-                  <TableCell align="right">
-                    <Typography sx={{ color: colorForAmount(tm.totalAPayer), fontWeight: 500 }}>
-                      {formatNumber(tm.totalAPayer)} €
-                    </Typography>
+                  <TableCell align="right" sx={{ cursor: "pointer" }}>
+                    <ClickableAmount onClick={() => openMois("a_payer")}>
+                      <Typography sx={{ color: colorForAmount(tm.totalAPayer), fontWeight: 500 }}>
+                        {formatNumber(tm.totalAPayer)} €
+                      </Typography>
+                    </ClickableAmount>
                   </TableCell>
-                  <TableCell align="right">
-                    <Typography sx={{ color: colorForAmount(tm.totalAPayerTTC), fontWeight: 500 }}>
-                      {formatNumber(tm.totalAPayerTTC)} €
-                    </Typography>
+                  <TableCell align="right" sx={{ cursor: "pointer" }}>
+                    <ClickableAmount onClick={() => openMois("a_payer_ttc")}>
+                      <Typography sx={{ color: colorForAmount(tm.totalAPayerTTC), fontWeight: 500 }}>
+                        {formatNumber(tm.totalAPayerTTC)} €
+                      </Typography>
+                    </ClickableAmount>
                   </TableCell>
-                  <TableCell align="right">
-                    <Typography sx={{ color: colorForAmount(tm.totalPaye), fontWeight: 500 }}>
-                      {formatNumber(tm.totalPaye)} €
-                    </Typography>
+                  <TableCell align="right" sx={{ cursor: "pointer" }}>
+                    <ClickableAmount onClick={() => openMois("paye")}>
+                      <Typography sx={{ color: colorForAmount(tm.totalPaye), fontWeight: 500 }}>
+                        {formatNumber(tm.totalPaye)} €
+                      </Typography>
+                    </ClickableAmount>
                   </TableCell>
-                  <TableCell align="right">
-                    <Typography sx={{ color: colorForEcart(), fontWeight: 500 }}>
-                      {formatNumber(tm.totalEcart)} €
-                    </Typography>
+                  <TableCell align="right" sx={{ cursor: "pointer" }}>
+                    <ClickableAmount onClick={() => openMois("ecart")}>
+                      <Typography sx={{ color: colorForEcart(), fontWeight: 500 }}>
+                        {formatNumber(tm.totalEcart)} €
+                      </Typography>
+                    </ClickableAmount>
                   </TableCell>
                 </TableRow>
               );
             })}
             <TableRow sx={{ backgroundColor: "rgba(27, 120, 188, 0.05)", borderTop: "2px solid rgba(27, 120, 188, 0.3)" }}>
               <TableCell><Typography sx={{ fontWeight: "bold", color: "rgba(27, 120, 188, 1)" }}>TOTAL</Typography></TableCell>
-              <TableCell align="right"><Typography sx={{ fontWeight: "bold", color: colorForAmount(totaux.totalAPayer) }}>{formatNumber(totaux.totalAPayer)} €</Typography></TableCell>
-              <TableCell align="right"><Typography sx={{ fontWeight: "bold", color: colorForAmount(totaux.totalAPayerTTC) }}>{formatNumber(totaux.totalAPayerTTC)} €</Typography></TableCell>
-              <TableCell align="right"><Typography sx={{ fontWeight: "bold", color: colorForAmount(totaux.totalPaye) }}>{formatNumber(totaux.totalPaye)} €</Typography></TableCell>
-              <TableCell align="right"><Typography sx={{ fontWeight: "bold", color: colorForEcart() }}>{formatNumber(totaux.totalEcart)} €</Typography></TableCell>
+              <TableCell align="right" sx={{ cursor: "pointer" }}>
+                <ClickableAmount onClick={() => openDecoupageSousTraitant(label, entityNames, Object.keys(totaux.mois), "a_payer")}>
+                  <Typography sx={{ fontWeight: "bold", color: colorForAmount(totaux.totalAPayer) }}>{formatNumber(totaux.totalAPayer)} €</Typography>
+                </ClickableAmount>
+              </TableCell>
+              <TableCell align="right" sx={{ cursor: "pointer" }}>
+                <ClickableAmount onClick={() => openDecoupageSousTraitant(label, entityNames, Object.keys(totaux.mois), "a_payer_ttc")}>
+                  <Typography sx={{ fontWeight: "bold", color: colorForAmount(totaux.totalAPayerTTC) }}>{formatNumber(totaux.totalAPayerTTC)} €</Typography>
+                </ClickableAmount>
+              </TableCell>
+              <TableCell align="right" sx={{ cursor: "pointer" }}>
+                <ClickableAmount onClick={() => openDecoupageSousTraitant(label, entityNames, Object.keys(totaux.mois), "paye")}>
+                  <Typography sx={{ fontWeight: "bold", color: colorForAmount(totaux.totalPaye) }}>{formatNumber(totaux.totalPaye)} €</Typography>
+                </ClickableAmount>
+              </TableCell>
+              <TableCell align="right" sx={{ cursor: "pointer" }}>
+                <ClickableAmount onClick={() => openDecoupageSousTraitant(label, entityNames, Object.keys(totaux.mois), "ecart")}>
+                  <Typography sx={{ fontWeight: "bold", color: colorForEcart() }}>{formatNumber(totaux.totalEcart)} €</Typography>
+                </ClickableAmount>
+              </TableCell>
             </TableRow>
           </TableBody>
         </Table>
@@ -3348,30 +3406,50 @@ const TableauSousTraitant = () => {
                             <Typography sx={{ color: "#ffffff" }}>-</Typography>
                           </TableCell>
                           <TableCell sx={commonBodyCellStyle}>
-                            <Typography
-                              sx={{
-                                fontWeight: "bold",
-                                fontSize: "0.9rem",
-                                color: row.totaux.totalAPayer !== 0
-                                  ? colorForAmount(row.totaux.totalAPayer)
-                                  : "#ffffff",
-                              }}
+                            <ClickableAmount
+                              onClick={() => openDecoupageSousTraitant(
+                                `Récap ${moisName} ${anneeComplete}`,
+                                null,
+                                [row.mois],
+                                "a_payer",
+                                `Tous les sous-traitants · ${moisName} ${anneeComplete}`
+                              )}
                             >
-                              {formatNumber(row.totaux.totalAPayer)} €
-                            </Typography>
+                              <Typography
+                                sx={{
+                                  fontWeight: "bold",
+                                  fontSize: "0.9rem",
+                                  color: row.totaux.totalAPayer !== 0
+                                    ? colorForAmount(row.totaux.totalAPayer)
+                                    : "#ffffff",
+                                }}
+                              >
+                                {formatNumber(row.totaux.totalAPayer)} €
+                              </Typography>
+                            </ClickableAmount>
                           </TableCell>
                           <TableCell sx={commonBodyCellStyle}>
-                            <Typography
-                              sx={{
-                                fontWeight: "bold",
-                                fontSize: "0.9rem",
-                                color: row.totaux.totalPaye !== 0
-                                  ? colorForAmount(row.totaux.totalPaye)
-                                  : "#ffffff",
-                              }}
+                            <ClickableAmount
+                              onClick={() => openDecoupageSousTraitant(
+                                `Récap ${moisName} ${anneeComplete}`,
+                                null,
+                                [row.mois],
+                                "paye",
+                                `Tous les sous-traitants · ${moisName} ${anneeComplete}`
+                              )}
                             >
-                              {formatNumber(row.totaux.totalPaye)} €
-                            </Typography>
+                              <Typography
+                                sx={{
+                                  fontWeight: "bold",
+                                  fontSize: "0.9rem",
+                                  color: row.totaux.totalPaye !== 0
+                                    ? colorForAmount(row.totaux.totalPaye)
+                                    : "#ffffff",
+                                }}
+                              >
+                                {formatNumber(row.totaux.totalPaye)} €
+                              </Typography>
+                            </ClickableAmount>
                           </TableCell>
                           <TableCell sx={commonBodyCellStyle}>
                             <Typography sx={{ color: "#ffffff" }}>-</Typography>
@@ -3645,16 +3723,24 @@ const TableauSousTraitant = () => {
                                 </Typography>
                               </Tooltip>
                             ) : (
-                              // Pour les autres lignes, affichage normal
-                              <Typography
-                                sx={{
-                                  fontSize: "0.8rem",
-                                  color: colorForAmount(item.a_payer),
-                                  textAlign: "center",
-                                }}
+                              <ClickableAmount
+                                onClick={() => openDecoupageSousTraitant(
+                                  row.sous_traitant,
+                                  [row.sous_traitant],
+                                  [row.mois],
+                                  "a_payer"
+                                )}
                               >
-                                {formatNumber(item.a_payer)} €
-                              </Typography>
+                                <Typography
+                                  sx={{
+                                    fontSize: "0.8rem",
+                                    color: colorForAmount(item.a_payer),
+                                    textAlign: "center",
+                                  }}
+                                >
+                                  {formatNumber(item.a_payer)} €
+                                </Typography>
+                              </ClickableAmount>
                             )}
                           </TableCell>
                           <TableCell sx={commonBodyCellStyle}>
@@ -4195,7 +4281,7 @@ const TableauSousTraitant = () => {
                   Totaux Globaux
                 </Typography>
                 <Box sx={{ display: "flex", gap: 3, flexWrap: "wrap" }}>
-                  <Box>
+                  <ClickableAmount onClick={() => openDecoupageSousTraitant("Tous les sous-traitants", recapTotaux.sorted, moisSorted, "a_payer")}>
                     <Typography sx={{ fontSize: "0.85rem", color: "text.secondary" }}>
                       Montant à payer HT
                     </Typography>
@@ -4208,8 +4294,8 @@ const TableauSousTraitant = () => {
                     >
                       {formatNumber(recapTotaux.global.totalAPayer)} €
                     </Typography>
-                  </Box>
-                  <Box>
+                  </ClickableAmount>
+                  <ClickableAmount onClick={() => openDecoupageSousTraitant("Tous les sous-traitants", recapTotaux.sorted, moisSorted, "a_payer_ttc")}>
                     <Typography sx={{ fontSize: "0.85rem", color: "text.secondary" }}>
                       Montant à payer TTC
                     </Typography>
@@ -4222,8 +4308,8 @@ const TableauSousTraitant = () => {
                     >
                       {formatNumber(recapTotaux.global.totalAPayerTTC)} €
                     </Typography>
-                  </Box>
-                  <Box>
+                  </ClickableAmount>
+                  <ClickableAmount onClick={() => openDecoupageSousTraitant("Tous les sous-traitants", recapTotaux.sorted, moisSorted, "paye")}>
                     <Typography sx={{ fontSize: "0.85rem", color: "text.secondary" }}>
                       Montant payé
                     </Typography>
@@ -4232,8 +4318,8 @@ const TableauSousTraitant = () => {
                     >
                       {formatNumber(recapTotaux.global.totalPaye)} €
                     </Typography>
-                  </Box>
-                  <Box>
+                  </ClickableAmount>
+                  <ClickableAmount onClick={() => openDecoupageSousTraitant("Tous les sous-traitants", recapTotaux.sorted, moisSorted, "ecart")}>
                     <Typography sx={{ fontSize: "0.85rem", color: "text.secondary" }}>
                       Écart
                     </Typography>
@@ -4246,7 +4332,7 @@ const TableauSousTraitant = () => {
                     >
                       {formatNumber(recapTotaux.global.totalEcart)} €
                     </Typography>
-                  </Box>
+                  </ClickableAmount>
                 </Box>
               </Paper>
 
@@ -4431,30 +4517,42 @@ const TableauSousTraitant = () => {
                               </Box>
                             </Box>
                             <Box sx={{ display: "flex", gap: 3 }}>
-                              <Box sx={{ textAlign: "right" }}>
-                                <Typography sx={{ fontSize: "0.75rem", color: "text.secondary" }}>À payer</Typography>
-                                <Typography sx={{ fontSize: "0.9rem", fontWeight: "bold", color: colorForAmount(totaux.totalAPayer) }}>
-                                  {formatNumber(totaux.totalAPayer)} €
-                                </Typography>
-                              </Box>
-                              <Box sx={{ textAlign: "right" }}>
-                                <Typography sx={{ fontSize: "0.75rem", color: "text.secondary" }}>Payé</Typography>
-                                <Typography
-                                  sx={{
-                                    fontSize: "0.9rem",
-                                    fontWeight: "bold",
-                                    color: colorForAmount(totaux.totalPaye),
-                                  }}
-                                >
-                                  {formatNumber(totaux.totalPaye)} €
-                                </Typography>
-                              </Box>
-                              <Box sx={{ textAlign: "right" }}>
-                                <Typography sx={{ fontSize: "0.75rem", color: "text.secondary" }}>Écart</Typography>
-                                <Typography sx={{ fontSize: "0.9rem", fontWeight: "bold", color: colorForEcart() }}>
-                                  {formatNumber(totaux.totalEcart)} €
-                                </Typography>
-                              </Box>
+                              <ClickableAmount
+                                onClick={() => openDecoupageSousTraitant(groupe.displayName, groupe.filteredVariants.map((v) => v.name), moisSorted, "a_payer")}
+                              >
+                                <Box sx={{ textAlign: "right" }}>
+                                  <Typography sx={{ fontSize: "0.75rem", color: "text.secondary" }}>À payer</Typography>
+                                  <Typography sx={{ fontSize: "0.9rem", fontWeight: "bold", color: colorForAmount(totaux.totalAPayer) }}>
+                                    {formatNumber(totaux.totalAPayer)} €
+                                  </Typography>
+                                </Box>
+                              </ClickableAmount>
+                              <ClickableAmount
+                                onClick={() => openDecoupageSousTraitant(groupe.displayName, groupe.filteredVariants.map((v) => v.name), moisSorted, "paye")}
+                              >
+                                <Box sx={{ textAlign: "right" }}>
+                                  <Typography sx={{ fontSize: "0.75rem", color: "text.secondary" }}>Payé</Typography>
+                                  <Typography
+                                    sx={{
+                                      fontSize: "0.9rem",
+                                      fontWeight: "bold",
+                                      color: colorForAmount(totaux.totalPaye),
+                                    }}
+                                  >
+                                    {formatNumber(totaux.totalPaye)} €
+                                  </Typography>
+                                </Box>
+                              </ClickableAmount>
+                              <ClickableAmount
+                                onClick={() => openDecoupageSousTraitant(groupe.displayName, groupe.filteredVariants.map((v) => v.name), moisSorted, "ecart")}
+                              >
+                                <Box sx={{ textAlign: "right" }}>
+                                  <Typography sx={{ fontSize: "0.75rem", color: "text.secondary" }}>Écart</Typography>
+                                  <Typography sx={{ fontSize: "0.9rem", fontWeight: "bold", color: colorForEcart() }}>
+                                    {formatNumber(totaux.totalEcart)} €
+                                  </Typography>
+                                </Box>
+                              </ClickableAmount>
                             </Box>
                           </Box>
                           <LinearProgress
@@ -4511,10 +4609,12 @@ const TableauSousTraitant = () => {
                                       >
                                         {variant.name}
                                       </Typography>
-                                      <Box sx={{ display: "flex", gap: 2 }}>
-                                        <Typography sx={{ fontSize: "0.8rem", fontWeight: 600, color: colorForAmount(vTotaux.totalAPayer) }}>
-                                          {formatNumber(vTotaux.totalAPayer)} €
-                                        </Typography>
+                                      <Box sx={{ display: "flex", gap: 2, alignItems: "center" }}>
+                                        <ClickableAmount onClick={() => openDecoupageSousTraitant(variant.name, [variant.name], moisSorted, "a_payer")}>
+                                          <Typography sx={{ fontSize: "0.8rem", fontWeight: 600, color: colorForAmount(vTotaux.totalAPayer) }}>
+                                            {formatNumber(vTotaux.totalAPayer)} €
+                                          </Typography>
+                                        </ClickableAmount>
                                         <Typography sx={{ fontSize: "0.8rem", color: "text.secondary" }}>
                                           {vPctPaye.toFixed(0)}% payé
                                         </Typography>
@@ -4522,14 +4622,14 @@ const TableauSousTraitant = () => {
                                     </Box>
                                   </AccordionSummary>
                                   <AccordionDetails sx={{ pt: 0 }}>
-                                    {renderRecapVariantTable(vTotaux)}
+                                    {renderRecapVariantTable(vTotaux, variant.name)}
                                   </AccordionDetails>
                                 </Accordion>
                               );
                             })}
                           </Box>
                         ) : (
-                          renderRecapVariantTable(groupe.filteredVariants[0].totaux)
+                          renderRecapVariantTable(groupe.filteredVariants[0].totaux, groupe.filteredVariants[0].name)
                         )}
                       </AccordionDetails>
                     </Accordion>
@@ -4539,6 +4639,17 @@ const TableauSousTraitant = () => {
               </Box>
             </Box>
           )}
+
+          <DecoupageAgenceModal
+            open={!!decoupageModal}
+            onClose={() => setDecoupageModal(null)}
+            title={decoupageModal?.title}
+            subtitle={decoupageModal?.subtitle}
+            items={decoupageModal?.items || []}
+            agenceIndex={agenceIndex}
+            focusField={decoupageModal?.focusField}
+            groupByChantier={decoupageModal?.groupByChantier}
+          />
 
           {/* Modal pour ajouter/modifier une facture */}
           <FactureModal

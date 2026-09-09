@@ -7,6 +7,7 @@ from rest_framework.response import Response
 from django.db.models import Sum, Q
 from django.utils import timezone
 from datetime import datetime, timedelta, date
+from .agency_planning import planning_montants_par_agent_mois
 from ..models import (
     Chantier,
     Devis,
@@ -737,15 +738,18 @@ class DashboardViewSet(viewsets.ViewSet):
             # Dépenses agence dashboard : réalisé = mois ≤ mois calendaire courant ; au-delà = prévisionnel
             today_d = timezone.now().date()
             dashboard_agence_depenses_cap_ym = (today_d.year, today_d.month)
+            agences = list(Agence.objects.all().order_by("id"))
+            main_agence = agences[0] if agences else None
+            main_agence_id = main_agence.id if main_agence else None
 
             def month_ym_gt_dashboard_cap(mdate):
                 if mdate is None:
                     return False
                 return (mdate.year, mdate.month) > dashboard_agence_depenses_cap_ym
-            # Index (agent, month) : uniquement pointage « tout en agence » (legacy), pour ne pas
-            # doubler une ligne AEM miroir du même montant. Avec répartition découpée, on ne
-            # masque pas les AEM : la ventilation pointage ≠ doublon systématique des factures agence.
-            pointage_agence_agent_month = set()
+
+            # (agent_id, year, month, agence_id) : un montant chargé imputé à cette agence
+            # remplace le planning hebdo et les ajustements sous-traitant (même règle que l'écran Agences).
+            pointage_coverage = set()
             for pointage in pointages_query:
                 line_montant = float(pointage.montant_charge or 0)
                 month_date = pointage.month
@@ -758,6 +762,10 @@ class DashboardViewSet(viewsets.ViewSet):
                             total_cout_main_oeuvre += amt
                             main_oeuvre_month_map[mk] += amt
                         else:
+                            if amt > 0 and pointage.agent_id:
+                                pointage_coverage.add(
+                                    (pointage.agent_id, month_date.year, month_date.month, ag_id)
+                                )
                             if is_future_agence_cap:
                                 repartition_pointage_agence_ht_prevu += amt
                                 totals_depenses_prevu_par_agence[ag_id] += amt
@@ -771,9 +779,10 @@ class DashboardViewSet(viewsets.ViewSet):
                         legacy_pointage_agence_ht_prevu += line_montant
                     else:
                         legacy_pointage_agence_ht += line_montant
-                    pointage_agence_agent_month.add(
-                        (pointage.agent_id, month_date.year, month_date.month)
-                    )
+                    if line_montant > 0 and pointage.agent_id and main_agence_id is not None:
+                        pointage_coverage.add(
+                            (pointage.agent_id, month_date.year, month_date.month, main_agence_id)
+                        )
                 else:
                     total_cout_main_oeuvre += line_montant
                     main_oeuvre_month_map[mk] += line_montant
@@ -860,12 +869,22 @@ class DashboardViewSet(viewsets.ViewSet):
                 # Miroirs pointage déjà comptés via PointageMensuel — ne pas doubler.
                 if aem.description and "[POINTAGE_ID:" in aem.description:
                     continue
-                # Si agent agence déjà compté par pointage mensuel sur ce mois, on ignore AEM.
-                if aem.agent_id and (
-                    aem.agent_id,
-                    int(aem.year),
-                    int(aem.month),
-                ) in pointage_agence_agent_month:
+                category = aem.category or ""
+                if category == "Pointage":
+                    continue
+                # Même règle que l'écran Agences : un pointage imputé à cette agence
+                # remplace les ajustements sous-traitant (loyer, primes, etc. restent).
+                if (
+                    category == "Ajustement Sous-traitant"
+                    and aem.agent_id
+                    and (
+                        aem.agent_id,
+                        int(aem.year),
+                        int(aem.month),
+                        aem.agence_id,
+                    )
+                    in pointage_coverage
+                ):
                     continue
                 line_amt = _agency_expense_month_line_amount(aem)
                 aid = aem.agence_id
@@ -874,7 +893,27 @@ class DashboardViewSet(viewsets.ViewSet):
                 else:
                     totals_depenses_par_agence[aid] += line_amt
 
-            agences = list(Agence.objects.all().order_by("id"))
+            # Planning hebdo sur le chantier de chaque agence, sauf agents déjà couverts par un pointage.
+            if date_start and date_end:
+                for ag in agences:
+                    if not ag.chantier_id:
+                        continue
+                    planning_par_agent = planning_montants_par_agent_mois(
+                        ag.chantier_id, date_start, date_end
+                    )
+                    for (agent_id, y, m), amt in planning_par_agent.items():
+                        if amt <= 0:
+                            continue
+                        if (agent_id, y, m, ag.id) in pointage_coverage:
+                            continue
+                        month_date_pl = month_year_to_date(y, m)
+                        if month_date_pl is None:
+                            continue
+                        if month_ym_gt_dashboard_cap(month_date_pl):
+                            totals_depenses_prevu_par_agence[ag.id] += amt
+                        else:
+                            totals_depenses_par_agence[ag.id] += amt
+
             # Pointages « agence » sans répartition détaillée : tout sur l'agence principale (comportement historique).
             if legacy_pointage_agence_ht > 0:
                 if agences:
