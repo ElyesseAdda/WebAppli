@@ -75,7 +75,7 @@ const groupTreasurerDetailLines = (details) => {
     .sort((a, b) => b.total - a.total);
 };
 
-/** Tooltip personnalisé avec détail des lignes */
+/** Tooltip au survol : totaux uniquement, sans la liste de lignes */
 const CustomTooltip = ({ active, payload, label }) => {
   if (!active || !payload || !payload.length) return null;
 
@@ -90,67 +90,30 @@ const CustomTooltip = ({ active, payload, label }) => {
         borderRadius: "10px",
         boxShadow: "0 4px 16px rgba(0,0,0,0.10)",
         p: 1.5,
-        minWidth: 220,
-        maxWidth: 340,
-        maxHeight: "60vh",
-        overflowY: "auto",
+        minWidth: 180,
         fontSize: "0.78rem",
       }}
     >
       <Typography sx={{ fontWeight: 700, fontSize: "0.82rem", mb: 0.8, color: "#111827" }}>
         {label}
       </Typography>
-      {entries.map((entry) => {
-        const details = getEntryDetails(entry);
-
-        return (
-          <Box key={entry.dataKey} sx={{ mb: 0.6 }}>
-            <Box sx={{ display: "flex", alignItems: "center", gap: 0.6, mb: 0.3 }}>
-              <Box
-                sx={{
-                  width: 10,
-                  height: 10,
-                  borderRadius: "2px",
-                  bgcolor: entry.fill || entry.color,
-                  flexShrink: 0,
-                  border: entry.dataKey.includes("Prevu") ? "1.5px dashed #64748b" : "none",
-                }}
-              />
-              <Typography sx={{ fontWeight: 700, color: "#374151", fontSize: "0.78rem" }}>
-                {entry.name} : {fmt(entry.value)}
-              </Typography>
-            </Box>
-            {groupTreasurerDetailLines(details).map((g) => (
-              <Box key={g.key} sx={{ pl: 0.5, mb: 0.35 }}>
-                {g.lines.length > 1 ? (
-                  <>
-                    <Typography sx={{ fontWeight: 700, color: "#4b5563", fontSize: "0.72rem" }}>
-                      {g.groupLabel} : {fmt(g.total)}
-                    </Typography>
-                    {g.lines.slice(0, 5).map((d, i) => (
-                      <Typography
-                        key={i}
-                        sx={{ pl: 1.5, color: "#6b7280", fontSize: "0.70rem", lineHeight: 1.45 }}
-                      >
-                        • {d.label} — {fmt(d.montant)}
-                      </Typography>
-                    ))}
-                    {g.lines.length > 5 && (
-                      <Typography sx={{ pl: 1.5, color: "#9ca3af", fontSize: "0.68rem" }}>
-                        + {g.lines.length - 5} ligne(s)…
-                      </Typography>
-                    )}
-                  </>
-                ) : (
-                  <Typography sx={{ color: "#6b7280", fontSize: "0.72rem", lineHeight: 1.5 }}>
-                    • {g.lines[0].label} — {fmt(g.lines[0].montant)}
-                  </Typography>
-                )}
-              </Box>
-            ))}
-          </Box>
-        );
-      })}
+      {entries.map((entry) => (
+        <Box key={entry.dataKey} sx={{ display: "flex", alignItems: "center", gap: 0.6, mb: 0.35 }}>
+          <Box
+            sx={{
+              width: 10,
+              height: 10,
+              borderRadius: "2px",
+              bgcolor: entry.fill || entry.color,
+              flexShrink: 0,
+              border: String(entry.dataKey).includes("Prevu") ? "1.5px dashed #64748b" : "none",
+            }}
+          />
+          <Typography sx={{ fontWeight: 700, color: "#374151", fontSize: "0.78rem" }}>
+            {entry.name} : {fmt(entry.value)}
+          </Typography>
+        </Box>
+      ))}
     </Box>
   );
 };
@@ -270,31 +233,8 @@ const CustomLegend = () => (
 );
 
 const TresorerieBarChart = ({ data = [], height = 340 }) => {
-  const [hoverTooltip, setHoverTooltip] = useState({
-    active: false,
-    payload: [],
-    label: "",
-    position: undefined,
-  });
   const [detailsModal, setDetailsModal] = useState({ open: false, label: "", entries: [] });
 
-  const handleChartMouseMove = (state) => {
-    if (!state?.isTooltipActive || !state?.activePayload?.length) {
-      setHoverTooltip({ active: false, payload: [], label: "", position: undefined });
-      return;
-    }
-    const c = state.activeCoordinate;
-    setHoverTooltip({
-      active: true,
-      payload: state.activePayload || [],
-      label: state.activeLabel || "",
-      position: c ? { x: c.x, y: c.y } : undefined,
-    });
-  };
-
-  const handleChartMouseLeave = () => {
-    setHoverTooltip({ active: false, payload: [], label: "", position: undefined });
-  };
   const handleChartClick = (state) => {
     if (state?.activePayload?.length) {
       const entries = (state.activePayload || []).filter((p) => p.value > 0).map((entry) => ({
@@ -331,8 +271,6 @@ const TresorerieBarChart = ({ data = [], height = 340 }) => {
             margin={{ top: 8, right: 12, left: 0, bottom: 28 }}
             barCategoryGap="20%"
             barGap={2}
-            onMouseMove={handleChartMouseMove}
-            onMouseLeave={handleChartMouseLeave}
             onClick={handleChartClick}
           >
             {/* Patterns SVG pour les barres hachurées */}
@@ -373,14 +311,7 @@ const TresorerieBarChart = ({ data = [], height = 340 }) => {
             />
             <Tooltip
               content={<CustomTooltip />}
-              active={hoverTooltip.active}
-              payload={hoverTooltip.payload}
-              label={hoverTooltip.label}
-              position={hoverTooltip.position}
               cursor={{ fill: "rgba(0,0,0,0.03)" }}
-              reverseDirection={{ y: true }}
-              allowEscapeViewBox={{ x: true, y: true }}
-              wrapperStyle={{ zIndex: 1300, pointerEvents: "auto" }}
             />
             <Legend content={<CustomLegend />} />
 
