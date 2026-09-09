@@ -9,7 +9,7 @@ from django.db.models.signals import post_save, post_delete, post_migrate
 from django.dispatch import receiver
 from django.db.models.functions import TruncMonth
 from datetime import date
-from django.db.models import Sum
+from django.db.models import Sum, Q
 
 
 STATE_CHOICES = [
@@ -3034,6 +3034,64 @@ def _parse_pointage_repartition_for_agency_expenses(pointage):
     return parts
 
 
+def _delete_pointage_agency_mirrors(pointage):
+    """Supprime les lignes Agences miroir Pointage (marqueur et orphelins agent/mois)."""
+    if not pointage:
+        return
+    qs = AgencyExpenseMonth.objects.filter(category="Pointage")
+    clauses = Q()
+    pointage_id = getattr(pointage, "id", None)
+    if pointage_id:
+        clauses |= Q(description__contains=f"[POINTAGE_ID:{pointage_id}]")
+    agent_id = getattr(pointage, "agent_id", None)
+    if agent_id is None:
+        agent = getattr(pointage, "agent", None)
+        agent_id = getattr(agent, "id", None)
+    month_date = getattr(pointage, "month", None)
+    if agent_id and month_date:
+        clauses |= Q(agent_id=agent_id, month=month_date.month, year=month_date.year)
+    if clauses:
+        qs.filter(clauses).delete()
+
+
+def purge_stale_pointage_agency_expenses(year=None, month=None, agence_id=None):
+    """
+    Supprime les miroirs Pointage dont le montant chargé n'est plus imputé à l'agence
+    (montant retiré, répartition vidée, ou pointage absent).
+    """
+    qs = AgencyExpenseMonth.objects.filter(category="Pointage")
+    if year is not None:
+        qs = qs.filter(year=int(year))
+    if month is not None:
+        qs = qs.filter(month=int(month))
+    if agence_id not in (None, ""):
+        qs = qs.filter(agence_id=int(agence_id))
+
+    stale_ids = []
+    for pe in qs.only("id", "agent_id", "month", "year", "agence_id"):
+        if not pe.agent_id or not pe.month or not pe.year:
+            stale_ids.append(pe.id)
+            continue
+        pm = PointageMensuel.objects.filter(
+            agent_id=pe.agent_id,
+            month__year=pe.year,
+            month__month=pe.month,
+        ).first()
+        if not pm or float(pm.montant_charge or 0) <= 0:
+            stale_ids.append(pe.id)
+            continue
+        parts = _parse_pointage_repartition_for_agency_expenses(pm)
+        if parts is not None:
+            allocated = any(ag_id == pe.agence_id and amt > 0 for ag_id, amt in parts)
+            if not allocated:
+                stale_ids.append(pe.id)
+        elif not pm.agence:
+            stale_ids.append(pe.id)
+    if stale_ids:
+        AgencyExpenseMonth.objects.filter(id__in=stale_ids).delete()
+    return stale_ids
+
+
 def sync_agency_expenses_from_pointage(pointage):
     """
     Miroir des parts agence du pointage mensuel dans AgencyExpenseMonth
@@ -3049,6 +3107,10 @@ def sync_agency_expenses_from_pointage(pointage):
     month = pointage.month.month
     year = pointage.month.year
 
+    if float(pointage.montant_charge or 0) <= 0:
+        _delete_pointage_agency_mirrors(pointage)
+        return
+
     desired = {}  # agence_id -> montant
     parts = _parse_pointage_repartition_for_agency_expenses(pointage)
     if parts is not None:
@@ -3062,7 +3124,7 @@ def sync_agency_expenses_from_pointage(pointage):
             desired[main_agence.id] = round(float(pointage.montant_charge), 2)
 
     if not desired:
-        existing_qs.delete()
+        _delete_pointage_agency_mirrors(pointage)
         return
 
     kept_ids = set()
@@ -3115,9 +3177,7 @@ def create_agency_expense_from_pointage(sender, instance, **kwargs):
 
 @receiver(post_delete, sender=PointageMensuel)
 def delete_agency_expense_from_pointage(sender, instance, **kwargs):
-    AgencyExpenseMonth.objects.filter(
-        description__contains=f"[POINTAGE_ID:{instance.id}]"
-    ).delete()
+    _delete_pointage_agency_mirrors(instance)
 
 
 # Signal pour créer automatiquement une AgencyExpenseMonth quand une prime de type 'agence' est créée

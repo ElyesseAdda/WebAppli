@@ -40,6 +40,7 @@ import GanttDetail from "./Gantt/GanttDetail";
 import ListeGantt from "./Gantt/ListeGantt";
 import GestionAppelsOffres from "./GestionAppelsOffres";
 import GlobalConflictModal from "./GlobalConflictModal";
+import PatchNotesModal from "./PatchNotesModal";
 import Layout from "./Layout";
 import ListeBonCommande from "./ListeBonCommande";
 import ListeChantier from "./ListeChantier";
@@ -143,6 +144,7 @@ function App() {
         <PageTitleManager />
         {/* Modal global pour les conflits de fichiers - accessible partout */}
         <GlobalConflictModal />
+        {isAuthenticated && <PatchNotesModal />}
 
         <Routes>
           {/* Route de connexion - accessible sans authentification */}
