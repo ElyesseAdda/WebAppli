@@ -94,6 +94,38 @@ export const areDevisTagsEqual = (left, right) =>
   formatDevisTagsLabel([...left].sort()) ===
   formatDevisTagsLabel([...right].sort());
 
+/** Toggle libre (sans exclusion) — pour le filtre multi-tags */
+export const toggleFilterTag = (selected, tagValue) => {
+  if (selected.includes(tagValue)) {
+    return selected.filter((item) => item !== tagValue);
+  }
+  return [...selected, tagValue];
+};
+
+/** Normalise le filtre status (string legacy ou tableau) */
+export const normalizeStatusFilter = (status) => {
+  if (Array.isArray(status)) {
+    return status.map(normalizeDevisTag).filter(Boolean);
+  }
+  if (!status || status === "Tous") return [];
+  return [normalizeDevisTag(status)].filter(Boolean);
+};
+
+/** true si le devis possède tous les tags filtrés (ET — combinaison exacte requise) */
+export const devisMatchesStatusFilter = (devis, statusFilter) => {
+  const selected = normalizeStatusFilter(statusFilter);
+  if (!selected.length) return true;
+  const devisTags = getDevisTags(devis);
+  return selected.every((tag) => devisTags.includes(tag));
+};
+
+export const formatStatusFilterLabel = (statusFilter) => {
+  const selected = normalizeStatusFilter(statusFilter);
+  if (!selected.length) return "Tous";
+  if (selected.length === 1) return selected[0];
+  return `${selected.length} tags`;
+};
+
 export const toggleDevisTag = (selected, tagValue) => {
   const exists = selected.includes(tagValue);
   if (exists) {

@@ -1,5 +1,6 @@
 import {
   Alert,
+  Box,
   Button,
   Dialog,
   DialogActions,
@@ -32,20 +33,21 @@ import {
   FilterCell,
   PriceTextField,
   StyledBox,
-  StyledSelect,
   StyledTableContainer,
   StyledTextField,
 } from "../../styles/tableStyles";
 import { generatePDFDrive } from "../../utils/universalDriveGenerator";
 import CreationSituation from "../CreationSituation";
 import FactureModal from "../FactureModal";
+import DevisTagFilterField from "../DevisTagFilterField";
+import DevisTagFilterModal from "../DevisTagFilterModal";
 import DevisTagModal from "../DevisTagModal";
 import TransformationCIEModal from "../TransformationCIEModal";
 import TransformationTSModal from "../TransformationTSModal";
 import { RegeneratePDFIconButton } from "../shared/RegeneratePDFButton";
 import { DOCUMENT_TYPES } from "../../config/documentTypeConfig";
 import {
-  DEVIS_TAG_VALUES,
+  devisMatchesStatusFilter,
   formatDevisTagDate,
   getDevisTagStyle,
   getDevisTags,
@@ -101,6 +103,7 @@ const ChantierListeDevis = ({
   const [anchorEl, setAnchorEl] = useState(null);
   const [selectedDevis, setSelectedDevis] = useState(null);
   const [showStatusModal, setShowStatusModal] = useState(false);
+  const [showTagFilterModal, setShowTagFilterModal] = useState(false);
   const [devisToUpdate, setDevisToUpdate] = useState(null);
   const [factureModalOpen, setFactureModalOpen] = useState(false);
   const [tsModalOpen, setTsModalOpen] = useState(false);
@@ -111,7 +114,6 @@ const ChantierListeDevis = ({
   const [situationModalOpen, setSituationModalOpen] = useState(false);
   const [selectedDevisForSituation, setSelectedDevisForSituation] =
     useState(null);
-  const statusOptions = DEVIS_TAG_VALUES;
   const [pendingSave, setPendingSave] = useState(false);
   const [snackbar, setSnackbar] = useState({ open: false, message: "", severity: "info" });
   const [editNumeroDialogOpen, setEditNumeroDialogOpen] = useState(false);
@@ -161,27 +163,28 @@ const ChantierListeDevis = ({
 
   useEffect(() => {
     // Recalcule la liste filtrée à chaque changement de filters ou de devis
-    let filtered = devis.filter((devis) => {
+    let filtered = devis.filter((devisItem) => {
       return Object.keys(filters).every((key) => {
+        if (key === "status") {
+          return devisMatchesStatusFilter(devisItem, filters[key]);
+        }
         if (!filters[key] || filters[key] === "Tous") return true;
         switch (key) {
           case "numero":
-            return devis.numero
+            return devisItem.numero
               ?.toLowerCase()
               .includes(filters[key].toLowerCase());
           case "client_name":
-            return devis.client_name
+            return devisItem.client_name
               ?.toLowerCase()
               .includes(filters[key].toLowerCase());
           case "date_creation":
             if (!filters[key]) return true;
-            const devisDate = toInputDate(devis.date_creation);
+            const devisDate = toInputDate(devisItem.date_creation);
             return devisDate === filters[key];
           case "price_ht":
-            const devisPrice = devis.price_ht?.toString() || "";
+            const devisPrice = devisItem.price_ht?.toString() || "";
             return devisPrice.includes(filters[key]);
-          case "status":
-            return getDevisTags(devis).includes(filters[key]);
           default:
             return true;
         }
@@ -197,33 +200,15 @@ const ChantierListeDevis = ({
     };
     setFilters(newFilters);
     setPendingSave(true);
-    let filtered = devis.filter((devis) => {
-      return Object.keys(newFilters).every((key) => {
-        if (!newFilters[key] || newFilters[key] === "Tous") return true;
-        switch (key) {
-          case "numero":
-            return devis.numero
-              ?.toLowerCase()
-              .includes(newFilters[key].toLowerCase());
-          case "client_name":
-            return devis.client_name
-              ?.toLowerCase()
-              .includes(newFilters[key].toLowerCase());
-          case "date_creation":
-            if (!newFilters[key]) return true;
-            const devisDate = toInputDate(devis.date_creation);
-            return devisDate === newFilters[key];
-          case "price_ht":
-            const devisPrice = devis.price_ht?.toString() || "";
-            return devisPrice.includes(newFilters[key]);
-          case "status":
-            return getDevisTags(devis).includes(newFilters[key]);
-          default:
-            return true;
-        }
-      });
-    });
-    setFilteredDevis(filtered);
+  };
+
+  const handleStatusFilterApply = (selectedTags) => {
+    const newFilters = {
+      ...filters,
+      status: selectedTags,
+    };
+    setFilters(newFilters);
+    setPendingSave(true);
   };
 
   const handleSort = (property) => {
@@ -763,19 +748,11 @@ const ChantierListeDevis = ({
                   </TableSortLabel>
                 </AlignedCell>
                 <FilterCell>
-                  <StyledSelect
+                  <DevisTagFilterField
                     value={filters.status}
-                    onChange={handleFilterChange("status")}
-                    variant="standard"
-                    sx={{ pt: "10px", color: "white" }}
-                  >
-                    <MenuItem value="Tous">Tous</MenuItem>
-                    {statusOptions.map((status) => (
-                      <MenuItem key={status} value={status}>
-                        {status}
-                      </MenuItem>
-                    ))}
-                  </StyledSelect>
+                    onClick={() => setShowTagFilterModal(true)}
+                    dark
+                  />
                 </FilterCell>
                 <FilterCell>
                   <Typography
@@ -1011,6 +988,13 @@ const ChantierListeDevis = ({
         onTagsChange={handleStatusUpdate}
         devisNumero={devisToUpdate?.numero}
         title="Modifier les tags du devis"
+      />
+
+      <DevisTagFilterModal
+        open={showTagFilterModal}
+        onClose={() => setShowTagFilterModal(false)}
+        selectedTags={filters.status}
+        onApply={handleStatusFilterApply}
       />
 
       <TransformationTSModal

@@ -5559,6 +5559,7 @@ def list_devis(request):
                 'price_ht': float(devis.price_ht),
                 'price_ttc': float(devis.price_ttc),
                 'status': devis.status,
+                'tags': list(devis.tags or []) or ([devis.status] if devis.status else []),
                 'description': devis.description
             }
             data.append(devis_data)

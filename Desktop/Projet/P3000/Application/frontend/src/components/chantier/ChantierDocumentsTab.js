@@ -35,15 +35,21 @@ const ChantierDocumentsTab = ({ chantierData, state, setState, isActive }) => {
 
   // Devis
   const [devis, setDevis] = useState([]);
-  const [filtersDevis, setFiltersDevis] = useState(
-    state.filtersDevis || {
+  const [filtersDevis, setFiltersDevis] = useState(() => {
+    const base = state.filtersDevis || {
       numero: "",
       client_name: "",
       date_creation: "",
       price_ht: "",
-      status: "Tous",
-    }
-  );
+      status: [],
+    };
+    const status = Array.isArray(base.status)
+      ? base.status
+      : !base.status || base.status === "Tous"
+        ? []
+        : [base.status];
+    return { ...base, status };
+  });
   const [isLoadedDevis, setIsLoadedDevis] = useState(false);
 
   // Factures
