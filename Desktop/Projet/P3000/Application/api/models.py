@@ -18,6 +18,24 @@ STATE_CHOICES = [
         ('Facturé', 'Facturé'),
         ('En attente', 'En attente'),
     ]
+DEVIS_STATUS_CHOICES = [
+        ('En attente BDC', 'En attente BDC'),
+        ('Envoyé', 'Envoyé'),
+        ('Validé', 'Validé'),
+        ('Refusé', 'Refusé'),
+        ('Travaux non réalisés', 'Travaux non réalisés'),
+        ('Travaux en cours', 'Travaux en cours'),
+        ('Travaux réalisés', 'Travaux réalisés'),
+        ('BDC reçus', 'BDC reçus'),
+        ('Faire Avenant', 'Faire Avenant'),
+        ('Faire TS', 'Faire TS'),
+        # Anciens libellés conservés pour compatibilité lecture
+        ('En attente', 'En attente'),
+        ('En attente de travaux', 'En attente de travaux'),
+        ('En Cours', 'En Cours'),
+        ('Terminé', 'Terminé'),
+        ('Facturé', 'Facturé'),
+    ]
 TYPE_CHOICES = [
         ('Travaux', 'Travaux'),
     ]
@@ -1452,7 +1470,16 @@ class Devis(models.Model):
     tva_rate = models.FloatField()
     nature_travaux = models.CharField(max_length=255, null=True, blank=True)
     description = models.TextField(null=True, blank=True)
-    status = models.CharField(max_length=20, choices=STATE_CHOICES, default='En Cours')
+    status = models.CharField(max_length=255, choices=DEVIS_STATUS_CHOICES, default='En attente BDC')
+    tags = models.JSONField(default=list, blank=True)
+    status_updated_at = models.DateTimeField(null=True, blank=True)
+    status_updated_by = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='devis_status_updates',
+    )
     chantier = models.ForeignKey(Chantier, on_delete=models.CASCADE, related_name='devis', null=True, blank=True)
     appel_offres = models.ForeignKey(AppelOffres, on_delete=models.CASCADE, related_name='devis', null=True, blank=True)
     client = models.ManyToManyField(Client, related_name='devis', blank=True)
@@ -4127,6 +4154,52 @@ from .models_gantt import (  # noqa: E402  (import après signaux/post_migrate)
     GanttDesignation,
     normaliser_libelle,
 )
+
+
+class UserNotification(models.Model):
+    TYPE_DEVIS_TAG = 'devis_tag'
+    TYPE_CHOICES = [
+        (TYPE_DEVIS_TAG, 'Changement de tag devis'),
+    ]
+
+    recipient = models.ForeignKey(User, on_delete=models.CASCADE, related_name='notifications')
+    actor = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='notifications_sent',
+    )
+    type = models.CharField(max_length=50, choices=TYPE_CHOICES, default=TYPE_DEVIS_TAG)
+    devis = models.ForeignKey(
+        Devis,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='tag_notifications',
+    )
+    chantier = models.ForeignKey(
+        Chantier,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='notifications',
+    )
+    devis_numero = models.CharField(max_length=100, blank=True, default='')
+    chantier_name = models.CharField(max_length=255, blank=True, default='')
+    old_value = models.CharField(max_length=255, blank=True, default='')
+    new_value = models.CharField(max_length=255, blank=True, default='')
+    is_read = models.BooleanField(default=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-created_at']
+        indexes = [
+            models.Index(fields=['recipient', 'is_read', '-created_at'], name='api_usernotif_recip_idx'),
+        ]
+
+    def __str__(self):
+        return f"{self.type} → {self.recipient} ({self.created_at})"
 
 
 class UserMobileAccess(models.Model):

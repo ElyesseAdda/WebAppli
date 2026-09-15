@@ -201,6 +201,12 @@ from .auth_views import (
 # Import de la vue de version
 from .views import app_version_view
 
+from .notification_views import (
+    list_notifications,
+    mark_notification_read,
+    mark_all_notifications_read,
+)
+
 # Import de la vue CSRF
 from .csrf_views import csrf_token_view
 
@@ -312,6 +318,9 @@ urlpatterns = [
     path('preview-saved-devis/<int:devis_id>/', preview_saved_devis, name='preview-saved-devis'),
     path('preview-saved-devis-v2/<int:devis_id>/', preview_saved_devis_v2, name='preview-saved-devis-v2'),
     path('list-devis/<int:devis_id>/update_status/', update_devis_status, name='update_devis_status'),
+    path('notifications/', list_notifications, name='list-notifications'),
+    path('notifications/read-all/', mark_all_notifications_read, name='mark-all-notifications-read'),
+    path('notifications/<int:notification_id>/read/', mark_notification_read, name='mark-notification-read'),
     path('create-facture/', create_facture, name='create-facture'),
     path('preview-facture/<int:facture_id>/', preview_facture, name='preview-facture'),
     path('preview-facture-v2/<int:facture_id>/', preview_facture_v2, name='preview-facture-v2'),

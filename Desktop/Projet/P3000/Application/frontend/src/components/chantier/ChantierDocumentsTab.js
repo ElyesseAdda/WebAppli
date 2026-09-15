@@ -10,6 +10,12 @@ const ChantierDocumentsTab = ({ chantierData, state, setState, isActive }) => {
   // Centralisation des états pour chaque sous-liste et filtres
   const [selectedTab, setSelectedTab] = useState(state.selectedTab || 0);
 
+  useEffect(() => {
+    if (typeof state.selectedTab === "number") {
+      setSelectedTab(state.selectedTab);
+    }
+  }, [state.selectedTab]);
+
   // Utiliser le hook centralisé pour les situations
   const { situations, loading: loadingSituations, loadSituations, updateSituation } = useSituationsManager(
     chantierData?.id

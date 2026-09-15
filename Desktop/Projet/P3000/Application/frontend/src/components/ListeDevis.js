@@ -36,9 +36,10 @@ import {
   StyledTextField,
 } from "../styles/tableStyles";
 import { generatePDFDrive } from "../utils/universalDriveGenerator";
+import { DEVIS_TAG_VALUES, getDevisTags } from "../config/devisTags";
 import CreationFacture from "./CreationFacture";
 import CreationSituation from "./CreationSituation";
-import StatusChangeModal from "./StatusChangeModal";
+import DevisTagModal from "./DevisTagModal";
 import TransformationCIEModal from "./TransformationCIEModal";
 import TransformationTSModal from "./TransformationTSModal";
 import { generateDevisMarchePDFDrive } from "./pdf_drive_functions";
@@ -154,7 +155,7 @@ const ListeDevis = () => {
   const [selectedDevisForSituation, setSelectedDevisForSituation] =
     useState(null);
 
-  const statusOptions = ["En attente", "Validé", "Refusé"];
+  const statusOptions = DEVIS_TAG_VALUES;
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -550,7 +551,7 @@ const ListeDevis = () => {
               return devisPrice.includes(newFilters[key]);
 
             case "status":
-              return d.status === newFilters[key];
+              return getDevisTags(d).includes(newFilters[key]);
 
             default:
               return true;
@@ -631,12 +632,13 @@ const ListeDevis = () => {
     handleClose();
   };
 
-  const handleStatusUpdate = async (newStatus) => {
+  const handleStatusUpdate = async (newTags) => {
     try {
       if (!devisToUpdate) return;
+      const tags = Array.isArray(newTags) ? newTags : [newTags].filter(Boolean);
+      const previousTags = getDevisTags(devisToUpdate);
 
-      // Si on change l'état depuis "Validé", vérifier les factures associées
-      if (devisToUpdate.status === "Validé" && newStatus !== "Validé") {
+      if (previousTags.includes("Validé") && !tags.includes("Validé")) {
         const response = await axios.get(
           `/api/list-devis/${devisToUpdate.id}/factures/`
         );
@@ -645,41 +647,43 @@ const ListeDevis = () => {
           : response.data?.factures || [];
 
         if (factures.length > 0) {
-          // Stocker l'ID du devis dans facturesToDelete
           setFacturesToDelete(
             factures.map((f) => ({
               ...f,
               devisId: devisToUpdate.id,
             }))
           );
-          setNewStatus(newStatus);
+          setNewStatus(tags);
           setDeleteFacturesModalOpen(true);
           setShowStatusModal(false);
           return;
         }
       }
 
-      await updateDevisStatus(newStatus);
+      await updateDevisStatus(tags);
     } catch (error) {
       void error;
-      alert("Erreur lors de la modification du statut");
+      alert("Erreur lors de la modification des tags");
     }
   };
 
-  const updateDevisStatus = async (status) => {
+  const updateDevisStatus = async (statusOrTags) => {
     try {
+      const tags = Array.isArray(statusOrTags)
+        ? statusOrTags
+        : [statusOrTags].filter(Boolean);
       await axios.put(`/api/list-devis/${devisToUpdate.id}/update_status/`, {
-        status: status,
+        tags,
       });
 
       setDevis(
         devis.map((d) =>
-          d.id === devisToUpdate.id ? { ...d, status: status } : d
+          d.id === devisToUpdate.id ? { ...d, status: tags[0] || "En attente", tags } : d
         )
       );
       setFilteredDevis(
         filteredDevis.map((d) =>
-          d.id === devisToUpdate.id ? { ...d, status: status } : d
+          d.id === devisToUpdate.id ? { ...d, status: tags[0] || "En attente", tags } : d
         )
       );
 
@@ -688,7 +692,7 @@ const ListeDevis = () => {
       setNewStatus(null);
     } catch (error) {
       void error;
-      alert("Erreur lors de la mise à jour du statut");
+      alert("Erreur lors de la mise à jour des tags");
     }
   };
 
@@ -698,7 +702,7 @@ const ListeDevis = () => {
 
       // Récupérer l'ID du devis depuis la première facture
       const devisId = facturesToDelete[0].devisId;
-      const statusToUpdate = newStatus;
+      const tagsToUpdate = Array.isArray(newStatus) ? newStatus : [newStatus].filter(Boolean);
 
       // Supprimer toutes les factures associées
       await Promise.all(
@@ -709,18 +713,22 @@ const ListeDevis = () => {
 
       // Mettre à jour le statut du devis
       await axios.put(`/api/list-devis/${devisId}/update_status/`, {
-        status: statusToUpdate,
+        tags: tagsToUpdate,
       });
 
       // Mettre à jour l'état local
       setDevis(
         devis.map((d) =>
-          d.id === devisId ? { ...d, status: statusToUpdate } : d
+          d.id === devisId
+            ? { ...d, status: tagsToUpdate[0] || "En attente", tags: tagsToUpdate }
+            : d
         )
       );
       setFilteredDevis(
         filteredDevis.map((d) =>
-          d.id === devisId ? { ...d, status: statusToUpdate } : d
+          d.id === devisId
+            ? { ...d, status: tagsToUpdate[0] || "En attente", tags: tagsToUpdate }
+            : d
         )
       );
 
@@ -1228,8 +1236,15 @@ const ListeDevis = () => {
                     >
                       {formatNumber(devis.price_ht)} €
                     </CenteredTableCell>
-                    <StatusCell status={devis.status}>
-                      {devis.status}
+                    <StatusCell
+                      status={getDevisTags(devis)[0] || devis.status}
+                      onClick={() => {
+                        setDevisToUpdate(devis);
+                        setShowStatusModal(true);
+                      }}
+                      style={{ cursor: "pointer" }}
+                    >
+                      {getDevisTags(devis).join(" / ") || "Aucun tag"}
                     </StatusCell>
                     <CenteredTableCell
                       sx={{
@@ -1557,16 +1572,17 @@ const ListeDevis = () => {
         )}
       </Menu>
 
-      <StatusChangeModal
+      <DevisTagModal
         open={showStatusModal}
         onClose={() => {
           setShowStatusModal(false);
           setDevisToUpdate(null);
         }}
         currentStatus={devisToUpdate?.status}
-        onStatusChange={handleStatusUpdate}
-        type="devis"
-        title="Modifier l'état du devis"
+        currentTags={devisToUpdate?.tags}
+        onTagsChange={handleStatusUpdate}
+        devisNumero={devisToUpdate?.numero}
+        title="Modifier les tags du devis"
       />
 
       <TransformationTSModal

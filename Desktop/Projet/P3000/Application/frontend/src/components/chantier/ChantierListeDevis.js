@@ -16,6 +16,7 @@ import {
   TableHead,
   TableRow,
   TableSortLabel,
+  Tooltip,
   Typography,
 } from "@mui/material";
 import { green } from "@mui/material/colors";
@@ -38,11 +39,17 @@ import {
 import { generatePDFDrive } from "../../utils/universalDriveGenerator";
 import CreationSituation from "../CreationSituation";
 import FactureModal from "../FactureModal";
-import StatusChangeModal from "../StatusChangeModal";
+import DevisTagModal from "../DevisTagModal";
 import TransformationCIEModal from "../TransformationCIEModal";
 import TransformationTSModal from "../TransformationTSModal";
 import { RegeneratePDFIconButton } from "../shared/RegeneratePDFButton";
 import { DOCUMENT_TYPES } from "../../config/documentTypeConfig";
+import {
+  DEVIS_TAG_VALUES,
+  formatDevisTagDate,
+  getDevisTagStyle,
+  getDevisTags,
+} from "../../config/devisTags";
 
 const formatNumber = (number) => {
   if (number == null) return "";
@@ -104,7 +111,7 @@ const ChantierListeDevis = ({
   const [situationModalOpen, setSituationModalOpen] = useState(false);
   const [selectedDevisForSituation, setSelectedDevisForSituation] =
     useState(null);
-  const statusOptions = ["En attente", "Validé", "Refusé"];
+  const statusOptions = DEVIS_TAG_VALUES;
   const [pendingSave, setPendingSave] = useState(false);
   const [snackbar, setSnackbar] = useState({ open: false, message: "", severity: "info" });
   const [editNumeroDialogOpen, setEditNumeroDialogOpen] = useState(false);
@@ -113,30 +120,6 @@ const ChantierListeDevis = ({
   const [existingFacturesWarningOpen, setExistingFacturesWarningOpen] =
     useState(false);
   const [existingDocuments, setExistingDocuments] = useState([]);
-
-  // Fonction pour obtenir les styles de statut (mêmes que le dashboard)
-  const getStatusStyles = (status) => {
-    return {
-      display: "inline-block",
-      px: 1.5,
-      py: 0.5,
-      borderRadius: 1,
-      backgroundColor:
-        status === "Validé"
-          ? "info.light"
-          : status === "Refusé"
-          ? "error.light"
-          : "warning.light",
-      color:
-        status === "Validé"
-          ? "info.dark"
-          : status === "Refusé"
-          ? "error.dark"
-          : "warning.dark",
-      fontWeight: 500,
-      textTransform: "capitalize",
-    };
-  };
 
   useEffect(() => {
     if (!isLoaded && chantierData?.id) {
@@ -198,7 +181,7 @@ const ChantierListeDevis = ({
             const devisPrice = devis.price_ht?.toString() || "";
             return devisPrice.includes(filters[key]);
           case "status":
-            return devis.status === filters[key];
+            return getDevisTags(devis).includes(filters[key]);
           default:
             return true;
         }
@@ -234,7 +217,7 @@ const ChantierListeDevis = ({
             const devisPrice = devis.price_ht?.toString() || "";
             return devisPrice.includes(newFilters[key]);
           case "status":
-            return devis.status === newFilters[key];
+            return getDevisTags(devis).includes(newFilters[key]);
           default:
             return true;
         }
@@ -524,6 +507,12 @@ const ChantierListeDevis = ({
     handleClose();
   };
 
+  const handleTagClick = (event, devisItem) => {
+    event.stopPropagation();
+    setDevisToUpdate(devisItem);
+    setShowStatusModal(true);
+  };
+
   const handleEditNumeroClick = () => {
     if (selectedDevis) {
       setDevisToEditNumero(selectedDevis);
@@ -586,17 +575,17 @@ const ChantierListeDevis = ({
   };
 
   // --- Handlers pour les modales ---
-  const handleStatusUpdate = async (newStatus) => {
+  const handleStatusUpdate = async (newTags) => {
     try {
       if (!devisToUpdate) return;
       await axios.put(`/api/list-devis/${devisToUpdate.id}/update_status/`, {
-        status: newStatus,
+        tags: newTags,
       });
       fetchDevis();
       setShowStatusModal(false);
       setDevisToUpdate(null);
     } catch (error) {
-      alert("Erreur lors de la modification du statut");
+      alert("Erreur lors de la modification des tags");
     }
   };
 
@@ -824,12 +813,40 @@ const ChantierListeDevis = ({
                     {formatNumber(devis.price_ht)} €
                   </CenteredTableCell>
                   <CenteredTableCell>
-                    <Typography
-                      variant="body2"
-                      sx={getStatusStyles(devis.status || "En attente")}
+                    <Tooltip
+                      title={
+                        devis.status_updated_by_name && devis.status_updated_at
+                          ? `Modifié par ${devis.status_updated_by_name} le ${formatDevisTagDate(devis.status_updated_at)} — cliquer pour changer`
+                          : "Cliquer pour modifier les tags"
+                      }
                     >
-                      {devis.status || "En attente"}
-                    </Typography>
+                      <div
+                        onClick={(event) => handleTagClick(event, devis)}
+                        style={{
+                          display: "flex",
+                          flexWrap: "wrap",
+                          gap: 6,
+                          justifyContent: "center",
+                          cursor: "pointer",
+                        }}
+                      >
+                        {getDevisTags(devis).length ? (
+                          getDevisTags(devis).map((tag) => (
+                            <Typography
+                              key={tag}
+                              variant="body2"
+                              sx={getDevisTagStyle(tag, { clickable: true })}
+                            >
+                              {tag}
+                            </Typography>
+                          ))
+                        ) : (
+                          <Typography variant="body2" color="text.secondary">
+                            Aucun tag
+                          </Typography>
+                        )}
+                      </div>
+                    </Tooltip>
                   </CenteredTableCell>
                   <CenteredTableCell sx={{ width: "120px", padding: "0 8px" }}>
                     <div style={{ display: "flex", gap: "8px", alignItems: "center", justifyContent: "center" }}>
@@ -891,7 +908,7 @@ const ChantierListeDevis = ({
         <MenuItem onClick={handleEditCIE}>Éditer en CIE</MenuItem>
         <MenuItem onClick={handleConvertToBonCommande}>Convertir en bon de commande</MenuItem>
         <MenuItem onClick={handleEditNumeroClick}>Modifier le numéro</MenuItem>
-        <MenuItem onClick={handleChangeStatus}>Modifier le statut</MenuItem>
+        <MenuItem onClick={handleChangeStatus}>Modifier les tags</MenuItem>
       </Menu>
 
       <Dialog
@@ -983,16 +1000,17 @@ const ChantierListeDevis = ({
         </DialogActions>
       </Dialog>
 
-      <StatusChangeModal
+      <DevisTagModal
         open={showStatusModal}
         onClose={() => {
           setShowStatusModal(false);
           setDevisToUpdate(null);
         }}
         currentStatus={devisToUpdate?.status}
-        onStatusChange={handleStatusUpdate}
-        type="devis"
-        title="Modifier le statut du devis"
+        currentTags={devisToUpdate?.tags}
+        onTagsChange={handleStatusUpdate}
+        devisNumero={devisToUpdate?.numero}
+        title="Modifier les tags du devis"
       />
 
       <TransformationTSModal

@@ -50,7 +50,7 @@ from .models import (
     AgencyExpenseAggregate, AgentPrime, Color, LigneSpeciale, FactureFournisseurMateriel,
     RecapFinancierPreference,
     SuiviPaiementSousTraitantMensuel, FactureSuiviSousTraitant, LigneMasqueeTableauSousTraitant, LigneMasqueeTableauFournisseur, Distributeur, DistributeurMouvement, DistributeurCell, DistributeurVente, DistributeurReapproSession, DistributeurReapproLigne, DistributeurFrais, StockProduct, StockProductBestPurchase, StockPurchase, StockPurchaseItem, StockLot, StockLoss,
-    Agence,
+    Agence, UserNotification, DEVIS_STATUS_CHOICES,
 )
 from .drive_automation import drive_automation
 from .models import compute_agency_expense_aggregate_for_month
@@ -397,6 +397,7 @@ class DevisViewSet(viewsets.ModelViewSet):
             'appel_offres',
             'appel_offres__societe',
             'appel_offres__societe__client_name',
+            'status_updated_by',
         )
         .prefetch_related('lignes', 'client')
         .order_by('-date_creation')
@@ -6017,22 +6018,140 @@ def _preview_saved_devis_legacy(request, devis_id):
     except Exception as e:
         return JsonResponse({'error': str(e)}, status=400)
 
+_DEVIS_TAG_LEGACY_MAP = {
+    'En attente': 'En attente BDC',
+    'En Attente': 'En attente BDC',
+    'en attente': 'En attente BDC',
+    'En attente de travaux': 'Travaux non réalisés',
+    'Travaux non réaliser': 'Travaux non réalisés',
+    'BDC recus': 'BDC reçus',
+}
+
+_DEVIS_EXCLUSIVE_TAG_GROUPS = [
+    ('Validé', 'Refusé'),
+    ('En attente BDC', 'BDC reçus'),
+    ('Travaux non réalisés', 'Travaux en cours', 'Travaux réalisés'),
+]
+
+
+def _canonicalize_devis_tag(tag):
+    tag = str(tag or '').strip()
+    return _DEVIS_TAG_LEGACY_MAP.get(tag, tag)
+
+
+def _apply_exclusive_devis_tags(tags):
+    """Conserve l'ordre et retire les tags incompatibles (le dernier gagne)."""
+    result = []
+    for tag in tags:
+        for group in _DEVIS_EXCLUSIVE_TAG_GROUPS:
+            if tag in group:
+                result = [item for item in result if item not in group]
+                break
+        if tag not in result:
+            result.append(tag)
+    return result
+
+
+def _normalize_devis_tags(raw_tags, fallback_status=''):
+    allowed = {choice[0] for choice in DEVIS_STATUS_CHOICES}
+    values = raw_tags if isinstance(raw_tags, list) else []
+    if not values and fallback_status:
+        values = [fallback_status]
+    normalized = []
+    seen = set()
+    for item in values:
+        tag = _canonicalize_devis_tag(item)
+        if not tag or tag in seen:
+            continue
+        if tag not in allowed:
+            continue
+        seen.add(tag)
+        normalized.append(tag)
+    return _apply_exclusive_devis_tags(normalized)
+
+
+def _format_devis_tags(tags):
+    return ' + '.join(tags) if tags else 'Aucun tag'
+
+
+def _primary_devis_status(tags):
+    for item in ('Refusé', 'Validé', 'Envoyé', 'En attente BDC', 'En attente'):
+        if item in tags:
+            return item
+    return tags[0] if tags else 'En attente BDC'
+
+
 @api_view(['PUT'])
 def update_devis_status(request, devis_id):
     try:
-        devis = Devis.objects.get(id=devis_id)
-        new_status = request.data.get('status')
-        
-        # Utiliser update() pour mettre à jour uniquement le statut
-        Devis.objects.filter(id=devis_id).update(status=new_status)
-        
-        # Récupérer le devis mis à jour
+        devis = Devis.objects.select_related('chantier').get(id=devis_id)
+        raw_tags = request.data.get('tags')
+        fallback_status = (request.data.get('status') or '').strip()
+        new_tags = _normalize_devis_tags(raw_tags, fallback_status)
+
+        if raw_tags is None and not fallback_status:
+            return Response({'error': 'Tags manquants'}, status=400)
+        if raw_tags is not None and not isinstance(raw_tags, list):
+            return Response({'error': 'Les tags doivent être une liste'}, status=400)
+        if isinstance(raw_tags, list):
+            allowed = {choice[0] for choice in DEVIS_STATUS_CHOICES}
+            unknown = []
+            for item in raw_tags:
+                raw = str(item or '').strip()
+                if not raw:
+                    continue
+                canonical = _canonicalize_devis_tag(raw)
+                if canonical not in allowed:
+                    unknown.append(raw)
+            if unknown:
+                return Response({'error': f'Tags non autorisés : {", ".join(unknown)}'}, status=400)
+
+        old_tags = _normalize_devis_tags(devis.tags, devis.status or '')
+        if old_tags == new_tags:
+            return Response({
+                'id': devis.id,
+                'status': devis.status,
+                'tags': old_tags,
+                'message': 'Tags inchangés'
+            })
+
+        from django.contrib.auth.models import User
+        actor = request.user if getattr(request.user, 'is_authenticated', False) else None
+        primary_status = _primary_devis_status(new_tags)
+
+        Devis.objects.filter(id=devis_id).update(
+            status=primary_status,
+            tags=new_tags,
+            status_updated_at=timezone.now(),
+            status_updated_by=actor,
+        )
         devis.refresh_from_db()
-        
+
+        recipients = User.objects.filter(is_active=True)
+        if actor:
+            recipients = recipients.exclude(pk=actor.pk)
+
+        UserNotification.objects.bulk_create([
+            UserNotification(
+                recipient=user,
+                actor=actor,
+                type=UserNotification.TYPE_DEVIS_TAG,
+                devis=devis,
+                chantier=devis.chantier,
+                devis_numero=devis.numero or '',
+                chantier_name=devis.chantier.chantier_name if devis.chantier_id else '',
+                old_value=_format_devis_tags(old_tags)[:255],
+                new_value=_format_devis_tags(new_tags)[:255],
+            )
+            for user in recipients
+        ])
+
         return Response({
             'id': devis.id,
             'status': devis.status,
-            'message': 'Statut mis à jour avec succès'
+            'tags': new_tags,
+            'status_updated_at': devis.status_updated_at,
+            'message': 'Tags mis à jour avec succès'
         })
     except Devis.DoesNotExist:
         return Response({'error': 'Devis non trouvé'}, status=404)

@@ -31,7 +31,18 @@ const StatusChangeModal = ({
     if (type === "facture") {
       return ["En cours", "Attente paiement", "Payée"];
     }
-    return ["En attente", "Validé", "Refusé"];
+    return [
+      "En attente BDC",
+      "Envoyé",
+      "Validé",
+      "Refusé",
+      "Travaux non réalisés",
+      "Travaux en cours",
+      "Travaux réalisés",
+      "BDC reçus",
+      "Faire Avenant",
+      "Faire TS",
+    ];
   };
 
   const handleSubmit = () => {
