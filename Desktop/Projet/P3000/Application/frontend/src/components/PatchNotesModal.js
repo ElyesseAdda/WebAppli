@@ -6,105 +6,112 @@ import PATCH_NOTES, {
 } from "../config/patchNotes";
 import "../../static/css/patchNotes.css";
 
-const VisualCategoriesAgence = () => (
-  <div className="pn-screen">
-    <div className="pn-screen-bar">Agence — ajouter une dépense</div>
-    <div className="pn-search-bar">
-      <span className="pn-hit pn-search-field" data-label="Tapez un nom">
-        Créer « Loyer bureau »
-      </span>
-    </div>
-    <div className="pn-screen-bar">Coût annuel par catégorie</div>
-    <div className="pn-row">
-      <span className="pn-doc">Fournisseur</span>
-      <span className="pn-hit" data-label="Cliquez ici">
-        2 000,00 €
-      </span>
-    </div>
-    <div className="pn-row">
-      <span className="pn-doc">Pringle</span>
-      <span className="pn-pill pn-pill-ok">2 000,00 €</span>
-    </div>
-    <p className="pn-caption">
-      Créez vos catégories. Un clic sur un total de l’année regroupe les mêmes noms.
-    </p>
-  </div>
-);
-
-const VisualPointageAgence = () => (
-  <div className="pn-screen">
-    <div className="pn-screen-bar">Agence — dépenses du mois</div>
-    <div className="pn-row is-muted">
-      <span className="pn-doc">Planning hebdo — Agent</span>
-      <span className="pn-pill">Masqué</span>
-    </div>
-    <div className="pn-row is-muted">
-      <span className="pn-doc">Ajustement sous-traitant</span>
-      <span className="pn-pill">Masqué</span>
-    </div>
-    <div className="pn-row">
-      <span className="pn-doc pn-hit" data-label="Compte dans l’agence">
-        Pointage — montant chargé
-      </span>
-      <span className="pn-pill pn-pill-ok">Conservé</span>
-    </div>
-    <p className="pn-caption">
-      Dès que le montant chargé est imputé à l’agence, il remplace le planning et les ajustements.
-      S’il est retiré, ceux-ci réapparaissent.
-    </p>
-  </div>
-);
-
-const VisualDecoupageAgence = () => (
-  <div className="pn-screen">
-    <div className="pn-screen-bar">Tableau Fournisseur — récap du mois</div>
-    <div className="pn-row">
-      <span className="pn-doc">Récap mars</span>
-      <span className="pn-hit" data-label="Cliquez ici">
-        4 100,00 €
-      </span>
-    </div>
-    <div className="pn-split">
-      <div className="pn-split-col">
-        <span className="pn-split-title">Agence</span>
-        <span className="pn-split-amount">4 000,00 €</span>
+function VisualDevisTags() {
+  return (
+    <div className="pn-screen">
+      <div className="pn-screen-bar">Liste des devis — tags</div>
+      <div className="pn-row">
+        <span className="pn-doc">DEV-2026-014</span>
+        <span className="pn-tag-chips">
+          <span className="pn-chip pn-chip-bdc">BDC reçus</span>
+          <span className="pn-chip pn-chip-ok">Validé</span>
+          <span className="pn-chip pn-chip-work">Travaux réalisés</span>
+        </span>
       </div>
-      <div className="pn-split-col is-chantier">
-        <span className="pn-split-title">Chantiers</span>
-        <span className="pn-split-amount">100,00 €</span>
+      <div className="pn-row">
+        <span className="pn-doc">DEV-2026-015</span>
+        <span className="pn-tag-chips">
+          <span
+            className="pn-hit pn-chip pn-chip-action"
+            data-label="Cliquez pour modifier"
+          >
+            A facturer
+          </span>
+        </span>
       </div>
+      <div className="pn-history-card">
+        <div className="pn-history-meta">Aujourd&apos;hui — Marie</div>
+        <div className="pn-history-flow">
+          <span className="pn-chip pn-chip-action">A facturer</span>
+          <span className="pn-arrow">→</span>
+          <span className="pn-chip pn-chip-ok">Facturé</span>
+        </div>
+        <div className="pn-history-doc">
+          Transformation en facture —{" "}
+          <span className="pn-linkish">F2026-042</span>
+        </div>
+      </div>
+      <p className="pn-caption">
+        Plusieurs tags par devis, filtre par combinaison, et historique avec le
+        numéro de document.
+      </p>
     </div>
-    <p className="pn-caption">
-      Un clic sur le montant sépare l’agence du reste. Sur l’année, chaque chantier est regroupé.
-    </p>
-  </div>
-);
+  );
+}
 
-const VisualRechercheFacturation = () => (
-  <div className="pn-screen">
-    <div className="pn-screen-bar">Tableau Facturation — récapitulatif</div>
-    <div className="pn-search-bar">
-      <span className="pn-hit pn-search-field" data-label="Tapez un nom">
-        Rechercher un chantier…
-      </span>
+function VisualDevisNotifications() {
+  return (
+    <div className="pn-screen">
+      <div className="pn-screen-bar">Alertes — cloche en haut à droite</div>
+      <div className="pn-notif-card">
+        <div className="pn-notif-title">
+          Jean — transformation en facture du devis DEV-2026-015
+        </div>
+        <div className="pn-history-doc">
+          Transformation en facture —{" "}
+          <span className="pn-hit pn-linkish" data-label="Ouvre la facture">
+            F2026-042
+          </span>
+        </div>
+        <div className="pn-history-flow">
+          <span className="pn-chip pn-chip-action">A facturer</span>
+          <span className="pn-arrow">→</span>
+          <span className="pn-chip pn-chip-ok">Facturé</span>
+        </div>
+      </div>
+      <div className="pn-notif-card is-muted">
+        <div className="pn-notif-title">
+          Sophie a modifié les tags du devis DEV-2026-014
+        </div>
+        <div className="pn-history-flow">
+          <span className="pn-chip pn-chip-bdc">En attente BDC</span>
+          <span className="pn-arrow">→</span>
+          <span className="pn-chip pn-chip-bdc">BDC reçus</span>
+        </div>
+      </div>
+      <p className="pn-caption">
+        Vous etes alertes partout dans l&apos;app. Le numéro de facture ou
+        d&apos;avenant est cliquable.
+      </p>
     </div>
-    <div className="pn-btn-row">
-      <span className="pn-app-btn pn-app-btn-blue">Plus gros montants</span>
-      <span className="pn-app-btn pn-app-btn-outline">% d’avancement</span>
-      <span className="pn-app-btn pn-app-btn-outline">A → Z</span>
-    </div>
-    <p className="pn-caption">
-      Cherchez un chantier ou un client, puis triez la liste comme dans les autres tableaux.
-    </p>
-  </div>
-);
+  );
+}
 
-const VISUALS = {
-  "categories-agence": VisualCategoriesAgence,
-  "pointage-agence": VisualPointageAgence,
-  "decoupage-agence": VisualDecoupageAgence,
-  "recherche-facturation": VisualRechercheFacturation,
-};
+function FeatureVisual({ feature }) {
+  if (!feature) {
+    return (
+      <div className="pn-screen">
+        <p className="pn-caption">Aperçu indisponible.</p>
+      </div>
+    );
+  }
+
+  const key = feature.visual || feature.id;
+
+  if (key === "devis-tags" || feature.id === "devis-tags") {
+    return <VisualDevisTags />;
+  }
+  if (key === "devis-notifications" || feature.id === "devis-notifications") {
+    return <VisualDevisNotifications />;
+  }
+
+  return (
+    <div className="pn-screen">
+      <div className="pn-screen-bar">{feature.title}</div>
+      <p className="pn-caption">{feature.text}</p>
+    </div>
+  );
+}
 
 const PatchNotesModal = () => {
   const [open, setOpen] = useState(false);
@@ -112,7 +119,6 @@ const PatchNotesModal = () => {
   const features = PATCH_NOTES.features || [];
   const lastIndex = Math.max(features.length - 1, 0);
   const feature = features[index] || null;
-  const Visual = feature ? VISUALS[feature.visual] : null;
   const isLast = index >= lastIndex;
 
   const handleClose = useCallback(() => {
@@ -156,7 +162,10 @@ const PatchNotesModal = () => {
       <div className="pn-modal">
         <header className="pn-header">
           <div>
-            <p className="pn-kicker">{PATCH_NOTES.date}</p>
+            <p className="pn-kicker">
+              {PATCH_NOTES.date}
+              {PATCH_NOTES.version ? ` · v${PATCH_NOTES.version}` : ""}
+            </p>
             <h2 id="pn-title">{PATCH_NOTES.title}</h2>
             <p className="pn-intro">{PATCH_NOTES.intro}</p>
           </div>
@@ -166,7 +175,9 @@ const PatchNotesModal = () => {
         </header>
 
         <div className="pn-body">
-          <div className="pn-visual">{Visual ? <Visual /> : null}</div>
+          <div className="pn-visual">
+            <FeatureVisual feature={feature} />
+          </div>
 
           <div className="pn-info">
             <span className={`pn-tag pn-tag-${feature.kind}`}>
@@ -205,7 +216,7 @@ const PatchNotesModal = () => {
             )}
             {isLast ? (
               <button type="button" className="pn-btn pn-btn-primary" onClick={handleClose}>
-                J’ai compris
+                J&apos;ai compris
               </button>
             ) : (
               <button

@@ -3,7 +3,8 @@
  *
  * Pour une nouvelle version :
  * 1. Changez PATCH_NOTES_ID (sinon le modal ne se rouvre pas)
- * 2. Mettez à jour title, date et la liste features
+ * 2. Incrémentez version
+ * 3. Mettez à jour title, date et la liste features
  *
  * kind : "nouveau" | "ameliore"
  * visual : identifiant du dessin de boutons dans PatchNotesModal
@@ -12,70 +13,42 @@ export const PATCH_NOTES_STORAGE_KEY = "p3000_seen_patch_notes";
 export const PATCH_NOTES_OPEN_EVENT = "p3000:open-patch-notes";
 export const PATCH_NOTES_SEEN_EVENT = "p3000:patch-notes-seen";
 
-export const PATCH_NOTES_ID = "2026-09-09-categories-agence";
+export const PATCH_NOTES_ID = "2026-09-15-tags-notifications-1.1.1";
 
 const PATCH_NOTES = {
   id: PATCH_NOTES_ID,
+  version: "1.1",
   title: "Quoi de neuf ?",
   date: "Septembre 2026",
-  intro: "Voici les nouveautés de cette mise à jour.",
+  intro: "Suivez vos devis avec des tags, et soyez alertés dès qu'une facture ou un avenant est créé.",
   features: [
     {
-      id: "categories-agence",
+      id: "devis-tags",
       kind: "nouveau",
-      title: "Vos propres catégories de dépenses d’agence",
-      where: "Page Agence",
-      text: "Vous n’êtes plus limités à une liste imposée. En ajoutant une dépense, vous pouvez choisir une catégorie déjà utilisée, ou en inventer une en tapant son nom. Le menu ne propose ensuite que celles qui servent vraiment. Un clic sur un total de l’année ouvre le détail : les mêmes noms (un fournisseur, un agent…) sont regroupés, avec le montant de toute l’année.",
+      title: "Tags sur les devis",
+      where: "Liste des devis et fiche chantier",
+      text: "Chaque devis peut porter plusieurs tags (BDC, décision, travaux, actions). Cliquez sur les tags pour les modifier. Un filtre permet de retrouver une combinaison exacte. L’historique garde la trace des changements, y compris les transformations en facture ou avenant.",
       steps: [
-        "Dans le menu Agence, ouvrez la page de l’agence",
-        "Cliquez sur Ajouter une dépense",
-        "Dans Catégorie, choisissez une catégorie déjà utilisée, ou tapez un nouveau nom puis validez",
-        "En bas de page, dans Coût annuel par catégorie, cliquez sur un montant (par exemple Fournisseur)",
-        "Le détail montre chaque nom une seule fois, avec le total de l’année. Un second clic déplie les mois",
+        "Dans la liste des devis, cliquez sur les tags d’un devis",
+        "Cochez un ou plusieurs tags (un seul par ligne : BDC, décision, travaux, actions)",
+        "Utilisez le filtre Tags pour afficher les devis qui ont tous les tags choisis",
+        "Cliquez sur l’icône historique pour voir Avant → Après, et le numéro de facture/avenant s’il y a eu une transformation",
       ],
-      visual: "categories-agence",
+      visual: "devis-tags",
     },
     {
-      id: "pointage-agence",
-      kind: "ameliore",
-      title: "Pointage et agence : un seul montant par agent",
-      where: "Tableau de pointage et page Agence",
-      text: "Quand les fiches de paie arrivent, le montant chargé remplace l’estimation du planning hebdo (et les ajustements sous-traitant) dans l’agence. Plus de double comptage. Si vous retirez ce montant, le planning et les ajustements réapparaissent.",
-      steps: [
-        "Dans le menu Tableau, ouvrez Tableau de pointage",
-        "Saisissez le montant chargé, puis cochez Agence pour l’imputer (éventuellement réparti entre agences et chantier)",
-        "Sur la page Agence, le planning hebdo et les ajustements de cet agent disparaissent : seul le montant chargé compte",
-        "Si vous mettez le montant chargé à 0 (ou décochez Agence), le planning et les ajustements réapparaissent",
-      ],
-      visual: "pointage-agence",
-    },
-    {
-      id: "decoupage-agence",
+      id: "devis-notifications",
       kind: "nouveau",
-      title: "Séparer l’agence et les chantiers d’un coup d’œil",
-      where: "Tableau Fournisseur et Tableau Sous-Traitant",
-      text: "Pour la comptabilité, un clic sur un montant ouvre un détail : ce qui concerne l’agence d’un côté, le reste des chantiers de l’autre. Sur l’année, les montants d’un même chantier sont regroupés pour une lecture plus claire.",
+      title: "Alertes tags et nouvelles factures",
+      where: "Cloche en haut à droite (toute l’application)",
+      text: "Quand quelqu’un change les tags d’un devis, vous recevez une alerte. Si le devis est transformé en facture, avenant ou CIE, la notification affiche le type de transformation et le numéro du document. Un clic sur le numéro ouvre la facture dans un nouvel onglet.",
       steps: [
-        "Dans le menu Tableau, ouvrez Tableau Fournisseur ou Tableau Sous-Traitant",
-        "Cliquez sur un montant (ligne, récap du mois, ou totaux de l’année)",
-        "Le détail montre la part agence et la part chantiers",
-        "Sur le récapitulatif de l’année, chaque chantier n’apparaît qu’une fois, avec son total",
+        "Ouvrez la cloche en haut à droite pour voir les alertes",
+        "Lisez le changement de tags (Avant → Après)",
+        "Si une facture a été créée, cliquez sur son numéro pour l’ouvrir",
+        "Un clic sur l’alerte vous emmène aussi vers le chantier concerné",
       ],
-      visual: "decoupage-agence",
-    },
-    {
-      id: "recherche-facturation",
-      kind: "nouveau",
-      title: "Retrouver un chantier plus vite dans la facturation",
-      where: "Tableau Facturation",
-      text: "Le récapitulatif en bas de page a maintenant une barre de recherche et les mêmes tris que les autres tableaux : plus gros montants, pourcentage d’avancement, ou ordre alphabétique.",
-      steps: [
-        "Dans le menu Tableau, ouvrez Tableau Facturation",
-        "Descendez jusqu’au récapitulatif par chantier",
-        "Tapez un nom de chantier ou de client dans la barre de recherche",
-        "Utilisez les boutons à droite pour trier la liste comme vous le souhaitez",
-      ],
-      visual: "recherche-facturation",
+      visual: "devis-notifications",
     },
   ],
 };
