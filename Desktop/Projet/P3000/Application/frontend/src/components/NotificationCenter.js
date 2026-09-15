@@ -20,6 +20,7 @@ import {
   formatDevisTagsLabel,
   getDevisTagMeta,
   getDevisTagStyle,
+  getTransformLabel,
   parseDevisTagsLabel,
 } from "../config/devisTags";
 import { useNotifications } from "../hooks/useNotifications";
@@ -57,6 +58,10 @@ export const buildNotificationTitle = (notification) => {
   const chantier = notification.chantier_name
     ? ` (${notification.chantier_name})`
     : "";
+  const transformLabel = getTransformLabel(notification.transform_type);
+  if (transformLabel) {
+    return `${actor} — ${transformLabel.toLowerCase()} du devis ${devis}${chantier}`;
+  }
   return `${actor} a modifié les tags du devis ${devis}${chantier}`;
 };
 
@@ -64,7 +69,10 @@ export const buildNotificationMessage = (notification) => {
   if (!notification) return "";
   const { fromLabel, toLabel } = getNotificationTagCombo(notification);
   const when = formatDevisTagDate(notification.created_at);
-  return `${buildNotificationTitle(notification)} : ${fromLabel} → ${toLabel}${
+  const documentPart = notification.document_numero
+    ? ` — ${notification.document_numero}`
+    : "";
+  return `${buildNotificationTitle(notification)}${documentPart} : ${fromLabel} → ${toLabel}${
     when ? ` — ${when}` : ""
   }`;
 };
@@ -81,6 +89,75 @@ const TagComboChips = ({ tags }) => {
           </Box>
         );
       })}
+    </Box>
+  );
+};
+
+const NotificationDocumentLine = ({ notification }) => {
+  const transformLabel = getTransformLabel(notification?.transform_type);
+  const documentNumero = notification?.document_numero || "";
+  const previewUrl = notification?.preview_url || "";
+  if (!transformLabel && !documentNumero) return null;
+
+  const canOpen = Boolean(previewUrl && documentNumero);
+
+  const handleOpen = (event) => {
+    event.stopPropagation();
+    if (!previewUrl) return;
+    window.open(previewUrl, "_blank", "noopener,noreferrer");
+  };
+
+  return (
+    <Box
+      sx={{
+        mt: 0.6,
+        display: "flex",
+        flexWrap: "wrap",
+        alignItems: "center",
+        gap: 0.5,
+      }}
+    >
+      {transformLabel && (
+        <Typography
+          component="span"
+          variant="caption"
+          sx={{ fontWeight: 700, color: "#334155" }}
+        >
+          {transformLabel}
+        </Typography>
+      )}
+      {documentNumero && (
+        <>
+          {transformLabel && (
+            <Typography component="span" variant="caption" sx={{ color: "#94a3b8" }}>
+              —
+            </Typography>
+          )}
+          <Typography
+            component={canOpen ? "button" : "span"}
+            type={canOpen ? "button" : undefined}
+            onClick={canOpen ? handleOpen : undefined}
+            variant="caption"
+            sx={{
+              fontWeight: 700,
+              color: canOpen ? "#1565c0" : "#475569",
+              textDecoration: canOpen ? "underline" : "none",
+              cursor: canOpen ? "pointer" : "default",
+              background: "none",
+              border: "none",
+              padding: 0,
+              fontFamily: "inherit",
+              fontSize: "0.75rem",
+              "&:hover": canOpen ? { color: "#0d47a1" } : undefined,
+            }}
+            title={
+              canOpen ? "Ouvrir le document dans un nouvel onglet" : undefined
+            }
+          >
+            {documentNumero}
+          </Typography>
+        </>
+      )}
     </Box>
   );
 };
@@ -195,6 +272,7 @@ export const NotificationBell = () => {
                   primary={buildNotificationTitle(notification)}
                   secondary={
                     <>
+                      <NotificationDocumentLine notification={notification} />
                       <NotificationTagChange notification={notification} />
                       {formatDevisTagDate(notification.created_at) ? (
                         <Typography variant="caption" color="text.secondary">
@@ -271,6 +349,7 @@ export const NotificationBanner = () => {
               {buildNotificationTitle(latestUnread)}
               {unreadCount > 1 ? ` — +${unreadCount - 1} autre(s)` : ""}
             </Typography>
+            <NotificationDocumentLine notification={latestUnread} />
             <NotificationTagChange notification={latestUnread} />
           </Box>
         </Alert>
@@ -291,6 +370,7 @@ export const NotificationBanner = () => {
             <Typography variant="body2" fontWeight={600}>
               {buildNotificationTitle(latestNew)}
             </Typography>
+            <NotificationDocumentLine notification={latestNew} />
             <NotificationTagChange notification={latestNew} />
           </Box>
         </Alert>

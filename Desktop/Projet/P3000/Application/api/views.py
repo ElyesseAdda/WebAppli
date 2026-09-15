@@ -6161,7 +6161,7 @@ def update_devis_status(request, devis_id):
             preview_url=preview_url,
         )
 
-        if not tags_unchanged:
+        if not tags_unchanged or has_transform_meta:
             recipients = User.objects.filter(is_active=True)
             if actor:
                 recipients = recipients.exclude(pk=actor.pk)
@@ -6177,6 +6177,9 @@ def update_devis_status(request, devis_id):
                     chantier_name=devis.chantier.chantier_name if devis.chantier_id else '',
                     old_value=_format_devis_tags(old_tags)[:255],
                     new_value=_format_devis_tags(new_tags)[:255],
+                    transform_type=transform_type,
+                    document_numero=document_numero,
+                    preview_url=preview_url,
                 )
                 for user in recipients
             ])

@@ -4236,6 +4236,9 @@ class UserNotification(models.Model):
     chantier_name = models.CharField(max_length=255, blank=True, default='')
     old_value = models.CharField(max_length=255, blank=True, default='')
     new_value = models.CharField(max_length=255, blank=True, default='')
+    transform_type = models.CharField(max_length=20, blank=True, default='')
+    document_numero = models.CharField(max_length=100, blank=True, default='')
+    preview_url = models.CharField(max_length=500, blank=True, default='')
     is_read = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
 

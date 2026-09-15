@@ -2585,6 +2585,9 @@ class UserNotificationSerializer(serializers.ModelSerializer):
             'new_value',
             'old_tags',
             'new_tags',
+            'transform_type',
+            'document_numero',
+            'preview_url',
             'is_read',
             'created_at',
         ]
