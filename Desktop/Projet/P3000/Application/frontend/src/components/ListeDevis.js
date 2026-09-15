@@ -34,11 +34,12 @@ import {
   StyledTextField,
 } from "../styles/tableStyles";
 import { generatePDFDrive } from "../utils/universalDriveGenerator";
-import { devisMatchesStatusFilter, getDevisTagStyle, getDevisTags, normalizeStatusFilter } from "../config/devisTags";
+import { applyTransformTagToDevis, devisMatchesStatusFilter, getDevisTagStyle, getDevisTags, normalizeStatusFilter } from "../config/devisTags";
 import CreationFacture from "./CreationFacture";
 import CreationSituation from "./CreationSituation";
 import DevisTagFilterField from "./DevisTagFilterField";
 import DevisTagFilterModal from "./DevisTagFilterModal";
+import DevisTagHistoryPanel from "./DevisTagHistoryPanel";
 import DevisTagModal from "./DevisTagModal";
 import TransformationCIEModal from "./TransformationCIEModal";
 import TransformationTSModal from "./TransformationTSModal";
@@ -983,6 +984,14 @@ const ListeDevis = () => {
   const handleFactureSubmit = async (factureData) => {
     try {
       const response = await axios.post("/api/facture/", factureData);
+      const devisForTag = selectedDevis;
+
+      // Tag Facturé avant génération Drive (remplace tous les autres tags)
+      try {
+        await applyTransformTagToDevis(devisForTag, "facture", axios);
+      } catch (tagError) {
+        void tagError;
+      }
 
       // Message de succès
       alert(`La facture ${response.data.numero} a été créée avec succès.`);
@@ -1232,13 +1241,13 @@ const ListeDevis = () => {
                       {formatNumber(devis.price_ht)} €
                     </CenteredTableCell>
                     <CenteredTableCell
-                      onClick={() => {
-                        setDevisToUpdate(devis);
-                        setShowStatusModal(true);
-                      }}
                       sx={{ cursor: "pointer", minWidth: 180 }}
                     >
                       <Box
+                        onClick={() => {
+                          setDevisToUpdate(devis);
+                          setShowStatusModal(true);
+                        }}
                         sx={{
                           display: "flex",
                           flexWrap: "wrap",
@@ -1264,6 +1273,7 @@ const ListeDevis = () => {
                           </Typography>
                         )}
                       </Box>
+                      <DevisTagHistoryPanel devisId={devis.id} devisNumero={devis.numero} />
                     </CenteredTableCell>
                     <CenteredTableCell
                       sx={{
@@ -1616,6 +1626,13 @@ const ListeDevis = () => {
         onClose={handleTSModalClose}
         devis={selectedDevisForTS}
         chantier={selectedChantier}
+        onSuccess={async (devis) => {
+          try {
+            await applyTransformTagToDevis(devis, "avenant", axios);
+          } catch (tagError) {
+            void tagError;
+          }
+        }}
       />
 
       <TransformationCIEModal
@@ -1623,6 +1640,13 @@ const ListeDevis = () => {
         onClose={handleCIEModalClose}
         devis={selectedDevisForCIE}
         chantier={selectedChantier}
+        onSuccess={async (devis) => {
+          try {
+            await applyTransformTagToDevis(devis, "cie", axios);
+          } catch (tagError) {
+            void tagError;
+          }
+        }}
       />
 
       <Modal

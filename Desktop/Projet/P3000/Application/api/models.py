@@ -29,13 +29,13 @@ DEVIS_STATUS_CHOICES = [
         ('Envoyé', 'Envoyé'),
         ('Faire Avenant', 'Faire Avenant'),
         ('A facturer', 'A facturer'),
+        ('Facturé', 'Facturé'),
         # Anciens libellés conservés pour compatibilité lecture
         ('Faire TS', 'Faire TS'),
         ('En attente', 'En attente'),
         ('En attente de travaux', 'En attente de travaux'),
         ('En Cours', 'En Cours'),
         ('Terminé', 'Terminé'),
-        ('Facturé', 'Facturé'),
     ]
 TYPE_CHOICES = [
         ('Travaux', 'Travaux'),
@@ -4155,6 +4155,35 @@ from .models_gantt import (  # noqa: E402  (import après signaux/post_migrate)
     GanttDesignation,
     normaliser_libelle,
 )
+
+
+class DevisTagHistory(models.Model):
+    """Historique des modifications de tags d'un devis."""
+
+    devis = models.ForeignKey(
+        Devis,
+        on_delete=models.CASCADE,
+        related_name='tag_history',
+    )
+    actor = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='devis_tag_history',
+    )
+    old_value = models.CharField(max_length=255, blank=True, default='')
+    new_value = models.CharField(max_length=255, blank=True, default='')
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-created_at']
+        indexes = [
+            models.Index(fields=['devis', '-created_at'], name='api_devistaghist_devis_idx'),
+        ]
+
+    def __str__(self):
+        return f"Devis {self.devis_id}: {self.old_value} → {self.new_value}"
 
 
 class UserNotification(models.Model):

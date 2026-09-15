@@ -41,12 +41,14 @@ import CreationSituation from "../CreationSituation";
 import FactureModal from "../FactureModal";
 import DevisTagFilterField from "../DevisTagFilterField";
 import DevisTagFilterModal from "../DevisTagFilterModal";
+import DevisTagHistoryPanel from "../DevisTagHistoryPanel";
 import DevisTagModal from "../DevisTagModal";
 import TransformationCIEModal from "../TransformationCIEModal";
 import TransformationTSModal from "../TransformationTSModal";
 import { RegeneratePDFIconButton } from "../shared/RegeneratePDFButton";
 import { DOCUMENT_TYPES } from "../../config/documentTypeConfig";
 import {
+  applyTransformTagToDevis,
   devisMatchesStatusFilter,
   formatDevisTagDate,
   getDevisTagStyle,
@@ -579,6 +581,13 @@ const ChantierListeDevis = ({
       console.log("Données envoyées:", factureData);
       const response = await axios.post("/api/facture/", factureData);
 
+      // Tag Facturé avant génération Drive (remplace tous les autres tags)
+      try {
+        await applyTransformTagToDevis(selectedDevis, "facture", axios);
+      } catch (tagError) {
+        console.error("Erreur mise à jour tag Facturé:", tagError);
+      }
+
       // Message de succès
       alert(`La facture ${response.data.numero} a été créée avec succès.`);
 
@@ -824,6 +833,7 @@ const ChantierListeDevis = ({
                         )}
                       </div>
                     </Tooltip>
+                    <DevisTagHistoryPanel devisId={devis.id} devisNumero={devis.numero} />
                   </CenteredTableCell>
                   <CenteredTableCell sx={{ width: "120px", padding: "0 8px" }}>
                     <div style={{ display: "flex", gap: "8px", alignItems: "center", justifyContent: "center" }}>
@@ -1002,6 +1012,14 @@ const ChantierListeDevis = ({
         onClose={() => setTsModalOpen(false)}
         devis={selectedDevisForTS}
         chantier={selectedChantier}
+        onSuccess={async (devis) => {
+          try {
+            await applyTransformTagToDevis(devis, "avenant", axios);
+          } catch (tagError) {
+            console.error("Erreur mise à jour tag avenant:", tagError);
+          }
+          fetchDevis();
+        }}
       />
 
       <TransformationCIEModal
@@ -1009,6 +1027,14 @@ const ChantierListeDevis = ({
         onClose={() => setCieModalOpen(false)}
         devis={selectedDevisForCIE}
         chantier={selectedChantier}
+        onSuccess={async (devis) => {
+          try {
+            await applyTransformTagToDevis(devis, "cie", axios);
+          } catch (tagError) {
+            console.error("Erreur mise à jour tag CIE:", tagError);
+          }
+          fetchDevis();
+        }}
       />
 
       <FactureModal

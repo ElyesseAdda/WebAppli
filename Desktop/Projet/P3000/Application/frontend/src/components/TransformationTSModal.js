@@ -14,7 +14,7 @@ import {
 import axios from "axios";
 import React, { useEffect, useState } from "react";
 
-const TransformationTSModal = ({ open, onClose, devis, chantier }) => {
+const TransformationTSModal = ({ open, onClose, devis, chantier, onSuccess }) => {
   // États pour gérer les données du formulaire
   const [designation, setDesignation] = useState("");
   const [selectedAvenant, setSelectedAvenant] = useState("");
@@ -70,6 +70,9 @@ const TransformationTSModal = ({ open, onClose, devis, chantier }) => {
 
       alert(`La facture TS a été créée avec succès.`);
       fetchAvenants(); // Rafraîchir la liste des avenants
+      if (onSuccess) {
+        await onSuccess(devis, response.data);
+      }
       onClose();
     } catch (error) {
       console.error("Erreur complète:", error);

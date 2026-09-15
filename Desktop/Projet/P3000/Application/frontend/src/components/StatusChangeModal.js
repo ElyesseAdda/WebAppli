@@ -41,6 +41,7 @@ const StatusChangeModal = ({
       "Travaux réalisés",
       "Faire Avenant",
       "A facturer",
+      "Facturé",
     ];
   };
 

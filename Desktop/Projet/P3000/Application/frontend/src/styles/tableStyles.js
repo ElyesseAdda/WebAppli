@@ -138,8 +138,8 @@ export const getStatusStyle = ({ status } = {}) => ({
       ? "#c2185b"
       : status === "Faire TS" || status === "A facturer"
       ? "#00838f"
-      : status === "Facturée" || status === "Facturé"
-      ? "green"
+      : status === "Facturé" || status === "Facturée"
+      ? "#1b5e20"
       : "inherit",
   fontWeight: 600,
 });

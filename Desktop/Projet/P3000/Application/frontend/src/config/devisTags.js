@@ -8,6 +8,7 @@ export const DEVIS_TAGS = [
   { value: "Travaux réalisés", label: "Travaux réalisés", bg: "#e0f2f1", color: "#00695c" },
   { value: "Faire Avenant", label: "Faire Avenant", bg: "#fce4ec", color: "#c2185b" },
   { value: "A facturer", label: "A facturer", bg: "#e0f7fa", color: "#00838f" },
+  { value: "Facturé", label: "Facturé", bg: "#e8f5e9", color: "#1b5e20" },
 ];
 
 export const DEVIS_TAG_VALUES = DEVIS_TAGS.map((tag) => tag.value);
@@ -28,9 +29,17 @@ export const DEVIS_TAG_ROWS = [
   },
   {
     label: "Actions",
-    values: ["Faire Avenant", "A facturer"],
+    values: ["Faire Avenant", "A facturer", "Facturé"],
   },
 ];
+
+export const DEVIS_ACTION_TAGS = ["Faire Avenant", "A facturer", "Facturé"];
+
+export const TRANSFORM_TAG_BY_TYPE = {
+  facture: "Facturé",
+  cie: "Facturé",
+  avenant: "Faire Avenant",
+};
 
 const LEGACY_TAG_MAP = {
   "En Attente": "En attente BDC",
@@ -140,6 +149,28 @@ export const toggleDevisTag = (selected, tagValue) => {
     : [...selected];
   next.push(tagValue);
   return next;
+};
+
+/** Remplace tous les tags par le seul tag d'action (ex. Facturé) */
+export const setDevisActionTag = (devisOrTags, actionTag) => {
+  if (!actionTag) return [];
+  return [actionTag];
+};
+
+/** Met à jour les tags après transformation facture / avenant / CIE */
+export const applyTransformTagToDevis = async (devis, transformType, axiosClient) => {
+  if (!devis?.id || !axiosClient) return null;
+  const actionTag =
+    TRANSFORM_TAG_BY_TYPE[transformType] ||
+    (transformType === "CIE" ? "Facturé" : null);
+  if (!actionTag) return null;
+
+  const nextTags = setDevisActionTag(devis, actionTag);
+  const response = await axiosClient.put(
+    `/api/list-devis/${devis.id}/update_status/`,
+    { tags: nextTags }
+  );
+  return response?.data?.tags || nextTags;
 };
 
 export const getDevisTagMeta = (status) => {

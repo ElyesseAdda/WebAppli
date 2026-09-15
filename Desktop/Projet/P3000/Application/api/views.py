@@ -50,7 +50,7 @@ from .models import (
     AgencyExpenseAggregate, AgentPrime, Color, LigneSpeciale, FactureFournisseurMateriel,
     RecapFinancierPreference,
     SuiviPaiementSousTraitantMensuel, FactureSuiviSousTraitant, LigneMasqueeTableauSousTraitant, LigneMasqueeTableauFournisseur, Distributeur, DistributeurMouvement, DistributeurCell, DistributeurVente, DistributeurReapproSession, DistributeurReapproLigne, DistributeurFrais, StockProduct, StockProductBestPurchase, StockPurchase, StockPurchaseItem, StockLot, StockLoss,
-    Agence, UserNotification, DEVIS_STATUS_CHOICES,
+    Agence, UserNotification, DevisTagHistory, DEVIS_STATUS_CHOICES,
 )
 from .drive_automation import drive_automation
 from .models import compute_agency_expense_aggregate_for_month
@@ -6033,7 +6033,7 @@ _DEVIS_EXCLUSIVE_TAG_GROUPS = [
     ('En attente BDC', 'BDC reçus'),
     ('Validé', 'Refusé'),
     ('Travaux non réalisés', 'Travaux en cours', 'Travaux réalisés'),
-    ('Faire Avenant', 'A facturer'),
+    ('Faire Avenant', 'A facturer', 'Facturé'),
 ]
 
 
@@ -6078,7 +6078,7 @@ def _format_devis_tags(tags):
 
 
 def _primary_devis_status(tags):
-    for item in ('Refusé', 'Validé', 'Envoyé', 'En attente BDC', 'En attente'):
+    for item in ('Facturé', 'Refusé', 'Validé', 'Envoyé', 'En attente BDC', 'En attente'):
         if item in tags:
             return item
     return tags[0] if tags else 'En attente BDC'
@@ -6130,6 +6130,13 @@ def update_devis_status(request, devis_id):
         )
         devis.refresh_from_db()
 
+        DevisTagHistory.objects.create(
+            devis=devis,
+            actor=actor,
+            old_value=_format_devis_tags(old_tags)[:255],
+            new_value=_format_devis_tags(new_tags)[:255],
+        )
+
         recipients = User.objects.filter(is_active=True)
         if actor:
             recipients = recipients.exclude(pk=actor.pk)
@@ -6156,6 +6163,36 @@ def update_devis_status(request, devis_id):
             'status_updated_at': devis.status_updated_at,
             'message': 'Tags mis à jour avec succès'
         })
+    except Devis.DoesNotExist:
+        return Response({'error': 'Devis non trouvé'}, status=404)
+    except Exception as e:
+        return Response({'error': str(e)}, status=500)
+
+
+@api_view(['GET'])
+def get_devis_tag_history(request, devis_id):
+    try:
+        devis = Devis.objects.get(id=devis_id)
+        history = (
+            DevisTagHistory.objects
+            .filter(devis=devis)
+            .select_related('actor')
+            .order_by('-created_at')[:50]
+        )
+        results = []
+        for item in history:
+            actor_name = 'Un utilisateur'
+            if item.actor:
+                full_name = item.actor.get_full_name()
+                actor_name = full_name.strip() or item.actor.username
+            results.append({
+                'id': item.id,
+                'old_value': item.old_value,
+                'new_value': item.new_value,
+                'actor_name': actor_name,
+                'created_at': item.created_at,
+            })
+        return Response({'results': results})
     except Devis.DoesNotExist:
         return Response({'error': 'Devis non trouvé'}, status=404)
     except Exception as e:
