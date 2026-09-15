@@ -6084,6 +6084,23 @@ def _primary_devis_status(tags):
     return tags[0] if tags else 'En attente BDC'
 
 
+_TRANSFORM_TYPE_ALLOWED = {
+    DevisTagHistory.TRANSFORM_FACTURE,
+    DevisTagHistory.TRANSFORM_AVENANT,
+    DevisTagHistory.TRANSFORM_CIE,
+}
+
+
+def _parse_transform_meta(data):
+    raw_type = str((data or {}).get('transform_type') or '').strip().lower()
+    transform_type = raw_type if raw_type in _TRANSFORM_TYPE_ALLOWED else ''
+    document_numero = str((data or {}).get('document_numero') or '').strip()[:100]
+    preview_url = str((data or {}).get('preview_url') or '').strip()[:500]
+    if preview_url and not preview_url.startswith('/'):
+        preview_url = ''
+    return transform_type, document_numero, preview_url
+
+
 @api_view(['PUT'])
 def update_devis_status(request, devis_id):
     try:
@@ -6091,6 +6108,8 @@ def update_devis_status(request, devis_id):
         raw_tags = request.data.get('tags')
         fallback_status = (request.data.get('status') or '').strip()
         new_tags = _normalize_devis_tags(raw_tags, fallback_status)
+        transform_type, document_numero, preview_url = _parse_transform_meta(request.data)
+        has_transform_meta = bool(transform_type or document_numero or preview_url)
 
         if raw_tags is None and not fallback_status:
             return Response({'error': 'Tags manquants'}, status=400)
@@ -6110,7 +6129,8 @@ def update_devis_status(request, devis_id):
                 return Response({'error': f'Tags non autorisés : {", ".join(unknown)}'}, status=400)
 
         old_tags = _normalize_devis_tags(devis.tags, devis.status or '')
-        if old_tags == new_tags:
+        tags_unchanged = old_tags == new_tags
+        if tags_unchanged and not has_transform_meta:
             return Response({
                 'id': devis.id,
                 'status': devis.status,
@@ -6122,46 +6142,51 @@ def update_devis_status(request, devis_id):
         actor = request.user if getattr(request.user, 'is_authenticated', False) else None
         primary_status = _primary_devis_status(new_tags)
 
-        Devis.objects.filter(id=devis_id).update(
-            status=primary_status,
-            tags=new_tags,
-            status_updated_at=timezone.now(),
-            status_updated_by=actor,
-        )
-        devis.refresh_from_db()
+        if not tags_unchanged:
+            Devis.objects.filter(id=devis_id).update(
+                status=primary_status,
+                tags=new_tags,
+                status_updated_at=timezone.now(),
+                status_updated_by=actor,
+            )
+            devis.refresh_from_db()
 
         DevisTagHistory.objects.create(
             devis=devis,
             actor=actor,
             old_value=_format_devis_tags(old_tags)[:255],
             new_value=_format_devis_tags(new_tags)[:255],
+            transform_type=transform_type,
+            document_numero=document_numero,
+            preview_url=preview_url,
         )
 
-        recipients = User.objects.filter(is_active=True)
-        if actor:
-            recipients = recipients.exclude(pk=actor.pk)
+        if not tags_unchanged:
+            recipients = User.objects.filter(is_active=True)
+            if actor:
+                recipients = recipients.exclude(pk=actor.pk)
 
-        UserNotification.objects.bulk_create([
-            UserNotification(
-                recipient=user,
-                actor=actor,
-                type=UserNotification.TYPE_DEVIS_TAG,
-                devis=devis,
-                chantier=devis.chantier,
-                devis_numero=devis.numero or '',
-                chantier_name=devis.chantier.chantier_name if devis.chantier_id else '',
-                old_value=_format_devis_tags(old_tags)[:255],
-                new_value=_format_devis_tags(new_tags)[:255],
-            )
-            for user in recipients
-        ])
+            UserNotification.objects.bulk_create([
+                UserNotification(
+                    recipient=user,
+                    actor=actor,
+                    type=UserNotification.TYPE_DEVIS_TAG,
+                    devis=devis,
+                    chantier=devis.chantier,
+                    devis_numero=devis.numero or '',
+                    chantier_name=devis.chantier.chantier_name if devis.chantier_id else '',
+                    old_value=_format_devis_tags(old_tags)[:255],
+                    new_value=_format_devis_tags(new_tags)[:255],
+                )
+                for user in recipients
+            ])
 
         return Response({
             'id': devis.id,
             'status': devis.status,
-            'tags': new_tags,
+            'tags': new_tags if not tags_unchanged else old_tags,
             'status_updated_at': devis.status_updated_at,
-            'message': 'Tags mis à jour avec succès'
+            'message': 'Tags mis à jour avec succès' if not tags_unchanged else 'Transformation enregistrée'
         })
     except Devis.DoesNotExist:
         return Response({'error': 'Devis non trouvé'}, status=404)
@@ -6189,6 +6214,9 @@ def get_devis_tag_history(request, devis_id):
                 'id': item.id,
                 'old_value': item.old_value,
                 'new_value': item.new_value,
+                'transform_type': item.transform_type or '',
+                'document_numero': item.document_numero or '',
+                'preview_url': item.preview_url or '',
                 'actor_name': actor_name,
                 'created_at': item.created_at,
             })
@@ -8263,12 +8291,29 @@ def create_facture_ts(request):
         # ✅ Transférer les coûts estimés du devis au chantier (section prévisionnel)
         recalculer_couts_estimes_chantier(chantier_id)
 
+        avenant_numero = ''
+        if avenant_id:
+            avenant_obj = Avenant.objects.filter(id=avenant_id).first()
+            if avenant_obj:
+                avenant_numero = str(avenant_obj.numero or '')
+
+        preview_url = f'/api/preview-saved-devis-v2/{devis.id}/'
+        document_numero = (
+            f'Avenant n°{avenant_numero}'
+            if avenant_numero
+            else f'TS n°{next_ts_number:03d}'
+        )
+
         return Response({
             "success": True,
             "message": f"Avenant créé avec succès",
             "facture_ts_id": facture_ts.id,
             "avenant_id": avenant_id,
-            "numero_ts": next_ts_number
+            "avenant_numero": avenant_numero,
+            "numero_ts": next_ts_number,
+            "devis_id": devis.id,
+            "document_numero": document_numero,
+            "preview_url": preview_url,
         })
 
     except Devis.DoesNotExist:
@@ -8364,7 +8409,9 @@ def create_facture_cie(request):
             "success": True,
             "message": f"Facture CIE créée avec succès",
             "facture_id": facture_cie.id,
-            "numero_cie": cie_number
+            "numero_cie": cie_number,
+            "document_numero": cie_number,
+            "preview_url": f'/api/preview-facture/{facture_cie.id}/',
         })
 
     except Devis.DoesNotExist:

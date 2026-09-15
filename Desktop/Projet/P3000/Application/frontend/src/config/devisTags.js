@@ -41,6 +41,97 @@ export const TRANSFORM_TAG_BY_TYPE = {
   avenant: "Faire Avenant",
 };
 
+export const TRANSFORM_LABELS = {
+  facture: "Transformation en facture",
+  avenant: "Transformation en avenant",
+  cie: "Transformation en facture CIE",
+};
+
+export const getTransformLabel = (transformType) =>
+  TRANSFORM_LABELS[transformType] || "";
+
+/** Construit les métadonnées document pour l'historique de transformation */
+export const buildTransformDocumentMeta = (transformType, responseData = {}) => {
+  const data = responseData || {};
+  if (transformType === "facture") {
+    const id = data.id || data.facture_id;
+    const numero = data.numero || data.document_numero || "";
+    return {
+      transform_type: "facture",
+      document_numero: numero ? String(numero) : "",
+      preview_url: id ? `/api/preview-facture/${id}/` : data.preview_url || "",
+    };
+  }
+  if (transformType === "cie") {
+    const id = data.facture_id || data.id;
+    const numero = data.numero_cie || data.document_numero || data.numero || "";
+    return {
+      transform_type: "cie",
+      document_numero: numero ? String(numero) : "",
+      preview_url:
+        data.preview_url || (id ? `/api/preview-facture/${id}/` : ""),
+    };
+  }
+  if (transformType === "avenant") {
+    const avenantNumero = data.avenant_numero;
+    const numeroTs = data.numero_ts;
+    const devisId = data.devis_id;
+    const documentNumero =
+      data.document_numero ||
+      (avenantNumero
+        ? `Avenant n°${avenantNumero}`
+        : numeroTs != null
+          ? `TS n°${String(numeroTs).padStart(3, "0")}`
+          : "");
+    return {
+      transform_type: "avenant",
+      document_numero: documentNumero,
+      preview_url:
+        data.preview_url ||
+        (devisId ? `/api/preview-saved-devis-v2/${devisId}/` : ""),
+    };
+  }
+  return {
+    transform_type: transformType || "",
+    document_numero: data.document_numero || "",
+    preview_url: data.preview_url || "",
+  };
+};
+
+/** Remplace tous les tags par le seul tag d'action (ex. Facturé) */
+export const setDevisActionTag = (devisOrTags, actionTag) => {
+  if (!actionTag) return [];
+  return [actionTag];
+};
+
+/** Met à jour les tags après transformation facture / avenant / CIE */
+export const applyTransformTagToDevis = async (
+  devis,
+  transformType,
+  axiosClient,
+  documentResponse = null
+) => {
+  if (!devis?.id || !axiosClient) return null;
+  const actionTag =
+    TRANSFORM_TAG_BY_TYPE[transformType] ||
+    (transformType === "CIE" ? "Facturé" : null);
+  if (!actionTag) return null;
+
+  const nextTags = setDevisActionTag(devis, actionTag);
+  const documentMeta = buildTransformDocumentMeta(
+    String(transformType || "").toLowerCase(),
+    {
+      ...(documentResponse || {}),
+      devis_id: documentResponse?.devis_id || devis.id,
+    }
+  );
+  const response = await axiosClient.put(
+    `/api/list-devis/${devis.id}/update_status/`,
+    { tags: nextTags, ...documentMeta }
+  );
+  return response?.data?.tags || nextTags;
+};
+
 const LEGACY_TAG_MAP = {
   "En Attente": "En attente BDC",
   "en attente": "En attente BDC",
@@ -149,28 +240,6 @@ export const toggleDevisTag = (selected, tagValue) => {
     : [...selected];
   next.push(tagValue);
   return next;
-};
-
-/** Remplace tous les tags par le seul tag d'action (ex. Facturé) */
-export const setDevisActionTag = (devisOrTags, actionTag) => {
-  if (!actionTag) return [];
-  return [actionTag];
-};
-
-/** Met à jour les tags après transformation facture / avenant / CIE */
-export const applyTransformTagToDevis = async (devis, transformType, axiosClient) => {
-  if (!devis?.id || !axiosClient) return null;
-  const actionTag =
-    TRANSFORM_TAG_BY_TYPE[transformType] ||
-    (transformType === "CIE" ? "Facturé" : null);
-  if (!actionTag) return null;
-
-  const nextTags = setDevisActionTag(devis, actionTag);
-  const response = await axiosClient.put(
-    `/api/list-devis/${devis.id}/update_status/`,
-    { tags: nextTags }
-  );
-  return response?.data?.tags || nextTags;
 };
 
 export const getDevisTagMeta = (status) => {

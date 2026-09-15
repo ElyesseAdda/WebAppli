@@ -4160,6 +4160,15 @@ from .models_gantt import (  # noqa: E402  (import après signaux/post_migrate)
 class DevisTagHistory(models.Model):
     """Historique des modifications de tags d'un devis."""
 
+    TRANSFORM_FACTURE = 'facture'
+    TRANSFORM_AVENANT = 'avenant'
+    TRANSFORM_CIE = 'cie'
+    TRANSFORM_CHOICES = [
+        (TRANSFORM_FACTURE, 'Facture'),
+        (TRANSFORM_AVENANT, 'Avenant'),
+        (TRANSFORM_CIE, 'Facture CIE'),
+    ]
+
     devis = models.ForeignKey(
         Devis,
         on_delete=models.CASCADE,
@@ -4174,6 +4183,14 @@ class DevisTagHistory(models.Model):
     )
     old_value = models.CharField(max_length=255, blank=True, default='')
     new_value = models.CharField(max_length=255, blank=True, default='')
+    transform_type = models.CharField(
+        max_length=20,
+        choices=TRANSFORM_CHOICES,
+        blank=True,
+        default='',
+    )
+    document_numero = models.CharField(max_length=100, blank=True, default='')
+    preview_url = models.CharField(max_length=500, blank=True, default='')
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:

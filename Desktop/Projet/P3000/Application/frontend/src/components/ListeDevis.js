@@ -988,7 +988,7 @@ const ListeDevis = () => {
 
       // Tag Facturé avant génération Drive (remplace tous les autres tags)
       try {
-        await applyTransformTagToDevis(devisForTag, "facture", axios);
+        await applyTransformTagToDevis(devisForTag, "facture", axios, response.data);
       } catch (tagError) {
         void tagError;
       }
@@ -1626,9 +1626,9 @@ const ListeDevis = () => {
         onClose={handleTSModalClose}
         devis={selectedDevisForTS}
         chantier={selectedChantier}
-        onSuccess={async (devis) => {
+        onSuccess={async (devis, responseData) => {
           try {
-            await applyTransformTagToDevis(devis, "avenant", axios);
+            await applyTransformTagToDevis(devis, "avenant", axios, responseData);
           } catch (tagError) {
             void tagError;
           }
@@ -1640,9 +1640,9 @@ const ListeDevis = () => {
         onClose={handleCIEModalClose}
         devis={selectedDevisForCIE}
         chantier={selectedChantier}
-        onSuccess={async (devis) => {
+        onSuccess={async (devis, responseData) => {
           try {
-            await applyTransformTagToDevis(devis, "cie", axios);
+            await applyTransformTagToDevis(devis, "cie", axios, responseData);
           } catch (tagError) {
             void tagError;
           }

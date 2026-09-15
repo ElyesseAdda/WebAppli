@@ -18,6 +18,7 @@ import {
   formatDevisTagDate,
   getDevisTagMeta,
   getDevisTagStyle,
+  getTransformLabel,
   parseDevisTagsLabel,
 } from "../config/devisTags";
 
@@ -58,84 +59,163 @@ const TagChips = ({ value }) => {
   );
 };
 
-const HistoryChange = ({ entry }) => (
-  <Box
-    sx={{
-      mb: 1.5,
-      p: 1.5,
-      borderRadius: "4px",
-      bgcolor: "#f8fafc",
-      border: "1px solid #e8edf3",
-    }}
-  >
-    <Typography
-      variant="caption"
-      sx={{
-        display: "block",
-        color: "#64748b",
-        fontWeight: 700,
-        letterSpacing: "0.02em",
-        mb: 1,
-      }}
-    >
-      {formatDevisTagDate(entry.created_at)} — {entry.actor_name}
-    </Typography>
+const HistoryChange = ({ entry }) => {
+  const transformLabel = getTransformLabel(entry.transform_type);
+  const documentNumero = entry.document_numero || "";
+  const previewUrl = entry.preview_url || "";
+  const canOpenPreview = Boolean(previewUrl && documentNumero);
 
+  const handleOpenDocument = (event) => {
+    event.stopPropagation();
+    if (!previewUrl) return;
+    window.open(previewUrl, "_blank", "noopener,noreferrer");
+  };
+
+  return (
     <Box
       sx={{
-        display: "flex",
-        flexDirection: { xs: "column", sm: "row" },
-        alignItems: { xs: "stretch", sm: "center" },
-        gap: 1,
+        mb: 1.5,
+        p: 1.5,
+        borderRadius: "4px",
+        bgcolor: "#f8fafc",
+        border: "1px solid #e8edf3",
       }}
     >
-      <Box sx={{ flex: 1, minWidth: 0 }}>
-        <Typography
+      <Typography
+        variant="caption"
+        sx={{
+          display: "block",
+          color: "#64748b",
+          fontWeight: 700,
+          letterSpacing: "0.02em",
+          mb: 1,
+        }}
+      >
+        {formatDevisTagDate(entry.created_at)} — {entry.actor_name}
+      </Typography>
+
+      {(transformLabel || documentNumero) && (
+        <Box
           sx={{
-            fontSize: "0.65rem",
-            fontWeight: 700,
-            letterSpacing: "0.05em",
-            textTransform: "uppercase",
-            color: "#94a3b8",
-            mb: 0.5,
+            mb: 1.25,
+            px: 1.1,
+            py: 0.85,
+            borderRadius: "4px",
+            bgcolor: "#fff",
+            border: "1px solid #e2e8f0",
+            display: "flex",
+            flexWrap: "wrap",
+            alignItems: "center",
+            gap: 0.75,
           }}
         >
-          Avant
-        </Typography>
-        <TagChips value={entry.old_value} />
-      </Box>
+          {transformLabel && (
+            <Typography
+              sx={{
+                fontSize: "0.78rem",
+                fontWeight: 700,
+                color: "#334155",
+              }}
+            >
+              {transformLabel}
+            </Typography>
+          )}
+          {documentNumero && (
+            <>
+              {transformLabel && (
+                <Typography sx={{ fontSize: "0.78rem", color: "#94a3b8" }}>
+                  —
+                </Typography>
+              )}
+              <Typography
+                component={canOpenPreview ? "button" : "span"}
+                type={canOpenPreview ? "button" : undefined}
+                onClick={canOpenPreview ? handleOpenDocument : undefined}
+                sx={{
+                  fontSize: "0.78rem",
+                  fontWeight: 700,
+                  color: canOpenPreview ? "#1565c0" : "#475569",
+                  textDecoration: canOpenPreview ? "underline" : "none",
+                  cursor: canOpenPreview ? "pointer" : "default",
+                  background: "none",
+                  border: "none",
+                  padding: 0,
+                  fontFamily: "inherit",
+                  "&:hover": canOpenPreview
+                    ? { color: "#0d47a1" }
+                    : undefined,
+                }}
+                title={
+                  canOpenPreview
+                    ? "Ouvrir le document dans un nouvel onglet"
+                    : undefined
+                }
+              >
+                {documentNumero}
+              </Typography>
+            </>
+          )}
+        </Box>
+      )}
 
       <Box
         sx={{
           display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          color: "#94a3b8",
-          flexShrink: 0,
-          py: { xs: 0.25, sm: 0 },
+          flexDirection: { xs: "column", sm: "row" },
+          alignItems: { xs: "stretch", sm: "center" },
+          gap: 1,
         }}
       >
-        <ArrowForwardIcon sx={{ fontSize: 18, transform: { xs: "rotate(90deg)", sm: "none" } }} />
-      </Box>
+        <Box sx={{ flex: 1, minWidth: 0 }}>
+          <Typography
+            sx={{
+              fontSize: "0.65rem",
+              fontWeight: 700,
+              letterSpacing: "0.05em",
+              textTransform: "uppercase",
+              color: "#94a3b8",
+              mb: 0.5,
+            }}
+          >
+            Avant
+          </Typography>
+          <TagChips value={entry.old_value} />
+        </Box>
 
-      <Box sx={{ flex: 1, minWidth: 0 }}>
-        <Typography
+        <Box
           sx={{
-            fontSize: "0.65rem",
-            fontWeight: 700,
-            letterSpacing: "0.05em",
-            textTransform: "uppercase",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
             color: "#94a3b8",
-            mb: 0.5,
+            flexShrink: 0,
+            py: { xs: 0.25, sm: 0 },
           }}
         >
-          Après
-        </Typography>
-        <TagChips value={entry.new_value} />
+          <ArrowForwardIcon
+            sx={{ fontSize: 18, transform: { xs: "rotate(90deg)", sm: "none" } }}
+          />
+        </Box>
+
+        <Box sx={{ flex: 1, minWidth: 0 }}>
+          <Typography
+            sx={{
+              fontSize: "0.65rem",
+              fontWeight: 700,
+              letterSpacing: "0.05em",
+              textTransform: "uppercase",
+              color: "#94a3b8",
+              mb: 0.5,
+            }}
+          >
+            Après
+          </Typography>
+          <TagChips value={entry.new_value} />
+        </Box>
       </Box>
     </Box>
-  </Box>
-);
+  );
+};
 
 const DevisTagHistoryPanel = ({ devisId, devisNumero }) => {
   const [open, setOpen] = React.useState(false);
