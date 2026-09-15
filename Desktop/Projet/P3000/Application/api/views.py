@@ -6025,12 +6025,14 @@ _DEVIS_TAG_LEGACY_MAP = {
     'En attente de travaux': 'Travaux non réalisés',
     'Travaux non réaliser': 'Travaux non réalisés',
     'BDC recus': 'BDC reçus',
+    'Faire TS': 'A facturer',
 }
 
 _DEVIS_EXCLUSIVE_TAG_GROUPS = [
-    ('Validé', 'Refusé'),
     ('En attente BDC', 'BDC reçus'),
+    ('Validé', 'Refusé'),
     ('Travaux non réalisés', 'Travaux en cours', 'Travaux réalisés'),
+    ('Faire Avenant', 'A facturer'),
 ]
 
 

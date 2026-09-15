@@ -76,7 +76,7 @@ const TagComboChips = ({ tags }) => {
       {values.map((tag) => {
         const meta = getDevisTagMeta(tag === "Aucun tag" ? "" : tag);
         return (
-          <Box key={tag} component="span" sx={{ ...getDevisTagStyle(tag), fontSize: "0.72rem" }}>
+          <Box key={tag} component="span" sx={{ ...getDevisTagStyle(tag), fontSize: "0.7rem", borderRadius: "3px" }}>
             {meta.label}
           </Box>
         );

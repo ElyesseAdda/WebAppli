@@ -33,15 +33,14 @@ const StatusChangeModal = ({
     }
     return [
       "En attente BDC",
-      "Envoyé",
+      "BDC reçus",
       "Validé",
       "Refusé",
       "Travaux non réalisés",
       "Travaux en cours",
       "Travaux réalisés",
-      "BDC reçus",
       "Faire Avenant",
-      "Faire TS",
+      "A facturer",
     ];
   };
 

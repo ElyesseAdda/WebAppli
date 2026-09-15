@@ -136,7 +136,7 @@ export const getStatusStyle = ({ status } = {}) => ({
       ? "#3949ab"
       : status === "Faire Avenant"
       ? "#c2185b"
-      : status === "Faire TS"
+      : status === "Faire TS" || status === "A facturer"
       ? "#00838f"
       : status === "Facturée" || status === "Facturé"
       ? "green"

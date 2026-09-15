@@ -1,17 +1,36 @@
 export const DEVIS_TAGS = [
   { value: "En attente BDC", label: "En attente BDC", bg: "#fff3e0", color: "#e65100" },
-  { value: "Envoyé", label: "Envoyé", bg: "#e3f2fd", color: "#1565c0" },
+  { value: "BDC reçus", label: "BDC reçus", bg: "#e8eaf6", color: "#3949ab" },
   { value: "Validé", label: "Validé", bg: "#e8f5e9", color: "#2e7d32" },
   { value: "Refusé", label: "Refusé", bg: "#ffebee", color: "#c62828" },
   { value: "Travaux non réalisés", label: "Travaux non réalisés", bg: "#fff8e1", color: "#f9a825" },
   { value: "Travaux en cours", label: "Travaux en cours", bg: "#ede7f6", color: "#6a1b9a" },
   { value: "Travaux réalisés", label: "Travaux réalisés", bg: "#e0f2f1", color: "#00695c" },
-  { value: "BDC reçus", label: "BDC reçus", bg: "#e8eaf6", color: "#3949ab" },
   { value: "Faire Avenant", label: "Faire Avenant", bg: "#fce4ec", color: "#c2185b" },
-  { value: "Faire TS", label: "Faire TS", bg: "#e0f7fa", color: "#00838f" },
+  { value: "A facturer", label: "A facturer", bg: "#e0f7fa", color: "#00838f" },
 ];
 
 export const DEVIS_TAG_VALUES = DEVIS_TAGS.map((tag) => tag.value);
+
+// Groupes d'affichage = tags incompatibles sur la même ligne
+export const DEVIS_TAG_ROWS = [
+  {
+    label: "Suivi BDC",
+    values: ["En attente BDC", "BDC reçus"],
+  },
+  {
+    label: "Décision",
+    values: ["Validé", "Refusé"],
+  },
+  {
+    label: "Travaux",
+    values: ["Travaux non réalisés", "Travaux en cours", "Travaux réalisés"],
+  },
+  {
+    label: "Actions",
+    values: ["Faire Avenant", "A facturer"],
+  },
+];
 
 const LEGACY_TAG_MAP = {
   "En Attente": "En attente BDC",
@@ -23,17 +42,14 @@ const LEGACY_TAG_MAP = {
   "Travaux réalisé": "Travaux réalisés",
   "Travaux realisé": "Travaux réalisés",
   "BDC recus": "BDC reçus",
+  "Faire TS": "A facturer",
   Envoye: "Envoyé",
   Valide: "Validé",
   Refuse: "Refusé",
 };
 
 // Tags incompatibles : sélectionner l'un désélectionne les autres du même groupe
-const EXCLUSIVE_TAG_GROUPS = [
-  ["Validé", "Refusé"],
-  ["En attente BDC", "BDC reçus"],
-  ["Travaux non réalisés", "Travaux en cours", "Travaux réalisés"],
-];
+const EXCLUSIVE_TAG_GROUPS = DEVIS_TAG_ROWS.map((row) => row.values);
 
 export const normalizeDevisTag = (status) => {
   if (!status) return "";
@@ -111,21 +127,24 @@ export const getDevisTagStyle = (status, { clickable = false } = {}) => {
   return {
     display: "inline-flex",
     alignItems: "center",
-    px: 1.25,
-    py: 0.35,
-    borderRadius: 1,
+    px: 1.1,
+    py: 0.4,
+    borderRadius: "3px",
+    border: `1px solid ${tag.color}40`,
     backgroundColor: tag.bg,
     color: tag.color,
     fontWeight: 600,
-    fontSize: "0.8rem",
+    fontSize: "0.75rem",
+    letterSpacing: "0.01em",
+    lineHeight: 1.25,
     cursor: clickable ? "pointer" : "default",
     userSelect: "none",
     whiteSpace: "nowrap",
-    transition: "transform 0.15s ease, box-shadow 0.15s ease",
+    transition: "background-color 0.15s ease, border-color 0.15s ease",
     "&:hover": clickable
       ? {
-          transform: "translateY(-1px)",
-          boxShadow: "0 2px 6px rgba(0,0,0,0.12)",
+          borderColor: tag.color,
+          filter: "brightness(0.98)",
         }
       : undefined,
   };

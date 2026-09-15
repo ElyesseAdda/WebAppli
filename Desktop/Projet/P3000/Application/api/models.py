@@ -20,16 +20,17 @@ STATE_CHOICES = [
     ]
 DEVIS_STATUS_CHOICES = [
         ('En attente BDC', 'En attente BDC'),
-        ('Envoyé', 'Envoyé'),
+        ('BDC reçus', 'BDC reçus'),
         ('Validé', 'Validé'),
         ('Refusé', 'Refusé'),
         ('Travaux non réalisés', 'Travaux non réalisés'),
         ('Travaux en cours', 'Travaux en cours'),
         ('Travaux réalisés', 'Travaux réalisés'),
-        ('BDC reçus', 'BDC reçus'),
+        ('Envoyé', 'Envoyé'),
         ('Faire Avenant', 'Faire Avenant'),
-        ('Faire TS', 'Faire TS'),
+        ('A facturer', 'A facturer'),
         # Anciens libellés conservés pour compatibilité lecture
+        ('Faire TS', 'Faire TS'),
         ('En attente', 'En attente'),
         ('En attente de travaux', 'En attente de travaux'),
         ('En Cours', 'En Cours'),
