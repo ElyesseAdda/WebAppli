@@ -84,34 +84,53 @@ const TableauFacturationTable = ({
     return n < 0 ? "rgba(211, 47, 47, 1)" : "rgba(46, 125, 50, 1)";
   };
 
-  const recapParChantier = useMemo(() => {
-    const parChantier = {};
+  const recapParSociete = useMemo(() => {
+    const parSociete = {};
+    const emptyAmounts = () => ({ montantHT: 0, montantRecu: 0, ecart: 0 });
+
     situationsAvecSousTotaux.forEach((item) => {
       if (item.isSousTotal) return;
       const isFacture = item.price_ht !== undefined;
       const chantierName = item.chantier_name || item.chantier?.chantier_name || "Inconnu";
+      const chantierKey = String(item.chantier_id || item.chantier?.id || chantierName);
+      const societeName = (
+        item.societe_name ||
+        item.chantier?.societe?.nom_societe ||
+        ""
+      ).trim() || "Société non renseignée";
       const montantHT = isFacture
         ? parseFloat(item.price_ht) || 0
         : parseFloat(item.montant_apres_retenues) || 0;
       const montantRecu = isFacture
         ? (item.state_facture === "Payée" ? montantHT : 0)
         : parseFloat(item.montant_reel_ht) || 0;
+      const ecart = montantRecu - montantHT;
 
-      if (!parChantier[chantierName]) {
-        parChantier[chantierName] = { montantHT: 0, montantRecu: 0, ecart: 0, clientName: "" };
+      if (!parSociete[societeName]) {
+        parSociete[societeName] = { ...emptyAmounts(), societeName, chantiers: {} };
       }
-      const clientName = item.client_name || item.chantier?.maitre_ouvrage_nom_societe || item.chantier?.societe?.nom_societe || "";
-      if (clientName && !parChantier[chantierName].clientName) {
-        parChantier[chantierName].clientName = clientName;
+      const societe = parSociete[societeName];
+      societe.montantHT += montantHT;
+      societe.montantRecu += montantRecu;
+      societe.ecart += ecart;
+
+      if (!societe.chantiers[chantierKey]) {
+        societe.chantiers[chantierKey] = { ...emptyAmounts(), name: chantierName, key: chantierKey };
       }
-      parChantier[chantierName].montantHT += montantHT;
-      parChantier[chantierName].montantRecu += montantRecu;
-      parChantier[chantierName].ecart += montantRecu - montantHT;
+      const chantier = societe.chantiers[chantierKey];
+      if (chantierName && chantier.name === "Inconnu") chantier.name = chantierName;
+      chantier.montantHT += montantHT;
+      chantier.montantRecu += montantRecu;
+      chantier.ecart += ecart;
     });
 
+    const groups = Object.values(parSociete).map((societe) => ({
+      ...societe,
+      chantiers: Object.values(societe.chantiers).sort((a, b) => b.montantHT - a.montantHT),
+    }));
+
     const totalHT = parseFloat(totaux.montantHTSituation) || 0;
-    const sorted = Object.keys(parChantier).sort((a, b) => parChantier[b].montantHT - parChantier[a].montantHT);
-    return { parChantier, totalHT, sorted };
+    return { groups, totalHT };
   }, [situationsAvecSousTotaux, totaux]);
 
   const getDefaultRecapSortDir = (sort) => (sort === "alphabetique" ? "asc" : "desc");
@@ -140,33 +159,31 @@ const TableauFacturationTable = ({
     return recapSortDir === "asc" ? "A → Z" : "Z → A";
   };
 
-  const recapChantiersSorted = useMemo(() => {
-    const { parChantier, sorted } = recapParChantier;
+  const recapSocietesSorted = useMemo(() => {
     const q = recapSearch.trim().toLowerCase();
-    let list = sorted.filter((chantier) => {
-      if (!q) return true;
-      const ch = parChantier[chantier] || {};
-      return (
-        chantier.toLowerCase().includes(q) ||
-        String(ch.clientName || "").toLowerCase().includes(q)
-      );
-    });
+    let list = recapParSociete.groups.map((societe) => {
+      if (!q) return { ...societe, filteredChantiers: societe.chantiers };
+      const societeMatch = societe.societeName.toLowerCase().includes(q);
+      const filteredChantiers = societeMatch
+        ? societe.chantiers
+        : societe.chantiers.filter((ch) => ch.name.toLowerCase().includes(q));
+      return { ...societe, filteredChantiers };
+    }).filter((societe) => societe.filteredChantiers.length > 0);
+
     return [...list].sort((a, b) => {
-      const chA = parChantier[a];
-      const chB = parChantier[b];
       let cmp = 0;
       if (recapSort === "alphabetique") {
-        cmp = a.localeCompare(b, "fr");
+        cmp = a.societeName.localeCompare(b.societeName, "fr");
       } else if (recapSort === "avancement") {
-        const pctA = chA.montantHT ? (chA.montantRecu / chA.montantHT) * 100 : 0;
-        const pctB = chB.montantHT ? (chB.montantRecu / chB.montantHT) * 100 : 0;
+        const pctA = a.montantHT ? (a.montantRecu / a.montantHT) * 100 : 0;
+        const pctB = b.montantHT ? (b.montantRecu / b.montantHT) * 100 : 0;
         cmp = pctA - pctB;
       } else {
-        cmp = (chA.montantHT || 0) - (chB.montantHT || 0);
+        cmp = (a.montantHT || 0) - (b.montantHT || 0);
       }
       return recapSortDir === "asc" ? cmp : -cmp;
     });
-  }, [recapParChantier, recapSearch, recapSort, recapSortDir]);
+  }, [recapParSociete, recapSearch, recapSort, recapSortDir]);
 
   // Calculer le nombre de lignes par mois (sans les sous-totaux) pour la fusion des cellules
   const calculerLignesParMois = () => {
@@ -804,14 +821,14 @@ const TableauFacturationTable = ({
       </Table>
     </TableContainer>
 
-    {/* Récapitulatif par chantier */}
-    {recapParChantier.sorted.length > 0 && (
+    {/* Récapitulatif par société */}
+    {recapParSociete.groups.length > 0 && (
       <Box sx={{ width: "100%", mt: 3 }}>
         <Typography
           variant="h6"
           sx={{ fontFamily: "Merriweather, serif", color: "white", fontWeight: "bold", mb: 2 }}
         >
-          RÉCAPITULATIF PAR CHANTIER
+          RÉCAPITULATIF PAR SOCIÉTÉ
         </Typography>
 
         <Paper
@@ -865,7 +882,7 @@ const TableauFacturationTable = ({
             }}
           >
             <TextField
-              placeholder="Rechercher par chantier ou client (ex. ZoniaHub, 0233322)…"
+              placeholder="Rechercher par société ou chantier…"
               value={recapSearch}
               onChange={(e) => setRecapSearch(e.target.value)}
               size="small"
@@ -910,35 +927,39 @@ const TableauFacturationTable = ({
           </Box>
           {recapSearch.trim() && (
             <Typography sx={{ fontSize: "0.75rem", color: "text.secondary", mt: 1.5 }}>
-              {recapChantiersSorted.length} chantier{recapChantiersSorted.length > 1 ? "s" : ""} affiché
-              {recapChantiersSorted.length > 1 ? "s" : ""}
+              {recapSocietesSorted.length} société{recapSocietesSorted.length > 1 ? "s" : ""} affichée
+              {recapSocietesSorted.length > 1 ? "s" : ""}
               {` pour « ${recapSearch.trim()} »`}
             </Typography>
           )}
         </Paper>
 
         <Box sx={{ display: "flex", flexDirection: "column", gap: 1 }}>
-          {recapChantiersSorted.length === 0 ? (
+          {recapSocietesSorted.length === 0 ? (
             <Paper sx={{ p: 3, textAlign: "center" }}>
               <Typography color="text.secondary">
-                Aucun chantier ne correspond à votre recherche.
+                Aucune société ne correspond à votre recherche.
               </Typography>
             </Paper>
           ) : (
-          recapChantiersSorted.map((chantier) => {
-            const ch = recapParChantier.parChantier[chantier];
-            const isPayeComplet = Math.abs(ch.montantHT - ch.montantRecu) < 0.01;
-            const pctCA = recapParChantier.totalHT
-              ? ((ch.montantHT / recapParChantier.totalHT) * 100).toFixed(1)
+          recapSocietesSorted.map((societe) => {
+            const searchActive = !!recapSearch.trim();
+            const chantiersAffiches = societe.filteredChantiers || societe.chantiers;
+            const montantHT = chantiersAffiches.reduce((sum, ch) => sum + ch.montantHT, 0);
+            const montantRecu = chantiersAffiches.reduce((sum, ch) => sum + ch.montantRecu, 0);
+            const ecart = chantiersAffiches.reduce((sum, ch) => sum + ch.ecart, 0);
+            const isPayeComplet = Math.abs(montantHT - montantRecu) < 0.01;
+            const pctCA = recapParSociete.totalHT
+              ? ((montantHT / recapParSociete.totalHT) * 100).toFixed(1)
               : "0.0";
-            const pctRecu = ch.montantHT
-              ? Math.min((ch.montantRecu / ch.montantHT) * 100, 100)
+            const pctRecu = montantHT
+              ? Math.min((montantRecu / montantHT) * 100, 100)
               : 0;
 
             return (
               <Accordion
-                key={chantier}
-                defaultExpanded={!!recapSearch.trim()}
+                key={societe.societeName}
+                defaultExpanded={searchActive}
                 sx={{ backgroundColor: "white", "&:before": { display: "none" }, boxShadow: 2 }}
               >
                 <AccordionSummary
@@ -952,7 +973,7 @@ const TableauFacturationTable = ({
                 >
                   <Box sx={{ display: "flex", flexDirection: "column", width: "100%", pr: 2, gap: 0.5 }}>
                     <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", width: "100%" }}>
-                      <Box sx={{ display: "flex", alignItems: "center", gap: 1.5 }}>
+                      <Box sx={{ display: "flex", alignItems: "center", gap: 1.5, flexWrap: "wrap" }}>
                         <Typography
                           sx={{
                             fontWeight: "bold",
@@ -960,8 +981,30 @@ const TableauFacturationTable = ({
                             color: isPayeComplet ? "rgba(46, 125, 50, 1)" : "rgba(27, 120, 188, 1)",
                           }}
                         >
-                          {chantier}
+                          {societe.societeName}
                         </Typography>
+                        <Box
+                          sx={{
+                            display: "inline-flex",
+                            alignItems: "center",
+                            backgroundColor: "rgba(27, 120, 188, 0.12)",
+                            borderRadius: "12px",
+                            px: 1.2,
+                            py: 0.2,
+                            border: "1px solid rgba(27, 120, 188, 0.3)",
+                          }}
+                        >
+                          <Typography
+                            sx={{
+                              fontSize: "0.75rem",
+                              fontWeight: 600,
+                              color: "rgba(27, 120, 188, 1)",
+                              lineHeight: 1.4,
+                            }}
+                          >
+                            {`${chantiersAffiches.length} chantier${chantiersAffiches.length > 1 ? "s" : ""}`}
+                          </Typography>
+                        </Box>
                         <Box
                           sx={{
                             display: "inline-flex",
@@ -988,8 +1031,8 @@ const TableauFacturationTable = ({
                       <Box sx={{ display: "flex", gap: 3 }}>
                         <Box sx={{ textAlign: "right" }}>
                           <Typography sx={{ fontSize: "0.75rem", color: "text.secondary" }}>Facturé HT</Typography>
-                          <Typography sx={{ fontSize: "0.9rem", fontWeight: "bold", color: colorForAmount(ch.montantHT) }}>
-                            {formatNum(ch.montantHT)} €
+                          <Typography sx={{ fontSize: "0.9rem", fontWeight: "bold", color: colorForAmount(montantHT) }}>
+                            {formatNum(montantHT)} €
                           </Typography>
                         </Box>
                         <Box sx={{ textAlign: "right" }}>
@@ -1001,13 +1044,13 @@ const TableauFacturationTable = ({
                               color: isPayeComplet ? "rgba(46, 125, 50, 1)" : "rgba(27, 120, 188, 1)",
                             }}
                           >
-                            {formatNum(ch.montantRecu)} €
+                            {formatNum(montantRecu)} €
                           </Typography>
                         </Box>
                         <Box sx={{ textAlign: "right" }}>
                           <Typography sx={{ fontSize: "0.75rem", color: "text.secondary" }}>Écart</Typography>
-                          <Typography sx={{ fontSize: "0.9rem", fontWeight: "bold", color: colorForAmount(ch.ecart) }}>
-                            {formatNum(ch.ecart)} €
+                          <Typography sx={{ fontSize: "0.9rem", fontWeight: "bold", color: colorForAmount(ecart) }}>
+                            {formatNum(ecart)} €
                           </Typography>
                         </Box>
                       </Box>
@@ -1028,31 +1071,81 @@ const TableauFacturationTable = ({
                   </Box>
                 </AccordionSummary>
                 <AccordionDetails>
-                  <Box sx={{ display: "flex", gap: 3, p: 1 }}>
-                    <Box>
-                      <Typography sx={{ fontSize: "0.8rem", color: "text.secondary" }}>Montant HT facturé</Typography>
-                      <Typography sx={{ fontWeight: "bold", color: colorForAmount(ch.montantHT) }}>
-                        {formatNum(ch.montantHT)} €
-                      </Typography>
-                    </Box>
-                    <Box>
-                      <Typography sx={{ fontSize: "0.8rem", color: "text.secondary" }}>Montant reçu HT</Typography>
-                      <Typography sx={{ fontWeight: "bold", color: "rgba(46, 125, 50, 1)" }}>
-                        {formatNum(ch.montantRecu)} €
-                      </Typography>
-                    </Box>
-                    <Box>
-                      <Typography sx={{ fontSize: "0.8rem", color: "text.secondary" }}>Écart</Typography>
-                      <Typography sx={{ fontWeight: "bold", color: colorForAmount(ch.ecart) }}>
-                        {formatNum(ch.ecart)} €
-                      </Typography>
-                    </Box>
-                    <Box>
-                      <Typography sx={{ fontSize: "0.8rem", color: "text.secondary" }}>% du CA total</Typography>
-                      <Typography sx={{ fontWeight: "bold", color: "rgba(27, 120, 188, 1)" }}>
-                        {pctCA}%
-                      </Typography>
-                    </Box>
+                  <Box sx={{ display: "flex", flexDirection: "column", gap: 1 }}>
+                    {chantiersAffiches.map((chantier) => {
+                      const chPayeComplet = Math.abs(chantier.montantHT - chantier.montantRecu) < 0.01;
+                      const chPctRecu = chantier.montantHT
+                        ? Math.min((chantier.montantRecu / chantier.montantHT) * 100, 100)
+                        : 0;
+                      return (
+                        <Box
+                          key={chantier.key}
+                          sx={{
+                            display: "flex",
+                            justifyContent: "space-between",
+                            alignItems: "center",
+                            gap: 2,
+                            flexWrap: "wrap",
+                            p: 1.5,
+                            borderRadius: 1,
+                            backgroundColor: chPayeComplet ? "rgba(46, 125, 50, 0.06)" : "rgba(27, 120, 188, 0.05)",
+                            border: `1px solid ${chPayeComplet ? "rgba(46, 125, 50, 0.18)" : "rgba(27, 120, 188, 0.15)"}`,
+                          }}
+                        >
+                          <Box sx={{ minWidth: 160, flex: 1 }}>
+                            <Typography
+                              sx={{
+                                fontWeight: 600,
+                                fontSize: "0.9rem",
+                                color: chPayeComplet ? "rgba(46, 125, 50, 1)" : "rgba(27, 120, 188, 1)",
+                              }}
+                            >
+                              {chantier.name}
+                            </Typography>
+                            <LinearProgress
+                              variant="determinate"
+                              value={chPctRecu}
+                              sx={{
+                                mt: 0.8,
+                                height: 3,
+                                borderRadius: 2,
+                                backgroundColor: chPayeComplet ? "rgba(46, 125, 50, 0.12)" : "rgba(27, 120, 188, 0.12)",
+                                "& .MuiLinearProgress-bar": {
+                                  borderRadius: 2,
+                                  backgroundColor: chPayeComplet ? "rgba(46, 125, 50, 0.7)" : "rgba(27, 120, 188, 0.7)",
+                                },
+                              }}
+                            />
+                          </Box>
+                          <Box sx={{ display: "flex", gap: 3 }}>
+                            <Box sx={{ textAlign: "right" }}>
+                              <Typography sx={{ fontSize: "0.7rem", color: "text.secondary" }}>Facturé HT</Typography>
+                              <Typography sx={{ fontSize: "0.85rem", fontWeight: "bold", color: colorForAmount(chantier.montantHT) }}>
+                                {formatNum(chantier.montantHT)} €
+                              </Typography>
+                            </Box>
+                            <Box sx={{ textAlign: "right" }}>
+                              <Typography sx={{ fontSize: "0.7rem", color: "text.secondary" }}>Reçu HT</Typography>
+                              <Typography
+                                sx={{
+                                  fontSize: "0.85rem",
+                                  fontWeight: "bold",
+                                  color: chPayeComplet ? "rgba(46, 125, 50, 1)" : "rgba(27, 120, 188, 1)",
+                                }}
+                              >
+                                {formatNum(chantier.montantRecu)} €
+                              </Typography>
+                            </Box>
+                            <Box sx={{ textAlign: "right" }}>
+                              <Typography sx={{ fontSize: "0.7rem", color: "text.secondary" }}>Écart</Typography>
+                              <Typography sx={{ fontSize: "0.85rem", fontWeight: "bold", color: colorForAmount(chantier.ecart) }}>
+                                {formatNum(chantier.ecart)} €
+                              </Typography>
+                            </Box>
+                          </Box>
+                        </Box>
+                      );
+                    })}
                   </Box>
                 </AccordionDetails>
               </Accordion>
