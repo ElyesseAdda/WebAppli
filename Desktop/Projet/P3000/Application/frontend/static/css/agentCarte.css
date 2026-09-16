@@ -95,6 +95,11 @@
   flex-direction: column;
   align-items: center;
   gap: 8px;
+  align-self: start;
+  position: sticky;
+  top: 16px;
+  width: 180px;
+  box-sizing: border-box;
 }
 
 .agent-carte-photo {
@@ -138,6 +143,229 @@
   gap: 6px;
   flex-wrap: wrap;
   justify-content: center;
+}
+
+.agent-carte-stats {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.agent-carte-stats-dates {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.agent-carte-stats-dates label {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: 0.62rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: #1b78bc;
+}
+
+.agent-carte-stats-dates input[type="date"] {
+  width: 100%;
+  box-sizing: border-box;
+  border: 1px solid #c5d8e8;
+  border-radius: 6px;
+  padding: 5px 6px;
+  font-size: 0.72rem;
+  color: #1a2b3c;
+  background: #fff;
+}
+
+.agent-carte-stats-dates input[type="date"]:focus {
+  outline: none;
+  border-color: #1b78bc;
+  box-shadow: 0 0 0 3px rgba(27, 120, 188, 0.12);
+}
+
+.agent-carte-stats-presets {
+  display: flex;
+  gap: 4px;
+}
+
+.agent-carte-stats-preset {
+  flex: 1;
+  border: 1px solid #c5d8e8;
+  background: #f7fbfe;
+  color: #1b78bc;
+  border-radius: 999px;
+  font-size: 0.65rem;
+  font-weight: 600;
+  padding: 4px 0;
+  cursor: pointer;
+}
+
+.agent-carte-stats-preset.active,
+.agent-carte-stats-preset:hover {
+  background: #1b78bc;
+  border-color: #1b78bc;
+  color: #fff;
+}
+
+.agent-carte-stats-summary {
+  width: 100%;
+  border: 1px solid #d5e6f2;
+  background: linear-gradient(180deg, #f7fbfe 0%, #eef6fb 100%);
+  border-radius: 10px;
+  padding: 10px 8px 8px;
+  cursor: pointer;
+  text-align: left;
+  color: inherit;
+}
+
+.agent-carte-stats-summary:hover:not(:disabled) {
+  border-color: #1b78bc;
+  box-shadow: 0 4px 12px rgba(27, 120, 188, 0.12);
+}
+
+.agent-carte-stats-summary:disabled {
+  cursor: default;
+  opacity: 0.75;
+}
+
+.agent-carte-stats-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 0.72rem;
+  color: #355066;
+  margin-bottom: 3px;
+}
+
+.agent-carte-stats-row strong {
+  color: #0d4a7a;
+  font-size: 0.78rem;
+}
+
+.agent-carte-stats-bar {
+  height: 7px;
+  border-radius: 999px;
+  background: #d9e7f2;
+  overflow: hidden;
+  margin-bottom: 8px;
+}
+
+.agent-carte-stats-bar-fill {
+  display: block;
+  height: 100%;
+  border-radius: 999px;
+  min-width: 0;
+}
+
+.agent-carte-stats-bar-fill.presence {
+  background: #2e7d32;
+}
+
+.agent-carte-stats-bar-fill.absence {
+  background: #d32f2f;
+}
+
+.agent-carte-stats-meta,
+.agent-carte-stats-hint,
+.agent-carte-stats-empty {
+  display: block;
+  text-align: center;
+  font-size: 0.64rem;
+  color: #5d7386;
+  line-height: 1.35;
+}
+
+.agent-carte-stats-hint {
+  margin-top: 4px;
+  color: #1b78bc;
+  font-weight: 600;
+}
+
+.agent-carte-stats-recap-kpis {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+  margin-bottom: 14px;
+}
+
+.agent-carte-stats-recap-kpis div {
+  background: #f4f8fb;
+  border-radius: 10px;
+  padding: 10px 8px;
+  text-align: center;
+}
+
+.agent-carte-stats-recap-kpis strong {
+  display: block;
+  color: #0d4a7a;
+  font-size: 1.05rem;
+}
+
+.agent-carte-stats-recap-kpis span {
+  font-size: 0.72rem;
+  color: #5d7386;
+}
+
+.agent-carte-stats-recap-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 12px;
+}
+
+.agent-carte-stats-recap-tag {
+  font-size: 0.75rem;
+  padding: 4px 8px;
+  border-radius: 999px;
+  background: #fdecea;
+  color: #b71c1c;
+}
+
+.agent-carte-stats-recap-tag.conge {
+  background: #f3e5f5;
+  color: #6a1b9a;
+}
+
+.agent-carte-stats-recap-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.agent-carte-stats-recap-list li {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 0;
+  border-bottom: 1px solid #edf2f6;
+}
+
+.agent-carte-stats-recap-dates {
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: #0d4a7a;
+  min-width: 140px;
+}
+
+.agent-carte-stats-recap-info {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 2px;
+}
+
+.agent-carte-stats-recap-info strong {
+  font-size: 0.85rem;
+  color: #1a2b3c;
+}
+
+.agent-carte-stats-recap-info span {
+  font-size: 0.72rem;
+  color: #5d7386;
 }
 
 .agent-carte-fields {
@@ -476,8 +704,21 @@
     justify-items: center;
   }
 
+  .agent-carte-photo-zone {
+    position: static;
+  }
+
   .agent-carte-fields {
     grid-template-columns: 1fr;
     width: 100%;
+  }
+
+  .agent-carte-stats-recap-list li {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .agent-carte-stats-recap-info {
+    align-items: flex-start;
   }
 }
