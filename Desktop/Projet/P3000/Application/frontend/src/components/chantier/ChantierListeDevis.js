@@ -17,7 +17,6 @@ import {
   TableHead,
   TableRow,
   TableSortLabel,
-  Tooltip,
   Typography,
 } from "@mui/material";
 import { green } from "@mui/material/colors";
@@ -50,7 +49,6 @@ import { DOCUMENT_TYPES } from "../../config/documentTypeConfig";
 import {
   applyTransformTagToDevis,
   devisMatchesStatusFilter,
-  formatDevisTagDate,
   getDevisTagStyle,
   getDevisTags,
 } from "../../config/devisTags";
@@ -799,40 +797,32 @@ const ChantierListeDevis = ({
                     {formatNumber(devis.price_ht)} €
                   </CenteredTableCell>
                   <CenteredTableCell>
-                    <Tooltip
-                      title={
-                        devis.status_updated_by_name && devis.status_updated_at
-                          ? `Modifié par ${devis.status_updated_by_name} le ${formatDevisTagDate(devis.status_updated_at)} — cliquer pour changer`
-                          : "Cliquer pour modifier les tags"
-                      }
+                    <div
+                      onClick={(event) => handleTagClick(event, devis)}
+                      style={{
+                        display: "flex",
+                        flexWrap: "wrap",
+                        gap: 6,
+                        justifyContent: "center",
+                        cursor: "pointer",
+                      }}
                     >
-                      <div
-                        onClick={(event) => handleTagClick(event, devis)}
-                        style={{
-                          display: "flex",
-                          flexWrap: "wrap",
-                          gap: 6,
-                          justifyContent: "center",
-                          cursor: "pointer",
-                        }}
-                      >
-                        {getDevisTags(devis).length ? (
-                          getDevisTags(devis).map((tag) => (
-                            <Typography
-                              key={tag}
-                              variant="body2"
-                              sx={getDevisTagStyle(tag, { clickable: true })}
-                            >
-                              {tag}
-                            </Typography>
-                          ))
-                        ) : (
-                          <Typography variant="body2" color="text.secondary">
-                            Aucun tag
+                      {getDevisTags(devis).length ? (
+                        getDevisTags(devis).map((tag) => (
+                          <Typography
+                            key={tag}
+                            variant="body2"
+                            sx={getDevisTagStyle(tag, { clickable: true })}
+                          >
+                            {tag}
                           </Typography>
-                        )}
-                      </div>
-                    </Tooltip>
+                        ))
+                      ) : (
+                        <Typography variant="body2" color="text.secondary">
+                          Aucun tag
+                        </Typography>
+                      )}
+                    </div>
                     <DevisTagHistoryPanel devisId={devis.id} devisNumero={devis.numero} />
                   </CenteredTableCell>
                   <CenteredTableCell sx={{ width: "120px", padding: "0 8px" }}>

@@ -14,6 +14,7 @@ import {
 } from "@mui/material";
 import axios from "axios";
 import React from "react";
+import { AiFillFilePdf } from "react-icons/ai";
 import {
   formatDevisTagDate,
   getDevisTagMeta,
@@ -59,16 +60,80 @@ const TagChips = ({ value }) => {
   );
 };
 
+const buildPdfFilename = (documentNumero, transformType) => {
+  const raw = String(documentNumero || "")
+    .replace(/[<>:"/\\|?*]/g, "-")
+    .replace(/\s+/g, "_")
+    .trim();
+  if (raw) return `${raw}.pdf`;
+  if (transformType === "avenant") return "avenant.pdf";
+  if (transformType === "cie") return "facture_cie.pdf";
+  return "facture.pdf";
+};
+
 const HistoryChange = ({ entry }) => {
+  const [downloading, setDownloading] = React.useState(false);
   const transformLabel = getTransformLabel(entry.transform_type);
   const documentNumero = entry.document_numero || "";
   const previewUrl = entry.preview_url || "";
   const canOpenPreview = Boolean(previewUrl && documentNumero);
+  const canDownload = Boolean(previewUrl);
 
   const handleOpenDocument = (event) => {
     event.stopPropagation();
     if (!previewUrl) return;
     window.open(previewUrl, "_blank", "noopener,noreferrer");
+  };
+
+  const handleDownloadDocument = async (event) => {
+    event.stopPropagation();
+    if (!previewUrl || downloading) return;
+
+    setDownloading(true);
+    try {
+      const filename = buildPdfFilename(documentNumero, entry.transform_type);
+      const factureMatch = previewUrl.match(/preview-facture(?:-v2)?\/(\d+)/);
+      let response;
+
+      if (factureMatch) {
+        response = await axios.post(
+          "/api/generate-facture-pdf-from-preview/",
+          { facture_id: Number(factureMatch[1]) },
+          { responseType: "blob" }
+        );
+      } else {
+        const devisMatch = previewUrl.match(/preview-saved-devis(?:-v2)?\/(\d+)/);
+        response = await axios.post(
+          "/api/generate-pdf-from-preview/",
+          {
+            preview_url: previewUrl,
+            devis_id: devisMatch ? Number(devisMatch[1]) : undefined,
+            filename,
+          },
+          { responseType: "blob" }
+        );
+      }
+
+      const contentType = response.headers["content-type"] || "";
+      if (!contentType.includes("pdf")) {
+        throw new Error("Réponse PDF invalide");
+      }
+
+      const pdfBlob = new Blob([response.data], { type: "application/pdf" });
+      const pdfUrl = window.URL.createObjectURL(pdfBlob);
+      const link = document.createElement("a");
+      link.href = pdfUrl;
+      link.download = filename;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(pdfUrl);
+    } catch (err) {
+      void err;
+      alert("Impossible de télécharger le document.");
+    } finally {
+      setDownloading(false);
+    }
   };
 
   return (
@@ -154,6 +219,26 @@ const HistoryChange = ({ entry }) => {
                 {documentNumero}
               </Typography>
             </>
+          )}
+          {canDownload && (
+            <IconButton
+              size="small"
+              onClick={handleDownloadDocument}
+              disabled={downloading}
+              title="Télécharger le PDF"
+              sx={{
+                ml: 0.25,
+                p: 0.4,
+                color: "#2e7d32",
+                "&:hover": { backgroundColor: "rgba(46, 125, 50, 0.08)" },
+              }}
+            >
+              {downloading ? (
+                <CircularProgress size={14} color="inherit" />
+              ) : (
+                <AiFillFilePdf style={{ fontSize: 18 }} />
+              )}
+            </IconButton>
           )}
         </Box>
       )}

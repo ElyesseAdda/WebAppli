@@ -272,13 +272,6 @@ export const getDevisTagStyle = (status, { clickable = false } = {}) => {
     cursor: clickable ? "pointer" : "default",
     userSelect: "none",
     whiteSpace: "nowrap",
-    transition: "background-color 0.15s ease, border-color 0.15s ease",
-    "&:hover": clickable
-      ? {
-          borderColor: tag.color,
-          filter: "brightness(0.98)",
-        }
-      : undefined,
   };
 };
 
