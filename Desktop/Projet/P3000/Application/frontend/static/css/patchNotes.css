@@ -547,6 +547,11 @@
   color: #b25400;
 }
 
+.pn-tag-bugfix {
+  background: #fce4ec;
+  color: #ad1457;
+}
+
 .pn-footer {
   display: flex;
   align-items: center;

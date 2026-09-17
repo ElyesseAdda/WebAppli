@@ -124,6 +124,25 @@ function VisualDevisNotifications() {
   );
 }
 
+function VisualBugFixes() {
+  return (
+    <div className="pn-screen">
+      <div className="pn-screen-bar">Corrections</div>
+      <div className="pn-row">
+        <span className="pn-doc">Avenant n°01</span>
+        <span className="pn-chip pn-chip-ok">puis n°02, n°03…</span>
+      </div>
+      <div className="pn-row">
+        <span className="pn-doc">Catégories</span>
+        <span className="pn-chip pn-chip-bdc">A → Z</span>
+      </div>
+      <p className="pn-caption">
+        Numérotation des avenants et tri alphabétique des catégories.
+      </p>
+    </div>
+  );
+}
+
 function FeatureVisual({ feature }) {
   if (!feature) {
     return (
@@ -143,6 +162,9 @@ function FeatureVisual({ feature }) {
   }
   if (key === "devis-notifications" || feature.id === "devis-notifications") {
     return <VisualDevisNotifications />;
+  }
+  if (key === "bugfixes" || feature.id === "bugfixes-avenant-categories") {
+    return <VisualBugFixes />;
   }
 
   return (
@@ -221,11 +243,22 @@ const PatchNotesModal = () => {
 
           <div className="pn-info">
             <span className={`pn-tag pn-tag-${feature.kind}`}>
-              {feature.kind === "nouveau" ? "Nouveau" : "Amélioré"}
+              {feature.kind === "nouveau"
+                ? "Nouveau"
+                : feature.kind === "bugfix"
+                  ? "Bug fix"
+                  : "Amélioré"}
             </span>
             <h3>{feature.title}</h3>
             <p className="pn-where">{feature.where}</p>
-            <p className="pn-text">{feature.text}</p>
+            {feature.text ? <p className="pn-text">{feature.text}</p> : null}
+            {Array.isArray(feature.fixes) && feature.fixes.length > 0 && (
+              <ul className="pn-steps">
+                {feature.fixes.map((fix) => (
+                  <li key={fix}>{fix}</li>
+                ))}
+              </ul>
+            )}
             {Array.isArray(feature.steps) && feature.steps.length > 0 && (
               <ol className="pn-steps">
                 {feature.steps.map((step) => (

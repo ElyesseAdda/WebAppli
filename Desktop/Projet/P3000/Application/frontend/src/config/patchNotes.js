@@ -6,18 +6,18 @@
  * 2. Incrémentez version
  * 3. Mettez à jour title, date et la liste features
  *
- * kind : "nouveau" | "ameliore"
+ * kind : "nouveau" | "ameliore" | "bugfix"
  * visual : identifiant du dessin de boutons dans PatchNotesModal
  */
 export const PATCH_NOTES_STORAGE_KEY = "p3000_seen_patch_notes";
 export const PATCH_NOTES_OPEN_EVENT = "p3000:open-patch-notes";
 export const PATCH_NOTES_SEEN_EVENT = "p3000:patch-notes-seen";
 
-export const PATCH_NOTES_ID = "2026-09-17-agent-conges-1.2";
+export const PATCH_NOTES_ID = "2026-09-17-agent-conges-1.3";
 
 const PATCH_NOTES = {
   id: PATCH_NOTES_ID,
-  version: "1.2",
+  version: "1.3",
   title: "Quoi de neuf ?",
   date: "Septembre 2026",
   intro: "Les congés payés de chaque agent se consultent et se corrigent désormais depuis sa carte.",
@@ -63,6 +63,18 @@ const PATCH_NOTES = {
         "Un clic sur l’alerte vous emmène aussi vers le chantier concerné",
       ],
       visual: "devis-notifications",
+    },
+    {
+      id: "bugfixes-avenant-categories",
+      kind: "bugfix",
+      title: "Bug fix",
+      where: "Avenants et frais d’agence",
+      text: "Deux correctifs pour plus de clarté dans les listes.",
+      fixes: [
+        "Les nouveaux avenants sont désormais numérotés Avenant n°01, n°02, etc.",
+        "Les catégories des frais d’agence sont désormais triées par ordre alphabétique dans le formulaire et le filtre.",
+      ],
+      visual: "bugfixes",
     },
   ],
 };
