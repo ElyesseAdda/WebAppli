@@ -13,15 +13,29 @@ export const PATCH_NOTES_STORAGE_KEY = "p3000_seen_patch_notes";
 export const PATCH_NOTES_OPEN_EVENT = "p3000:open-patch-notes";
 export const PATCH_NOTES_SEEN_EVENT = "p3000:patch-notes-seen";
 
-export const PATCH_NOTES_ID = "2026-09-15-tags-notifications-1.1.1";
+export const PATCH_NOTES_ID = "2026-09-17-agent-conges-1.2";
 
 const PATCH_NOTES = {
   id: PATCH_NOTES_ID,
-  version: "1.1",
+  version: "1.2",
   title: "Quoi de neuf ?",
   date: "Septembre 2026",
-  intro: "Suivez vos devis avec des tags, et soyez alertés dès qu'une facture ou un avenant est créé.",
+  intro: "Les congés payés de chaque agent se consultent et se corrigent désormais depuis sa carte.",
   features: [
+    {
+      id: "agent-conges",
+      kind: "nouveau",
+      title: "Congés payés sur la carte agent",
+      where: "Agent & Planning → Carte Agent",
+      text: "Vous voyez le solde de congés de l’agent : acquis, en cours, prévision et déjà pris. Cliquez sur un chiffre pour le mettre à jour, ou sur un mois pour comprendre le calcul (présence, absences…).",
+      steps: [
+        "Ouvrez la Carte Agent et sélectionnez un agent",
+        "Cliquez sur le bloc Congés sous la photo",
+        "Cliquez sur Acquis, En cours, Prévision ou Pris pour indiquer le bon nombre",
+        "Cliquez sur un mois pour voir le détail : présence, absences et calcul",
+      ],
+      visual: "agent-conges",
+    },
     {
       id: "devis-tags",
       kind: "nouveau",

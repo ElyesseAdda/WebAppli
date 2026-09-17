@@ -2,7 +2,7 @@ from rest_framework import serializers
 from django.db.models import Q
 from .models import (
     Chantier, Societe, Devis, Partie, SousPartie, LigneDetail, Client, 
-    Agent, AgentContrat, AgentContratAvenant, AgentPeriodeInactivite, Stock, Presence, StockMovement, StockHistory, Event, MonthlyHours, PointageMensuel,
+    Agent, AgentContrat, AgentContratAvenant, AgentPeriodeInactivite, AgentCongeAjustement, Stock, Presence, StockMovement, StockHistory, Event, MonthlyHours, PointageMensuel,
     Schedule, LaborCost, DevisLigne, Facture, FactureLigne, BonCommande, LigneBonCommande,
     Avenant, FactureTS, Situation, SituationLigne, SituationLigneSupplementaire, SituationLigneSpeciale,
     ChantierLigneSupplementaire, SituationLigneAvenant, AgencyExpense, AgencyExpenseOverride,
@@ -767,6 +767,24 @@ class AgentPeriodeInactiviteSerializer(serializers.ModelSerializer):
         model = AgentPeriodeInactivite
         fields = ['id', 'agent', 'date_debut', 'date_fin', 'motif', 'created_at']
         read_only_fields = ['id', 'created_at']
+
+
+class AgentCongeAjustementSerializer(serializers.ModelSerializer):
+    jours_signed = serializers.DecimalField(max_digits=6, decimal_places=2, read_only=True)
+
+    class Meta:
+        model = AgentCongeAjustement
+        fields = [
+            'id',
+            'agent',
+            'type_mouvement',
+            'jours',
+            'jours_signed',
+            'date',
+            'motif',
+            'created_at',
+        ]
+        read_only_fields = ['id', 'agent', 'created_at', 'jours_signed']
 
 
 class AgentContratAvenantSerializer(serializers.ModelSerializer):

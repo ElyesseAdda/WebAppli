@@ -6,6 +6,43 @@ import PATCH_NOTES, {
 } from "../config/patchNotes";
 import "../../static/css/patchNotes.css";
 
+function VisualAgentConges() {
+  return (
+    <div className="pn-screen">
+      <div className="pn-screen-bar">Carte Agent — Congés</div>
+      <div className="pn-kpi-row">
+        <div className="pn-kpi">
+          <strong>0</strong>
+          <span>Acquis</span>
+        </div>
+        <div className="pn-kpi pn-hit" data-label="Cliquez pour corriger">
+          <strong>1,2</strong>
+          <span>En cours</span>
+        </div>
+        <div className="pn-kpi">
+          <strong>21</strong>
+          <span>Prévision</span>
+        </div>
+        <div className="pn-kpi">
+          <strong>0</strong>
+          <span>Pris</span>
+        </div>
+      </div>
+      <div className="pn-row pn-hit" data-label="Cliquez pour le détail">
+        <span>Septembre 2026</span>
+        <strong>1,02 j</strong>
+      </div>
+      <div className="pn-conges-detail">
+        <div>2,5 × 9 / 22 = 1,02 j acquis</div>
+        <div>9 présence · 4 absences</div>
+      </div>
+      <p className="pn-caption">
+        Corrigez les compteurs au clic, puis ouvrez un mois pour voir le calcul.
+      </p>
+    </div>
+  );
+}
+
 function VisualDevisTags() {
   return (
     <div className="pn-screen">
@@ -98,6 +135,9 @@ function FeatureVisual({ feature }) {
 
   const key = feature.visual || feature.id;
 
+  if (key === "agent-conges" || feature.id === "agent-conges") {
+    return <VisualAgentConges />;
+  }
   if (key === "devis-tags" || feature.id === "devis-tags") {
     return <VisualDevisTags />;
   }

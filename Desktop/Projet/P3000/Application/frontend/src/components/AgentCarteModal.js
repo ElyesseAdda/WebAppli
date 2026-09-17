@@ -22,9 +22,13 @@ import {
 
   Typography,
 
+  Tooltip,
+
 } from "@mui/material";
 
 import CloseIcon from "@mui/icons-material/Close";
+
+import InfoOutlinedIcon from "@mui/icons-material/InfoOutlined";
 
 import PhotoCameraIcon from "@mui/icons-material/PhotoCamera";
 
@@ -449,6 +453,44 @@ const formatPct = (value, workDays) => {
   return `${Number.isInteger(rounded) ? rounded.toFixed(0) : rounded.toFixed(1)} %`;
 };
 
+const formatJours = (value) => {
+  if (value == null || value === "" || Number.isNaN(Number(value))) return "—";
+  return Number(value).toLocaleString("fr-FR", {
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 2,
+  });
+};
+
+const CONGE_INFO_TEXT = [
+  "Cliquez sur Acquis, En cours, Prévision ou Pris pour indiquer le réel à ce jour.",
+  "Le calcul continue ensuite : mois clos, congés posés, prévision restante.",
+  "2,5 jours par mois travaillé (lundi-vendredi), prorata selon le contrat.",
+  "Plafond 30 jours. Reset le 31 mai, sans report automatique.",
+].join("\n");
+
+const CONGE_KPI_ITEMS = [
+  { id: "acquis", label: "Acquis", valueKey: "acquis_clos" },
+  { id: "en_cours", label: "En cours", valueKey: "en_cours" },
+  { id: "previsionnel", label: "Prévision", valueKey: "previsionnel" },
+  { id: "pris", label: "Pris", valueKey: "pris" },
+];
+
+const congeMonthDetail = (m) => {
+  const parts = [`${formatJours(m.acquis)} j`];
+  if (m.phase === "previsionnel" || m.statut === "previsionnel") parts.push("prév.");
+  else if (m.statut === "prorata") parts.push("prorata");
+  if (m.pris) parts.push(`${m.pris} pris`);
+  return parts.join(" · ");
+};
+
+const CONGE_PHASE_LABELS = {
+  clos: "Mois clos",
+  en_cours: "Mois en cours",
+  previsionnel: "Prévision",
+};
+
+const congeMonthKey = (m) => (m ? `${m.annee}-${m.mois}` : "");
+
 const buildAgentPresenceStats = (events, startISO, endISO, joursTravail, contrats = []) => {
   const coverage = getContratCoverage(contrats);
   const workDays = getWorkDaysInRange(startISO, endISO, joursTravail, coverage);
@@ -678,6 +720,18 @@ const AgentCarteModal = ({ isOpen, handleClose, refreshAgents, agents = [] }) =>
 
   const [statsPreset, setStatsPreset] = useState("month");
 
+  const [congeData, setCongeData] = useState(null);
+
+  const [isLoadingConges, setIsLoadingConges] = useState(false);
+
+  const [congeDialogOpen, setCongeDialogOpen] = useState(false);
+
+  const [kpiEdit, setKpiEdit] = useState(null);
+  const [kpiDraft, setKpiDraft] = useState("");
+  const [kpiSaving, setKpiSaving] = useState(false);
+  const kpiSkipSaveRef = useRef(false);
+  const [selectedCongeMonth, setSelectedCongeMonth] = useState(null);
+
 
 
   const activeContrat = contrats[activeContratIndex] || null;
@@ -699,6 +753,11 @@ const AgentCarteModal = ({ isOpen, handleClose, refreshAgents, agents = [] }) =>
     setAgentEvents([]);
 
     setStatsRecapOpen(false);
+
+    setCongeData(null);
+
+    setCongeDialogOpen(false);
+    setSelectedCongeMonth(null);
 
   };
 
@@ -805,6 +864,10 @@ const AgentCarteModal = ({ isOpen, handleClose, refreshAgents, agents = [] }) =>
 
       setStatsRecapOpen(false);
 
+      setCongeDialogOpen(false);
+
+      setCongeData(null);
+
       const range = getDefaultStatsRange();
 
       setStatsDateStart(range.start);
@@ -866,6 +929,122 @@ const AgentCarteModal = ({ isOpen, handleClose, refreshAgents, agents = [] }) =>
   }, [isOpen, agentData.id]);
 
 
+
+  const congeYear = Number(String(statsDateEnd || "").slice(0, 4)) || new Date().getFullYear();
+  const congeRefDate = statsDateEnd || new Date().toISOString().slice(0, 10);
+
+
+
+  useEffect(() => {
+
+    if (!isOpen || !agentData.id) {
+
+      setCongeData(null);
+
+      setIsLoadingConges(false);
+
+      return undefined;
+
+    }
+
+    let cancelled = false;
+
+    setIsLoadingConges(true);
+
+    axios
+
+      .get(`/api/agent/${agentData.id}/conges/`, { params: { date: congeRefDate } })
+
+      .then((res) => {
+
+        if (!cancelled) setCongeData(res.data);
+
+      })
+
+      .catch(() => {
+
+        if (!cancelled) setCongeData(null);
+
+      })
+
+      .finally(() => {
+
+        if (!cancelled) setIsLoadingConges(false);
+
+      });
+
+    return () => {
+
+      cancelled = true;
+
+    };
+
+  }, [isOpen, agentData.id, congeRefDate, agentEvents]);
+
+
+
+  const refreshConges = async () => {
+
+    if (!agentData.id) return;
+
+    const res = await axios.get(`/api/agent/${agentData.id}/conges/`, {
+
+      params: { date: congeRefDate },
+
+    });
+
+    setCongeData(res.data);
+
+  };
+
+  useEffect(() => {
+    if (!selectedCongeMonth) return;
+    const next = (congeData?.mois || []).find(
+      (m) => congeMonthKey(m) === congeMonthKey(selectedCongeMonth)
+    );
+    if (!next) {
+      setSelectedCongeMonth(null);
+      return;
+    }
+    if (next !== selectedCongeMonth) setSelectedCongeMonth(next);
+  }, [congeData, selectedCongeMonth]);
+
+
+
+  const startKpiEdit = (item) => {
+    if (kpiSaving) return;
+    setKpiEdit(item.id);
+    const current = congeData?.[item.valueKey] ?? 0;
+    setKpiDraft(String(current));
+  };
+
+  const saveKpiEdit = async () => {
+    if (kpiSkipSaveRef.current) {
+      kpiSkipSaveRef.current = false;
+      return;
+    }
+    const field = kpiEdit;
+    if (!field || !agentData.id) {
+      setKpiEdit(null);
+      return;
+    }
+    const jours = Number(String(kpiDraft).replace(",", "."));
+    if (Number.isNaN(jours) || jours < 0) {
+      setMessage({ type: "error", text: "Indiquez un nombre de jours valide (0 ou plus)." });
+      setKpiEdit(null);
+      return;
+    }
+    setKpiSaving(true);
+    try {
+      const res = await axios.post(`/api/agent/${agentData.id}/conges/setup/`, { field, jours });
+      setCongeData(res.data);
+    } catch (error) {
+      setMessage({ type: "error", text: formatApiError(error, "Impossible d'enregistrer le compteur.") });
+    } finally {
+      setKpiSaving(false);
+      setKpiEdit((current) => (current === field ? null : current));
+    }
+  };
 
   const presenceStats = useMemo(() => {
 
@@ -2530,6 +2709,43 @@ const AgentCarteModal = ({ isOpen, handleClose, refreshAgents, agents = [] }) =>
 
                       </button>
 
+                      <button
+                        type="button"
+                        className="agent-carte-conges-summary"
+                        onClick={() => setCongeDialogOpen(true)}
+                        disabled={isLoadingConges || !congeData}
+                        title="Gérer les congés"
+                      >
+                        {isLoadingConges || !congeData ? (
+                          <span className="agent-carte-stats-empty">Congés...</span>
+                        ) : (
+                          <>
+                            <div className="agent-carte-conges-title">
+                              Congés {congeData.periode_courte || congeData.periode_label || congeData.year}
+                            </div>
+                            <div className="agent-carte-stats-row">
+                              <span>Acquis</span>
+                              <strong>{formatJours(congeData.acquis_clos ?? congeData.acquis)} j</strong>
+                            </div>
+                            <div className="agent-carte-stats-row">
+                              <span>En cours</span>
+                              <strong>{formatJours(congeData.en_cours_annee ?? congeData.en_cours)} j</strong>
+                            </div>
+                            <div className="agent-carte-stats-row">
+                              <span>Pris</span>
+                              <strong>{formatJours(congeData.pris)} j</strong>
+                            </div>
+                            <div className="agent-carte-stats-row">
+                              <span>Solde</span>
+                              <strong>{formatJours(congeData.solde)} j</strong>
+                            </div>
+                            <div className="agent-carte-stats-hint">
+                              Reset {congeData.reset_le || "31 mai"}
+                            </div>
+                          </>
+                        )}
+                      </button>
+
                     </div>
 
                   )}
@@ -2883,8 +3099,6 @@ const AgentCarteModal = ({ isOpen, handleClose, refreshAgents, agents = [] }) =>
                   {agentData.type_paiement === "journalier" &&
 
                     renderField("Taux journalier (€)", "taux_journalier", "number")}
-
-                  {renderField("Congé (jours)", "conge", "number")}
 
 
 
@@ -3409,6 +3623,265 @@ const AgentCarteModal = ({ isOpen, handleClose, refreshAgents, agents = [] }) =>
           Fermer
         </Button>
       </DialogActions>
+    </Dialog>
+
+    <Dialog
+      open={congeDialogOpen}
+      onClose={() => {
+        setKpiEdit(null);
+        setSelectedCongeMonth(null);
+        setCongeDialogOpen(false);
+      }}
+      maxWidth={selectedCongeMonth ? "md" : "sm"}
+      fullWidth
+      className={`agent-carte-conges-dialog${selectedCongeMonth ? " has-month-detail" : ""}`}
+    >
+      <div className="agent-carte-conges-dialog-split">
+        <div className="agent-carte-conges-dialog-main">
+      <DialogTitle sx={{ pr: 1, pb: 1 }}>
+        <div className="agent-carte-conges-dialog-head">
+          <div>
+            <div className="agent-carte-conges-dialog-kicker">Congés payés</div>
+            <div className="agent-carte-conges-dialog-period">
+              {congeData?.periode_label || congeData?.periode_courte || congeYear}
+            </div>
+          </div>
+          <div className="agent-carte-conges-dialog-actions">
+            <Tooltip
+              arrow
+              enterTouchDelay={0}
+              title={
+                <Typography component="span" sx={{ whiteSpace: "pre-line", fontSize: "0.78rem", display: "block" }}>
+                  {CONGE_INFO_TEXT}
+                </Typography>
+              }
+            >
+              <IconButton size="small" aria-label="Règles de calcul">
+                <InfoOutlinedIcon fontSize="small" />
+              </IconButton>
+            </Tooltip>
+            <IconButton
+              aria-label="Fermer"
+              onClick={() => {
+                setSelectedCongeMonth(null);
+                setCongeDialogOpen(false);
+              }}
+              size="small"
+            >
+              <CloseIcon />
+            </IconButton>
+          </div>
+        </div>
+      </DialogTitle>
+      <DialogContent dividers>
+        <div className="agent-carte-conges-hero">
+          <strong>{formatJours(congeData?.solde)} j</strong>
+          <span>Solde disponible</span>
+        </div>
+        <div className="agent-carte-conges-kpis">
+          {CONGE_KPI_ITEMS.map((item) => (
+            <button
+              key={item.id}
+              type="button"
+              className={`agent-carte-conges-kpi${congeData?.setup?.[item.id] ? " is-set" : ""}`}
+              onClick={() => startKpiEdit(item)}
+              disabled={kpiSaving}
+              title="Cliquer pour définir le nombre"
+            >
+              {kpiEdit === item.id ? (
+                <input
+                  autoFocus
+                  type="number"
+                  min="0"
+                  step="0.5"
+                  value={kpiDraft}
+                  aria-label={item.label}
+                  onChange={(e) => setKpiDraft(e.target.value)}
+                  onClick={(e) => e.stopPropagation()}
+                  onBlur={saveKpiEdit}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      e.preventDefault();
+                      e.currentTarget.blur();
+                    }
+                    if (e.key === "Escape") {
+                      e.preventDefault();
+                      kpiSkipSaveRef.current = true;
+                      setKpiEdit(null);
+                    }
+                  }}
+                />
+              ) : (
+                <strong>{formatJours(congeData?.[item.valueKey] ?? (item.id === "acquis" ? congeData?.acquis : 0))}</strong>
+              )}
+              <span>{item.label}</span>
+            </button>
+          ))}
+        </div>
+
+        <section className="agent-carte-conges-section">
+          <div className="agent-carte-conges-section-title">Acquisition</div>
+          <ul className="agent-carte-conges-months">
+            {(congeData?.mois || [])
+              .filter((m) => {
+                const phase = m.phase || m.statut;
+                if (phase === "previsionnel" || phase === "futur") return false;
+                return Number(m.acquis) > 0 || Number(m.pris) > 0 || phase === "en_cours";
+              })
+              .map((m) => {
+                const isOpen = congeMonthKey(selectedCongeMonth) === congeMonthKey(m);
+                return (
+                  <li key={congeMonthKey(m)}>
+                    <button
+                      type="button"
+                      className={`agent-carte-conges-month agent-carte-conges-month-${m.phase || m.statut || "clos"}${isOpen ? " is-open" : ""}`}
+                      onClick={() => setSelectedCongeMonth(isOpen ? null : m)}
+                    >
+                      <span>{m.label}</span>
+                      <span>{congeMonthDetail(m)}</span>
+                    </button>
+                  </li>
+                );
+              })}
+          </ul>
+        </section>
+
+        {congeData?.prises?.length > 0 && (
+          <section className="agent-carte-conges-section">
+            <div className="agent-carte-conges-section-title">Posés</div>
+            <ul className="agent-carte-conges-moves">
+              {congeData.prises.map((group) => (
+                <li key={`${group.start}-${group.end}`}>
+                  <span>
+                    {formatDateFr(group.start)}
+                    {group.start !== group.end ? ` → ${formatDateFr(group.end)}` : ""}
+                  </span>
+                  <strong>-{group.days} j</strong>
+                </li>
+              ))}
+            </ul>
+          </section>
+        )}
+
+        {congeData?.autres_conges?.length > 0 && (
+          <section className="agent-carte-conges-section">
+            <div className="agent-carte-conges-section-title">Autres</div>
+            <ul className="agent-carte-conges-moves">
+              {congeData.autres_conges.map((group) => (
+                <li key={`other-${group.start}-${group.designation}`}>
+                  <span>
+                    {formatDateFr(group.start)}
+                    {group.start !== group.end ? ` → ${formatDateFr(group.end)}` : ""}
+                    {" · "}
+                    {group.designation}
+                  </span>
+                  <strong>{group.days} j</strong>
+                </li>
+              ))}
+            </ul>
+          </section>
+        )}
+      </DialogContent>
+        </div>
+        {selectedCongeMonth && (
+          <aside className="agent-carte-conges-month-panel">
+            {(() => {
+              const detail = selectedCongeMonth.detail || {};
+              const phase = detail.phase || selectedCongeMonth.phase;
+              const rows = [
+                ["Jours ouvrés du mois", detail.jours_ouvres_mois ?? selectedCongeMonth.jours_ouvres_mois],
+                ["Jours écoulés", detail.jours_ecoules],
+                ["Sous contrat", detail.jours_contrat ?? selectedCongeMonth.jours_ouvres_contrat],
+                ["Hors contrat", detail.hors_contrat],
+                ["Non acquis", detail.non_acquis ?? selectedCongeMonth.jours_non_acquis],
+                ["Jours comptés", detail.jours_comptes],
+                ["Congés posés", detail.pris ?? selectedCongeMonth.pris],
+              ].filter(([label, value]) => {
+                if (value === undefined || value === null) return false;
+                if (label === "Hors contrat" && !value) return false;
+                return true;
+              });
+              return (
+                <>
+                  <div className="agent-carte-conges-month-panel-head">
+                    <div>
+                      <div className="agent-carte-conges-dialog-kicker">
+                        {CONGE_PHASE_LABELS[phase] || "Détail"}
+                      </div>
+                      <strong>{selectedCongeMonth.label}</strong>
+                      {detail.au ? (
+                        <span>
+                          Du {formatDateFr(detail.du)} au {formatDateFr(detail.au)}
+                        </span>
+                      ) : null}
+                    </div>
+                    <IconButton
+                      size="small"
+                      aria-label="Fermer le détail"
+                      onClick={() => setSelectedCongeMonth(null)}
+                    >
+                      <CloseIcon fontSize="small" />
+                    </IconButton>
+                  </div>
+
+                  <div className="agent-carte-conges-month-formula">
+                    <span>
+                      {formatJours(detail.taux ?? 2.5)} × {detail.jours_comptes ?? 0} /{" "}
+                      {detail.jours_ouvres_mois ?? selectedCongeMonth.jours_ouvres_mois ?? 0}
+                    </span>
+                    <strong>{formatJours(detail.acquis ?? selectedCongeMonth.acquis)} j acquis</strong>
+                    <em>2,5 j × jours comptés / jours ouvrés du mois</em>
+                    {detail.plafond ? <em>Plafond annuel de 30 j appliqué</em> : null}
+                  </div>
+
+                  <div className="agent-carte-conges-month-kpis">
+                    {[
+                      ["Présence", detail.presence],
+                      ["Absence", detail.absence],
+                      ["Congés", detail.conge],
+                      ["École", detail.ecole],
+                    ].map(([label, value]) => (
+                      <div key={label}>
+                        <strong>{value ?? 0}</strong>
+                        <span>{label}</span>
+                      </div>
+                    ))}
+                  </div>
+
+                  <dl className="agent-carte-conges-month-rows">
+                    {rows.map(([label, value]) => (
+                      <div key={label}>
+                        <dt>{label}</dt>
+                        <dd>{value} j</dd>
+                      </div>
+                    ))}
+                  </dl>
+
+                  {(detail.evenements || []).length > 0 && (
+                    <>
+                      <div className="agent-carte-conges-section-title">Événements</div>
+                      <ul className="agent-carte-conges-moves">
+                        {detail.evenements.map((item) => (
+                          <li key={`${item.type}-${item.start}-${item.designation}`}>
+                            <span>
+                              {formatDateFr(item.start)}
+                              {item.start !== item.end ? ` → ${formatDateFr(item.end)}` : ""}
+                              {" · "}
+                              {item.designation}
+                              {item.compte === false ? " · non acquis" : ""}
+                            </span>
+                            <strong>{item.days} j</strong>
+                          </li>
+                        ))}
+                      </ul>
+                    </>
+                  )}
+                </>
+              );
+            })()}
+          </aside>
+        )}
+      </div>
     </Dialog>
 
   </>

@@ -2476,6 +2476,118 @@ class AgentViewSet(viewsets.ModelViewSet):
             return Response(AgentContratAvenantSerializer(avenant).data)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
+    @action(detail=True, methods=['get'], url_path='conges')
+    def conges(self, request, pk=None):
+        """Solde de congés : acquisition 2,5 j/mois, prises et ajustements."""
+        from .agent_conges import build_agent_conges
+
+        agent = self.get_object()
+        from django.utils.dateparse import parse_date
+
+        ref_date = parse_date(request.query_params.get('date') or '')
+        year_param = request.query_params.get('year')
+        year = None
+        if year_param:
+            try:
+                year = int(year_param)
+            except (TypeError, ValueError):
+                return Response({'error': 'Année invalide'}, status=status.HTTP_400_BAD_REQUEST)
+        return Response(build_agent_conges(agent, year=year, ref_date=ref_date))
+
+    @action(detail=True, methods=['post'], url_path='conges/setup')
+    def conges_setup(self, request, pk=None):
+        """Définit un compteur (acquis, en cours, prévision, pris) pour démarrer le calcul."""
+        from decimal import Decimal, InvalidOperation
+
+        from .agent_conges import KPI_FIELDS, set_agent_kpi
+
+        agent = self.get_object()
+        field = str(request.data.get("field") or "").strip()
+        if field not in KPI_FIELDS:
+            return Response(
+                {"error": "Indicateur invalide"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        raw = request.data.get("jours")
+        try:
+            target = Decimal(str(raw).replace(",", ".").strip())
+        except (InvalidOperation, TypeError, AttributeError):
+            return Response(
+                {"error": "Indiquez un nombre de jours valide"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        try:
+            data = set_agent_kpi(agent, field, target)
+        except ValueError as exc:
+            return Response({"error": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+        return Response(data)
+
+    @action(detail=True, methods=['post'], url_path='conges/solde-initial')
+    def conges_solde_initial(self, request, pk=None):
+        """Fixe le solde de congés à ce jour pour démarrer le comptage."""
+        from decimal import Decimal, InvalidOperation
+
+        from .agent_conges import set_agent_solde_initial
+
+        agent = self.get_object()
+        raw = request.data.get("jours")
+        try:
+            target = Decimal(str(raw).replace(",", ".").strip())
+        except (InvalidOperation, TypeError, AttributeError):
+            return Response(
+                {"error": "Indiquez un nombre de jours valide"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        try:
+            data = set_agent_solde_initial(agent, target)
+        except ValueError as exc:
+            return Response({"error": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+        return Response(data)
+
+    @action(detail=True, methods=['post'], url_path='conges/ajustements')
+    def conges_ajustements(self, request, pk=None):
+        """Ajoute un crédit ou un débit manuel de congés."""
+        from .serializers import AgentCongeAjustementSerializer
+
+        agent = self.get_object()
+        serializer = AgentCongeAjustementSerializer(
+            data={**request.data, 'agent': agent.id}
+        )
+        if not serializer.is_valid():
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+        jours = serializer.validated_data.get('jours')
+        if jours is None or jours <= 0:
+            return Response(
+                {'error': 'Le nombre de jours doit être supérieur à 0'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        ajustement = serializer.save(agent=agent)
+        return Response(
+            AgentCongeAjustementSerializer(ajustement).data,
+            status=status.HTTP_201_CREATED,
+        )
+
+    @action(
+        detail=True,
+        methods=['delete'],
+        url_path=r'conges/ajustements/(?P<ajustement_id>[^/.]+)',
+    )
+    def conges_ajustement_detail(self, request, pk=None, ajustement_id=None):
+        """Supprime un ajustement manuel de congés."""
+        from .models import AgentCongeAjustement
+
+        agent = self.get_object()
+        try:
+            ajustement = AgentCongeAjustement.objects.get(pk=ajustement_id, agent=agent)
+        except AgentCongeAjustement.DoesNotExist:
+            return Response(
+                {'error': 'Ajustement non trouvé'},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+        ajustement.delete()
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
     @action(detail=True, methods=['post'], url_path='sync-effectif')
     def sync_effectif(self, request, pk=None):
         """Recalcule is_active depuis les contrats (après saisie carte agent)."""

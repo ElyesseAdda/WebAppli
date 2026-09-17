@@ -236,14 +236,18 @@
   display: flex;
   justify-content: space-between;
   align-items: center;
-  font-size: 0.72rem;
+  font-size: 0.6rem;
   color: #355066;
   margin-bottom: 3px;
 }
 
+.agent-carte-stats-row span {
+  font-size: 0.58rem;
+}
+
 .agent-carte-stats-row strong {
   color: #0d4a7a;
-  font-size: 0.78rem;
+  font-size: 0.68rem;
 }
 
 .agent-carte-stats-bar {
@@ -290,6 +294,202 @@
   grid-template-columns: repeat(3, 1fr);
   gap: 8px;
   margin-bottom: 14px;
+}
+
+.agent-carte-conges-kpis {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+.agent-carte-conges-kpi {
+  background: #f4f8fb;
+  border-radius: 10px;
+  padding: 10px 6px;
+  text-align: center;
+  border: 1px solid transparent;
+  cursor: pointer;
+  font: inherit;
+  color: inherit;
+}
+
+.agent-carte-conges-kpi:hover:not(:disabled),
+.agent-carte-conges-kpi.is-set {
+  border-color: #1b78bc;
+  background: #eaf4fb;
+}
+
+.agent-carte-conges-kpi:disabled {
+  cursor: default;
+  opacity: 0.75;
+}
+
+.agent-carte-conges-kpi strong {
+  display: block;
+  color: #0d4a7a;
+  font-size: 0.98rem;
+}
+
+.agent-carte-conges-kpi span {
+  font-size: 0.64rem;
+  color: #5d7386;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.agent-carte-conges-kpi input {
+  width: 100%;
+  box-sizing: border-box;
+  border: none;
+  background: #fff;
+  border-radius: 6px;
+  text-align: center;
+  font-size: 0.98rem;
+  font-weight: 700;
+  color: #0d4a7a;
+  padding: 2px 4px;
+}
+
+.agent-carte-conges-kpi input:focus {
+  outline: 2px solid #1b78bc;
+}
+
+.agent-carte-conges-dialog .MuiDialog-paper {
+  border-radius: 16px;
+}
+
+.agent-carte-conges-dialog-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.agent-carte-conges-dialog-kicker {
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: #1b78bc;
+}
+
+.agent-carte-conges-dialog-period {
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: #12324a;
+  text-transform: capitalize;
+}
+
+.agent-carte-conges-dialog-actions {
+  display: flex;
+  align-items: center;
+}
+
+.agent-carte-conges-hero {
+  text-align: center;
+  padding: 4px 0 16px;
+}
+
+.agent-carte-conges-hero strong {
+  display: block;
+  font-size: 2rem;
+  line-height: 1.1;
+  color: #0d4a7a;
+  letter-spacing: -0.03em;
+}
+
+.agent-carte-conges-hero span {
+  font-size: 0.72rem;
+  color: #5d7386;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.agent-carte-conges-setup {
+  background: #f4f8fb;
+  border: 1px solid #d5e6f2;
+  border-radius: 12px;
+  padding: 12px 14px 14px;
+  margin-bottom: 4px;
+}
+
+.agent-carte-conges-setup-head {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: #12324a;
+  margin-bottom: 8px;
+}
+
+.agent-carte-conges-setup-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.agent-carte-conges-setup-row input {
+  width: 110px;
+  box-sizing: border-box;
+  border: 1px solid #c5d8e8;
+  border-radius: 8px;
+  padding: 8px 10px;
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: #0d4a7a;
+  background: #fff;
+}
+
+.agent-carte-conges-setup-row input:focus {
+  outline: none;
+  border-color: #1b78bc;
+}
+
+.agent-carte-conges-setup-row > span {
+  color: #5d7386;
+  font-size: 0.85rem;
+}
+
+.agent-carte-conges-setup-meta {
+  margin-top: 8px;
+  font-size: 0.72rem;
+  color: #5d7386;
+}
+
+.agent-carte-conges-section {
+  margin-top: 18px;
+}
+
+.agent-carte-conges-section-title {
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #7a8fa3;
+  margin-bottom: 8px;
+}
+
+.agent-carte-conges-moves {
+  list-style: none;
+  margin: 8px 0 0;
+  padding: 0;
+}
+
+.agent-carte-conges-moves li {
+  display: grid;
+  grid-template-columns: 1fr auto auto;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 0;
+  border-bottom: 1px solid #edf2f6;
+  font-size: 0.8rem;
+  color: #355066;
+}
+
+.agent-carte-conges-moves strong {
+  color: #0d4a7a;
 }
 
 .agent-carte-stats-recap-kpis div {
@@ -366,6 +566,259 @@
 .agent-carte-stats-recap-info span {
   font-size: 0.72rem;
   color: #5d7386;
+}
+
+.agent-carte-conges-summary {
+  width: 100%;
+  border: 1px solid #d5e6f2;
+  background: #fff;
+  border-radius: 10px;
+  padding: 10px 8px 8px;
+  cursor: pointer;
+  text-align: left;
+  color: inherit;
+}
+
+.agent-carte-conges-summary:hover:not(:disabled) {
+  border-color: #1b78bc;
+}
+
+.agent-carte-conges-title {
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: #1b78bc;
+  margin-bottom: 6px;
+}
+
+.agent-carte-conges-form {
+  display: grid;
+  grid-template-columns: 110px 80px 1fr auto;
+  gap: 8px;
+}
+
+.agent-carte-conges-form input,
+.agent-carte-conges-form select {
+  width: 100%;
+  box-sizing: border-box;
+  border: 1px solid #c5d8e8;
+  border-radius: 6px;
+  padding: 6px 8px;
+  font-size: 0.8rem;
+}
+
+.agent-carte-conges-form input[type="text"] {
+  min-width: 0;
+}
+
+@media (max-width: 520px) {
+  .agent-carte-conges-form {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .agent-carte-conges-form input[type="text"],
+  .agent-carte-conges-form button {
+    grid-column: 1 / -1;
+  }
+}
+
+.agent-carte-conges-dialog.has-month-detail .MuiDialog-paper {
+  max-width: 920px;
+}
+
+.agent-carte-conges-dialog-split {
+  display: flex;
+  align-items: stretch;
+  min-height: 0;
+  max-height: calc(100vh - 64px);
+}
+
+.agent-carte-conges-dialog-main {
+  flex: 1 1 0;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.agent-carte-conges-dialog-main .MuiDialogContent-root {
+  flex: 1;
+}
+
+.agent-carte-conges-months {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.agent-carte-conges-months li {
+  border-bottom: 1px solid #edf2f6;
+}
+
+.agent-carte-conges-month {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  margin: 0;
+  border: 0;
+  background: transparent;
+  padding: 8px 6px;
+  font: inherit;
+  font-size: 0.8rem;
+  color: inherit;
+  cursor: pointer;
+  border-radius: 8px;
+  text-align: left;
+}
+
+.agent-carte-conges-month:hover,
+.agent-carte-conges-month.is-open {
+  background: #eef6fb;
+}
+
+.agent-carte-conges-month-en_cours span:last-child,
+.agent-carte-conges-month-previsionnel span:last-child {
+  color: #1b78bc;
+}
+
+.agent-carte-conges-month-panel {
+  width: 320px;
+  flex: 0 0 320px;
+  box-sizing: border-box;
+  border-left: 1px solid #d5e6f2;
+  background: #f6fafc;
+  padding: 16px 16px 20px;
+  overflow: auto;
+}
+
+.agent-carte-conges-month-panel-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.agent-carte-conges-month-panel-head strong {
+  display: block;
+  font-size: 1rem;
+  color: #12324a;
+}
+
+.agent-carte-conges-month-panel-head span {
+  display: block;
+  font-size: 0.72rem;
+  color: #5d7386;
+  margin-top: 2px;
+}
+
+.agent-carte-conges-month-formula {
+  background: #fff;
+  border: 1px solid #d5e6f2;
+  border-radius: 12px;
+  padding: 12px;
+  text-align: center;
+  margin-bottom: 12px;
+}
+
+.agent-carte-conges-month-formula span {
+  display: block;
+  font-size: 0.85rem;
+  color: #355066;
+}
+
+.agent-carte-conges-month-formula strong {
+  display: block;
+  font-size: 1.25rem;
+  color: #0d4a7a;
+  margin: 4px 0;
+}
+
+.agent-carte-conges-month-formula em {
+  display: block;
+  font-style: normal;
+  font-size: 0.7rem;
+  color: #7a8fa3;
+}
+
+.agent-carte-conges-month-kpis {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.agent-carte-conges-month-kpis div {
+  background: #fff;
+  border-radius: 10px;
+  padding: 8px;
+  text-align: center;
+}
+
+.agent-carte-conges-month-kpis strong {
+  display: block;
+  color: #0d4a7a;
+  font-size: 1.05rem;
+}
+
+.agent-carte-conges-month-kpis span {
+  font-size: 0.68rem;
+  color: #5d7386;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.agent-carte-conges-month-rows {
+  margin: 0 0 12px;
+}
+
+.agent-carte-conges-month-rows > div {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 5px 0;
+  border-bottom: 1px solid #e6eef4;
+  font-size: 0.78rem;
+}
+
+.agent-carte-conges-month-rows dt {
+  color: #5d7386;
+}
+
+.agent-carte-conges-month-rows dd {
+  margin: 0;
+  font-weight: 700;
+  color: #12324a;
+}
+
+.agent-carte-conges-month-panel .agent-carte-conges-moves li {
+  grid-template-columns: 1fr auto;
+  align-items: start;
+  font-size: 0.68rem;
+  line-height: 1.3;
+}
+
+.agent-carte-conges-month-panel .agent-carte-conges-moves li span {
+  font-size: 0.68rem;
+  line-height: 1.3;
+}
+
+@media (max-width: 720px) {
+  .agent-carte-conges-dialog-split {
+    flex-direction: column;
+    max-height: calc(100vh - 32px);
+  }
+
+  .agent-carte-conges-month-panel {
+    width: auto;
+    flex-basis: auto;
+    max-height: 42vh;
+    border-left: 0;
+    border-top: 1px solid #d5e6f2;
+  }
 }
 
 .agent-carte-fields {

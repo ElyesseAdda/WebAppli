@@ -755,6 +755,70 @@ class AgentPeriodeInactivite(models.Model):
         return f'{self.agent} inactif {self.date_debut} → {fin}'
 
 
+class AgentCongeAjustement(models.Model):
+    """Crédit ou débit manuel du solde de congés (report, correction, don, etc.)."""
+    TYPE_CHOICES = [
+        ('ajout', 'Ajout'),
+        ('retrait', 'Retrait'),
+    ]
+
+    agent = models.ForeignKey(
+        Agent,
+        on_delete=models.CASCADE,
+        related_name='conge_ajustements',
+    )
+    type_mouvement = models.CharField(max_length=10, choices=TYPE_CHOICES, default='ajout')
+    jours = models.DecimalField(
+        max_digits=6,
+        decimal_places=2,
+        help_text="Nombre de jours (toujours positif ; le sens est donné par type_mouvement)",
+    )
+    date = models.DateField(help_text="Date de l'ajustement (année de rattachement)")
+    motif = models.CharField(max_length=255, blank=True, default='')
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-date', '-id']
+        verbose_name = 'Ajustement congés agent'
+        verbose_name_plural = 'Ajustements congés agents'
+
+    def __str__(self):
+        signe = '+' if self.type_mouvement == 'ajout' else '-'
+        return f'{self.agent} {signe}{self.jours} j ({self.date})'
+
+    @property
+    def jours_signed(self):
+        value = self.jours or 0
+        return value if self.type_mouvement == 'ajout' else -value
+
+
+class AgentCongeSetup(models.Model):
+    """Valeurs de départ par agent et par période (1er juin – 31 mai)."""
+    agent = models.ForeignKey(
+        Agent,
+        on_delete=models.CASCADE,
+        related_name='conge_setups',
+    )
+    period_start = models.DateField()
+    acquis = models.DecimalField(max_digits=6, decimal_places=2, null=True, blank=True)
+    acquis_live = models.DecimalField(max_digits=6, decimal_places=2, null=True, blank=True)
+    en_cours = models.DecimalField(max_digits=6, decimal_places=2, null=True, blank=True)
+    en_cours_live = models.DecimalField(max_digits=6, decimal_places=2, null=True, blank=True)
+    previsionnel = models.DecimalField(max_digits=6, decimal_places=2, null=True, blank=True)
+    previsionnel_live = models.DecimalField(max_digits=6, decimal_places=2, null=True, blank=True)
+    pris = models.DecimalField(max_digits=6, decimal_places=2, null=True, blank=True)
+    pris_live = models.DecimalField(max_digits=6, decimal_places=2, null=True, blank=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        unique_together = ('agent', 'period_start')
+        verbose_name = 'Setup congés agent'
+        verbose_name_plural = 'Setups congés agents'
+
+    def __str__(self):
+        return f'{self.agent} {self.period_start}'
+
+
 class MonthlyPresence(models.Model):
     agent = models.ForeignKey(Agent, on_delete=models.CASCADE)
     month = models.DateField()  # Utilisez le premier jour du mois pour représenter le mois
