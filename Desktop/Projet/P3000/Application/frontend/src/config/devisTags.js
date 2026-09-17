@@ -1,6 +1,9 @@
 import { formatAvenantNumero } from "../utils/formatAvenantNumero";
 
+export const DEFAULT_DEVIS_TAG = "En attente";
+
 export const DEVIS_TAGS = [
+  { value: "En attente", label: "En attente", bg: "#eceff1", color: "#455a64" },
   { value: "En attente BDC", label: "En attente BDC", bg: "#fff3e0", color: "#e65100" },
   { value: "BDC reçus", label: "BDC reçus", bg: "#e8eaf6", color: "#3949ab" },
   { value: "Validé", label: "Validé", bg: "#e8f5e9", color: "#2e7d32" },
@@ -18,8 +21,8 @@ export const DEVIS_TAG_VALUES = DEVIS_TAGS.map((tag) => tag.value);
 // Groupes d'affichage = tags incompatibles sur la même ligne
 export const DEVIS_TAG_ROWS = [
   {
-    label: "Suivi BDC",
-    values: ["En attente BDC", "BDC reçus"],
+    label: "Suivi",
+    values: ["En attente", "En attente BDC", "BDC reçus"],
   },
   {
     label: "Décision",
@@ -135,9 +138,8 @@ export const applyTransformTagToDevis = async (
 };
 
 const LEGACY_TAG_MAP = {
-  "En Attente": "En attente BDC",
-  "en attente": "En attente BDC",
-  "En attente": "En attente BDC",
+  "En Attente": "En attente",
+  "en attente": "En attente",
   "En attente de travaux": "Travaux non réalisés",
   "Travaux non réaliser": "Travaux non réalisés",
   "Travaux non realises": "Travaux non réalisés",

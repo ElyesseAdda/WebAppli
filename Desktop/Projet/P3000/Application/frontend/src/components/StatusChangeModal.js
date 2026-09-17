@@ -32,6 +32,7 @@ const StatusChangeModal = ({
       return ["En cours", "Attente paiement", "Payée"];
     }
     return [
+      "En attente",
       "En attente BDC",
       "BDC reçus",
       "Validé",
