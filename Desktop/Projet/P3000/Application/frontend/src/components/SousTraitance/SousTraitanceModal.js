@@ -46,7 +46,7 @@ import ContratSansDocumentForm from "./ContratSansDocumentForm";
 import SousTraitantForm from "./SousTraitantForm";
 import { RegeneratePDFIconButton } from "../shared/RegeneratePDFButton";
 import { DOCUMENT_TYPES } from "../../config/documentTypeConfig";
-import { COLORS } from "../../constants/colors";
+import { formatAvenantNumero } from "../../utils/formatAvenantNumero";
 
 const SousTraitanceModal = ({ open, onClose, chantierId, onUpdate }) => {
   const [sousTraitants, setSousTraitants] = useState([]);
@@ -243,7 +243,7 @@ const SousTraitanceModal = ({ open, onClose, chantierId, onUpdate }) => {
     
     return parts.map((part, index) => 
       regex.test(part) ? (
-        <span key={index} style={{ backgroundColor: COLORS.warningLight, fontWeight: 'bold' }}>
+        <span key={index} style={{ backgroundColor: '#ffeb3b', fontWeight: 'bold' }}>
           {part}
         </span>
       ) : part
@@ -623,7 +623,7 @@ const SousTraitanceModal = ({ open, onClose, chantierId, onUpdate }) => {
                             variant="caption"
                             sx={{
                               backgroundColor: "rgba(255, 152, 0, 0.1)",
-                              color: COLORS.warningDark,
+                              color: "#f57c00",
                               px: 1,
                               py: 0.5,
                               borderRadius: 1,
@@ -653,7 +653,7 @@ const SousTraitanceModal = ({ open, onClose, chantierId, onUpdate }) => {
                           }}
                           sx={{
                             mr: 2.5,
-                            color: COLORS.successDark,
+                            color: "#2e7d32",
                             "&:hover": {
                               backgroundColor: "rgba(46, 125, 50, 0.1)",
                             },
@@ -674,7 +674,7 @@ const SousTraitanceModal = ({ open, onClose, chantierId, onUpdate }) => {
                           }}
                           sx={{
                             mr: 2.5,
-                            color: COLORS.accent,
+                            color: "#9c27b0",
                             "&:hover": {
                               backgroundColor: "rgba(156, 39, 176, 0.1)",
                             },
@@ -694,7 +694,7 @@ const SousTraitanceModal = ({ open, onClose, chantierId, onUpdate }) => {
                               }}
                               sx={{
                                 mr: sousTraitant.contrat.sans_contrat ? 1 : 2.5,
-                                color: COLORS.infoDark,
+                                color: "#1976d2",
                                 "&:hover": {
                                   backgroundColor: "rgba(25, 118, 210, 0.1)",
                                 },
@@ -732,7 +732,7 @@ const SousTraitanceModal = ({ open, onClose, chantierId, onUpdate }) => {
                                   }}
                                   sx={{
                                     mr: 1,
-                                    color: COLORS.infoDark,
+                                    color: "#1976d2",
                                     "&:hover": {
                                       backgroundColor: "rgba(25, 118, 210, 0.1)",
                                     },
@@ -750,7 +750,7 @@ const SousTraitanceModal = ({ open, onClose, chantierId, onUpdate }) => {
                                   }}
                                   sx={{
                                     mr: 2.5,
-                                    color: COLORS.error,
+                                    color: "#d32f2f",
                                     "&:hover": {
                                       backgroundColor: "rgba(211, 47, 47, 0.1)",
                                     },
@@ -772,7 +772,7 @@ const SousTraitanceModal = ({ open, onClose, chantierId, onUpdate }) => {
                             }}
                             sx={{
                               mr: 2.5,
-                              color: COLORS.infoDark,
+                              color: "#1976d2",
                               "&:hover": {
                                 backgroundColor: "rgba(25, 118, 210, 0.1)",
                               },
@@ -929,7 +929,7 @@ const SousTraitanceModal = ({ open, onClose, chantierId, onUpdate }) => {
                                             )
                                           }
                                           sx={{
-                                            color: COLORS.error,
+                                            color: "#d32f2f",
                                             "&:hover": {
                                               backgroundColor:
                                                 "rgba(211, 47, 47, 0.1)",
@@ -1001,7 +1001,7 @@ const SousTraitanceModal = ({ open, onClose, chantierId, onUpdate }) => {
                                         },
                                       }}
                                     >
-                                      Avenant n°{avenant.numero}
+                                      {formatAvenantNumero(avenant.numero)}
                                     </TableCell>
                                     <TableCell sx={{ whiteSpace: "pre-line" }}>
                                       {avenant.description}
@@ -1060,7 +1060,7 @@ const SousTraitanceModal = ({ open, onClose, chantierId, onUpdate }) => {
                                                   handleGeneratePDF(
                                                     "avenant",
                                                     avenant.id,
-                                                    `Avenant ${avenant.numero} ${sousTraitant.entreprise} ${chantier?.nom || chantier?.chantier_name || "Chantier"}`
+                                                    `${formatAvenantNumero(avenant.numero)} ${sousTraitant.entreprise} ${chantier?.nom || chantier?.chantier_name || "Chantier"}`
                                                   )
                                                 }
                                                 sx={{
@@ -1107,7 +1107,7 @@ const SousTraitanceModal = ({ open, onClose, chantierId, onUpdate }) => {
                                                   handleDeleteAvenant(avenant.id)
                                                 }
                                                 sx={{
-                                                  color: COLORS.error,
+                                                  color: "#d32f2f",
                                                   "&:hover": {
                                                     backgroundColor:
                                                       "rgba(211, 47, 47, 0.1)",
@@ -1262,7 +1262,7 @@ const SousTraitanceModal = ({ open, onClose, chantierId, onUpdate }) => {
               sx={{
                 '& .MuiOutlinedInput-root': {
                   '&:hover fieldset': {
-                    borderColor: COLORS.infoDark,
+                    borderColor: '#1976d2',
                   },
                 },
               }}
@@ -1342,7 +1342,7 @@ const SousTraitanceModal = ({ open, onClose, chantierId, onUpdate }) => {
                           variant="caption"
                           sx={{
                             backgroundColor: "rgba(76, 175, 80, 0.1)",
-                            color: COLORS.successDark,
+                            color: "#2e7d32",
                             px: 1,
                             py: 0.5,
                             borderRadius: 1,

@@ -21,7 +21,7 @@ from .serializers import (
     DocumentListSerializer, 
     FolderItemSerializer
 )
-from .utils import build_document_key, generate_presigned_url, generate_presigned_post, custom_slugify, clean_drive_path
+from .utils import build_document_key, generate_presigned_url, generate_presigned_post, custom_slugify, clean_drive_path, format_avenant_numero, get_next_chantier_avenant_numero
 from rest_framework.pagination import PageNumberPagination
 from rest_framework.decorators import action, api_view, permission_classes
 from django.http import JsonResponse, HttpResponse
@@ -50,7 +50,7 @@ from .models import (
     AgencyExpenseAggregate, AgentPrime, Color, LigneSpeciale, FactureFournisseurMateriel,
     RecapFinancierPreference,
     SuiviPaiementSousTraitantMensuel, FactureSuiviSousTraitant, LigneMasqueeTableauSousTraitant, LigneMasqueeTableauFournisseur, Distributeur, DistributeurMouvement, DistributeurCell, DistributeurVente, DistributeurReapproSession, DistributeurReapproLigne, DistributeurFrais, StockProduct, StockProductBestPurchase, StockPurchase, StockPurchaseItem, StockLot, StockLoss,
-    Agence,
+    Agence, UserNotification, DevisTagHistory, DEVIS_STATUS_CHOICES,
 )
 from .drive_automation import drive_automation
 from .models import compute_agency_expense_aggregate_for_month
@@ -397,6 +397,7 @@ class DevisViewSet(viewsets.ModelViewSet):
             'appel_offres',
             'appel_offres__societe',
             'appel_offres__societe__client_name',
+            'status_updated_by',
         )
         .prefetch_related('lignes', 'client')
         .order_by('-date_creation')
@@ -2475,6 +2476,118 @@ class AgentViewSet(viewsets.ModelViewSet):
             return Response(AgentContratAvenantSerializer(avenant).data)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
+    @action(detail=True, methods=['get'], url_path='conges')
+    def conges(self, request, pk=None):
+        """Solde de congés : acquisition 2,5 j/mois, prises et ajustements."""
+        from .agent_conges import build_agent_conges
+
+        agent = self.get_object()
+        from django.utils.dateparse import parse_date
+
+        ref_date = parse_date(request.query_params.get('date') or '')
+        year_param = request.query_params.get('year')
+        year = None
+        if year_param:
+            try:
+                year = int(year_param)
+            except (TypeError, ValueError):
+                return Response({'error': 'Année invalide'}, status=status.HTTP_400_BAD_REQUEST)
+        return Response(build_agent_conges(agent, year=year, ref_date=ref_date))
+
+    @action(detail=True, methods=['post'], url_path='conges/setup')
+    def conges_setup(self, request, pk=None):
+        """Définit un compteur (acquis, en cours, prévision, pris) pour démarrer le calcul."""
+        from decimal import Decimal, InvalidOperation
+
+        from .agent_conges import KPI_FIELDS, set_agent_kpi
+
+        agent = self.get_object()
+        field = str(request.data.get("field") or "").strip()
+        if field not in KPI_FIELDS:
+            return Response(
+                {"error": "Indicateur invalide"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        raw = request.data.get("jours")
+        try:
+            target = Decimal(str(raw).replace(",", ".").strip())
+        except (InvalidOperation, TypeError, AttributeError):
+            return Response(
+                {"error": "Indiquez un nombre de jours valide"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        try:
+            data = set_agent_kpi(agent, field, target)
+        except ValueError as exc:
+            return Response({"error": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+        return Response(data)
+
+    @action(detail=True, methods=['post'], url_path='conges/solde-initial')
+    def conges_solde_initial(self, request, pk=None):
+        """Fixe le solde de congés à ce jour pour démarrer le comptage."""
+        from decimal import Decimal, InvalidOperation
+
+        from .agent_conges import set_agent_solde_initial
+
+        agent = self.get_object()
+        raw = request.data.get("jours")
+        try:
+            target = Decimal(str(raw).replace(",", ".").strip())
+        except (InvalidOperation, TypeError, AttributeError):
+            return Response(
+                {"error": "Indiquez un nombre de jours valide"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        try:
+            data = set_agent_solde_initial(agent, target)
+        except ValueError as exc:
+            return Response({"error": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+        return Response(data)
+
+    @action(detail=True, methods=['post'], url_path='conges/ajustements')
+    def conges_ajustements(self, request, pk=None):
+        """Ajoute un crédit ou un débit manuel de congés."""
+        from .serializers import AgentCongeAjustementSerializer
+
+        agent = self.get_object()
+        serializer = AgentCongeAjustementSerializer(
+            data={**request.data, 'agent': agent.id}
+        )
+        if not serializer.is_valid():
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+        jours = serializer.validated_data.get('jours')
+        if jours is None or jours <= 0:
+            return Response(
+                {'error': 'Le nombre de jours doit être supérieur à 0'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        ajustement = serializer.save(agent=agent)
+        return Response(
+            AgentCongeAjustementSerializer(ajustement).data,
+            status=status.HTTP_201_CREATED,
+        )
+
+    @action(
+        detail=True,
+        methods=['delete'],
+        url_path=r'conges/ajustements/(?P<ajustement_id>[^/.]+)',
+    )
+    def conges_ajustement_detail(self, request, pk=None, ajustement_id=None):
+        """Supprime un ajustement manuel de congés."""
+        from .models import AgentCongeAjustement
+
+        agent = self.get_object()
+        try:
+            ajustement = AgentCongeAjustement.objects.get(pk=ajustement_id, agent=agent)
+        except AgentCongeAjustement.DoesNotExist:
+            return Response(
+                {'error': 'Ajustement non trouvé'},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+        ajustement.delete()
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
     @action(detail=True, methods=['post'], url_path='sync-effectif')
     def sync_effectif(self, request, pk=None):
         """Recalcule is_active depuis les contrats (après saisie carte agent)."""
@@ -3843,9 +3956,11 @@ class DistributeurReapproSessionViewSet(viewsets.ModelViewSet):
                         {'error': 'Cette session est déjà terminée'},
                         status=status.HTTP_400_BAD_REQUEST,
                     )
+                # of=('self',) : PostgreSQL refuse FOR UPDATE sur le côté nullable
+                # d'un OUTER JOIN (cell.stock_product est null=True).
                 lignes_locked = list(
                     session.lignes.select_related('cell', 'cell__stock_product')
-                    .select_for_update()
+                    .select_for_update(of=('self',))
                     .all()
                 )
                 by_product = collect_by_product(lignes_locked)
@@ -3863,7 +3978,7 @@ class DistributeurReapproSessionViewSet(viewsets.ModelViewSet):
                     lots = list(
                         StockLot.objects.filter(produit=product, quantite_restante__gt=0)
                         .order_by('date_achat', 'created_at')
-                        .select_for_update()
+                        .select_for_update(of=('self',))
                     )
                     restant_a_retirer = quantite
                     for lot in lots:
@@ -3908,6 +4023,20 @@ class DistributeurReapproSessionViewSet(viewsets.ModelViewSet):
                 'error': 'Stock insuffisant. Faites un achat avant de valider le mouvement.',
                 'insuffisant': insuffisant,
             }, status=status.HTTP_400_BAD_REQUEST)
+        except Exception:
+            logger.exception(
+                "Erreur inattendue lors de la terminaison de la session réappro %s",
+                pk,
+            )
+            return Response(
+                {
+                    'error': (
+                        "Erreur lors de l'enregistrement du mouvement. "
+                        "Réessayez, ou contactez le support si le problème persiste."
+                    ),
+                },
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
 
         serializer = DistributeurReapproSessionSerializer(session)
         return Response(serializer.data, status=status.HTTP_200_OK)
@@ -5558,6 +5687,7 @@ def list_devis(request):
                 'price_ht': float(devis.price_ht),
                 'price_ttc': float(devis.price_ttc),
                 'status': devis.status,
+                'tags': list(devis.tags or []) or ([devis.status] if devis.status else []),
                 'description': devis.description
             }
             data.append(devis_data)
@@ -6017,23 +6147,211 @@ def _preview_saved_devis_legacy(request, devis_id):
     except Exception as e:
         return JsonResponse({'error': str(e)}, status=400)
 
+_DEVIS_TAG_LEGACY_MAP = {
+    'En attente': 'En attente BDC',
+    'En Attente': 'En attente BDC',
+    'en attente': 'En attente BDC',
+    'En attente de travaux': 'Travaux non réalisés',
+    'Travaux non réaliser': 'Travaux non réalisés',
+    'BDC recus': 'BDC reçus',
+    'Faire TS': 'A facturer',
+}
+
+_DEVIS_EXCLUSIVE_TAG_GROUPS = [
+    ('En attente BDC', 'BDC reçus'),
+    ('Validé', 'Refusé'),
+    ('Travaux non réalisés', 'Travaux en cours', 'Travaux réalisés'),
+    ('Faire Avenant', 'A facturer', 'Facturé'),
+]
+
+
+def _canonicalize_devis_tag(tag):
+    tag = str(tag or '').strip()
+    return _DEVIS_TAG_LEGACY_MAP.get(tag, tag)
+
+
+def _apply_exclusive_devis_tags(tags):
+    """Conserve l'ordre et retire les tags incompatibles (le dernier gagne)."""
+    result = []
+    for tag in tags:
+        for group in _DEVIS_EXCLUSIVE_TAG_GROUPS:
+            if tag in group:
+                result = [item for item in result if item not in group]
+                break
+        if tag not in result:
+            result.append(tag)
+    return result
+
+
+def _normalize_devis_tags(raw_tags, fallback_status=''):
+    allowed = {choice[0] for choice in DEVIS_STATUS_CHOICES}
+    values = raw_tags if isinstance(raw_tags, list) else []
+    if not values and fallback_status:
+        values = [fallback_status]
+    normalized = []
+    seen = set()
+    for item in values:
+        tag = _canonicalize_devis_tag(item)
+        if not tag or tag in seen:
+            continue
+        if tag not in allowed:
+            continue
+        seen.add(tag)
+        normalized.append(tag)
+    return _apply_exclusive_devis_tags(normalized)
+
+
+def _format_devis_tags(tags):
+    return ' + '.join(tags) if tags else 'Aucun tag'
+
+
+def _primary_devis_status(tags):
+    for item in ('Facturé', 'Refusé', 'Validé', 'Envoyé', 'En attente BDC', 'En attente'):
+        if item in tags:
+            return item
+    return tags[0] if tags else 'En attente BDC'
+
+
+_TRANSFORM_TYPE_ALLOWED = {
+    DevisTagHistory.TRANSFORM_FACTURE,
+    DevisTagHistory.TRANSFORM_AVENANT,
+    DevisTagHistory.TRANSFORM_CIE,
+}
+
+
+def _parse_transform_meta(data):
+    raw_type = str((data or {}).get('transform_type') or '').strip().lower()
+    transform_type = raw_type if raw_type in _TRANSFORM_TYPE_ALLOWED else ''
+    document_numero = str((data or {}).get('document_numero') or '').strip()[:100]
+    preview_url = str((data or {}).get('preview_url') or '').strip()[:500]
+    if preview_url and not preview_url.startswith('/'):
+        preview_url = ''
+    return transform_type, document_numero, preview_url
+
+
 @api_view(['PUT'])
 def update_devis_status(request, devis_id):
     try:
-        devis = Devis.objects.get(id=devis_id)
-        new_status = request.data.get('status')
-        
-        # Utiliser update() pour mettre à jour uniquement le statut
-        Devis.objects.filter(id=devis_id).update(status=new_status)
-        
-        # Récupérer le devis mis à jour
-        devis.refresh_from_db()
-        
+        devis = Devis.objects.select_related('chantier').get(id=devis_id)
+        raw_tags = request.data.get('tags')
+        fallback_status = (request.data.get('status') or '').strip()
+        new_tags = _normalize_devis_tags(raw_tags, fallback_status)
+        transform_type, document_numero, preview_url = _parse_transform_meta(request.data)
+        has_transform_meta = bool(transform_type or document_numero or preview_url)
+
+        if raw_tags is None and not fallback_status:
+            return Response({'error': 'Tags manquants'}, status=400)
+        if raw_tags is not None and not isinstance(raw_tags, list):
+            return Response({'error': 'Les tags doivent être une liste'}, status=400)
+        if isinstance(raw_tags, list):
+            allowed = {choice[0] for choice in DEVIS_STATUS_CHOICES}
+            unknown = []
+            for item in raw_tags:
+                raw = str(item or '').strip()
+                if not raw:
+                    continue
+                canonical = _canonicalize_devis_tag(raw)
+                if canonical not in allowed:
+                    unknown.append(raw)
+            if unknown:
+                return Response({'error': f'Tags non autorisés : {", ".join(unknown)}'}, status=400)
+
+        old_tags = _normalize_devis_tags(devis.tags, devis.status or '')
+        tags_unchanged = old_tags == new_tags
+        if tags_unchanged and not has_transform_meta:
+            return Response({
+                'id': devis.id,
+                'status': devis.status,
+                'tags': old_tags,
+                'message': 'Tags inchangés'
+            })
+
+        from django.contrib.auth.models import User
+        actor = request.user if getattr(request.user, 'is_authenticated', False) else None
+        primary_status = _primary_devis_status(new_tags)
+
+        if not tags_unchanged:
+            Devis.objects.filter(id=devis_id).update(
+                status=primary_status,
+                tags=new_tags,
+                status_updated_at=timezone.now(),
+                status_updated_by=actor,
+            )
+            devis.refresh_from_db()
+
+        DevisTagHistory.objects.create(
+            devis=devis,
+            actor=actor,
+            old_value=_format_devis_tags(old_tags)[:255],
+            new_value=_format_devis_tags(new_tags)[:255],
+            transform_type=transform_type,
+            document_numero=document_numero,
+            preview_url=preview_url,
+        )
+
+        if not tags_unchanged or has_transform_meta:
+            recipients = User.objects.filter(is_active=True)
+            if actor:
+                recipients = recipients.exclude(pk=actor.pk)
+
+            UserNotification.objects.bulk_create([
+                UserNotification(
+                    recipient=user,
+                    actor=actor,
+                    type=UserNotification.TYPE_DEVIS_TAG,
+                    devis=devis,
+                    chantier=devis.chantier,
+                    devis_numero=devis.numero or '',
+                    chantier_name=devis.chantier.chantier_name if devis.chantier_id else '',
+                    old_value=_format_devis_tags(old_tags)[:255],
+                    new_value=_format_devis_tags(new_tags)[:255],
+                    transform_type=transform_type,
+                    document_numero=document_numero,
+                    preview_url=preview_url,
+                )
+                for user in recipients
+            ])
+
         return Response({
             'id': devis.id,
             'status': devis.status,
-            'message': 'Statut mis à jour avec succès'
+            'tags': new_tags if not tags_unchanged else old_tags,
+            'status_updated_at': devis.status_updated_at,
+            'message': 'Tags mis à jour avec succès' if not tags_unchanged else 'Transformation enregistrée'
         })
+    except Devis.DoesNotExist:
+        return Response({'error': 'Devis non trouvé'}, status=404)
+    except Exception as e:
+        return Response({'error': str(e)}, status=500)
+
+
+@api_view(['GET'])
+def get_devis_tag_history(request, devis_id):
+    try:
+        devis = Devis.objects.get(id=devis_id)
+        history = (
+            DevisTagHistory.objects
+            .filter(devis=devis)
+            .select_related('actor')
+            .order_by('-created_at')[:50]
+        )
+        results = []
+        for item in history:
+            actor_name = 'Un utilisateur'
+            if item.actor:
+                full_name = item.actor.get_full_name()
+                actor_name = full_name.strip() or item.actor.username
+            results.append({
+                'id': item.id,
+                'old_value': item.old_value,
+                'new_value': item.new_value,
+                'transform_type': item.transform_type or '',
+                'document_numero': item.document_numero or '',
+                'preview_url': item.preview_url or '',
+                'actor_name': actor_name,
+                'created_at': item.created_at,
+            })
+        return Response({'results': results})
     except Devis.DoesNotExist:
         return Response({'error': 'Devis non trouvé'}, status=404)
     except Exception as e:
@@ -8069,15 +8387,8 @@ def create_facture_ts(request):
         # Si on doit créer un nouvel avenant
         avenant_id = request.data.get('avenant_id')
         if request.data.get('create_new_avenant'):
-            # Prochain numéro : max des numéros numériques existants + 1, ou "1"
-            existing = Avenant.objects.filter(chantier_id=chantier_id).values_list('numero', flat=True)
-            next_num = 1
-            for n in existing:
-                try:
-                    next_num = max(next_num, int(n) + 1)
-                except (ValueError, TypeError):
-                    pass
-            new_avenant_number = str(next_num)
+            # Prochain numéro : 01, 02, 03…
+            new_avenant_number = get_next_chantier_avenant_numero(chantier_id)
 
             avenant = Avenant.objects.create(
                 chantier_id=chantier_id,
@@ -8104,12 +8415,29 @@ def create_facture_ts(request):
         # ✅ Transférer les coûts estimés du devis au chantier (section prévisionnel)
         recalculer_couts_estimes_chantier(chantier_id)
 
+        avenant_numero = ''
+        if avenant_id:
+            avenant_obj = Avenant.objects.filter(id=avenant_id).first()
+            if avenant_obj:
+                avenant_numero = str(avenant_obj.numero or '')
+
+        preview_url = f'/api/preview-saved-devis-v2/{devis.id}/'
+        document_numero = (
+            format_avenant_numero(avenant_numero)
+            if avenant_numero
+            else f'TS n°{next_ts_number:03d}'
+        )
+
         return Response({
             "success": True,
             "message": f"Avenant créé avec succès",
             "facture_ts_id": facture_ts.id,
             "avenant_id": avenant_id,
-            "numero_ts": next_ts_number
+            "avenant_numero": avenant_numero,
+            "numero_ts": next_ts_number,
+            "devis_id": devis.id,
+            "document_numero": document_numero,
+            "preview_url": preview_url,
         })
 
     except Devis.DoesNotExist:
@@ -8205,7 +8533,9 @@ def create_facture_cie(request):
             "success": True,
             "message": f"Facture CIE créée avec succès",
             "facture_id": facture_cie.id,
-            "numero_cie": cie_number
+            "numero_cie": cie_number,
+            "document_numero": cie_number,
+            "preview_url": f'/api/preview-facture/{facture_cie.id}/',
         })
 
     except Devis.DoesNotExist:
@@ -9635,6 +9965,12 @@ def get_all_situations_by_year(request):
                 elif hasattr(chantier, 'societe') and chantier.societe and hasattr(chantier.societe, 'nom_societe'):
                     client_name = chantier.societe.nom_societe
                 situation_data['client_name'] = client_name
+                situation_data['maitre_ouvrage_nom_societe'] = chantier.maitre_ouvrage_nom_societe
+                situation_data['societe_name'] = (
+                    chantier.societe.nom_societe
+                    if getattr(chantier, 'societe', None) and chantier.societe.nom_societe
+                    else None
+                )
                 
                 # Ajouter toutes les situations du chantier (sérialisées) pour le calcul des cumuls
                 chantier_id = chantier.id

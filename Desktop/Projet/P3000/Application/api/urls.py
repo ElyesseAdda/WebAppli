@@ -18,7 +18,7 @@ from .views import (
     historique_stock, get_latest_code_produit, EventViewSet, delete_events_by_agent_and_period, 
     get_agents_with_work_days, update_days_present, recalculate_monthly_hours, assign_chantier, get_schedule,copy_schedule, 
     delete_schedule, update_schedule_comment, save_labor_costs, get_labor_costs, create_chantier_from_devis, create_devis, get_next_devis_number, 
-    list_devis,get_chantier_relations, preview_saved_devis, update_devis_status, create_facture, FactureViewSet, preview_facture, preview_facture_v2,
+    list_devis,get_chantier_relations, preview_saved_devis, update_devis_status, get_devis_tag_history, create_facture, FactureViewSet, preview_facture, preview_facture_v2,
     create_facture_from_devis, get_next_facture_number, check_facture_numero, generate_facture_pdf_from_preview, get_chantier_details, check_chantier_name, check_client, check_societe, get_chantiers_drive_paths,
     calculate_special_lines, get_devis_special_lines, get_devis_factures, update_facture_status, get_fournisseurs,
     bon_commande_view, BonCommandeViewSet, get_products_by_fournisseur, preview_bon_commande, generate_bon_commande_number,
@@ -201,6 +201,12 @@ from .auth_views import (
 # Import de la vue de version
 from .views import app_version_view
 
+from .notification_views import (
+    list_notifications,
+    mark_notification_read,
+    mark_all_notifications_read,
+)
+
 # Import de la vue CSRF
 from .csrf_views import csrf_token_view
 
@@ -312,6 +318,10 @@ urlpatterns = [
     path('preview-saved-devis/<int:devis_id>/', preview_saved_devis, name='preview-saved-devis'),
     path('preview-saved-devis-v2/<int:devis_id>/', preview_saved_devis_v2, name='preview-saved-devis-v2'),
     path('list-devis/<int:devis_id>/update_status/', update_devis_status, name='update_devis_status'),
+    path('list-devis/<int:devis_id>/tag_history/', get_devis_tag_history, name='get_devis_tag_history'),
+    path('notifications/', list_notifications, name='list-notifications'),
+    path('notifications/read-all/', mark_all_notifications_read, name='mark-all-notifications-read'),
+    path('notifications/<int:notification_id>/read/', mark_notification_read, name='mark-notification-read'),
     path('create-facture/', create_facture, name='create-facture'),
     path('preview-facture/<int:facture_id>/', preview_facture, name='preview-facture'),
     path('preview-facture-v2/<int:facture_id>/', preview_facture_v2, name='preview-facture-v2'),

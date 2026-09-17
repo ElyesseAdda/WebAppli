@@ -117,16 +117,30 @@ export const commonStyles = {
 };
 
 // Fonction pour le style dynamique du statut
-export const getStatusStyle = (status) => ({
+export const getStatusStyle = ({ status } = {}) => ({
   color:
-    status === "En attente"
+    status === "En attente" || status === "En attente BDC"
       ? "orange"
       : status === "Refusé"
       ? "red"
       : status === "Validé" || status === "Validée"
       ? "green"
-      : status === "Facturée"
-      ? "green"
+      : status === "Envoyé"
+      ? "#1565c0"
+      : status === "Travaux non réalisés" || status === "En attente de travaux"
+      ? "#f9a825"
+      : status === "Travaux en cours"
+      ? "#6a1b9a"
+      : status === "Travaux réalisés" || status === "Travaux réalisé"
+      ? "#00695c"
+      : status === "BDC reçus"
+      ? "#3949ab"
+      : status === "Faire Avenant"
+      ? "#c2185b"
+      : status === "Faire TS" || status === "A facturer"
+      ? "#00838f"
+      : status === "Facturé" || status === "Facturée"
+      ? "#1b5e20"
       : "inherit",
   fontWeight: 600,
 });

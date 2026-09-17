@@ -68,7 +68,12 @@ const MouvementReapproPage = ({
   const [loading, setLoading] = useState(false);
   const [terminating, setTerminating] = useState(false);
   const [resumeReduit, setResumeReduit] = useState(false);
-  const [errorModal, setErrorModal] = useState({ open: false, error: null, insuffisant: [] });
+  const [errorModal, setErrorModal] = useState({
+    open: false,
+    error: null,
+    insuffisant: [],
+    showStockHint: false,
+  });
   const [confirmAnnuler, setConfirmAnnuler] = useState(false);
   const [annulating, setAnnulating] = useState(false);
   const [dateMouvement, setDateMouvement] = useState(formatLocalDateTimeForInput());
@@ -180,18 +185,23 @@ const MouvementReapproPage = ({
       onClose();
     } catch (error) {
       console.error("Erreur terminaison mouvement:", error);
-      const data = error.response?.data || {};
-      const insuffisant = Array.isArray(data.insuffisant)
-        ? data.insuffisant.filter(Boolean)
+      const data = error.response?.data;
+      const payload = data && typeof data === "object" ? data : {};
+      const insuffisant = Array.isArray(payload.insuffisant)
+        ? payload.insuffisant.filter(Boolean)
         : [];
       const errorMessage =
-        (typeof data.error === "string" && data.error) ||
-        (typeof data.detail === "string" && data.detail) ||
+        (typeof payload.error === "string" && payload.error) ||
+        (typeof payload.detail === "string" && payload.detail) ||
         "Erreur lors de l'enregistrement";
+      const isStockError =
+        insuffisant.length > 0 ||
+        (typeof errorMessage === "string" && /stock/i.test(errorMessage));
       setErrorModal({
         open: true,
         error: errorMessage,
         insuffisant,
+        showStockHint: isStockError && insuffisant.length === 0,
       });
     } finally {
       setTerminating(false);
@@ -659,12 +669,12 @@ const MouvementReapproPage = ({
                 })}
               </Box>
             </Box>
-          ) : (
+          ) : errorModal.showStockHint ? (
             <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
               Le détail du produit n&apos;a pas pu être déterminé. Vérifiez le
               stock de chaque produit du mouvement avant de revalider.
             </Typography>
-          )}
+          ) : null}
           {errorModal.insuffisant?.length > 0 && (
             <Typography variant="body2" color="text.secondary">
               Faites un achat (onglet Stock) pour ces produits, puis revalidez

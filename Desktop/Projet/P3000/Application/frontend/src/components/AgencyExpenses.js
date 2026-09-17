@@ -145,6 +145,11 @@ const uniquePreserveOrder = (items) => {
   return out;
 };
 
+const sortCategoriesAlpha = (items) =>
+  [...(items || [])].sort((a, b) =>
+    String(a).localeCompare(String(b), "fr", { sensitivity: "base" })
+  );
+
 const normalizeCategoryName = (value) => String(value || "").trim().slice(0, 50);
 
 const designationKey = (description) =>
@@ -341,17 +346,21 @@ const AgencyExpenses = () => {
 
   const formCategoryOptions = useMemo(() => {
     const current = isEditing ? editingExpense?.category : newExpense.category;
-    return uniquePreserveOrder([
-      ...customCategories,
-      ...usedCategories,
-      current,
-    ]).filter(
-      (c) => !SYSTEM_CATEGORIES.some((s) => s.toLowerCase() === c.toLowerCase())
+    return sortCategoriesAlpha(
+      uniquePreserveOrder([
+        ...customCategories,
+        ...usedCategories,
+        current,
+      ]).filter(
+        (c) => !SYSTEM_CATEGORIES.some((s) => s.toLowerCase() === c.toLowerCase())
+      )
     );
   }, [customCategories, usedCategories, isEditing, editingExpense?.category, newExpense.category]);
 
   const filterCategoryList = useMemo(() => {
-    return uniquePreserveOrder([...usedCategories, ...customCategories]);
+    return sortCategoriesAlpha(
+      uniquePreserveOrder([...usedCategories, ...customCategories])
+    );
   }, [usedCategories, customCategories]);
 
   const categoriesWithPlanning = useMemo(
@@ -1240,7 +1249,7 @@ const AgencyExpenses = () => {
                 <Autocomplete
                   size="small"
                   fullWidth
-                  options={uniquePreserveOrder(["Tous", filters.category, ...filterCategoryList])}
+                  options={uniquePreserveOrder(["Tous", ...filterCategoryList, filters.category])}
                   value={filters.category || "Tous"}
                   disableClearable
                   autoHighlight
@@ -1253,10 +1262,15 @@ const AgencyExpenses = () => {
                   }
                   filterOptions={(options, state) => {
                     const q = (state.inputValue || "").trim().toLowerCase();
-                    if (!q) return options;
-                    return options.filter((o) =>
-                      String(o).toLowerCase().includes(q)
+                    const filtered = q
+                      ? options.filter((o) =>
+                          String(o).toLowerCase().includes(q)
+                        )
+                      : options;
+                    const rest = sortCategoriesAlpha(
+                      filtered.filter((o) => o !== "Tous")
                     );
+                    return filtered.includes("Tous") ? ["Tous", ...rest] : rest;
                   }}
                   renderInput={(params) => (
                     <StyledTextField
@@ -1845,19 +1859,25 @@ const AgencyExpenses = () => {
               }}
               filterOptions={(options, params) => {
                 const filtered = filterCategoryOptions(options, params);
+                const strings = sortCategoriesAlpha(
+                  filtered.filter((option) => typeof option === "string")
+                );
+                const createOpts = filtered.filter(
+                  (option) => typeof option !== "string"
+                );
                 const inputValue = normalizeCategoryName(params.inputValue);
-                if (!inputValue) return filtered;
+                if (!inputValue) return [...strings, ...createOpts];
                 const exists = options.some(
                   (option) =>
                     String(option).toLowerCase() === inputValue.toLowerCase()
                 );
                 if (!exists) {
-                  filtered.push({
+                  createOpts.push({
                     inputValue,
                     title: `Créer « ${inputValue} »`,
                   });
                 }
-                return filtered;
+                return [...strings, ...createOpts];
               }}
               getOptionLabel={(option) => {
                 if (typeof option === "string") return option;

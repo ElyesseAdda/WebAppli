@@ -28,6 +28,7 @@ import axios from "axios";
 import React, { useEffect, useState } from "react";
 import { FaChevronDown, FaChevronUp, FaTrash } from "react-icons/fa";
 import { generatePDFDrive } from "../../utils/universalDriveGenerator";
+import { formatAvenantNumero } from "../../utils/formatAvenantNumero";
 
 const MOIS = [
   { value: 1, label: "Janvier" },
@@ -730,7 +731,7 @@ const AvenantSousPartieTable = ({ avenant, handlePourcentageChange }) => {
               </IconButton>
             </TableCell>
             <TableCell sx={{ width: "300px", padding: "8px" }}>
-              {avenant.numero}
+              {formatAvenantNumero(avenant.numero)}
             </TableCell>
             <TableCell
               sx={{ width: "100px", padding: "8px" }}

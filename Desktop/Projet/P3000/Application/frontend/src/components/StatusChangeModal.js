@@ -31,15 +31,18 @@ const StatusChangeModal = ({
     if (type === "facture") {
       return ["En cours", "Attente paiement", "Payée"];
     }
-    if (type === "rapport") {
-      return [
-        { value: "brouillon", label: "Brouillon" },
-        { value: "a_faire", label: "A faire" },
-        { value: "en_cours", label: "En cours" },
-        { value: "termine", label: "Terminé" },
-      ];
-    }
-    return ["En attente", "Validé", "Refusé"];
+    return [
+      "En attente BDC",
+      "BDC reçus",
+      "Validé",
+      "Refusé",
+      "Travaux non réalisés",
+      "Travaux en cours",
+      "Travaux réalisés",
+      "Faire Avenant",
+      "A facturer",
+      "Facturé",
+    ];
   };
 
   const handleSubmit = () => {
@@ -82,8 +85,6 @@ const StatusChangeModal = ({
             ? "Modifier l'état de la facture"
             : type === "situation"
             ? "Modifier le statut de la situation"
-            : type === "rapport"
-            ? "Modifier le statut du rapport"
             : "Modifier l'état du devis")}
       </DialogTitle>
       <DialogContent>

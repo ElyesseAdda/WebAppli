@@ -20,7 +20,7 @@ class CacheManager {
 
   static checkForUpdates() {
     const currentVersion = localStorage.getItem("app_version");
-    const serverVersion = process.env.REACT_APP_VERSION || "1.0.0";
+    const serverVersion = process.env.REACT_APP_VERSION || "1.1.0";
 
     if (currentVersion !== serverVersion) {
       this.clearAppCache();

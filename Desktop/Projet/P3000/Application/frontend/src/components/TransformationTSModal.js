@@ -13,8 +13,9 @@ import {
 } from "@mui/material";
 import axios from "axios";
 import React, { useEffect, useState } from "react";
+import { formatAvenantNumero } from "../utils/formatAvenantNumero";
 
-const TransformationTSModal = ({ open, onClose, devis, chantier }) => {
+const TransformationTSModal = ({ open, onClose, devis, chantier, onSuccess }) => {
   // États pour gérer les données du formulaire
   const [designation, setDesignation] = useState("");
   const [selectedAvenant, setSelectedAvenant] = useState("");
@@ -70,6 +71,9 @@ const TransformationTSModal = ({ open, onClose, devis, chantier }) => {
 
       alert(`La facture TS a été créée avec succès.`);
       fetchAvenants(); // Rafraîchir la liste des avenants
+      if (onSuccess) {
+        await onSuccess(devis, response.data);
+      }
       onClose();
     } catch (error) {
       console.error("Erreur complète:", error);
@@ -138,7 +142,7 @@ const TransformationTSModal = ({ open, onClose, devis, chantier }) => {
             >
               {avenants.map((avenant) => (
                 <MenuItem key={avenant.id} value={avenant.id}>
-                  Avenant n°{avenant.numero}({avenant.nombre_ts} TS - Total:{" "}
+                  {formatAvenantNumero(avenant.numero)} ({avenant.nombre_ts} TS - Total:{" "}
                   {avenant.montant_total}€)
                 </MenuItem>
               ))}
