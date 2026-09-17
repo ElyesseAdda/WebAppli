@@ -143,6 +143,29 @@ function VisualBugFixes() {
   );
 }
 
+function VisualFacturationMaitreOuvrage() {
+  return (
+    <div className="pn-screen">
+      <div className="pn-screen-bar">Tableau Facturation — récapitulatif</div>
+      <div className="pn-row pn-hit" data-label="Regroupé par maître d’ouvrage">
+        <span>Maître d’ouvrage A</span>
+        <strong>2 chantiers</strong>
+      </div>
+      <div className="pn-row">
+        <span>Maître d’ouvrage B</span>
+        <strong>1 chantier</strong>
+      </div>
+      <div className="pn-row">
+        <span>Non renseigné</span>
+        <strong>5 chantiers</strong>
+      </div>
+      <p className="pn-caption">
+        Recherche et tri à partir du nom de société du maître d’ouvrage.
+      </p>
+    </div>
+  );
+}
+
 function FeatureVisual({ feature }) {
   if (!feature) {
     return (
@@ -165,6 +188,12 @@ function FeatureVisual({ feature }) {
   }
   if (key === "bugfixes" || feature.id === "bugfixes-avenant-categories") {
     return <VisualBugFixes />;
+  }
+  if (
+    key === "facturation-maitre-ouvrage" ||
+    feature.id === "facturation-maitre-ouvrage"
+  ) {
+    return <VisualFacturationMaitreOuvrage />;
   }
 
   return (

@@ -79,6 +79,20 @@ const PATCH_NOTES = {
       ],
       visual: "bugfixes",
     },
+    {
+      id: "facturation-maitre-ouvrage",
+      kind: "ameliore",
+      title: "Récapitulatif par maître d’ouvrage",
+      where: "Tableau → Tableau Facturation",
+      text: "En bas du tableau, les chantiers sont regroupés et triés selon le nom du maître d’ouvrage renseigné sur la fiche chantier, plus selon la société liée.",
+      steps: [
+        "Ouvrez le Tableau Facturation",
+        "Descendez jusqu’au récapitulatif",
+        "Chaque accordéon correspond à un maître d’ouvrage",
+        "Recherchez par maître d’ouvrage ou par chantier, puis triez par montant, avancement ou ordre alphabétique",
+      ],
+      visual: "facturation-maitre-ouvrage",
+    },
   ],
 };
 
