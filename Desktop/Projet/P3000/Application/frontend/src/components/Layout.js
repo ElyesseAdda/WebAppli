@@ -7,7 +7,6 @@ import FolderDownloadIndicator from "./DriveV2/FolderDownloadIndicator";
 import BonCommandeForm from "./BonCommandeForm";
 import BreadcrumbHeader from "./BreadcrumbHeader";
 import Header from "./Header";
-import { NotificationBanner } from "./NotificationCenter";
 import SlideBar from "./SlideBar";
 import { NotificationsProvider } from "../hooks/useNotifications";
 
@@ -93,9 +92,6 @@ const Layout = ({ children, user, onLogout }) => {
       />
       <div className="main-content">
         <BreadcrumbHeader user={user} onLogout={onLogout} />
-        <div style={{ padding: "0 16px" }}>
-          <NotificationBanner />
-        </div>
         {children}
       </div>
       {bonCommandeFormOpen && (
