@@ -1,6 +1,6 @@
+import DoneIcon from "@mui/icons-material/Done";
 import NotificationsIcon from "@mui/icons-material/Notifications";
 import {
-  Alert,
   Badge,
   Box,
   Button,
@@ -10,14 +10,12 @@ import {
   ListItemButton,
   ListItemText,
   Menu,
-  Snackbar,
   Typography,
 } from "@mui/material";
-import React, { useMemo, useState } from "react";
+import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   formatDevisTagDate,
-  formatDevisTagsLabel,
   getDevisTagMeta,
   getDevisTagStyle,
   getTransformLabel,
@@ -43,15 +41,10 @@ const getNotificationTagCombo = (notification) => {
   const toTags = Array.isArray(notification?.new_tags)
     ? notification.new_tags
     : parseDevisTagsLabel(notification?.new_value);
-  return {
-    fromTags,
-    toTags,
-    fromLabel: formatDevisTagsLabel(fromTags),
-    toLabel: formatDevisTagsLabel(toTags),
-  };
+  return { fromTags, toTags };
 };
 
-export const buildNotificationTitle = (notification) => {
+const buildNotificationTitle = (notification) => {
   if (!notification) return "";
   const actor = notification.actor_name || "Un utilisateur";
   const devis = notification.devis_numero || "devis";
@@ -63,18 +56,6 @@ export const buildNotificationTitle = (notification) => {
     return `${actor} — ${transformLabel.toLowerCase()} du devis ${devis}${chantier}`;
   }
   return `${actor} a modifié les tags du devis ${devis}${chantier}`;
-};
-
-export const buildNotificationMessage = (notification) => {
-  if (!notification) return "";
-  const { fromLabel, toLabel } = getNotificationTagCombo(notification);
-  const when = formatDevisTagDate(notification.created_at);
-  const documentPart = notification.document_numero
-    ? ` — ${notification.document_numero}`
-    : "";
-  return `${buildNotificationTitle(notification)}${documentPart} : ${fromLabel} → ${toLabel}${
-    when ? ` — ${when}` : ""
-  }`;
 };
 
 const TagComboChips = ({ tags }) => {
@@ -196,6 +177,13 @@ export const NotificationBell = () => {
     openChantierFromNotification(notification, navigate);
   };
 
+  const handleMarkAsRead = async (event, notification) => {
+    event.stopPropagation();
+    if (!notification.is_read) {
+      await markAsRead(notification.id);
+    }
+  };
+
   return (
     <>
       <IconButton
@@ -257,124 +245,58 @@ export const NotificationBell = () => {
           </Box>
         ) : (
           <List dense disablePadding>
-            {notifications.map((notification) => (
-              <ListItemButton
-                key={notification.id}
-                onClick={() => handleClickNotification(notification)}
-                sx={{
-                  alignItems: "flex-start",
-                  backgroundColor: notification.is_read
-                    ? "transparent"
-                    : "rgba(25, 118, 210, 0.08)",
-                }}
-              >
-                <ListItemText
-                  primary={buildNotificationTitle(notification)}
-                  secondary={
-                    <>
-                      <NotificationDocumentLine notification={notification} />
-                      <NotificationTagChange notification={notification} />
-                      {formatDevisTagDate(notification.created_at) ? (
-                        <Typography variant="caption" color="text.secondary">
-                          {formatDevisTagDate(notification.created_at)}
-                        </Typography>
-                      ) : null}
-                    </>
-                  }
-                  primaryTypographyProps={{
-                    variant: "body2",
-                    fontWeight: notification.is_read ? 400 : 600,
+            {notifications.map((notification, index) => (
+              <React.Fragment key={notification.id}>
+                {index > 0 && <Divider sx={{ mx: 2 }} />}
+                <ListItemButton
+                  onClick={() => handleClickNotification(notification)}
+                  sx={{
+                    alignItems: "flex-start",
+                    py: 1.5,
+                    px: 2,
+                    gap: 1,
+                    backgroundColor: "rgba(25, 118, 210, 0.06)",
+                    "&:hover": { backgroundColor: "rgba(25, 118, 210, 0.12)" },
                   }}
-                  secondaryTypographyProps={{ component: "div" }}
-                />
-              </ListItemButton>
+                >
+                  <ListItemText
+                    primary={buildNotificationTitle(notification)}
+                    secondary={
+                      <>
+                        <NotificationDocumentLine notification={notification} />
+                        <NotificationTagChange notification={notification} />
+                        {formatDevisTagDate(notification.created_at) ? (
+                          <Typography variant="caption" color="text.secondary">
+                            {formatDevisTagDate(notification.created_at)}
+                          </Typography>
+                        ) : null}
+                      </>
+                    }
+                    primaryTypographyProps={{
+                      variant: "body2",
+                      fontWeight: 600,
+                    }}
+                    secondaryTypographyProps={{ component: "div" }}
+                  />
+                  <IconButton
+                    size="small"
+                    title="Marquer comme lu"
+                    aria-label="Marquer comme lu"
+                    onClick={(event) => handleMarkAsRead(event, notification)}
+                    sx={{
+                      mt: 0.15,
+                      color: "text.secondary",
+                      "&:hover": { color: "#2e7d32", backgroundColor: "rgba(46, 125, 50, 0.08)" },
+                    }}
+                  >
+                    <DoneIcon fontSize="small" />
+                  </IconButton>
+                </ListItemButton>
+              </React.Fragment>
             ))}
           </List>
         )}
       </Menu>
-    </>
-  );
-};
-
-export const NotificationBanner = () => {
-  const navigate = useNavigate();
-  const {
-    notifications,
-    unreadCount,
-    latestNew,
-    markAsRead,
-    clearLatestNew,
-  } = useNotifications();
-
-  const latestUnread = useMemo(
-    () => notifications.find((item) => !item.is_read) || null,
-    [notifications]
-  );
-
-  const handleOpen = async (notification) => {
-    if (!notification) return;
-    if (!notification.is_read) {
-      await markAsRead(notification.id);
-    }
-    clearLatestNew();
-    openChantierFromNotification(notification, navigate);
-  };
-
-  return (
-    <>
-      {latestUnread && unreadCount > 0 && (
-        <Alert
-          severity="info"
-          sx={{
-            mb: 2,
-            cursor: "pointer",
-            alignItems: "center",
-          }}
-          onClick={() => handleOpen(latestUnread)}
-          action={
-            <Button
-              color="inherit"
-              size="small"
-              onClick={(event) => {
-                event.stopPropagation();
-                handleOpen(latestUnread);
-              }}
-            >
-              Ouvrir le chantier
-            </Button>
-          }
-        >
-          <Box>
-            <Typography variant="body2" fontWeight={600}>
-              {buildNotificationTitle(latestUnread)}
-              {unreadCount > 1 ? ` — +${unreadCount - 1} autre(s)` : ""}
-            </Typography>
-            <NotificationDocumentLine notification={latestUnread} />
-            <NotificationTagChange notification={latestUnread} />
-          </Box>
-        </Alert>
-      )}
-      <Snackbar
-        open={Boolean(latestNew)}
-        autoHideDuration={8000}
-        onClose={clearLatestNew}
-        anchorOrigin={{ vertical: "top", horizontal: "right" }}
-      >
-        <Alert
-          severity="warning"
-          onClose={clearLatestNew}
-          onClick={() => handleOpen(latestNew)}
-          sx={{ cursor: "pointer", minWidth: 320 }}
-        >
-          <Box>
-            <Typography variant="body2" fontWeight={600}>
-              {buildNotificationTitle(latestNew)}
-            </Typography>
-            <NotificationDocumentLine notification={latestNew} />
-            <NotificationTagChange notification={latestNew} />
-          </Box>
-        </Alert>
-      </Snackbar>
     </>
   );
 };

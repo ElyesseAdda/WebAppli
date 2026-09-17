@@ -10,7 +10,7 @@ from .serializers import UserNotificationSerializer
 @permission_classes([IsAuthenticated])
 def list_notifications(request):
     queryset = (
-        UserNotification.objects.filter(recipient=request.user)
+        UserNotification.objects.filter(recipient=request.user, is_read=False)
         .select_related('actor', 'chantier', 'devis')[:80]
     )
     unread_count = UserNotification.objects.filter(

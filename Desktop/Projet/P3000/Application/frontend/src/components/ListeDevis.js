@@ -35,7 +35,7 @@ import {
 } from "../styles/tableStyles";
 import { generatePDFDrive } from "../utils/universalDriveGenerator";
 import { formatAvenantNumero } from "../utils/formatAvenantNumero";
-import { applyTransformTagToDevis, devisMatchesStatusFilter, getDevisTagStyle, getDevisTags, normalizeStatusFilter } from "../config/devisTags";
+import { applyTransformTagToDevis, DEFAULT_DEVIS_TAG, devisMatchesStatusFilter, getDevisTagStyle, getDevisTags, normalizeStatusFilter } from "../config/devisTags";
 import CreationFacture from "./CreationFacture";
 import CreationSituation from "./CreationSituation";
 import DevisTagFilterField from "./DevisTagFilterField";
@@ -672,7 +672,7 @@ const ListeDevis = () => {
 
       const patchDevis = (d) =>
         d.id === devisToUpdate.id
-          ? { ...d, status: tags[0] || "En attente BDC", tags }
+          ? { ...d, status: tags[0] || DEFAULT_DEVIS_TAG, tags }
           : d;
 
       setDevis((prev) => prev.map(patchDevis));
@@ -725,14 +725,14 @@ const ListeDevis = () => {
       setDevis(
         devis.map((d) =>
           d.id === devisId
-            ? { ...d, status: tagsToUpdate[0] || "En attente BDC", tags: tagsToUpdate }
+            ? { ...d, status: tagsToUpdate[0] || DEFAULT_DEVIS_TAG, tags: tagsToUpdate }
           : d
       )
       );
       setFilteredDevis(
         filteredDevis.map((d) =>
           d.id === devisId
-            ? { ...d, status: tagsToUpdate[0] || "En attente BDC", tags: tagsToUpdate }
+            ? { ...d, status: tagsToUpdate[0] || DEFAULT_DEVIS_TAG, tags: tagsToUpdate }
             : d
         )
       );

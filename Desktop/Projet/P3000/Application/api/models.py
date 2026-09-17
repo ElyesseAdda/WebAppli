@@ -18,7 +18,15 @@ STATE_CHOICES = [
         ('Facturé', 'Facturé'),
         ('En attente', 'En attente'),
     ]
+DEFAULT_DEVIS_STATUS = 'En attente'
+
+
+def default_devis_tags():
+    return [DEFAULT_DEVIS_STATUS]
+
+
 DEVIS_STATUS_CHOICES = [
+        ('En attente', 'En attente'),
         ('En attente BDC', 'En attente BDC'),
         ('BDC reçus', 'BDC reçus'),
         ('Validé', 'Validé'),
@@ -32,7 +40,6 @@ DEVIS_STATUS_CHOICES = [
         ('Facturé', 'Facturé'),
         # Anciens libellés conservés pour compatibilité lecture
         ('Faire TS', 'Faire TS'),
-        ('En attente', 'En attente'),
         ('En attente de travaux', 'En attente de travaux'),
         ('En Cours', 'En Cours'),
         ('Terminé', 'Terminé'),
@@ -1535,8 +1542,8 @@ class Devis(models.Model):
     tva_rate = models.FloatField()
     nature_travaux = models.CharField(max_length=255, null=True, blank=True)
     description = models.TextField(null=True, blank=True)
-    status = models.CharField(max_length=255, choices=DEVIS_STATUS_CHOICES, default='En attente BDC')
-    tags = models.JSONField(default=list, blank=True)
+    status = models.CharField(max_length=255, choices=DEVIS_STATUS_CHOICES, default=DEFAULT_DEVIS_STATUS)
+    tags = models.JSONField(default=default_devis_tags, blank=True)
     status_updated_at = models.DateTimeField(null=True, blank=True)
     status_updated_by = models.ForeignKey(
         User,
