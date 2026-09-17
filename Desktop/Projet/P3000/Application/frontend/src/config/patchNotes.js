@@ -13,11 +13,11 @@ export const PATCH_NOTES_STORAGE_KEY = "p3000_seen_patch_notes";
 export const PATCH_NOTES_OPEN_EVENT = "p3000:open-patch-notes";
 export const PATCH_NOTES_SEEN_EVENT = "p3000:patch-notes-seen";
 
-export const PATCH_NOTES_ID = "2026-09-17-agent-conges-1.3";
+export const PATCH_NOTES_ID = "2026-09-17-fournisseur-fill-1.3.1";
 
 const PATCH_NOTES = {
   id: PATCH_NOTES_ID,
-  version: "1.3",
+  version: "1.1",
   title: "Quoi de neuf ?",
   date: "Septembre 2026",
   intro: "Les congés payés de chaque agent se consultent et se corrigent désormais depuis sa carte.",
@@ -68,11 +68,14 @@ const PATCH_NOTES = {
       id: "bugfixes-avenant-categories",
       kind: "bugfix",
       title: "Bug fix",
-      where: "Avenants et frais d’agence",
-      text: "Deux correctifs pour plus de clarté dans les listes.",
+      where: "Avenants, frais d’agence et Tableau Fournisseur",
+      text: "Correctifs pour plus de clarté dans les listes et le remplissage automatique des paiements fournisseurs.",
       fixes: [
         "Les nouveaux avenants sont désormais numérotés Avenant n°01, n°02, etc.",
         "Les catégories des frais d’agence sont désormais triées par ordre alphabétique dans le formulaire et le filtre.",
+        "Le remplissage automatique du Tableau Fournisseur valide désormais les factures déjà présentes sur toutes les lignes d’un même fournisseur.",
+        "Une nouvelle facture saisie dans ce modal peut être rattachée au chantier de son choix lorsqu’un fournisseur a plusieurs lignes.",
+        "Un n° de facture saisi sans montant, s’il n’existe pas encore de facture, crée la même facture sur chaque ligne avec le montant à payer de la ligne.",
       ],
       visual: "bugfixes",
     },

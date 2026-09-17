@@ -3522,11 +3522,6 @@ const TableauFournisseur = () => {
                           sx={{ width: 140 }}
                           inputProps={{ min: 0, step: 0.01 }}
                           placeholder={replicateAllLines ? "À payer / ligne" : ""}
-                          helperText={
-                            replicateAllLines
-                              ? `Même n° sur ${lignesCount} lignes`
-                              : undefined
-                          }
                         />
                         {fillModalFactures.length > 1 && (
                           <Button
