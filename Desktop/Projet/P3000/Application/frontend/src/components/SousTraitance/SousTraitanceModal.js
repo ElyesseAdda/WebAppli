@@ -46,6 +46,7 @@ import ContratSansDocumentForm from "./ContratSansDocumentForm";
 import SousTraitantForm from "./SousTraitantForm";
 import { RegeneratePDFIconButton } from "../shared/RegeneratePDFButton";
 import { DOCUMENT_TYPES } from "../../config/documentTypeConfig";
+import { formatAvenantNumero } from "../../utils/formatAvenantNumero";
 
 const SousTraitanceModal = ({ open, onClose, chantierId, onUpdate }) => {
   const [sousTraitants, setSousTraitants] = useState([]);
@@ -1000,7 +1001,7 @@ const SousTraitanceModal = ({ open, onClose, chantierId, onUpdate }) => {
                                         },
                                       }}
                                     >
-                                      Avenant n°{avenant.numero}
+                                      {formatAvenantNumero(avenant.numero)}
                                     </TableCell>
                                     <TableCell sx={{ whiteSpace: "pre-line" }}>
                                       {avenant.description}
@@ -1059,7 +1060,7 @@ const SousTraitanceModal = ({ open, onClose, chantierId, onUpdate }) => {
                                                   handleGeneratePDF(
                                                     "avenant",
                                                     avenant.id,
-                                                    `Avenant ${avenant.numero} ${sousTraitant.entreprise} ${chantier?.nom || chantier?.chantier_name || "Chantier"}`
+                                                    `${formatAvenantNumero(avenant.numero)} ${sousTraitant.entreprise} ${chantier?.nom || chantier?.chantier_name || "Chantier"}`
                                                   )
                                                 }
                                                 sx={{

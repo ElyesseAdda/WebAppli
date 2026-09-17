@@ -2,7 +2,7 @@ from rest_framework import serializers
 from django.db.models import Q
 from .models import (
     Chantier, Societe, Devis, Partie, SousPartie, LigneDetail, Client, 
-    Agent, AgentContrat, AgentContratAvenant, AgentPeriodeInactivite, Stock, Presence, StockMovement, StockHistory, Event, MonthlyHours, PointageMensuel,
+    Agent, AgentContrat, AgentContratAvenant, AgentPeriodeInactivite, AgentCongeAjustement, Stock, Presence, StockMovement, StockHistory, Event, MonthlyHours, PointageMensuel,
     Schedule, LaborCost, DevisLigne, Facture, FactureLigne, BonCommande, LigneBonCommande,
     Avenant, FactureTS, Situation, SituationLigne, SituationLigneSupplementaire, SituationLigneSpeciale,
     ChantierLigneSupplementaire, SituationLigneAvenant, AgencyExpense, AgencyExpenseOverride,
@@ -12,7 +12,7 @@ from .models import (
     AgentPrime, Color, LigneSpeciale, AgencyExpenseMonth, SuiviPaiementSousTraitantMensuel, FactureSuiviSousTraitant,
     LigneMasqueeTableauSousTraitant, LigneMasqueeTableauFournisseur,
     Distributeur, DistributeurMouvement, DistributeurCell, DistributeurVente, DistributeurReapproSession, DistributeurReapproLigne, DistributeurFrais, StockProduct, StockProductBestPurchase, StockPurchase, StockPurchaseItem, StockLot, StockLoss,
-    Agence
+    Agence, UserNotification
 )
 from decimal import Decimal, ROUND_HALF_UP
 
@@ -201,6 +201,7 @@ class DevisSerializer(serializers.ModelSerializer):
     chantier_name = serializers.SerializerMethodField()
     client_name = serializers.SerializerMethodField()
     societe_name = serializers.SerializerMethodField()
+    status_updated_by_name = serializers.SerializerMethodField()
 
     class Meta:
         model = Devis
@@ -210,7 +211,8 @@ class DevisSerializer(serializers.ModelSerializer):
             'chantier', 'appel_offres', 'chantier_name', 'client_name', 'societe_name',
             'client', 'lignes', 'lignes_speciales', 'lignes_display', 'parties_metadata', 'devis_chantier',
             'cout_estime_main_oeuvre', 'cout_estime_materiel', 'lignes_speciales_v2', 'version_systeme_lignes',
-            'contact_societe', 'societe_devis'
+            'contact_societe', 'societe_devis',
+            'status_updated_at', 'status_updated_by_name', 'tags',
         ]
         read_only_fields = ['client']  # ✅ Retirer date_creation pour permettre sa modification
 
@@ -224,6 +226,13 @@ class DevisSerializer(serializers.ModelSerializer):
     #     }
     #     ...
     
+    def get_status_updated_by_name(self, obj):
+        user = getattr(obj, 'status_updated_by', None)
+        if not user:
+            return None
+        full_name = user.get_full_name()
+        return full_name.strip() or user.username
+
     def get_chantier_name(self, obj):
         if obj.devis_chantier and obj.appel_offres:
             return obj.appel_offres.chantier_name if obj.appel_offres else None
@@ -758,6 +767,24 @@ class AgentPeriodeInactiviteSerializer(serializers.ModelSerializer):
         model = AgentPeriodeInactivite
         fields = ['id', 'agent', 'date_debut', 'date_fin', 'motif', 'created_at']
         read_only_fields = ['id', 'created_at']
+
+
+class AgentCongeAjustementSerializer(serializers.ModelSerializer):
+    jours_signed = serializers.DecimalField(max_digits=6, decimal_places=2, read_only=True)
+
+    class Meta:
+        model = AgentCongeAjustement
+        fields = [
+            'id',
+            'agent',
+            'type_mouvement',
+            'jours',
+            'jours_signed',
+            'date',
+            'motif',
+            'created_at',
+        ]
+        read_only_fields = ['id', 'agent', 'created_at', 'jours_signed']
 
 
 class AgentContratAvenantSerializer(serializers.ModelSerializer):
@@ -2555,3 +2582,52 @@ class LigneMasqueeTableauFournisseurSerializer(serializers.ModelSerializer):
         if not data.get('source_type'):
             data['source_type'] = ''
         return data
+
+
+class UserNotificationSerializer(serializers.ModelSerializer):
+    actor_name = serializers.SerializerMethodField()
+    old_tags = serializers.SerializerMethodField()
+    new_tags = serializers.SerializerMethodField()
+
+    class Meta:
+        model = UserNotification
+        fields = [
+            'id',
+            'type',
+            'actor_name',
+            'devis_id',
+            'chantier_id',
+            'devis_numero',
+            'chantier_name',
+            'old_value',
+            'new_value',
+            'old_tags',
+            'new_tags',
+            'transform_type',
+            'document_numero',
+            'preview_url',
+            'is_read',
+            'created_at',
+        ]
+        read_only_fields = fields
+
+    def get_actor_name(self, obj):
+        if not obj.actor:
+            return 'Un utilisateur'
+        full_name = obj.actor.get_full_name()
+        return full_name.strip() or obj.actor.username
+
+    def get_old_tags(self, obj):
+        return _split_tag_combo(obj.old_value)
+
+    def get_new_tags(self, obj):
+        return _split_tag_combo(obj.new_value)
+
+
+def _split_tag_combo(value):
+    if not value or value in ('—', '-', 'Aucun tag'):
+        return []
+    text = str(value)
+    for sep in (' + ', ' / ', '+', '/'):
+        text = text.replace(sep, '|')
+    return [part.strip() for part in text.split('|') if part.strip()]

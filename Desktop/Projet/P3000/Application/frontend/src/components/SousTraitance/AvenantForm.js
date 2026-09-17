@@ -21,6 +21,7 @@ import { LocalizationProvider } from "@mui/x-date-pickers/LocalizationProvider";
 import frLocale from "date-fns/locale/fr";
 import React, { useEffect, useState } from "react";
 import { generatePDFDrive } from "../../utils/universalDriveGenerator";
+import { formatAvenantNumero } from "../../utils/formatAvenantNumero";
 
 const parseDateValue = (value) => {
   if (!value) return new Date();
@@ -223,7 +224,7 @@ const AvenantForm = ({
   return (
     <Dialog open={open} onClose={onClose} maxWidth="md" fullWidth>
       <DialogTitle>
-        {isEdit ? `Modifier l'avenant n°${avenant.numero}` : "Nouvel avenant"}
+        {isEdit ? `Modifier ${formatAvenantNumero(avenant.numero)}` : "Nouvel avenant"}
       </DialogTitle>
       <DialogContent>
         {!isEdit && avenants.length > 0 && (
@@ -245,7 +246,7 @@ const AvenantForm = ({
                 <TableBody>
                   {avenants.map((av) => (
                     <TableRow key={av.id}>
-                      <TableCell>{av.numero}</TableCell>
+                      <TableCell>{formatAvenantNumero(av.numero)}</TableCell>
                       <TableCell>
                         {new Date(av.date_creation).toLocaleDateString()}
                       </TableCell>
@@ -262,7 +263,7 @@ const AvenantForm = ({
 
         {isEdit && (
           <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-            Numéro d&apos;avenant : {avenant.numero} (non modifiable)
+            Numéro d&apos;avenant : {formatAvenantNumero(avenant.numero)} (non modifiable)
           </Typography>
         )}
 

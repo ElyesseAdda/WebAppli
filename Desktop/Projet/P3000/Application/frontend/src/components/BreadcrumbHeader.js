@@ -18,6 +18,7 @@ import {
   openPatchNotes,
   PATCH_NOTES_SEEN_EVENT,
 } from "../config/patchNotes";
+import { NotificationBell } from "./NotificationCenter";
 import "./../../static/css/breadcrumb.css";
 import "./../../static/css/patchNotes.css";
 
@@ -203,6 +204,7 @@ const BreadcrumbHeader = ({ user, onLogout }) => {
       {user && (
         <div className="breadcrumb-right">
           <div className="user-section">
+            <NotificationBell />
             <button
               type="button"
               className={`patch-notes-open-btn${hasNewNotes ? " has-unseen" : ""}`}

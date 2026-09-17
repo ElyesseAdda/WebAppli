@@ -26,6 +26,7 @@ import {
 import axios from "axios";
 import React, { useEffect, useState } from "react";
 import { FaChevronDown, FaChevronUp, FaTrash } from "react-icons/fa";
+import { formatAvenantNumero } from "../utils/formatAvenantNumero";
 
 const MOIS = [
   { value: 1, label: "Janvier" },
@@ -298,7 +299,7 @@ const AvenantSousPartieTable = ({ avenant, handlePourcentageChange }) => {
                 {open ? <FaChevronUp /> : <FaChevronDown />}
               </IconButton>
             </TableCell>
-            <TableCell>{avenant.numero}</TableCell>
+            <TableCell>{formatAvenantNumero(avenant.numero)}</TableCell>
             <TableCell align="center"></TableCell>
             <TableCell align="center"></TableCell>
             <TableCell align="right">{avenant.montant_total} €</TableCell>

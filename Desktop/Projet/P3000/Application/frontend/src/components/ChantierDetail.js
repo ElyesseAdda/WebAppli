@@ -26,7 +26,7 @@ import {
 import { alpha } from "@mui/material/styles";
 import axios from "axios";
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { useLocation, useNavigate, useParams } from "react-router-dom";
 import { RecapFinancierProvider } from "./chantier/RecapFinancierContext";
 
 // Composants des onglets
@@ -179,6 +179,7 @@ const TabPanel = ({ children, value, index }) => (
 const ChantierDetail = () => {
   const { id } = useParams();
   const navigate = useNavigate();
+  const location = useLocation();
   const [selectedTab, setSelectedTab] = useState(0);
   const [chantierData, setChantierData] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -580,7 +581,14 @@ const ChantierDetail = () => {
 
   // Charger le dernier chantier consulté si aucun ID dans l'URL ou au premier chargement
   useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    const hasExplicitTarget = params.has("tab") || params.has("fromAlert");
     const lastVisitedId = localStorage.getItem("last_visited_chantier");
+
+    if (hasExplicitTarget && id) {
+      localStorage.setItem("last_visited_chantier", String(id));
+      return;
+    }
     
     // Si aucun ID dans l'URL et qu'il y a un dernier chantier visité, y rediriger
     if (!id && lastVisitedId) {
@@ -598,6 +606,27 @@ const ChantierDetail = () => {
       }
     }
   }, []); // Exécuter seulement au montage du composant
+
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    const tabParam = params.get("tab");
+    const subtabParam = params.get("subtab");
+
+    if (tabParam != null) {
+      if (tabParam === "documents") {
+        setSelectedTab(1);
+      } else {
+        const parsed = Number(tabParam);
+        if (!Number.isNaN(parsed)) {
+          setSelectedTab(parsed);
+        }
+      }
+    }
+
+    if (subtabParam === "devis" || subtabParam === "1") {
+      setDocumentsState((prev) => ({ ...prev, selectedTab: 1 }));
+    }
+  }, [location.search, location.pathname]);
 
   useEffect(() => {
     if (id) {

@@ -12,7 +12,7 @@ import {
 import axios from "axios";
 import React, { useState } from "react";
 
-const TransformationCIEModal = ({ open, onClose, devis, chantier }) => {
+const TransformationCIEModal = ({ open, onClose, devis, chantier, onSuccess }) => {
   const [designation, setDesignation] = useState("");
   const [mois, setMois] = useState("");
   const [annee, setAnnee] = useState(new Date().getFullYear());
@@ -34,6 +34,10 @@ const TransformationCIEModal = ({ open, onClose, devis, chantier }) => {
       console.log("Réponse reçue:", response.data);
 
       alert(`La facture CIE a été créée avec succès.`);
+
+      if (onSuccess) {
+        await onSuccess(devis, response.data);
+      }
 
       if (response.data.preview_url) {
         window.open(response.data.preview_url, "_blank");

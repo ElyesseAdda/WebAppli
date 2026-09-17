@@ -256,7 +256,7 @@ class Command(BaseCommand):
         if dry_run:
             for avenant in queryset:
                 self.stdout.write(
-                    f'  ✓ Avenant n°{avenant.numero} - {avenant.contrat.contrat_name}'
+                    f'  ✓ Avenant n°{avenant.numero:02d} - {avenant.contrat.contrat_name}'
                 )
             return
         

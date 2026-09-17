@@ -29,16 +29,19 @@ import {
   DevisNumber,
   FilterCell,
   PriceTextField,
-  StatusCell,
   StyledBox,
-  StyledSelect,
   StyledTableContainer,
   StyledTextField,
 } from "../styles/tableStyles";
 import { generatePDFDrive } from "../utils/universalDriveGenerator";
+import { formatAvenantNumero } from "../utils/formatAvenantNumero";
+import { applyTransformTagToDevis, devisMatchesStatusFilter, getDevisTagStyle, getDevisTags, normalizeStatusFilter } from "../config/devisTags";
 import CreationFacture from "./CreationFacture";
 import CreationSituation from "./CreationSituation";
-import StatusChangeModal from "./StatusChangeModal";
+import DevisTagFilterField from "./DevisTagFilterField";
+import DevisTagFilterModal from "./DevisTagFilterModal";
+import DevisTagHistoryPanel from "./DevisTagHistoryPanel";
+import DevisTagModal from "./DevisTagModal";
 import TransformationCIEModal from "./TransformationCIEModal";
 import TransformationTSModal from "./TransformationTSModal";
 import { generateDevisMarchePDFDrive } from "./pdf_drive_functions";
@@ -111,7 +114,7 @@ const hasActiveFilters = (filters) => {
     filters.client_name ||
     filters.date_creation ||
     filters.price_ht ||
-    (filters.status && filters.status !== "Tous")
+    normalizeStatusFilter(filters.status).length > 0
   );
 };
 
@@ -129,13 +132,14 @@ const ListeDevis = () => {
     client_name: "",
     date_creation: "",
     price_ht: "",
-    status: "Tous",
+    status: [],
   });
   const [orderBy, setOrderBy] = useState("date");
   const [order, setOrder] = useState("desc");
   const [anchorEl, setAnchorEl] = useState(null);
   const [selectedDevis, setSelectedDevis] = useState(null);
   const [showStatusModal, setShowStatusModal] = useState(false);
+  const [showTagFilterModal, setShowTagFilterModal] = useState(false);
   const [devisToUpdate, setDevisToUpdate] = useState(null);
   const [factureModalOpen, setFactureModalOpen] = useState(false);
   const [deleteModalOpen, setDeleteModalOpen] = useState(false);
@@ -154,8 +158,43 @@ const ListeDevis = () => {
   const [selectedDevisForSituation, setSelectedDevisForSituation] =
     useState(null);
 
-  const statusOptions = ["En attente", "Validé", "Refusé"];
   const navigate = useNavigate();
+
+  const devisMatchesFilters = (d, activeFilters) =>
+    Object.keys(activeFilters).every((key) => {
+      const value = activeFilters[key];
+      if (key === "status") {
+        return devisMatchesStatusFilter(d, value);
+      }
+      if (!value || value === "Tous") return true;
+      switch (key) {
+        case "numero":
+          return d.numero?.toLowerCase().includes(value.toLowerCase());
+        case "chantier_name":
+          return d.chantier_name?.toLowerCase().includes(value.toLowerCase());
+        case "client_name":
+          return d.client_name?.toLowerCase().includes(value.toLowerCase());
+        case "date_creation": {
+          if (!value) return true;
+          const devisDate = new Date(d.date_creation).toISOString().split("T")[0];
+          return devisDate === value;
+        }
+        case "price_ht":
+          return (d.price_ht?.toString() || "").includes(value);
+        default:
+          return true;
+      }
+    });
+
+  const applyFiltersToList = async (newFilters) => {
+    setFilters(newFilters);
+    if (hasActiveFilters(newFilters)) {
+      const allDevis = await loadAllDevisForFilter();
+      setFilteredDevis(allDevis.filter((d) => devisMatchesFilters(d, newFilters)));
+    } else {
+      setFilteredDevis(devis);
+    }
+  };
 
   useEffect(() => {
     fetchDevis();
@@ -511,58 +550,14 @@ const ListeDevis = () => {
       ...filters,
       [field]: event.target.value,
     };
-    setFilters(newFilters);
+    await applyFiltersToList(newFilters);
+  };
 
-    // Si on a des filtres actifs, charger tous les devis pour filtrer
-    if (hasActiveFilters(newFilters)) {
-      const allDevis = await loadAllDevisForFilter();
-      
-      let filtered = allDevis.filter((d) => {
-        return Object.keys(newFilters).every((key) => {
-          if (!newFilters[key] || newFilters[key] === "Tous") return true;
-
-          switch (key) {
-            case "numero":
-              return d.numero
-                ?.toLowerCase()
-                .includes(newFilters[key].toLowerCase());
-
-            case "chantier_name":
-              return d.chantier_name
-                ?.toLowerCase()
-                .includes(newFilters[key].toLowerCase());
-
-            case "client_name":
-              return d.client_name
-                ?.toLowerCase()
-                .includes(newFilters[key].toLowerCase());
-
-            case "date_creation":
-              if (!newFilters[key]) return true;
-              // Convertir la date du devis au format YYYY-MM-DD pour la comparaison
-              const devisDate = new Date(d.date_creation)
-                .toISOString()
-                .split("T")[0];
-              return devisDate === newFilters[key];
-
-            case "price_ht":
-              const devisPrice = d.price_ht?.toString() || "";
-              return devisPrice.includes(newFilters[key]);
-
-            case "status":
-              return d.status === newFilters[key];
-
-            default:
-              return true;
-          }
-        });
-      });
-
-      setFilteredDevis(filtered);
-    } else {
-      // Pas de filtre, revenir à la liste paginée
-      setFilteredDevis(devis);
-    }
+  const handleStatusFilterApply = async (selectedTags) => {
+    await applyFiltersToList({
+      ...filters,
+      status: selectedTags,
+    });
   };
 
   const handleLoadMore = () => {
@@ -631,12 +626,13 @@ const ListeDevis = () => {
     handleClose();
   };
 
-  const handleStatusUpdate = async (newStatus) => {
+  const handleStatusUpdate = async (newTags) => {
     try {
       if (!devisToUpdate) return;
+      const tags = Array.isArray(newTags) ? newTags : [newTags].filter(Boolean);
+      const previousTags = getDevisTags(devisToUpdate);
 
-      // Si on change l'état depuis "Validé", vérifier les factures associées
-      if (devisToUpdate.status === "Validé" && newStatus !== "Validé") {
+      if (previousTags.includes("Validé") && !tags.includes("Validé")) {
         const response = await axios.get(
           `/api/list-devis/${devisToUpdate.id}/factures/`
         );
@@ -645,50 +641,63 @@ const ListeDevis = () => {
           : response.data?.factures || [];
 
         if (factures.length > 0) {
-          // Stocker l'ID du devis dans facturesToDelete
           setFacturesToDelete(
             factures.map((f) => ({
               ...f,
               devisId: devisToUpdate.id,
             }))
           );
-          setNewStatus(newStatus);
+          setNewStatus(tags);
           setDeleteFacturesModalOpen(true);
           setShowStatusModal(false);
           return;
         }
       }
 
-      await updateDevisStatus(newStatus);
+      await updateDevisStatus(tags);
     } catch (error) {
       void error;
-      alert("Erreur lors de la modification du statut");
+      alert("Erreur lors de la modification des tags");
     }
   };
 
-  const updateDevisStatus = async (status) => {
+  const updateDevisStatus = async (statusOrTags) => {
     try {
+      const tags = Array.isArray(statusOrTags)
+        ? statusOrTags
+        : [statusOrTags].filter(Boolean);
       await axios.put(`/api/list-devis/${devisToUpdate.id}/update_status/`, {
-        status: status,
+        tags,
       });
 
-      setDevis(
-        devis.map((d) =>
-          d.id === devisToUpdate.id ? { ...d, status: status } : d
-        )
+      const patchDevis = (d) =>
+        d.id === devisToUpdate.id
+          ? { ...d, status: tags[0] || "En attente BDC", tags }
+          : d;
+
+      setDevis((prev) => prev.map(patchDevis));
+      setAllDevisForFilter((prev) =>
+        prev ? prev.map(patchDevis) : prev
       );
-      setFilteredDevis(
-        filteredDevis.map((d) =>
-          d.id === devisToUpdate.id ? { ...d, status: status } : d
-        )
-      );
+
+      const source = allDevisForFilter
+        ? allDevisForFilter.map(patchDevis)
+        : devis.map(patchDevis);
+
+      if (hasActiveFilters(filters)) {
+        setFilteredDevis(
+          sortByNewestFirst(source.filter((d) => devisMatchesFilters(d, filters)))
+        );
+      } else {
+        setFilteredDevis((prev) => prev.map(patchDevis));
+      }
 
       setShowStatusModal(false);
       setDevisToUpdate(null);
       setNewStatus(null);
     } catch (error) {
       void error;
-      alert("Erreur lors de la mise à jour du statut");
+      alert("Erreur lors de la mise à jour des tags");
     }
   };
 
@@ -698,7 +707,7 @@ const ListeDevis = () => {
 
       // Récupérer l'ID du devis depuis la première facture
       const devisId = facturesToDelete[0].devisId;
-      const statusToUpdate = newStatus;
+      const tagsToUpdate = Array.isArray(newStatus) ? newStatus : [newStatus].filter(Boolean);
 
       // Supprimer toutes les factures associées
       await Promise.all(
@@ -709,18 +718,22 @@ const ListeDevis = () => {
 
       // Mettre à jour le statut du devis
       await axios.put(`/api/list-devis/${devisId}/update_status/`, {
-        status: statusToUpdate,
+        tags: tagsToUpdate,
       });
 
       // Mettre à jour l'état local
       setDevis(
         devis.map((d) =>
-          d.id === devisId ? { ...d, status: statusToUpdate } : d
-        )
+          d.id === devisId
+            ? { ...d, status: tagsToUpdate[0] || "En attente BDC", tags: tagsToUpdate }
+          : d
+      )
       );
       setFilteredDevis(
         filteredDevis.map((d) =>
-          d.id === devisId ? { ...d, status: statusToUpdate } : d
+          d.id === devisId
+            ? { ...d, status: tagsToUpdate[0] || "En attente BDC", tags: tagsToUpdate }
+            : d
         )
       );
 
@@ -803,7 +816,7 @@ const ListeDevis = () => {
     if (factureTs) {
       const tsLabel = String(factureTs.numero_ts ?? "").padStart(3, "0");
       const avenantLabel = factureTs.avenant_numero
-        ? `Avenant n°${factureTs.avenant_numero}`
+        ? formatAvenantNumero(factureTs.avenant_numero)
         : "Avenant";
       const designation = factureTs.designation
         ? ` - ${factureTs.designation}`
@@ -972,6 +985,14 @@ const ListeDevis = () => {
   const handleFactureSubmit = async (factureData) => {
     try {
       const response = await axios.post("/api/facture/", factureData);
+      const devisForTag = selectedDevis;
+
+      // Tag Facturé avant génération Drive (remplace tous les autres tags)
+      try {
+        await applyTransformTagToDevis(devisForTag, "facture", axios, response.data);
+      } catch (tagError) {
+        void tagError;
+      }
 
       // Message de succès
       alert(`La facture ${response.data.numero} a été créée avec succès.`);
@@ -1191,19 +1212,11 @@ const ListeDevis = () => {
                   </TableSortLabel>
                 </AlignedCell>
                 <FilterCell>
-                  <StyledSelect
+                  <DevisTagFilterField
                     value={filters.status}
-                    onChange={handleFilterChange("status")}
-                    variant="standard"
-                    sx={{ pt: "10px" }}
-                  >
-                    <MenuItem value="Tous">Tous</MenuItem>
-                    {statusOptions.map((status) => (
-                      <MenuItem key={status} value={status}>
-                        {status}
-                      </MenuItem>
-                    ))}
-                  </StyledSelect>
+                    onClick={() => setShowTagFilterModal(true)}
+                    dark
+                  />
                 </FilterCell>
                 <FilterCell />
               </TableRow>
@@ -1228,9 +1241,41 @@ const ListeDevis = () => {
                     >
                       {formatNumber(devis.price_ht)} €
                     </CenteredTableCell>
-                    <StatusCell status={devis.status}>
-                      {devis.status}
-                    </StatusCell>
+                    <CenteredTableCell
+                      sx={{ cursor: "pointer", minWidth: 180 }}
+                    >
+                      <Box
+                        onClick={() => {
+                          setDevisToUpdate(devis);
+                          setShowStatusModal(true);
+                        }}
+                        sx={{
+                          display: "flex",
+                          flexWrap: "wrap",
+                          gap: 0.75,
+                          justifyContent: "center",
+                          alignItems: "center",
+                        }}
+                      >
+                        {getDevisTags(devis).length ? (
+                          getDevisTags(devis).map((tag) => (
+                            <Typography
+                              key={tag}
+                              component="span"
+                              variant="body2"
+                              sx={getDevisTagStyle(tag, { clickable: true })}
+                            >
+                              {tag}
+                            </Typography>
+                          ))
+                        ) : (
+                          <Typography variant="body2" color="text.secondary">
+                            Aucun tag
+                          </Typography>
+                        )}
+                      </Box>
+                      <DevisTagHistoryPanel devisId={devis.id} devisNumero={devis.numero} />
+                    </CenteredTableCell>
                     <CenteredTableCell
                       sx={{
                         width: "60px",
@@ -1557,16 +1602,24 @@ const ListeDevis = () => {
         )}
       </Menu>
 
-      <StatusChangeModal
+      <DevisTagModal
         open={showStatusModal}
         onClose={() => {
           setShowStatusModal(false);
           setDevisToUpdate(null);
         }}
         currentStatus={devisToUpdate?.status}
-        onStatusChange={handleStatusUpdate}
-        type="devis"
-        title="Modifier l'état du devis"
+        currentTags={devisToUpdate?.tags}
+        onTagsChange={handleStatusUpdate}
+        devisNumero={devisToUpdate?.numero}
+        title="Modifier les tags du devis"
+      />
+
+      <DevisTagFilterModal
+        open={showTagFilterModal}
+        onClose={() => setShowTagFilterModal(false)}
+        selectedTags={filters.status}
+        onApply={handleStatusFilterApply}
       />
 
       <TransformationTSModal
@@ -1574,6 +1627,13 @@ const ListeDevis = () => {
         onClose={handleTSModalClose}
         devis={selectedDevisForTS}
         chantier={selectedChantier}
+        onSuccess={async (devis, responseData) => {
+          try {
+            await applyTransformTagToDevis(devis, "avenant", axios, responseData);
+          } catch (tagError) {
+            void tagError;
+          }
+        }}
       />
 
       <TransformationCIEModal
@@ -1581,6 +1641,13 @@ const ListeDevis = () => {
         onClose={handleCIEModalClose}
         devis={selectedDevisForCIE}
         chantier={selectedChantier}
+        onSuccess={async (devis, responseData) => {
+          try {
+            await applyTransformTagToDevis(devis, "cie", axios, responseData);
+          } catch (tagError) {
+            void tagError;
+          }
+        }}
       />
 
       <Modal

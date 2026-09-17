@@ -28,7 +28,7 @@ const SlideBar = ({ toggleSidebar, isSidebarVisible, user, onOpenBonCommande, on
   const location = useLocation();
   const [expandedCategories, setExpandedCategories] = useState({});
   const [agences, setAgences] = useState([]);
-  const [agenceExpanded, setAgenceExpanded] = useState(true);
+  const [agenceExpanded, setAgenceExpanded] = useState(false);
 
   const fetchAgences = useCallback(() => {
     axios

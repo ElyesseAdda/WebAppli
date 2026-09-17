@@ -18,6 +18,25 @@ STATE_CHOICES = [
         ('Facturé', 'Facturé'),
         ('En attente', 'En attente'),
     ]
+DEVIS_STATUS_CHOICES = [
+        ('En attente BDC', 'En attente BDC'),
+        ('BDC reçus', 'BDC reçus'),
+        ('Validé', 'Validé'),
+        ('Refusé', 'Refusé'),
+        ('Travaux non réalisés', 'Travaux non réalisés'),
+        ('Travaux en cours', 'Travaux en cours'),
+        ('Travaux réalisés', 'Travaux réalisés'),
+        ('Envoyé', 'Envoyé'),
+        ('Faire Avenant', 'Faire Avenant'),
+        ('A facturer', 'A facturer'),
+        ('Facturé', 'Facturé'),
+        # Anciens libellés conservés pour compatibilité lecture
+        ('Faire TS', 'Faire TS'),
+        ('En attente', 'En attente'),
+        ('En attente de travaux', 'En attente de travaux'),
+        ('En Cours', 'En Cours'),
+        ('Terminé', 'Terminé'),
+    ]
 TYPE_CHOICES = [
         ('Travaux', 'Travaux'),
     ]
@@ -696,7 +715,7 @@ class AgentContratAvenant(models.Model):
         verbose_name_plural = 'Avenants contrats agents'
 
     def __str__(self):
-        return f'Avenant n°{self.numero} — {self.contrat}'
+        return f'Avenant n°{self.numero:02d} — {self.contrat}'
 
     def save(self, *args, **kwargs):
         if not self.numero:
@@ -734,6 +753,70 @@ class AgentPeriodeInactivite(models.Model):
     def __str__(self):
         fin = self.date_fin.isoformat() if self.date_fin else '…'
         return f'{self.agent} inactif {self.date_debut} → {fin}'
+
+
+class AgentCongeAjustement(models.Model):
+    """Crédit ou débit manuel du solde de congés (report, correction, don, etc.)."""
+    TYPE_CHOICES = [
+        ('ajout', 'Ajout'),
+        ('retrait', 'Retrait'),
+    ]
+
+    agent = models.ForeignKey(
+        Agent,
+        on_delete=models.CASCADE,
+        related_name='conge_ajustements',
+    )
+    type_mouvement = models.CharField(max_length=10, choices=TYPE_CHOICES, default='ajout')
+    jours = models.DecimalField(
+        max_digits=6,
+        decimal_places=2,
+        help_text="Nombre de jours (toujours positif ; le sens est donné par type_mouvement)",
+    )
+    date = models.DateField(help_text="Date de l'ajustement (année de rattachement)")
+    motif = models.CharField(max_length=255, blank=True, default='')
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-date', '-id']
+        verbose_name = 'Ajustement congés agent'
+        verbose_name_plural = 'Ajustements congés agents'
+
+    def __str__(self):
+        signe = '+' if self.type_mouvement == 'ajout' else '-'
+        return f'{self.agent} {signe}{self.jours} j ({self.date})'
+
+    @property
+    def jours_signed(self):
+        value = self.jours or 0
+        return value if self.type_mouvement == 'ajout' else -value
+
+
+class AgentCongeSetup(models.Model):
+    """Valeurs de départ par agent et par période (1er juin – 31 mai)."""
+    agent = models.ForeignKey(
+        Agent,
+        on_delete=models.CASCADE,
+        related_name='conge_setups',
+    )
+    period_start = models.DateField()
+    acquis = models.DecimalField(max_digits=6, decimal_places=2, null=True, blank=True)
+    acquis_live = models.DecimalField(max_digits=6, decimal_places=2, null=True, blank=True)
+    en_cours = models.DecimalField(max_digits=6, decimal_places=2, null=True, blank=True)
+    en_cours_live = models.DecimalField(max_digits=6, decimal_places=2, null=True, blank=True)
+    previsionnel = models.DecimalField(max_digits=6, decimal_places=2, null=True, blank=True)
+    previsionnel_live = models.DecimalField(max_digits=6, decimal_places=2, null=True, blank=True)
+    pris = models.DecimalField(max_digits=6, decimal_places=2, null=True, blank=True)
+    pris_live = models.DecimalField(max_digits=6, decimal_places=2, null=True, blank=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        unique_together = ('agent', 'period_start')
+        verbose_name = 'Setup congés agent'
+        verbose_name_plural = 'Setups congés agents'
+
+    def __str__(self):
+        return f'{self.agent} {self.period_start}'
 
 
 class MonthlyPresence(models.Model):
@@ -1452,7 +1535,16 @@ class Devis(models.Model):
     tva_rate = models.FloatField()
     nature_travaux = models.CharField(max_length=255, null=True, blank=True)
     description = models.TextField(null=True, blank=True)
-    status = models.CharField(max_length=20, choices=STATE_CHOICES, default='En Cours')
+    status = models.CharField(max_length=255, choices=DEVIS_STATUS_CHOICES, default='En attente BDC')
+    tags = models.JSONField(default=list, blank=True)
+    status_updated_at = models.DateTimeField(null=True, blank=True)
+    status_updated_by = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='devis_status_updates',
+    )
     chantier = models.ForeignKey(Chantier, on_delete=models.CASCADE, related_name='devis', null=True, blank=True)
     appel_offres = models.ForeignKey(AppelOffres, on_delete=models.CASCADE, related_name='devis', null=True, blank=True)
     client = models.ManyToManyField(Client, related_name='devis', blank=True)
@@ -2578,7 +2670,7 @@ class Parametres(models.Model):
 
 class Avenant(models.Model):
     chantier = models.ForeignKey('Chantier', on_delete=models.CASCADE, related_name='avenants')
-    numero = models.CharField(max_length=50)  # Numéro ou libellé de l'avenant (ex: "3", "3 bis")
+    numero = models.CharField(max_length=50)  # Numéro ou libellé de l'avenant (ex: "01", "02", "3 bis")
     date_creation = models.DateTimeField(auto_now_add=True)
     montant_total = models.DecimalField(max_digits=10, decimal_places=2, default=0)
 
@@ -2587,7 +2679,10 @@ class Avenant(models.Model):
         ordering = ['numero']
 
     def __str__(self):
-        return f"Avenant n°{self.numero} - {self.chantier}"
+        numero = str(self.numero or "").strip()
+        if numero.isdigit():
+            numero = f"{int(numero):02d}"
+        return f"Avenant n°{numero} - {self.chantier}"
 
 class FactureTS(models.Model):
     devis = models.OneToOneField('Devis', on_delete=models.CASCADE, related_name='facture_ts')
@@ -3391,7 +3486,7 @@ class AvenantSousTraitance(models.Model):
         unique_together = ('contrat', 'numero')  # Garantit l'unicité du numéro d'avenant par contrat
 
     def __str__(self):
-        return f"Avenant n°{self.numero} - {self.contrat.sous_traitant.entreprise} - {self.contrat.chantier.chantier_name}"
+        return f"Avenant n°{self.numero:02d} - {self.contrat.sous_traitant.entreprise} - {self.contrat.chantier.chantier_name}"
 
     def save(self, *args, **kwargs):
         from decimal import Decimal
@@ -3514,7 +3609,7 @@ class PaiementSousTraitant(models.Model):
         unique_together = ('chantier', 'sous_traitant', 'date_paiement', 'avenant')
 
     def __str__(self):
-        avenant_info = f" - Avenant {self.avenant.numero}" if self.avenant else ""
+        avenant_info = f" - Avenant n°{self.avenant.numero:02d}" if self.avenant else ""
         return f"{self.sous_traitant} - {self.chantier} - {self.date_paiement}{avenant_info}"
     
     @property
@@ -4127,6 +4222,101 @@ from .models_gantt import (  # noqa: E402  (import après signaux/post_migrate)
     GanttDesignation,
     normaliser_libelle,
 )
+
+
+class DevisTagHistory(models.Model):
+    """Historique des modifications de tags d'un devis."""
+
+    TRANSFORM_FACTURE = 'facture'
+    TRANSFORM_AVENANT = 'avenant'
+    TRANSFORM_CIE = 'cie'
+    TRANSFORM_CHOICES = [
+        (TRANSFORM_FACTURE, 'Facture'),
+        (TRANSFORM_AVENANT, 'Avenant'),
+        (TRANSFORM_CIE, 'Facture CIE'),
+    ]
+
+    devis = models.ForeignKey(
+        Devis,
+        on_delete=models.CASCADE,
+        related_name='tag_history',
+    )
+    actor = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='devis_tag_history',
+    )
+    old_value = models.CharField(max_length=255, blank=True, default='')
+    new_value = models.CharField(max_length=255, blank=True, default='')
+    transform_type = models.CharField(
+        max_length=20,
+        choices=TRANSFORM_CHOICES,
+        blank=True,
+        default='',
+    )
+    document_numero = models.CharField(max_length=100, blank=True, default='')
+    preview_url = models.CharField(max_length=500, blank=True, default='')
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-created_at']
+        indexes = [
+            models.Index(fields=['devis', '-created_at'], name='api_devistaghist_devis_idx'),
+        ]
+
+    def __str__(self):
+        return f"Devis {self.devis_id}: {self.old_value} → {self.new_value}"
+
+
+class UserNotification(models.Model):
+    TYPE_DEVIS_TAG = 'devis_tag'
+    TYPE_CHOICES = [
+        (TYPE_DEVIS_TAG, 'Changement de tag devis'),
+    ]
+
+    recipient = models.ForeignKey(User, on_delete=models.CASCADE, related_name='notifications')
+    actor = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='notifications_sent',
+    )
+    type = models.CharField(max_length=50, choices=TYPE_CHOICES, default=TYPE_DEVIS_TAG)
+    devis = models.ForeignKey(
+        Devis,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='tag_notifications',
+    )
+    chantier = models.ForeignKey(
+        Chantier,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='notifications',
+    )
+    devis_numero = models.CharField(max_length=100, blank=True, default='')
+    chantier_name = models.CharField(max_length=255, blank=True, default='')
+    old_value = models.CharField(max_length=255, blank=True, default='')
+    new_value = models.CharField(max_length=255, blank=True, default='')
+    transform_type = models.CharField(max_length=20, blank=True, default='')
+    document_numero = models.CharField(max_length=100, blank=True, default='')
+    preview_url = models.CharField(max_length=500, blank=True, default='')
+    is_read = models.BooleanField(default=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-created_at']
+        indexes = [
+            models.Index(fields=['recipient', 'is_read', '-created_at'], name='api_usernotif_recip_idx'),
+        ]
+
+    def __str__(self):
+        return f"{self.type} → {self.recipient} ({self.created_at})"
 
 
 class UserMobileAccess(models.Model):

@@ -133,6 +133,8 @@ export const useTableauFacturation = () => {
               chantier_id: chantierId,
               isFacture: true, // Marqueur pour identifier les factures
               client_name: clientName,
+              societe_name: chantier?.societe?.nom_societe || null,
+              maitre_ouvrage_nom_societe: chantier?.maitre_ouvrage_nom_societe || null,
             };
           });
           
@@ -166,14 +168,44 @@ export const useTableauFacturation = () => {
     [cumulsBySituationId]
   );
 
+  const chantiersById = useMemo(() => {
+    const map = {};
+    (chantiers || []).forEach((c) => {
+      map[c.id] = c;
+    });
+    return map;
+  }, [chantiers]);
+
+  const enrichItemWithChantierInfo = (item) => {
+    const chantier = chantiersById[item.chantier_id || item.chantier];
+    return {
+      ...item,
+      societe_name: item.societe_name || chantier?.societe?.nom_societe || null,
+      maitre_ouvrage_nom_societe:
+        item.maitre_ouvrage_nom_societe ||
+        chantier?.maitre_ouvrage_nom_societe ||
+        null,
+    };
+  };
+
+  const situationsEnrichies = useMemo(
+    () => allSituations.map(enrichItemWithChantierInfo),
+    [allSituations, chantiersById]
+  );
+
   // Trier les situations (mémorisé)
   const situationsTriees = useMemo(() => {
-    return sortSituations(allSituations, extractSituationNumber);
-  }, [allSituations]);
+    return sortSituations(situationsEnrichies, extractSituationNumber);
+  }, [situationsEnrichies]);
+
+  const facturesEnrichies = useMemo(
+    () => allFactures.map(enrichItemWithChantierInfo),
+    [allFactures, chantiersById]
+  );
 
   // Trier les factures (mémorisé) - uniquement par numéro de facture, sans tenir compte du chantier
   const facturesTriees = useMemo(() => {
-    return [...allFactures].sort((a, b) => {
+    return [...facturesEnrichies].sort((a, b) => {
       // Trier uniquement par numéro de facture (001, 002, etc.), indépendamment du chantier
       const numA = extractFactureNumber(a.numero);
       const numB = extractFactureNumber(b.numero);
@@ -187,7 +219,7 @@ export const useTableauFacturation = () => {
       // Si les deux n'ont pas de numéro, garder l'ordre original
       return 0;
     });
-  }, [allFactures]);
+  }, [facturesEnrichies]);
 
   // Grouper les situations et factures par mois avec sous-totaux (mémorisé)
   const situationsAvecSousTotaux = useMemo(() => {
