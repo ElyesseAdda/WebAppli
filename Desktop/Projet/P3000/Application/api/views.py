@@ -5451,6 +5451,7 @@ def create_devis(request):
                     'nature_travaux': request.data.get('nature_travaux', ''),
                     'description': request.data.get('description', ''),
                     'status': 'En attente',
+                    'tags': ['En attente'],
                     'devis_chantier': True,
                     'lignes_speciales': lignes_speciales_filtered,
                     'lignes_display': lignes_display,
@@ -5535,6 +5536,7 @@ def create_devis(request):
                     'nature_travaux': request.data.get('nature_travaux', ''),
                     'description': request.data.get('description', ''),
                     'status': 'En attente',
+                    'tags': ['En attente'],
                     'devis_chantier': False,
                     'lignes_speciales': lignes_speciales_filtered,
                     'lignes_display': lignes_display,
@@ -6148,9 +6150,8 @@ def _preview_saved_devis_legacy(request, devis_id):
         return JsonResponse({'error': str(e)}, status=400)
 
 _DEVIS_TAG_LEGACY_MAP = {
-    'En attente': 'En attente BDC',
-    'En Attente': 'En attente BDC',
-    'en attente': 'En attente BDC',
+    'En Attente': 'En attente',
+    'en attente': 'En attente',
     'En attente de travaux': 'Travaux non réalisés',
     'Travaux non réaliser': 'Travaux non réalisés',
     'BDC recus': 'BDC reçus',
@@ -6158,7 +6159,7 @@ _DEVIS_TAG_LEGACY_MAP = {
 }
 
 _DEVIS_EXCLUSIVE_TAG_GROUPS = [
-    ('En attente BDC', 'BDC reçus'),
+    ('En attente', 'En attente BDC', 'BDC reçus'),
     ('Validé', 'Refusé'),
     ('Travaux non réalisés', 'Travaux en cours', 'Travaux réalisés'),
     ('Faire Avenant', 'A facturer', 'Facturé'),
@@ -6209,7 +6210,7 @@ def _primary_devis_status(tags):
     for item in ('Facturé', 'Refusé', 'Validé', 'Envoyé', 'En attente BDC', 'En attente'):
         if item in tags:
             return item
-    return tags[0] if tags else 'En attente BDC'
+    return tags[0] if tags else 'En attente'
 
 
 _TRANSFORM_TYPE_ALLOWED = {

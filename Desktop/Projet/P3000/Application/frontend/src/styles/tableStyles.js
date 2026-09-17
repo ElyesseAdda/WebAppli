@@ -118,7 +118,9 @@ export const commonStyles = {
 // Fonction pour le style dynamique du statut
 export const getStatusStyle = ({ status } = {}) => ({
   color:
-    status === "En attente" || status === "En attente BDC"
+    status === "En attente"
+      ? "#455a64"
+      : status === "En attente BDC"
       ? "orange"
       : status === "Refusé"
       ? "red"

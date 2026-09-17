@@ -12,6 +12,7 @@ import {
 } from "@mui/material";
 import React from "react";
 import {
+  DEFAULT_DEVIS_TAG,
   DEVIS_TAGS,
   DEVIS_TAG_ROWS,
   areDevisTagsEqual,
@@ -152,7 +153,7 @@ const DevisTagModal = ({
     if (onTagsChange) {
       onTagsChange(selectedTags);
     } else if (onStatusChange) {
-      onStatusChange(selectedTags[0] || "En attente BDC");
+      onStatusChange(selectedTags[0] || DEFAULT_DEVIS_TAG);
     }
     onClose();
   };
