@@ -134,6 +134,7 @@ export const useTableauFacturation = () => {
               isFacture: true, // Marqueur pour identifier les factures
               client_name: clientName,
               societe_name: chantier?.societe?.nom_societe || null,
+              maitre_ouvrage_nom_societe: chantier?.maitre_ouvrage_nom_societe || null,
             };
           });
           
@@ -175,14 +176,20 @@ export const useTableauFacturation = () => {
     return map;
   }, [chantiers]);
 
+  const enrichItemWithChantierInfo = (item) => {
+    const chantier = chantiersById[item.chantier_id || item.chantier];
+    return {
+      ...item,
+      societe_name: item.societe_name || chantier?.societe?.nom_societe || null,
+      maitre_ouvrage_nom_societe:
+        item.maitre_ouvrage_nom_societe ||
+        chantier?.maitre_ouvrage_nom_societe ||
+        null,
+    };
+  };
+
   const situationsEnrichies = useMemo(
-    () =>
-      allSituations.map((situation) => {
-        if (situation.societe_name) return situation;
-        const chantier = chantiersById[situation.chantier_id || situation.chantier];
-        const societeName = chantier?.societe?.nom_societe;
-        return societeName ? { ...situation, societe_name: societeName } : situation;
-      }),
+    () => allSituations.map(enrichItemWithChantierInfo),
     [allSituations, chantiersById]
   );
 
@@ -192,13 +199,7 @@ export const useTableauFacturation = () => {
   }, [situationsEnrichies]);
 
   const facturesEnrichies = useMemo(
-    () =>
-      allFactures.map((facture) => {
-        if (facture.societe_name) return facture;
-        const chantier = chantiersById[facture.chantier_id || facture.chantier];
-        const societeName = chantier?.societe?.nom_societe;
-        return societeName ? { ...facture, societe_name: societeName } : facture;
-      }),
+    () => allFactures.map(enrichItemWithChantierInfo),
     [allFactures, chantiersById]
   );
 

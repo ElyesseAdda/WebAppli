@@ -9965,6 +9965,7 @@ def get_all_situations_by_year(request):
                 elif hasattr(chantier, 'societe') and chantier.societe and hasattr(chantier.societe, 'nom_societe'):
                     client_name = chantier.societe.nom_societe
                 situation_data['client_name'] = client_name
+                situation_data['maitre_ouvrage_nom_societe'] = chantier.maitre_ouvrage_nom_societe
                 situation_data['societe_name'] = (
                     chantier.societe.nom_societe
                     if getattr(chantier, 'societe', None) and chantier.societe.nom_societe

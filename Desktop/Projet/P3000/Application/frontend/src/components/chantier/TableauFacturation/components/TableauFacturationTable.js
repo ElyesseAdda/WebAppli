@@ -85,7 +85,7 @@ const TableauFacturationTable = ({
   };
 
   const recapParSociete = useMemo(() => {
-    const parSociete = {};
+    const parGroupe = {};
     const emptyAmounts = () => ({ montantHT: 0, montantRecu: 0, ecart: 0 });
 
     situationsAvecSousTotaux.forEach((item) => {
@@ -93,11 +93,12 @@ const TableauFacturationTable = ({
       const isFacture = item.price_ht !== undefined;
       const chantierName = item.chantier_name || item.chantier?.chantier_name || "Inconnu";
       const chantierKey = String(item.chantier_id || item.chantier?.id || chantierName);
-      const societeName = (
-        item.societe_name ||
-        item.chantier?.societe?.nom_societe ||
+      const groupeName = (
+        item.maitre_ouvrage_nom_societe ||
+        item.chantier?.maitre_ouvrage_nom_societe ||
         ""
-      ).trim() || "Société non renseignée";
+      ).trim() || "Maître d'ouvrage non renseigné";
+      const groupeKey = groupeName.toLowerCase();
       const montantHT = isFacture
         ? parseFloat(item.price_ht) || 0
         : parseFloat(item.montant_apres_retenues) || 0;
@@ -106,27 +107,27 @@ const TableauFacturationTable = ({
         : parseFloat(item.montant_reel_ht) || 0;
       const ecart = montantRecu - montantHT;
 
-      if (!parSociete[societeName]) {
-        parSociete[societeName] = { ...emptyAmounts(), societeName, chantiers: {} };
+      if (!parGroupe[groupeKey]) {
+        parGroupe[groupeKey] = { ...emptyAmounts(), societeName: groupeName, chantiers: {} };
       }
-      const societe = parSociete[societeName];
-      societe.montantHT += montantHT;
-      societe.montantRecu += montantRecu;
-      societe.ecart += ecart;
+      const groupe = parGroupe[groupeKey];
+      groupe.montantHT += montantHT;
+      groupe.montantRecu += montantRecu;
+      groupe.ecart += ecart;
 
-      if (!societe.chantiers[chantierKey]) {
-        societe.chantiers[chantierKey] = { ...emptyAmounts(), name: chantierName, key: chantierKey };
+      if (!groupe.chantiers[chantierKey]) {
+        groupe.chantiers[chantierKey] = { ...emptyAmounts(), name: chantierName, key: chantierKey };
       }
-      const chantier = societe.chantiers[chantierKey];
+      const chantier = groupe.chantiers[chantierKey];
       if (chantierName && chantier.name === "Inconnu") chantier.name = chantierName;
       chantier.montantHT += montantHT;
       chantier.montantRecu += montantRecu;
       chantier.ecart += ecart;
     });
 
-    const groups = Object.values(parSociete).map((societe) => ({
-      ...societe,
-      chantiers: Object.values(societe.chantiers).sort((a, b) => b.montantHT - a.montantHT),
+    const groups = Object.values(parGroupe).map((groupe) => ({
+      ...groupe,
+      chantiers: Object.values(groupe.chantiers).sort((a, b) => b.montantHT - a.montantHT),
     }));
 
     const totalHT = parseFloat(totaux.montantHTSituation) || 0;
@@ -821,14 +822,14 @@ const TableauFacturationTable = ({
       </Table>
     </TableContainer>
 
-    {/* Récapitulatif par société */}
+    {/* Récapitulatif par maître d'ouvrage */}
     {recapParSociete.groups.length > 0 && (
       <Box sx={{ width: "100%", mt: 3 }}>
         <Typography
           variant="h6"
           sx={{ fontFamily: "Merriweather, serif", color: "white", fontWeight: "bold", mb: 2 }}
         >
-          RÉCAPITULATIF PAR SOCIÉTÉ
+          RÉCAPITULATIF PAR MAÎTRE D'OUVRAGE
         </Typography>
 
         <Paper
@@ -882,7 +883,7 @@ const TableauFacturationTable = ({
             }}
           >
             <TextField
-              placeholder="Rechercher par société ou chantier…"
+              placeholder="Rechercher par maître d'ouvrage ou chantier…"
               value={recapSearch}
               onChange={(e) => setRecapSearch(e.target.value)}
               size="small"
@@ -927,7 +928,7 @@ const TableauFacturationTable = ({
           </Box>
           {recapSearch.trim() && (
             <Typography sx={{ fontSize: "0.75rem", color: "text.secondary", mt: 1.5 }}>
-              {recapSocietesSorted.length} société{recapSocietesSorted.length > 1 ? "s" : ""} affichée
+              {recapSocietesSorted.length} maître{recapSocietesSorted.length > 1 ? "s" : ""} d'ouvrage affiché
               {recapSocietesSorted.length > 1 ? "s" : ""}
               {` pour « ${recapSearch.trim()} »`}
             </Typography>
@@ -938,7 +939,7 @@ const TableauFacturationTable = ({
           {recapSocietesSorted.length === 0 ? (
             <Paper sx={{ p: 3, textAlign: "center" }}>
               <Typography color="text.secondary">
-                Aucune société ne correspond à votre recherche.
+                Aucun maître d'ouvrage ne correspond à votre recherche.
               </Typography>
             </Paper>
           ) : (
