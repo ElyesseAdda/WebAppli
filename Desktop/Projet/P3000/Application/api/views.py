@@ -3956,9 +3956,11 @@ class DistributeurReapproSessionViewSet(viewsets.ModelViewSet):
                         {'error': 'Cette session est déjà terminée'},
                         status=status.HTTP_400_BAD_REQUEST,
                     )
+                # of=('self',) : PostgreSQL refuse FOR UPDATE sur le côté nullable
+                # d'un OUTER JOIN (cell.stock_product est null=True).
                 lignes_locked = list(
                     session.lignes.select_related('cell', 'cell__stock_product')
-                    .select_for_update()
+                    .select_for_update(of=('self',))
                     .all()
                 )
                 by_product = collect_by_product(lignes_locked)
@@ -3976,7 +3978,7 @@ class DistributeurReapproSessionViewSet(viewsets.ModelViewSet):
                     lots = list(
                         StockLot.objects.filter(produit=product, quantite_restante__gt=0)
                         .order_by('date_achat', 'created_at')
-                        .select_for_update()
+                        .select_for_update(of=('self',))
                     )
                     restant_a_retirer = quantite
                     for lot in lots:
@@ -4021,6 +4023,20 @@ class DistributeurReapproSessionViewSet(viewsets.ModelViewSet):
                 'error': 'Stock insuffisant. Faites un achat avant de valider le mouvement.',
                 'insuffisant': insuffisant,
             }, status=status.HTTP_400_BAD_REQUEST)
+        except Exception:
+            logger.exception(
+                "Erreur inattendue lors de la terminaison de la session réappro %s",
+                pk,
+            )
+            return Response(
+                {
+                    'error': (
+                        "Erreur lors de l'enregistrement du mouvement. "
+                        "Réessayez, ou contactez le support si le problème persiste."
+                    ),
+                },
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
 
         serializer = DistributeurReapproSessionSerializer(session)
         return Response(serializer.data, status=status.HTTP_200_OK)
