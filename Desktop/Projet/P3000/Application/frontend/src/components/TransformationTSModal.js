@@ -13,6 +13,7 @@ import {
 } from "@mui/material";
 import axios from "axios";
 import React, { useEffect, useState } from "react";
+import { formatAvenantNumero } from "../utils/formatAvenantNumero";
 
 const TransformationTSModal = ({ open, onClose, devis, chantier, onSuccess }) => {
   // États pour gérer les données du formulaire
@@ -141,7 +142,7 @@ const TransformationTSModal = ({ open, onClose, devis, chantier, onSuccess }) =>
             >
               {avenants.map((avenant) => (
                 <MenuItem key={avenant.id} value={avenant.id}>
-                  Avenant n°{avenant.numero}({avenant.nombre_ts} TS - Total:{" "}
+                  {formatAvenantNumero(avenant.numero)} ({avenant.nombre_ts} TS - Total:{" "}
                   {avenant.montant_total}€)
                 </MenuItem>
               ))}

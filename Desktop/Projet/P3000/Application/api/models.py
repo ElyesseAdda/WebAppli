@@ -715,7 +715,7 @@ class AgentContratAvenant(models.Model):
         verbose_name_plural = 'Avenants contrats agents'
 
     def __str__(self):
-        return f'Avenant n°{self.numero} — {self.contrat}'
+        return f'Avenant n°{self.numero:02d} — {self.contrat}'
 
     def save(self, *args, **kwargs):
         if not self.numero:
@@ -2670,7 +2670,7 @@ class Parametres(models.Model):
 
 class Avenant(models.Model):
     chantier = models.ForeignKey('Chantier', on_delete=models.CASCADE, related_name='avenants')
-    numero = models.CharField(max_length=50)  # Numéro ou libellé de l'avenant (ex: "3", "3 bis")
+    numero = models.CharField(max_length=50)  # Numéro ou libellé de l'avenant (ex: "01", "02", "3 bis")
     date_creation = models.DateTimeField(auto_now_add=True)
     montant_total = models.DecimalField(max_digits=10, decimal_places=2, default=0)
 
@@ -2679,7 +2679,10 @@ class Avenant(models.Model):
         ordering = ['numero']
 
     def __str__(self):
-        return f"Avenant n°{self.numero} - {self.chantier}"
+        numero = str(self.numero or "").strip()
+        if numero.isdigit():
+            numero = f"{int(numero):02d}"
+        return f"Avenant n°{numero} - {self.chantier}"
 
 class FactureTS(models.Model):
     devis = models.OneToOneField('Devis', on_delete=models.CASCADE, related_name='facture_ts')
@@ -3483,7 +3486,7 @@ class AvenantSousTraitance(models.Model):
         unique_together = ('contrat', 'numero')  # Garantit l'unicité du numéro d'avenant par contrat
 
     def __str__(self):
-        return f"Avenant n°{self.numero} - {self.contrat.sous_traitant.entreprise} - {self.contrat.chantier.chantier_name}"
+        return f"Avenant n°{self.numero:02d} - {self.contrat.sous_traitant.entreprise} - {self.contrat.chantier.chantier_name}"
 
     def save(self, *args, **kwargs):
         from decimal import Decimal
@@ -3606,7 +3609,7 @@ class PaiementSousTraitant(models.Model):
         unique_together = ('chantier', 'sous_traitant', 'date_paiement', 'avenant')
 
     def __str__(self):
-        avenant_info = f" - Avenant {self.avenant.numero}" if self.avenant else ""
+        avenant_info = f" - Avenant n°{self.avenant.numero:02d}" if self.avenant else ""
         return f"{self.sous_traitant} - {self.chantier} - {self.date_paiement}{avenant_info}"
     
     @property

@@ -872,7 +872,7 @@ def generate_avenant_sous_traitance_pdf_drive(request):
         chantier_name = request.GET.get('chantier_name', 'Chantier')
         societe_name = request.GET.get('societe_name', 'Société par défaut')
         sous_traitant_name = request.GET.get('sous_traitant_name', 'Sous-traitant')
-        numero_avenant = request.GET.get('numero_avenant', '1')
+        numero_avenant = request.GET.get('numero_avenant', '01')
         
         if not avenant_id:
             return JsonResponse({

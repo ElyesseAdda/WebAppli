@@ -141,3 +141,17 @@ def format_taux_propre(taux):
         return str(taux_float).rstrip('0').rstrip('.')
     except (ValueError, TypeError):
         return str(taux)
+
+
+@register.filter
+def pad_avenant_numero(numero):
+    """Padder un numéro d'avenant sur 2 chiffres : 1 → 01."""
+    from api.utils import pad_avenant_numero as _pad
+    return _pad(numero)
+
+
+@register.filter
+def format_avenant_numero(numero):
+    """Libellé d'avenant : Avenant n°01."""
+    from api.utils import format_avenant_numero as _format
+    return _format(numero)

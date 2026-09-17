@@ -72,7 +72,7 @@ export const DOCUMENT_CONFIG = {
       chantier_name: documentData.chantier?.chantier_name || documentData.chantier?.nom || documentData.chantier_name || documentData.contrat?.chantier?.chantier_name || documentData.contrat?.chantier?.nom || 'Chantier',
       societe_name: documentData.chantier?.societe?.nom_societe || documentData.chantier?.societe?.nom || documentData.societe_name || documentData.contrat?.chantier?.societe?.nom_societe || documentData.contrat?.chantier?.societe?.nom || 'Société',
       sous_traitant_name: documentData.contrat?.sous_traitant?.entreprise || documentData.sous_traitant_name || 'SousTraitant',
-      numero_avenant: documentData.numero || '1',
+      numero_avenant: documentData.numero || '01',
       force_replace: true,
     }),
   },

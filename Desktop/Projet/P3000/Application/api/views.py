@@ -21,7 +21,7 @@ from .serializers import (
     DocumentListSerializer, 
     FolderItemSerializer
 )
-from .utils import build_document_key, generate_presigned_url, generate_presigned_post, custom_slugify, clean_drive_path
+from .utils import build_document_key, generate_presigned_url, generate_presigned_post, custom_slugify, clean_drive_path, format_avenant_numero, get_next_chantier_avenant_numero
 from rest_framework.pagination import PageNumberPagination
 from rest_framework.decorators import action, api_view, permission_classes
 from django.http import JsonResponse, HttpResponse
@@ -8387,15 +8387,8 @@ def create_facture_ts(request):
         # Si on doit créer un nouvel avenant
         avenant_id = request.data.get('avenant_id')
         if request.data.get('create_new_avenant'):
-            # Prochain numéro : max des numéros numériques existants + 1, ou "1"
-            existing = Avenant.objects.filter(chantier_id=chantier_id).values_list('numero', flat=True)
-            next_num = 1
-            for n in existing:
-                try:
-                    next_num = max(next_num, int(n) + 1)
-                except (ValueError, TypeError):
-                    pass
-            new_avenant_number = str(next_num)
+            # Prochain numéro : 01, 02, 03…
+            new_avenant_number = get_next_chantier_avenant_numero(chantier_id)
 
             avenant = Avenant.objects.create(
                 chantier_id=chantier_id,
@@ -8430,7 +8423,7 @@ def create_facture_ts(request):
 
         preview_url = f'/api/preview-saved-devis-v2/{devis.id}/'
         document_numero = (
-            f'Avenant n°{avenant_numero}'
+            format_avenant_numero(avenant_numero)
             if avenant_numero
             else f'TS n°{next_ts_number:03d}'
         )

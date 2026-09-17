@@ -46,6 +46,7 @@ import TransformationCIEModal from "../TransformationCIEModal";
 import TransformationTSModal from "../TransformationTSModal";
 import { RegeneratePDFIconButton } from "../shared/RegeneratePDFButton";
 import { DOCUMENT_TYPES } from "../../config/documentTypeConfig";
+import { formatAvenantNumero } from "../../utils/formatAvenantNumero";
 import {
   applyTransformTagToDevis,
   devisMatchesStatusFilter,
@@ -349,7 +350,7 @@ const ChantierListeDevis = ({
     if (factureTs) {
       const tsLabel = String(factureTs.numero_ts ?? "").padStart(3, "0");
       const avenantLabel = factureTs.avenant_numero
-        ? `Avenant n°${factureTs.avenant_numero}`
+        ? formatAvenantNumero(factureTs.avenant_numero)
         : "Avenant";
       const designation = factureTs.designation
         ? ` - ${factureTs.designation}`

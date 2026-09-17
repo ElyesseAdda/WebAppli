@@ -44,6 +44,8 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 
 import "../../static/css/agentCarte.css";
 
+import { formatAvenantNumero } from "../utils/formatAvenantNumero";
+
 
 
 const EMPTY_AGENT = {
@@ -3034,7 +3036,7 @@ const AgentCarteModal = ({ isOpen, handleClose, refreshAgents, agents = [] }) =>
 
                                 avenantIndex,
 
-                                `Avenant ${avenant.numero || avenantIndex + 1} — Libellé`,
+                                `${formatAvenantNumero(avenant.numero || avenantIndex + 1)} — Libellé`,
 
                                 "libelle",
 
@@ -3048,7 +3050,7 @@ const AgentCarteModal = ({ isOpen, handleClose, refreshAgents, agents = [] }) =>
 
                                 avenantIndex,
 
-                                `Avenant ${avenant.numero || avenantIndex + 1} — Nouvelle fin CDD`,
+                                `${formatAvenantNumero(avenant.numero || avenantIndex + 1)} — Nouvelle fin CDD`,
 
                                 "date_fin_contrat",
 

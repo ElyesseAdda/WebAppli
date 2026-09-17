@@ -1,3 +1,5 @@
+import { formatAvenantNumero } from "../utils/formatAvenantNumero";
+
 export const DEVIS_TAGS = [
   { value: "En attente BDC", label: "En attente BDC", bg: "#fff3e0", color: "#e65100" },
   { value: "BDC reçus", label: "BDC reçus", bg: "#e8eaf6", color: "#3949ab" },
@@ -79,7 +81,7 @@ export const buildTransformDocumentMeta = (transformType, responseData = {}) => 
     const documentNumero =
       data.document_numero ||
       (avenantNumero
-        ? `Avenant n°${avenantNumero}`
+        ? formatAvenantNumero(avenantNumero)
         : numeroTs != null
           ? `TS n°${String(numeroTs).padStart(3, "0")}`
           : "");

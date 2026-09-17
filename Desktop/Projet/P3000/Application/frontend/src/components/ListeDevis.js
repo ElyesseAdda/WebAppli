@@ -34,6 +34,7 @@ import {
   StyledTextField,
 } from "../styles/tableStyles";
 import { generatePDFDrive } from "../utils/universalDriveGenerator";
+import { formatAvenantNumero } from "../utils/formatAvenantNumero";
 import { applyTransformTagToDevis, devisMatchesStatusFilter, getDevisTagStyle, getDevisTags, normalizeStatusFilter } from "../config/devisTags";
 import CreationFacture from "./CreationFacture";
 import CreationSituation from "./CreationSituation";
@@ -815,7 +816,7 @@ const ListeDevis = () => {
     if (factureTs) {
       const tsLabel = String(factureTs.numero_ts ?? "").padStart(3, "0");
       const avenantLabel = factureTs.avenant_numero
-        ? `Avenant n°${factureTs.avenant_numero}`
+        ? formatAvenantNumero(factureTs.avenant_numero)
         : "Avenant";
       const designation = factureTs.designation
         ? ` - ${factureTs.designation}`

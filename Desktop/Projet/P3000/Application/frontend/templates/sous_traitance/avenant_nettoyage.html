@@ -1,9 +1,10 @@
 {% load static %}
+{% load phone_filters %}
 <!DOCTYPE html>
 <html lang="fr">
   <head>
     <meta charset="UTF-8" />
-    <title>Avenant N°{{ avenant.numero }} - Contrat de sous-traitance</title>
+    <title>Avenant N°{{ avenant.numero|pad_avenant_numero }} - Contrat de sous-traitance</title>
     {% load humanize %}
     <style>
       body {
@@ -156,7 +157,7 @@
     </div>
 
     <h1>
-      AVENANT N°{{ avenant.numero }} au CONTRAT DE PRESTATION DE SERVICES<br />du
+      AVENANT N°{{ avenant.numero|pad_avenant_numero }} au CONTRAT DE PRESTATION DE SERVICES<br />du
       {{ avenant.contrat.date_creation|date:"d/m/Y" }}
     </h1>
 
@@ -350,7 +351,7 @@
               background-color: white;
             "
           >
-            Avenant n°{{ a.numero }}
+            {{ a.numero|format_avenant_numero }}
           </div>
           <div
             class="table-like-cell"
@@ -369,7 +370,7 @@
               background-color: white;
             "
           >
-            Avenant n°{{ avenant.numero }}
+            {{ avenant.numero|format_avenant_numero }}
           </div>
           <div
             class="table-like-cell"

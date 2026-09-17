@@ -5,6 +5,7 @@
 
 import axios from "axios";
 import { normalizeFilename } from '../components/DriveV2/services/pathNormalizationService';
+import { formatAvenantNumero } from './formatAvenantNumero';
 
 // Configuration de base
 const API_BASE_URL =
@@ -64,9 +65,9 @@ const DOCUMENT_TYPES = {
     ],
     displayName: "Avenant Sous-traitance",
     getDisplayName: (data) =>
-      `Avenant ${data.numeroAvenant} - ${data.sousTraitantName}`,
+      `${formatAvenantNumero(data.numeroAvenant)} - ${data.sousTraitantName}`,
     getLoadingMessage: (data) =>
-      `Génération de l'avenant ${data.numeroAvenant} vers le Drive...`,
+      `Génération de ${formatAvenantNumero(data.numeroAvenant)} vers le Drive...`,
   },
   devis_normal: {
     apiEndpoint: "/generate-devis-travaux-pdf-drive/",
@@ -542,7 +543,7 @@ const buildFileName = (documentType, data) => {
 
     case "avenant_sous_traitance":
       // Nom du fichier : "Avenant [Numero] [SousTraitant] - [Chantier].pdf"
-      const avenantName = `Avenant ${data.numeroAvenant} ${data.sousTraitantName} - ${data.chantierName}`;
+      const avenantName = `${formatAvenantNumero(data.numeroAvenant)} ${data.sousTraitantName} - ${data.chantierName}`;
       fileName = `${avenantName}.pdf`;
       break;
 

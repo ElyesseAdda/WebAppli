@@ -37,6 +37,7 @@ import {
 } from "../../styles/tableStyles";
 import { RegeneratePDFIconButton } from "../shared/RegeneratePDFButton";
 import { DOCUMENT_TYPES } from "../../config/documentTypeConfig";
+import { formatAvenantNumero } from "../../utils/formatAvenantNumero";
 
 const formatNumber = (number) => {
   if (number == null) return "";
@@ -526,7 +527,7 @@ const ChantierListeAvenants = ({
                     <MenuItem value="Tous">Tous</MenuItem>
                     {avenantNumeros.map((numero) => (
                       <MenuItem key={numero} value={numero.toString()}>
-                        {numero}
+                        {formatAvenantNumero(numero)}
                       </MenuItem>
                     ))}
                   </StyledSelect>
@@ -576,7 +577,7 @@ const ChantierListeAvenants = ({
                       {formatNumber(item.montant_ht)} €
                     </CenteredTableCell>
                     <CenteredTableCell>
-                      {item.avenant_numero}
+                      {formatAvenantNumero(item.avenant_numero)}
                     </CenteredTableCell>
                     <CenteredTableCell sx={{ width: "120px", padding: "0 8px" }}>
                       <div

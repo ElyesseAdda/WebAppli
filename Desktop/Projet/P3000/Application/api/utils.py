@@ -1659,3 +1659,56 @@ def recalculate_all_numeros(all_items):
         result.append({**item, 'numero': numero})
     
     return result
+
+
+_AVENANT_PREFIX_RE = re.compile(r'^avenant\s*n[°oº]?\s*', re.IGNORECASE)
+_AVENANT_DIGITS_RE = re.compile(r'^\d+$')
+_AVENANT_LEADING_DIGITS_RE = re.compile(r'^(\d+)')
+
+
+def pad_avenant_numero(numero):
+    """Retourne la partie numéro d'un avenant, paddée sur 2 chiffres si c'est un entier (01, 02…)."""
+    if numero is None or numero == '':
+        return ''
+    value = _AVENANT_PREFIX_RE.sub('', str(numero).strip()).strip()
+    if _AVENANT_DIGITS_RE.fullmatch(value):
+        return f"{int(value):02d}"
+    return value
+
+
+def format_avenant_numero(numero):
+    """Libellé d'affichage : Avenant n°01, Avenant n°02, Avenant n°3 bis…"""
+    padded = pad_avenant_numero(numero)
+    if not padded:
+        return ''
+    return f"Avenant n°{padded}"
+
+
+def get_next_chantier_avenant_numero(chantier_id):
+    """Prochain numéro d'avenant chantier au format 01, 02, 03…"""
+    from .models import Avenant
+
+    existing = list(
+        Avenant.objects.filter(chantier_id=chantier_id).values_list('numero', flat=True)
+    )
+    next_num = 1
+    for n in existing:
+        padded = pad_avenant_numero(n)
+        match = _AVENANT_LEADING_DIGITS_RE.match(padded)
+        if match:
+            next_num = max(next_num, int(match.group(1)) + 1)
+
+    existing_raw = {str(n).strip() for n in existing if n is not None}
+    existing_padded = {pad_avenant_numero(n) for n in existing if n is not None}
+
+    while True:
+        candidate = f"{next_num:02d}"
+        if (
+            candidate not in existing_raw
+            and candidate not in existing_padded
+            and str(next_num) not in existing_raw
+            and str(next_num) not in existing_padded
+        ):
+            return candidate
+        next_num += 1
+

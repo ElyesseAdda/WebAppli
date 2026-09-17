@@ -18,7 +18,8 @@ from .utils import (
     upload_file_to_s3_robust,
     create_s3_folder_recursive,
     custom_slugify,
-    normalize_drive_segment
+    normalize_drive_segment,
+    pad_avenant_numero,
 )
 from .views_drive.manager import normalize_filename, denormalize_filename
 from .drive_automation import drive_automation
@@ -200,7 +201,7 @@ class PDFManager:
         
         elif document_type == 'avenant_sous_traitance':
             # Format: Avenant_NumeroAvenant_NomSousTraitant_NomChantier.pdf
-            avenant_numero = kwargs.get('avenant_numero', '1')
+            avenant_numero = pad_avenant_numero(kwargs.get('avenant_numero', '01')) or '01'
             sous_traitant_name = kwargs.get('sous_traitant_name', 'SousTraitant')
             chantier_name = kwargs.get('chantier_name', 'Chantier')
             # Normaliser les noms pour encoder "/" en "∕"

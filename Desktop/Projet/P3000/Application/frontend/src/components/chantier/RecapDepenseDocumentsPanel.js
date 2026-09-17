@@ -13,6 +13,7 @@ import {
 import axios from "axios";
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import RecapCategoryDetails from "./RecapCategoryDetails";
+import { formatAvenantNumero } from "../../utils/formatAvenantNumero";
 
 const formatMontant = (v) =>
   Number(v || 0).toLocaleString("fr-FR", {
@@ -333,7 +334,7 @@ const RecapDepenseDocumentsPanel = ({
                         fontWeight={700}
                         sx={{ wordBreak: "break-word", overflowWrap: "anywhere", lineHeight: 1.35 }}
                       >
-                        Avenant n°{av.numero ?? av.id}
+                        {formatAvenantNumero(av.numero ?? av.id)}
                         {av.description?.trim() ? ` — ${av.description.trim()}` : ""}
                       </Typography>
                       <Typography variant="caption" color="text.secondary" sx={{ display: "block", mt: 0.25, wordBreak: "break-word" }}>
