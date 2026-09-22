@@ -583,6 +583,27 @@
   border-color: #1b78bc;
 }
 
+.agent-carte-conges-outlook {
+  margin: 6px 0 4px;
+  padding: 6px 8px;
+  border-radius: 8px;
+  background: #f4f8fb;
+  color: #1a2b3c;
+  font-size: 0.72rem;
+  font-weight: 600;
+  line-height: 1.35;
+}
+
+.agent-carte-conges-outlook.is-bas {
+  background: #fff8e8;
+}
+
+.agent-carte-conges-outlook.is-depasse,
+.agent-carte-conges-outlook.is-epuise {
+  background: #fff1f0;
+  color: #9b2c2c;
+}
+
 .agent-carte-conges-title {
   font-size: 0.68rem;
   font-weight: 700;

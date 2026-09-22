@@ -13,8 +13,13 @@ import { LocalizationProvider } from "@mui/x-date-pickers/LocalizationProvider";
 import axios from "axios";
 import dayjs from "dayjs";
 import "dayjs/locale/fr"; // Importer la locale française
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import "./../../static/css/calendrierAgent.css";
+import {
+  congeEnCoursText,
+  countWeekdaysInclusive,
+  formatJoursConge,
+} from "../utils/congeAnticipation";
 
 // Configurer dayjs pour utiliser la locale française
 dayjs.locale("fr");
@@ -25,7 +30,7 @@ const ModalStyle = styled(Box)({
   top: "50%",
   left: "50%",
   transform: "translate(-50%, -50%)",
-  width: 450,
+  width: 500,
   maxHeight: "90vh",
   overflowY: "auto",
   background: "linear-gradient(135deg, #ffffff 0%, #f8f9fa 100%)",
@@ -49,7 +54,7 @@ const ModalStyle = styled(Box)({
     backgroundClip: "text",
   },
 
-  "& p": {
+  "& > p": {
     color: "#6c757d",
     fontSize: "14px",
     textAlign: "center",
@@ -158,6 +163,8 @@ const CalendrierAgent = ({ agents, onPeriodChange, initialDate }) => {
 
   const [eventType, setEventType] = useState("");
   const [subtype, setSubtype] = useState("");
+  const [congeApercu, setCongeApercu] = useState(null);
+  const [congeLoading, setCongeLoading] = useState(false);
 
   const fetchAgentsWithWorkDays = async () => {
     try {
@@ -172,44 +179,83 @@ const CalendrierAgent = ({ agents, onPeriodChange, initialDate }) => {
     }
   };
 
+  const dayIndex = {
+    lundi: 1,
+    mardi: 2,
+    mercredi: 3,
+    jeudi: 4,
+    vendredi: 5,
+    samedi: 6,
+    dimanche: 0,
+  };
+
+  const parseWorkDays = (joursTravail) => {
+    if (!joursTravail) return [1, 2, 3, 4, 5];
+    const days = String(joursTravail)
+      .split(",")
+      .map((day) => dayIndex[day.trim().toLowerCase()])
+      .filter((day) => day !== undefined);
+    return days.length ? days : [1, 2, 3, 4, 5];
+  };
+
+  const getAgentWorkDays = (agentId) => {
+    const agent = agents.find((item) => String(item.id) === String(agentId));
+    return parseWorkDays(agent?.jours_travail);
+  };
+
+  const isBlankCalendarDay = (agentId, date) => {
+    const iso = dayjs(date).format("YYYY-MM-DD");
+    const covering = events.filter((event) => {
+      if (String(event.resourceId) !== String(agentId)) return false;
+      const start = dayjs(event.start).format("YYYY-MM-DD");
+      let end = dayjs(event.end || event.start).format("YYYY-MM-DD");
+      if (end > start) end = dayjs(event.end).subtract(1, "day").format("YYYY-MM-DD");
+      return iso >= start && iso <= end;
+    });
+    if (!covering.length) {
+      return !getAgentWorkDays(agentId).includes(dayjs(date).day());
+    }
+    return covering.every((event) => String(event.title || "").trim() === "");
+  };
+
   const loadEvents = async () => {
     const loadedEvents = await fetchEvents();
     const agentsWithWorkDays = await fetchAgentsWithWorkDays();
+    const workDaysByAgent = new Map(
+      agentsWithWorkDays.map((agent) => [String(agent.id), parseWorkDays(agent.jours_travail)])
+    );
     let adaptedEvents = [];
 
     if (loadedEvents && loadedEvents.length > 0) {
-      adaptedEvents = loadedEvents.map((event) => {
-        // Pour FullCalendar, la date de fin doit être le jour SUIVANT le dernier jour d'affichage
-        const endDate = dayjs(event.end_date).add(1, 'day').format('YYYY-MM-DD');
-        
-        return {
-          id: event.id,
-          resourceId: event.agent.toString(),
-          start: event.start_date,
-          end: endDate,
-          title:
-            event.event_type === "modification_horaire"
-              ? `${event.hours_modified}H`
-              : event.event_type === "ecole"
-              ? "École"
-              : `${event.event_type}${
-                  event.subtype ? ` (${event.subtype})` : ""
-                }`,
-          color: getColorByStatus(event.event_type, event.subtype),
-        };
+      loadedEvents.forEach((event) => {
+        const title =
+          event.event_type === "modification_horaire"
+            ? `${event.hours_modified}H`
+            : event.event_type === "ecole"
+            ? "École"
+            : `${event.event_type}${event.subtype ? ` (${event.subtype})` : ""}`;
+        const color = getColorByStatus(event.event_type, event.subtype);
+        const workDays = workDaysByAgent.get(String(event.agent)) || [1, 2, 3, 4, 5];
+        let cursor = dayjs(event.start_date);
+        const last = dayjs(event.end_date || event.start_date);
+        while (cursor.isBefore(last, "day") || cursor.isSame(last, "day")) {
+          if (workDays.includes(cursor.day())) {
+            const day = cursor.format("YYYY-MM-DD");
+            adaptedEvents.push({
+              id: `${event.id}-${day}`,
+              resourceId: event.agent.toString(),
+              start: day,
+              end: dayjs(day).add(1, "day").format("YYYY-MM-DD"),
+              title,
+              color,
+            });
+          }
+          cursor = cursor.add(1, "day");
+        }
       });
     }
 
     if (agentsWithWorkDays.length > 0) {
-      const dayMapping = {
-        lundi: 1,
-        mardi: 2,
-        mercredi: 3,
-        jeudi: 4,
-        vendredi: 5,
-        samedi: 6,
-        dimanche: 0,
-      };
 
       // OPTIMISATION : Créer un index des événements existants par agent et date
       const eventsByAgentAndDate = new Map();
@@ -233,11 +279,7 @@ const CalendrierAgent = ({ agents, onPeriodChange, initialDate }) => {
       const endDate = today.add(6, 'month').endOf('month');
 
       agentsWithWorkDays.forEach((agent) => {
-        const workDays = agent.jours_travail
-          ? agent.jours_travail
-              .split(",")
-              .map((day) => dayMapping[day.trim().toLowerCase()])
-          : [1, 2, 3, 4, 5];
+        const workDays = workDaysByAgent.get(String(agent.id)) || [1, 2, 3, 4, 5];
 
         // Générer les jours uniquement pour la période visible
         let currentDate = startDate;
@@ -275,9 +317,35 @@ const CalendrierAgent = ({ agents, onPeriodChange, initialDate }) => {
     loadEvents();
   }, []);
 
+  useEffect(() => {
+    if (!modalIsOpen || selectedAgent == null || typeof selectedAgent === "object") {
+      return undefined;
+    }
+    let cancelled = false;
+    setCongeApercu(null);
+    setCongeLoading(true);
+    axios
+      .get(`/api/agent/${selectedAgent}/conges/`)
+      .then((response) => {
+        if (!cancelled) setCongeApercu(response.data);
+      })
+      .catch((error) => {
+        console.error("Erreur lors de la récupération des congés", error);
+        if (!cancelled) setCongeApercu(null);
+      })
+      .finally(() => {
+        if (!cancelled) setCongeLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [modalIsOpen, selectedAgent]);
+
   const handleResourceClick = (agentId, agentName) => {
     setSelectedAgent(agentId);
     setSelectedAgentName(agentName);
+    setCongeApercu(null);
+    setCongeLoading(true);
     setModalIsOpen(true);
   };
 
@@ -335,6 +403,7 @@ const CalendrierAgent = ({ agents, onPeriodChange, initialDate }) => {
       const endDate = dayjs(selectedEndDate || selectedDate).format(
         "YYYY-MM-DD"
       );
+      const isUntouchedDay = (date) => isBlankCalendarDay(selectedAgent, date);
 
       // Gestion spéciale pour l'événement "École"
       if (eventType === "ecole") {
@@ -347,6 +416,10 @@ const CalendrierAgent = ({ agents, onPeriodChange, initialDate }) => {
             currentDate.isBefore(finalDate, "day") ||
             currentDate.isSame(finalDate, "day")
           ) {
+            if (isUntouchedDay(currentDate)) {
+              currentDate = currentDate.add(1, "day");
+              continue;
+            }
             const weekNumber = currentDate.isoWeek();
             const year = currentDate.year();
             const dayName = currentDate.locale("fr").format("dddd");
@@ -408,6 +481,10 @@ const CalendrierAgent = ({ agents, onPeriodChange, initialDate }) => {
           currentDate.isBefore(finalDate, "day") ||
           currentDate.isSame(finalDate, "day")
         ) {
+          if (isUntouchedDay(currentDate)) {
+            currentDate = currentDate.add(1, "day");
+            continue;
+          }
           const weekNumber = currentDate.isoWeek();
           const year = currentDate.year();
           const dayName = currentDate.locale("fr").format("dddd");
@@ -471,6 +548,19 @@ const CalendrierAgent = ({ agents, onPeriodChange, initialDate }) => {
         currentDate.isSame(finalDate, "day")
       ) {
         const formattedDate = currentDate.format("YYYY-MM-DD");
+
+        if (isUntouchedDay(currentDate)) {
+          newEvents.push({
+            id: `${selectedAgent}-${formattedDate}`,
+            resourceId: selectedAgent.toString(),
+            start: formattedDate,
+            end: formattedDate,
+            title: " ",
+            color: "grey",
+          });
+          currentDate = currentDate.add(1, "day");
+          continue;
+        }
 
         const newEvent = {
           agent: selectedAgent,
@@ -567,6 +657,36 @@ const CalendrierAgent = ({ agents, onPeriodChange, initialDate }) => {
     padding: "20px",
   };
 
+  const eventCoversIso = (event, iso) => {
+    const start = dayjs(event.start).format("YYYY-MM-DD");
+    let end = dayjs(event.end || event.start).format("YYYY-MM-DD");
+    if (end > start) {
+      end = dayjs(event.end).subtract(1, "day").format("YYYY-MM-DD");
+    }
+    return iso >= start && iso <= end;
+  };
+
+  const agentsEnConge = useMemo(() => {
+    const today = dayjs().format("YYYY-MM-DD");
+    const ids = new Set();
+    events.forEach((event) => {
+      const title = String(event.title || "").toLowerCase();
+      if (!title.startsWith("conge")) return;
+      if (eventCoversIso(event, today)) ids.add(String(event.resourceId));
+    });
+    return ids;
+  }, [events]);
+
+  const anticipation = congeApercu?.anticipation;
+  const periodeJours = countWeekdaysInclusive(selectedDate, selectedEndDate || selectedDate);
+  const soldeActuel = Number(congeApercu?.solde);
+  const periodeDepasseSolde =
+    eventType === "conge" &&
+    subtype === "paye" &&
+    periodeJours > 0 &&
+    Number.isFinite(soldeActuel) &&
+    periodeJours > soldeActuel;
+
   return (
     <>
       <FullCalendar
@@ -607,39 +727,20 @@ const CalendrierAgent = ({ agents, onPeriodChange, initialDate }) => {
         selectable={true}
         select={handleResourceClick}
         eventClick={handleEventClick}
-        resourceAreaWidth="300px"
+        resourceAreaWidth="320px"
         height="auto"
-        resourceLabelClassNames="fc-resource-label-agent"
         resourceLabelContent={(arg) => (
           <div
-            className="fc-resource-agent-name-wrapper"
-            style={{
-              position: "relative",
-              width: "100%",
-              height: "100%",
-              color: "#ffffff",
-            }}
+            className="agent-resource-label"
             onClick={() =>
               handleResourceClick(arg.resource.id, arg.resource.title)
             }
           >
-            <span
-              className="fc-agent-name"
-              style={{ color: "#ffffff", fontWeight: 600 }}
-            >
-              {arg.resource.title}
-            </span>
-            <div
-              style={{
-                position: "absolute",
-                top: 0,
-                left: 0,
-                width: "100%",
-                height: "100%",
-                cursor: "pointer",
-                backgroundColor: "transparent",
-              }}
-            />
+            <span>{arg.resource.title}</span>
+            {agentsEnConge.has(String(arg.resource.id)) && (
+              <span className="agent-resource-badge">En congé</span>
+            )}
+            <div className="agent-resource-hit" />
           </div>
         )}
       />
@@ -648,6 +749,30 @@ const CalendrierAgent = ({ agents, onPeriodChange, initialDate }) => {
         <ModalStyle sx={style}>
           <h2>Modifier la période</h2>
           <p>Agent : {selectedAgentName}</p>
+          <div className="cal-conges">
+            {congeLoading && <p className="cal-conges-line">Congés...</p>}
+            {!congeLoading && !congeApercu && (
+              <p className="cal-conges-line">Congés indisponibles</p>
+            )}
+            {!congeLoading && congeApercu && (
+              <p className="cal-conges-line">
+                Acquis {formatJoursConge(congeApercu.acquis_clos ?? congeApercu.acquis)} j
+                <span> · </span>
+                En cours {formatJoursConge(congeApercu.en_cours_annee ?? congeApercu.en_cours)} j
+                <span> · </span>
+                Pris {formatJoursConge(congeApercu.pris)} j
+                <span> · </span>
+                Solde {formatJoursConge(congeApercu.solde)} j
+                <span> · </span>
+                {congeEnCoursText(anticipation)}
+              </p>
+            )}
+            {periodeDepasseSolde && (
+              <p className="cal-conges-line">
+                {periodeJours} j ouvrés pour un solde de {formatJoursConge(soldeActuel)} j
+              </p>
+            )}
+          </div>
           <LocalizationProvider dateAdapter={AdapterDayjs}>
             <DatePicker
               label="Date de début"

@@ -7446,7 +7446,8 @@ class BonCommandeViewSet(viewsets.ModelViewSet):
                     'montant_total': request.data.get('montant_total', 0),
                     'statut': request.data.get('statut', 'en_attente'),
                     'date_livraison': request.data.get('date_livraison'),
-                    'date_commande': request.data.get('date_commande')
+                    'date_commande': request.data.get('date_commande'),
+                    'heure_livraison': request.data.get('heure_livraison') or None,
                 }
                 
                 # Ajouter le magasin (ForeignKey) si un ID est fourni
@@ -7531,6 +7532,7 @@ class BonCommandeViewSet(viewsets.ModelViewSet):
                 'date_paiement': bc.date_paiement,
                 'reste_a_payer': float(bc.montant_total - bc.montant_paye),
                 'date_commande': bc.date_commande,
+                'heure_livraison': bc.heure_livraison.strftime('%H:%M') if bc.heure_livraison else None,
                 # Informations de contact
                 'contact_type': bc.contact_type,
                 'contact_agent': {
@@ -7614,6 +7616,20 @@ def get_products_by_fournisseur(request):
             {'error': str(e)},
             status=status.HTTP_500_INTERNAL_SERVER_ERROR
         )
+
+def _format_heure_livraison(value):
+    if not value:
+        return None
+    if hasattr(value, 'strftime'):
+        return f"{value.strftime('%H')}H{value.strftime('%M')}"
+    text = str(value).strip()
+    if not text:
+        return None
+    parts = text.split(':')
+    if len(parts) >= 2 and parts[0].isdigit() and parts[1][:2].isdigit():
+        return f"{int(parts[0]):02d}H{parts[1][:2]}"
+    return text
+
 
 @api_view(['GET'])
 def preview_bon_commande(request):
@@ -7724,6 +7740,7 @@ def preview_bon_commande(request):
             'statut': bon_commande_data.get('statut', 'en_attente'),
             'date_commande': formatted_date_commande,
             'date_livraison': formatted_date_livraison,
+            'heure_livraison': _format_heure_livraison(bon_commande_data.get('heure_livraison')),
             'magasin_retrait': magasin_nom,
             'magasin_email': magasin_email,
             'contact_type': contact_type,
@@ -7904,6 +7921,7 @@ def preview_saved_bon_commande(request, id):
             'statut': bon_commande.statut,
             'date_commande': formatted_date_commande,
             'date_livraison': formatted_date_livraison,
+            'heure_livraison': _format_heure_livraison(bon_commande.heure_livraison),
             'magasin_retrait': magasin_nom or "",
             'magasin_email': magasin_email,
             'contact_type': bon_commande.contact_type,

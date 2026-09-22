@@ -33,6 +33,7 @@ function SelectionFournisseurModal({ open, onClose, onSubmit, numeroBC, initialC
   const [dateCreation, setDateCreation] = useState(
     new Date().toISOString().split("T")[0]
   );
+  const [heureLivraison, setHeureLivraison] = useState("");
   const [contactType, setContactType] = useState("");
   const [contactAgent, setContactAgent] = useState("");
   const [contactSousTraitant, setContactSousTraitant] = useState("");
@@ -144,6 +145,7 @@ function SelectionFournisseurModal({ open, onClose, onSubmit, numeroBC, initialC
       emetteur: selectedData.emetteur,
       statut: selectedData.statut, // Ajout du statut
       date_commande: dateCommande,
+      heure_livraison: heureLivraison || null,
       date_creation_personnalisee: dateCreation,
       numero_bon_commande: numeroBonCommande,
       contact_type: contactType,
@@ -179,6 +181,7 @@ function SelectionFournisseurModal({ open, onClose, onSubmit, numeroBC, initialC
       setContactSousTraitantContact("");
       setSousTraitantContacts([]);
       setMagasins([]);
+      setHeureLivraison("");
       setSelectedData((prev) => ({
         ...prev,
         magasin: "",
@@ -348,6 +351,18 @@ function SelectionFournisseurModal({ open, onClose, onSubmit, numeroBC, initialC
               required
             />
           </Box>
+
+          <TextField
+            label="Heure de livraison"
+            type="time"
+            value={heureLivraison}
+            onChange={(e) => setHeureLivraison(e.target.value)}
+            InputLabelProps={{
+              shrink: true,
+            }}
+            helperText="Facultatif. Apparaît sur le PDF si elle est renseignée."
+            fullWidth
+          />
 
           <FormControl fullWidth>
             <InputLabel>Type de Contact Réceptionnaire</InputLabel>

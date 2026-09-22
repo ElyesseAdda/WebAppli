@@ -51,6 +51,7 @@ function BonCommandeForm({
       statut: data.statut, // Ajout du statut
       numero_bon_commande: data.numero_bon_commande,
       date_commande: data.date_commande,
+      heure_livraison: data.heure_livraison || null,
       date_creation_personnalisee: data.date_creation_personnalisee,
       contact_type: data.contact_type,
       contact_agent: data.contact_agent,
@@ -86,6 +87,7 @@ function BonCommandeForm({
       emetteur: selectedData.emetteur,
       statut: selectedData.statut, // Ajout du statut pour la prévisualisation
       date_commande: selectedData.date_commande,
+      heure_livraison: selectedData.heure_livraison || null,
       date_creation_personnalisee: selectedData.date_creation_personnalisee,
       contact_type: selectedData.contact_type,
       contact_agent: selectedData.contact_agent,
@@ -122,6 +124,7 @@ function BonCommandeForm({
       emetteur: selectedData.emetteur,
       statut: selectedData.statut || "en_attente",
       date_commande: selectedData.date_commande,
+      heure_livraison: selectedData.heure_livraison || null,
       date_creation_personnalisee: selectedData.date_creation_personnalisee,
       contact_type: selectedData.contact_type,
       contact_agent: selectedData.contact_agent,

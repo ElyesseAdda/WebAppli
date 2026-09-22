@@ -512,6 +512,7 @@ def build_agent_conges(
         payload = _apply_setup(payload, setup)
     else:
         payload["setup"] = {key: False for key in KPI_FIELDS}
+    payload["anticipation"] = build_conge_anticipation(payload, events, today)
     return payload
 
 
@@ -654,6 +655,117 @@ def _group_paid_leaves(events, start: date, end: date) -> list[dict]:
         }
         for g in groups
     ]
+
+
+def _next_weekday(day: date) -> date:
+    current = day
+    while not is_weekday(current):
+        current += timedelta(days=1)
+    return current
+
+
+def _paid_leave_days(events, start: date, end: date) -> list[date]:
+    if end < start:
+        return []
+    days = set()
+    for event in events:
+        if not is_paid_leave(event):
+            continue
+        event_start = max(event.start_date, start)
+        event_end = min(event.end_date or event.start_date, end)
+        if event_end < event_start:
+            continue
+        for day in each_date(event_start, event_end):
+            if is_weekday(day):
+                days.add(day)
+    return sorted(days)
+
+
+def _current_leave(events, today: date) -> dict | None:
+    covering = []
+    for event in events:
+        if event.event_type != "conge":
+            continue
+        end = event.end_date or event.start_date
+        if event.start_date <= today <= end:
+            covering.append(event)
+    if not covering:
+        return None
+    covering.sort(
+        key=lambda event: (
+            0 if is_paid_leave(event) else 1,
+            -((event.end_date or event.start_date).toordinal()),
+        )
+    )
+    event = covering[0]
+    end = event.end_date or event.start_date
+    subtype = event.subtype or "paye"
+    label = "Payé" if subtype in CONGE_PAYE_SUBTYPES else CONGE_SUBTYPE_LABELS.get(subtype, subtype)
+    retour = _next_weekday(end + timedelta(days=1))
+    return {
+        "start": event.start_date.isoformat(),
+        "end": end.isoformat(),
+        "subtype": subtype,
+        "label": label,
+        "paye": is_paid_leave(event),
+        "jours_restants": count_weekdays(today, end),
+        "retour_le": retour.isoformat(),
+    }
+
+
+def build_conge_anticipation(payload: dict, events, today: date) -> dict:
+    """Solde restant, congé en cours, et dernier jour encore couvert."""
+    period_end = date.fromisoformat(payload["reset_date"])
+    solde = Decimal(str(payload["solde"]))
+    conge_en_cours = _current_leave(events, today)
+
+    future_start = today + timedelta(days=1)
+    future_days = _paid_leave_days(events, future_start, period_end)
+    periodes = _group_paid_leaves(events, future_start, period_end) if future_start <= period_end else []
+
+    jours_entiers = int(solde) if solde >= 1 else 0
+    reliquat = _q(solde - Decimal(jours_entiers)) if solde > 0 else Decimal("0.00")
+
+    covered_days: list[date] = []
+    if jours_entiers and future_start <= period_end:
+        cursor = future_start if is_weekday(future_start) else _next_weekday(future_start)
+        while len(covered_days) < jours_entiers and cursor <= period_end:
+            covered_days.append(cursor)
+            nxt = cursor + timedelta(days=1)
+            cursor = nxt if is_weekday(nxt) else _next_weekday(nxt)
+
+    covered = set(covered_days)
+    uncovered = [day for day in future_days if day not in covered]
+    epuise_le = today if solde < 1 else (uncovered[0] if uncovered else None)
+
+    couvert_jusqu_au_reset = bool(jours_entiers) and len(covered_days) < jours_entiers and epuise_le is None
+    dernier_jour = covered_days[-1] if covered_days and not couvert_jusqu_au_reset else None
+
+    if solde < 1:
+        statut = "epuise"
+    elif epuise_le is not None:
+        statut = "depasse"
+    elif jours_entiers <= 5:
+        statut = "bas"
+    else:
+        statut = "ok"
+
+    return {
+        "conge_en_cours": conge_en_cours,
+        "solde": _to_float(solde),
+        "en_cours": payload.get("en_cours"),
+        "acquis": payload.get("acquis_clos"),
+        "pris": payload.get("pris"),
+        "jours_poses_a_venir": len(future_days),
+        "periodes_a_venir": periodes,
+        "solde_apres_poses": _to_float(_q(solde - Decimal(len(future_days)))),
+        "epuise_le": epuise_le.isoformat() if epuise_le else None,
+        "dernier_jour": dernier_jour.isoformat() if dernier_jour else None,
+        "reliquat": _to_float(reliquat),
+        "couvert_jusqu_au_reset": couvert_jusqu_au_reset,
+        "statut": statut,
+        "reset_le": payload.get("reset_le"),
+    }
 
 
 def _list_other_leaves(events, start: date, end: date) -> list[dict]:
