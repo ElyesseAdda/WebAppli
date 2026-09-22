@@ -2595,6 +2595,7 @@ class BonCommande(models.Model):
     date_creation = models.DateTimeField(auto_now_add=True)
     statut = models.CharField(max_length=20, choices=STATUT_CHOICES, default='en_attente')
     date_livraison = models.DateField(null=True, blank=True)
+    heure_livraison = models.TimeField(null=True, blank=True, verbose_name="Heure de livraison")
     magasin_retrait = models.CharField(max_length=200, null=True, blank=True)  # Conservé pour compatibilité
     magasin = models.ForeignKey('Magasin', on_delete=models.SET_NULL, null=True, blank=True, related_name='bons_commande', help_text="Magasin du fournisseur pour le retrait")
     date_commande = models.DateField(default='2025-01-01')  # Ajout du champ de date avec une valeur par défaut
