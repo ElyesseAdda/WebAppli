@@ -13,8 +13,13 @@ import { LocalizationProvider } from "@mui/x-date-pickers/LocalizationProvider";
 import axios from "axios";
 import dayjs from "dayjs";
 import "dayjs/locale/fr"; // Importer la locale française
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import "./../../static/css/calendrierAgent.css";
+import {
+  congeEnCoursText,
+  countWeekdaysInclusive,
+  formatJoursConge,
+} from "../utils/congeAnticipation";
 
 // Configurer dayjs pour utiliser la locale française
 dayjs.locale("fr");
@@ -25,7 +30,7 @@ const ModalStyle = styled(Box)({
   top: "50%",
   left: "50%",
   transform: "translate(-50%, -50%)",
-  width: 450,
+  width: 500,
   maxHeight: "90vh",
   overflowY: "auto",
   background: "linear-gradient(135deg, #ffffff 0%, #f8f9fa 100%)",
@@ -49,7 +54,7 @@ const ModalStyle = styled(Box)({
     backgroundClip: "text",
   },
 
-  "& p": {
+  "& > p": {
     color: "#6c757d",
     fontSize: "14px",
     textAlign: "center",
@@ -158,6 +163,8 @@ const CalendrierAgent = ({ agents, onPeriodChange, initialDate }) => {
 
   const [eventType, setEventType] = useState("");
   const [subtype, setSubtype] = useState("");
+  const [congeApercu, setCongeApercu] = useState(null);
+  const [congeLoading, setCongeLoading] = useState(false);
 
   const fetchAgentsWithWorkDays = async () => {
     try {
@@ -275,9 +282,35 @@ const CalendrierAgent = ({ agents, onPeriodChange, initialDate }) => {
     loadEvents();
   }, []);
 
+  useEffect(() => {
+    if (!modalIsOpen || selectedAgent == null || typeof selectedAgent === "object") {
+      return undefined;
+    }
+    let cancelled = false;
+    setCongeApercu(null);
+    setCongeLoading(true);
+    axios
+      .get(`/api/agent/${selectedAgent}/conges/`)
+      .then((response) => {
+        if (!cancelled) setCongeApercu(response.data);
+      })
+      .catch((error) => {
+        console.error("Erreur lors de la récupération des congés", error);
+        if (!cancelled) setCongeApercu(null);
+      })
+      .finally(() => {
+        if (!cancelled) setCongeLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [modalIsOpen, selectedAgent]);
+
   const handleResourceClick = (agentId, agentName) => {
     setSelectedAgent(agentId);
     setSelectedAgentName(agentName);
+    setCongeApercu(null);
+    setCongeLoading(true);
     setModalIsOpen(true);
   };
 
@@ -567,6 +600,36 @@ const CalendrierAgent = ({ agents, onPeriodChange, initialDate }) => {
     padding: "20px",
   };
 
+  const eventCoversIso = (event, iso) => {
+    const start = dayjs(event.start).format("YYYY-MM-DD");
+    let end = dayjs(event.end || event.start).format("YYYY-MM-DD");
+    if (end > start) {
+      end = dayjs(event.end).subtract(1, "day").format("YYYY-MM-DD");
+    }
+    return iso >= start && iso <= end;
+  };
+
+  const agentsEnConge = useMemo(() => {
+    const today = dayjs().format("YYYY-MM-DD");
+    const ids = new Set();
+    events.forEach((event) => {
+      const title = String(event.title || "").toLowerCase();
+      if (!title.startsWith("conge")) return;
+      if (eventCoversIso(event, today)) ids.add(String(event.resourceId));
+    });
+    return ids;
+  }, [events]);
+
+  const anticipation = congeApercu?.anticipation;
+  const periodeJours = countWeekdaysInclusive(selectedDate, selectedEndDate || selectedDate);
+  const soldeActuel = Number(congeApercu?.solde);
+  const periodeDepasseSolde =
+    eventType === "conge" &&
+    subtype === "paye" &&
+    periodeJours > 0 &&
+    Number.isFinite(soldeActuel) &&
+    periodeJours > soldeActuel;
+
   return (
     <>
       <FullCalendar
@@ -607,27 +670,20 @@ const CalendrierAgent = ({ agents, onPeriodChange, initialDate }) => {
         selectable={true}
         select={handleResourceClick}
         eventClick={handleEventClick}
-        resourceAreaWidth="300px"
+        resourceAreaWidth="320px"
         height="auto"
         resourceLabelContent={(arg) => (
           <div
-            style={{ position: "relative", width: "100%", height: "100%" }}
+            className="agent-resource-label"
             onClick={() =>
               handleResourceClick(arg.resource.id, arg.resource.title)
             }
           >
             <span>{arg.resource.title}</span>
-            <div
-              style={{
-                position: "absolute",
-                top: 0,
-                left: 0,
-                width: "100%",
-                height: "100%",
-                cursor: "pointer",
-                backgroundColor: "transparent",
-              }}
-            />
+            {agentsEnConge.has(String(arg.resource.id)) && (
+              <span className="agent-resource-badge">En congé</span>
+            )}
+            <div className="agent-resource-hit" />
           </div>
         )}
       />
@@ -636,6 +692,30 @@ const CalendrierAgent = ({ agents, onPeriodChange, initialDate }) => {
         <ModalStyle sx={style}>
           <h2>Modifier la période</h2>
           <p>Agent : {selectedAgentName}</p>
+          <div className="cal-conges">
+            {congeLoading && <p className="cal-conges-line">Congés...</p>}
+            {!congeLoading && !congeApercu && (
+              <p className="cal-conges-line">Congés indisponibles</p>
+            )}
+            {!congeLoading && congeApercu && (
+              <p className="cal-conges-line">
+                Acquis {formatJoursConge(congeApercu.acquis_clos ?? congeApercu.acquis)} j
+                <span> · </span>
+                En cours {formatJoursConge(congeApercu.en_cours_annee ?? congeApercu.en_cours)} j
+                <span> · </span>
+                Pris {formatJoursConge(congeApercu.pris)} j
+                <span> · </span>
+                Solde {formatJoursConge(congeApercu.solde)} j
+                <span> · </span>
+                {congeEnCoursText(anticipation)}
+              </p>
+            )}
+            {periodeDepasseSolde && (
+              <p className="cal-conges-line">
+                {periodeJours} j ouvrés pour un solde de {formatJoursConge(soldeActuel)} j
+              </p>
+            )}
+          </div>
           <LocalizationProvider dateAdapter={AdapterDayjs}>
             <DatePicker
               label="Date de début"

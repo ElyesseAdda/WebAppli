@@ -46,6 +46,8 @@ import "../../static/css/agentCarte.css";
 
 import { formatAvenantNumero } from "../utils/formatAvenantNumero";
 
+import { congeEnCoursText } from "../utils/congeAnticipation";
+
 
 
 const EMPTY_AGENT = {
@@ -2741,6 +2743,11 @@ const AgentCarteModal = ({ isOpen, handleClose, refreshAgents, agents = [] }) =>
                               <span>Solde</span>
                               <strong>{formatJours(congeData.solde)} j</strong>
                             </div>
+                            {congeData.anticipation?.conge_en_cours && (
+                              <div className="agent-carte-conges-outlook">
+                                {congeEnCoursText(congeData.anticipation)}
+                              </div>
+                            )}
                             <div className="agent-carte-stats-hint">
                               Reset {congeData.reset_le || "31 mai"}
                             </div>
@@ -3680,6 +3687,11 @@ const AgentCarteModal = ({ isOpen, handleClose, refreshAgents, agents = [] }) =>
           <strong>{formatJours(congeData?.solde)} j</strong>
           <span>Solde disponible</span>
         </div>
+        {congeData?.anticipation?.conge_en_cours && (
+          <div className="agent-carte-conges-outlook">
+            {congeEnCoursText(congeData.anticipation)}
+          </div>
+        )}
         <div className="agent-carte-conges-kpis">
           {CONGE_KPI_ITEMS.map((item) => (
             <button
