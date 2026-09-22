@@ -100,6 +100,7 @@ function ProduitSelectionTable({
           emetteur: selectedData.emetteur,
           statut: selectedData.statut,
           date_commande: selectedData.date_commande,
+          heure_livraison: selectedData.heure_livraison || null,
           date_creation_personnalisee: selectedData.date_creation_personnalisee,
           contact_type: selectedData.contact_type,
           contact_agent: selectedData.contact_agent,
@@ -344,6 +345,7 @@ function ProduitSelectionTable({
         emetteur: selectedData.emetteur,
         statut: selectedData.statut, // Ajout du statut
         date_commande: selectedData.date_commande,
+        heure_livraison: selectedData.heure_livraison || null,
         date_creation_personnalisee: selectedData.date_creation_personnalisee,
         contact_type: selectedData.contact_type,
         contact_agent: selectedData.contact_agent,
