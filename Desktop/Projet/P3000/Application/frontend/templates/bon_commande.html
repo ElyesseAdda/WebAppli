@@ -398,14 +398,14 @@
       <div class="adresse-livraison">
         <h3>Adresse de Livraison et date:</h3>
         {% if statut == 'en_attente' %}
-        <p>En attente Livraison</p>
+        <p>En attente Livraison{% if heure_livraison %} À {{ heure_livraison }}{% endif %}</p>
         {% elif statut == 'livre_chantier' %}
         <p>
-          LIVRAISON {{ chantier.chantier_name|upper }} LE {{ date_commande }}
+          LIVRAISON {{ chantier.chantier_name|upper }} LE {{ date_commande }}{% if heure_livraison %} À {{ heure_livraison }}{% endif %}
         </p>
         {% elif statut == 'retrait_magasin' %}
         <p>
-          RETRAIT {% if magasin_retrait %}{{ magasin_retrait|upper }}{% else %}{{ fournisseur|upper }}{% endif %} LE {{ date_commande }}
+          RETRAIT {% if magasin_retrait %}{{ magasin_retrait|upper }}{% else %}{{ fournisseur|upper }}{% endif %} LE {{ date_commande }}{% if heure_livraison %} À {{ heure_livraison }}{% endif %}
         </p>
         {% endif %}
       </div>
