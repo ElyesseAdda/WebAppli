@@ -19,36 +19,33 @@ import { createTheme, ThemeProvider } from '@mui/material/styles';
 import logo from '../img/logo.png';
 
 // --- CONFIGURATION DU THÈME MUI ---
-// Création d'un thème personnalisé pour intégrer les couleurs de Peinture 3000
 const theme = createTheme({
   palette: {
     primary: {
-      main: '#1E73BE', // Le bleu principal du logo
+      main: '#ffffff',
     },
     secondary: {
-      main: '#CEDC00', // Le jaune du logo
+      main: '#4a4a4a',
     },
     text: {
-      primary: '#2c3e50', // Texte sombre
-      secondary: '#95a5a6', // Texte gris
+      primary: '#2c3e50',
+      secondary: '#95a5a6',
     },
     background: {
-      default: '#fdfdfd',
+      default: '#2d2d2d',
     }
   },
   typography: {
     fontFamily: '"Segoe UI", "Helvetica Neue", Helvetica, Arial, sans-serif',
   },
   components: {
-    // Personnalisation globale des composants pour coller au design
     MuiButton: {
       styleOverrides: {
         root: {
           padding: '12px 16px',
           fontSize: '1rem',
-          textTransform: 'none', // Pas de MAJUSCULES forcées
+          textTransform: 'none',
           borderRadius: '8px',
-          boxShadow: '0 4px 6px rgba(0,0,0,0.1)',
           fontWeight: 600,
         },
       },
@@ -58,7 +55,6 @@ const theme = createTheme({
         root: {
           marginBottom: '16px',
           '& .MuiOutlinedInput-root': {
-            backgroundColor: '#ffffff',
             borderRadius: '8px',
           }
         }
@@ -142,38 +138,21 @@ const Login = ({ onLoginSuccess }) => {
   return (
     <ThemeProvider theme={theme}>
       <CssBaseline />
-      <style>
-        {`
-          @keyframes shimmer {
-            0% {
-              background-position: 0% center;
-            }
-            50% {
-              background-position: 100% center;
-            }
-            100% {
-              background-position: 0% center;
-            }
-          }
-        `}
-      </style>
       <Grid container component="main" sx={{ height: '100vh', overflow: 'hidden' }}>
         
-        {/* --- PARTIE GAUCHE : LA MARQUE (Bleu) --- */}
+        {/* --- PARTIE GAUCHE : fond blanc, logo et texte noirs --- */}
         <Grid 
           item 
           xs={12} 
           md={6} 
           sx={{
-            // Dégradé identique à la version précédente
-            background: 'linear-gradient(135deg, #1E73BE 0%, #16538a 100%)',
+            background: '#ffffff',
             display: 'flex',
             flexDirection: 'column',
             justifyContent: 'center',
             alignItems: 'center',
-            color: 'white',
+            color: '#000000',
             position: 'relative',
-            // Responsive : 35% de la hauteur sur mobile, 100% sur bureau
             height: { xs: '35vh', md: '100vh' },
             boxShadow: 6,
             zIndex: 10
@@ -187,7 +166,7 @@ const Login = ({ onLoginSuccess }) => {
             alignItems: 'center',
             width: '100%'
           }}>
-            {/* Logo */}
+            {/* Logo (noir sur fond blanc) */}
             <Box 
               sx={{ 
                 mb: 4,
@@ -199,12 +178,11 @@ const Login = ({ onLoginSuccess }) => {
             >
               <img 
                 src={logo} 
-                alt="Peinture 3000" 
+                alt="MJR Services" 
                 style={{ 
-                  width: '100%', 
+                  width: '500px', 
                   height: 'auto', 
-                  objectFit: 'contain',
-                  filter: 'brightness(0) invert(1)'
+                  objectFit: 'contain'
                 }} 
               />
             </Box>
@@ -216,25 +194,19 @@ const Login = ({ onLoginSuccess }) => {
                 fontWeight: 700, 
                 lineHeight: 1.2, 
                 fontSize: { xs: '1.25rem', md: '2.5rem' },
-                background: 'linear-gradient(90deg, #CEDC00 0%, #E8F500 50%, #CEDC00 100%)',
-                backgroundSize: '200% auto',
-                backgroundClip: 'text',
-                WebkitBackgroundClip: 'text',
-                WebkitTextFillColor: 'transparent',
-                animation: 'shimmer 3s ease-in-out infinite',
-                textShadow: '0 0 20px rgba(206, 220, 0, 0.3)',
+                color: '#000000',
               }}
             >
               Pilotage centralisé<br />de vos chantiers.
             </Typography>
             
-            <Typography variant="subtitle1" sx={{ mt: 2, color: 'rgba(255, 255, 255, 0.75)', fontWeight: 600, fontSize: { xs: '0.875rem', md: '1.5rem' } }}>
+            <Typography variant="subtitle1" sx={{ mt: 2, color: '#333333', fontWeight: 600, fontSize: { xs: '0.875rem', md: '1.5rem' } }}>
               Suite de gestion administrative et technique
             </Typography>
           </Box>
         </Grid>
 
-        {/* --- PARTIE DROITE : LE FORMULAIRE --- */}
+        {/* --- PARTIE DROITE : fond gris-noir, texte blanc --- */}
         <Grid 
           item 
           xs={12} 
@@ -245,9 +217,9 @@ const Login = ({ onLoginSuccess }) => {
             flexDirection: 'column', 
             justifyContent: 'center', 
             alignItems: 'center',
-            height: { xs: '65vh', md: '100vh' }, // Prend le reste de la hauteur sur mobile
+            height: { xs: '65vh', md: '100vh' },
             overflowY: 'auto',
-            bgcolor: 'background.default',
+            bgcolor: '#2d2d2d',
             p: { xs: 2, md: 8 }
           }}
         >
@@ -261,17 +233,16 @@ const Login = ({ onLoginSuccess }) => {
           >
             {/* En-tête du formulaire */}
             <Box sx={{ mb: 5, textAlign: { xs: 'center', md: 'left' } }}>
-              <Typography component="h2" variant="h4" sx={{ color: 'text.primary', fontWeight: 700, mb: 1 }}>
+              <Typography component="h2" variant="h4" sx={{ color: '#ffffff', fontWeight: 700, mb: 1 }}>
                 Connexion
               </Typography>
-              <Typography variant="body1" sx={{ color: 'text.secondary' }}>
+              <Typography variant="body1" sx={{ color: 'rgba(255, 255, 255, 0.8)' }}>
                 Renseignez vos identifiants pour accéder à l'application.
               </Typography>
             </Box>
 
             {/* Formulaire MUI */}
             <Box component="form" onSubmit={handleSubmit} noValidate>
-              {/* Messages d'erreur/succès */}
               {error && (
                 <Alert severity="error" sx={{ marginBottom: 2 }}>
                   {error}
@@ -296,10 +267,22 @@ const Login = ({ onLoginSuccess }) => {
                 value={formData.username}
                 onChange={handleInputChange}
                 InputLabelProps={{ shrink: true }}
+                sx={{
+                  '& .MuiInputLabel-root': { color: 'rgba(255, 255, 255, 0.7)' },
+                  '& .MuiInputLabel-root.Mui-focused': { color: '#ffffff' },
+                  '& .MuiOutlinedInput-root': {
+                    backgroundColor: 'rgba(255, 255, 255, 0.08)',
+                    '& fieldset': { borderColor: 'rgba(255, 255, 255, 0.3)' },
+                    '&:hover fieldset': { borderColor: 'rgba(255, 255, 255, 0.5)' },
+                    '&.Mui-focused fieldset': { borderColor: '#ffffff' },
+                    '& .MuiInputBase-input': { color: '#ffffff' },
+                  },
+                  '& .MuiInputAdornment-root .MuiSvgIcon-root': { color: 'rgba(255, 255, 255, 0.7)' },
+                }}
                 InputProps={{
                   startAdornment: (
                     <InputAdornment position="start">
-                      <Person color="action" />
+                      <Person sx={{ color: 'rgba(255, 255, 255, 0.7)' }} />
                     </InputAdornment>
                   ),
                 }}
@@ -318,10 +301,21 @@ const Login = ({ onLoginSuccess }) => {
                 value={formData.password}
                 onChange={handleInputChange}
                 InputLabelProps={{ shrink: true }}
+                sx={{
+                  '& .MuiInputLabel-root': { color: 'rgba(255, 255, 255, 0.7)' },
+                  '& .MuiInputLabel-root.Mui-focused': { color: '#ffffff' },
+                  '& .MuiOutlinedInput-root': {
+                    backgroundColor: 'rgba(255, 255, 255, 0.08)',
+                    '& fieldset': { borderColor: 'rgba(255, 255, 255, 0.3)' },
+                    '&:hover fieldset': { borderColor: 'rgba(255, 255, 255, 0.5)' },
+                    '&.Mui-focused fieldset': { borderColor: '#ffffff' },
+                    '& .MuiInputBase-input': { color: '#ffffff' },
+                  },
+                }}
                 InputProps={{
                   startAdornment: (
                     <InputAdornment position="start">
-                      <Lock color="action" />
+                      <Lock sx={{ color: 'rgba(255, 255, 255, 0.7)' }} />
                     </InputAdornment>
                   ),
                   endAdornment: (
@@ -330,6 +324,7 @@ const Login = ({ onLoginSuccess }) => {
                         aria-label="toggle password visibility"
                         onClick={handleTogglePasswordVisibility}
                         edge="end"
+                        sx={{ color: 'rgba(255, 255, 255, 0.7)' }}
                       >
                         {showPassword ? <VisibilityOff /> : <Visibility />}
                       </IconButton>
@@ -338,7 +333,6 @@ const Login = ({ onLoginSuccess }) => {
                 }}
               />
 
-              {/* Bouton avec couleur sombre par défaut, bleu au survol */}
               <Button
                 type="submit"
                 fullWidth
@@ -347,18 +341,20 @@ const Login = ({ onLoginSuccess }) => {
                 sx={{ 
                   mt: 3, 
                   mb: 2, 
-                  bgcolor: 'text.primary',
+                  bgcolor: '#ffffff',
+                  color: '#2d2d2d',
                   '&:hover': {
-                    bgcolor: 'primary.main',
+                    bgcolor: 'rgba(255, 255, 255, 0.9)',
                   },
                   '&:disabled': {
-                    bgcolor: 'text.secondary',
+                    bgcolor: 'rgba(255, 255, 255, 0.3)',
+                    color: 'rgba(255, 255, 255, 0.5)',
                   },
                   py: 1.5
                 }}
               >
                 {loading ? (
-                  <CircularProgress size={24} color="inherit" />
+                  <CircularProgress size={24} sx={{ color: '#2d2d2d' }} />
                 ) : (
                   'Se connecter'
                 )}
@@ -367,24 +363,22 @@ const Login = ({ onLoginSuccess }) => {
               <Grid container alignItems="center" justifyContent="space-between" sx={{ mt: 1 }}>
                 <Grid item>
                   <FormControlLabel
-                    control={<Checkbox value="remember" color="primary" sx={{ '&.Mui-checked': { color: 'primary.main' } }} />}
-                    label={<Typography variant="body2" color="text.secondary">Rester connecté</Typography>}
+                    control={<Checkbox value="remember" sx={{ color: 'rgba(255, 255, 255, 0.7)', '&.Mui-checked': { color: '#ffffff' } }} />}
+                    label={<Typography variant="body2" sx={{ color: 'rgba(255, 255, 255, 0.8)' }}>Rester connecté</Typography>}
                   />
                 </Grid>
                 <Grid item>
-                  <Link href="#" variant="body2" sx={{ color: 'primary.main', fontWeight: 600, textDecoration: 'none', '&:hover': { textDecoration: 'underline' } }}>
+                  <Link href="#" variant="body2" sx={{ color: '#ffffff', fontWeight: 600, textDecoration: 'none', '&:hover': { textDecoration: 'underline' } }}>
                     Mot de passe oublié ?
                   </Link>
                 </Grid>
               </Grid>
             </Box>
 
-            {/* Informations supplémentaires */}
             <Typography
               variant="body2"
-              color="text.secondary"
               align="center"
-              sx={{ mt: 3 }}
+              sx={{ mt: 3, color: 'rgba(255, 255, 255, 0.7)' }}
             >
               Contactez l'administrateur pour obtenir vos identifiants
             </Typography>

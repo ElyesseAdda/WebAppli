@@ -13,7 +13,7 @@ import {
 import { Visibility, VisibilityOff, Person, Lock } from "@mui/icons-material";
 import { createTheme, ThemeProvider } from "@mui/material/styles";
 import { useNavigate } from "react-router-dom";
-import logo from "../img/logo.png";
+import logo from "../img/apple-touch-icon.png";
 
 // Thème mobile optimisé
 const mobileTheme = createTheme({
@@ -116,7 +116,7 @@ const LoginMobile = ({ onLoginSuccess }) => {
         if (onLoginSuccess) {
           onLoginSuccess(data.user);
         }
-        // Hub mobile P3000 (choix Rapports / Distributeurs / Drive selon droits)
+        // Hub mobile MJR (Distributeur → lien externe P3000)
         navigate("/mobile-home");
       } else {
         setError(data.error || "Identifiants incorrects");
@@ -175,11 +175,10 @@ const LoginMobile = ({ onLoginSuccess }) => {
           >
             <img
               src={logo}
-              alt="Peinture 3000"
+              alt="MJR SERVICES"
               style={{
-                width: "160px",
-                height: "auto",
-                maxHeight: "120px",
+                width: "120px",
+                height: "120px",
                 objectFit: "contain",
               }}
             />
@@ -196,7 +195,7 @@ const LoginMobile = ({ onLoginSuccess }) => {
               color: "text.primary",
             }}
           >
-            Peinture 3000
+            MJR SERVICES
           </Typography>
 
           <Typography
@@ -207,7 +206,7 @@ const LoginMobile = ({ onLoginSuccess }) => {
               color: "text.secondary",
             }}
           >
-            Suite de gestion administrative et technique
+            Gestion des distributeurs automatiques
           </Typography>
 
           {/* Formulaire */}

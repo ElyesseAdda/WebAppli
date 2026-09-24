@@ -1,30 +1,61 @@
 const path = require("path");
 const fs = require("fs");
+const { execSync } = require("child_process");
 const puppeteer = require("puppeteer");
+
+function isSnapBinary(binPath) {
+  try {
+    const output = execSync(`${binPath} --version 2>&1`, { encoding: "utf-8", timeout: 5000 });
+    return output.toLowerCase().includes("snap");
+  } catch {
+    return false;
+  }
+}
+
+function findChromiumPath() {
+  const candidates = [
+    "/usr/bin/google-chrome-stable",
+    "/usr/bin/google-chrome",
+    "/usr/bin/chromium-browser",
+    "/usr/bin/chromium",
+    "/opt/google/chrome/google-chrome",
+  ];
+  for (const p of candidates) {
+    if (fs.existsSync(p)) {
+      if (isSnapBinary(p)) {
+        console.log(`[generate_pdf] ${p} is snap — skipped (incompatible with www-data)`);
+        continue;
+      }
+      return p;
+    }
+  }
+  return undefined;
+}
 
 async function generatePDF() {
   const args = process.argv.slice(2);
-  const previewUrl = args[0]; // L'URL de prévisualisation du devis
-  const pdfPath = args[1] || path.join(require("os").tmpdir(), `devis-${Date.now()}.pdf`);
+  const previewUrl = args[0];
+  const pdfPath = args[1] || path.resolve(__dirname, "devis.pdf");
+  const isLinux = process.platform === "linux";
+  const chromiumPath = isLinux ? findChromiumPath() : undefined;
 
-  // Détecter l'environnement : production (Linux) ou local (Windows/autre)
-  const isProduction = process.platform === "linux" && fs.existsSync("/usr/bin/chromium-browser");
-  const chromiumPath = isProduction ? "/usr/bin/chromium-browser" : undefined;
+  console.log(`[generate_pdf] Platform: ${process.platform}`);
+  console.log(`[generate_pdf] Preview URL: ${previewUrl}`);
+  console.log(`[generate_pdf] Output path: ${pdfPath}`);
+  console.log(`[generate_pdf] Chromium path: ${chromiumPath || "bundled (puppeteer)"}`);
 
-  // Configuration des arguments selon l'environnement
   const launchArgs = [
-        "--disable-dev-shm-usage",
-        "--disable-gpu",
-        "--window-size=1920,1080",
-        "--font-render-hinting=none",
-        "--disable-font-subpixel-positioning",
-        "--disable-features=FontAccess",
-        "--enable-font-antialiasing",
-        "--force-device-scale-factor=1",
+    "--disable-dev-shm-usage",
+    "--disable-gpu",
+    "--window-size=1920,1080",
+    "--font-render-hinting=none",
+    "--disable-font-subpixel-positioning",
+    "--disable-features=FontAccess",
+    "--enable-font-antialiasing",
+    "--force-device-scale-factor=1",
   ];
 
-  // Ajouter --no-sandbox uniquement en production (nécessaire pour Gunicorn)
-  if (isProduction) {
+  if (isLinux) {
     launchArgs.push("--no-sandbox", "--disable-setuid-sandbox");
   }
 
@@ -33,24 +64,26 @@ async function generatePDF() {
     args: launchArgs,
   };
 
-  // Ajouter executablePath uniquement en production
   if (chromiumPath) {
     browserConfig.executablePath = chromiumPath;
   }
 
+  console.log(`[generate_pdf] Launch args: ${launchArgs.join(" ")}`);
+  console.log(`[generate_pdf] executablePath: ${browserConfig.executablePath || "auto-detect (puppeteer bundled)"}`);
+
   try {
     const browser = await puppeteer.launch(browserConfig);
+    console.log(`[generate_pdf] Browser launched successfully`);
 
     const page = await browser.newPage();
 
     try {
       await page.setViewport({
         width: 794,
-        height: 1123, // A4 height in pixels
+        height: 1123,
         deviceScaleFactor: 1,
       });
 
-      // Injecter les polices système pour assurer la compatibilité
       await page.evaluateOnNewDocument(() => {
         const style = document.createElement('style');
         style.textContent = `
@@ -62,7 +95,6 @@ async function generatePDF() {
         document.head.appendChild(style);
       });
 
-      // Ajouter les cookies de session si disponibles
       const cookies = process.env.SESSION_COOKIES;
       if (cookies) {
         try {
@@ -73,29 +105,19 @@ async function generatePDF() {
         }
       }
 
+      console.log(`[generate_pdf] Navigating to: ${previewUrl}`);
       const response = await page.goto(previewUrl, {
-        waitUntil: ["load", "networkidle2"],
+        waitUntil: ["load", "networkidle0"],
         timeout: 60000,
       });
 
       if (!response.ok()) {
         throw new Error(`Page load failed with status: ${response.status()}`);
       }
+      console.log(`[generate_pdf] Page loaded with status: ${response.status()}`);
 
-      // Attendre que le contenu soit complètement chargé
       await page.waitForSelector("body", { timeout: 10000 });
-
-      // Attendre que toutes les images soient complètement chargées (photos S3, logo, signature)
-      // plutôt qu'un délai fixe de 3 secondes
-      await page.waitForFunction(
-        () => {
-          const imgs = Array.from(document.querySelectorAll("img"));
-          return imgs.every((img) => img.complete && img.naturalWidth > 0);
-        },
-        { timeout: 20000, polling: 200 }
-      ).catch(() => {
-        // Si certaines images ne se chargent pas (ex: URL expirée), on continue quand même
-      });
+      await new Promise((resolve) => setTimeout(resolve, 3000));
 
       await page.pdf({
         path: pdfPath,
@@ -108,27 +130,41 @@ async function generatePDF() {
           bottom: "20px",
           left: "20px",
         },
-        preferCSSPageSize: false, // IMPORTANT: Désactiver pour les PDFs multi-pages
+        preferCSSPageSize: false,
         scale: 1,
         displayHeaderFooter: false,
-        pageRanges: "", // Inclure toutes les pages
+        pageRanges: "",
       });
 
+      console.log(`[generate_pdf] PDF generated successfully: ${pdfPath}`);
       await browser.close();
-      process.exit(0); // Sortie réussie
+      process.exit(0);
     } catch (pageError) {
-      console.error("Erreur lors du traitement de la page:", pageError);
-      await page.screenshot({ path: require("os").tmpdir() + "/error-screenshot.png" }).catch(() => {});
+      console.error("[generate_pdf] Erreur page:", pageError.message);
+      try {
+        await page.screenshot({ path: "/tmp/puppeteer-error-screenshot.png" });
+      } catch (_) {}
+      await browser.close();
       throw pageError;
     }
   } catch (err) {
-    console.error("Erreur détaillée:", err);
-    console.error("Stack trace:", err.stack);
-    process.exit(1); // Sortie avec une erreur
+    console.error("[generate_pdf] Erreur:", err.message);
+    console.error("[generate_pdf] Stack:", err.stack);
+
+    if (err.message && (err.message.includes("Could not find") || err.message.includes("Failed to launch"))) {
+      console.error("=== DIAGNOSTIC ===");
+      console.error("Chromium non utilisable. Solutions :");
+      console.error("1. Installer Google Chrome: wget -q -O /tmp/gc.deb https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb && sudo apt install -y /tmp/gc.deb");
+      console.error("2. Ou configurer le cache Puppeteer: sudo mkdir -p /opt/puppeteer-cache && sudo chown www-data:www-data /opt/puppeteer-cache && PUPPETEER_CACHE_DIR=/opt/puppeteer-cache npx puppeteer browsers install chromium");
+      console.error("Cache Puppeteer actuel: " + (process.env.PUPPETEER_CACHE_DIR || "~/.cache/puppeteer"));
+      console.error("==================");
+    }
+
+    process.exit(1);
   }
 }
 
 generatePDF().catch((err) => {
-  console.error("Erreur non gérée:", err);
+  console.error("[generate_pdf] Erreur non geree:", err.message);
   process.exit(1);
 });

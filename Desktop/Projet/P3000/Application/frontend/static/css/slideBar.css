@@ -52,14 +52,14 @@ html {
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 8px 0 20px 0;
+  /* padding: 8px 0 20px 0; */
   margin-bottom: 8px;
   border-bottom: 1px solid var(--sidebar-border);
 }
 
 .slide-bar .logo {
-  width: 140px;
-  height: auto;
+  width: 300px;
+  height: 180px;
   object-fit: contain;
 }
 

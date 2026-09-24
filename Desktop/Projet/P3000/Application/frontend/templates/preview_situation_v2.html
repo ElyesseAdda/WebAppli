@@ -38,7 +38,7 @@
 
       /* Style pour les sections en bleu */
       .partie {
-        background-color: rgba(27, 120, 188, 1);
+        background-color: black;
         color: white;
         font-weight: bold;
         padding: 0px;
@@ -62,7 +62,7 @@
         vertical-align: top;
       }
       .sous-partie {
-        background-color: rgb(157, 197, 226);
+        background-color: #d3d3d3;
         color: black;
         padding: 5px;
         text-align: left;
@@ -361,9 +361,13 @@
         width: 300px;
       }
       .logo {
-        width: 220px;
-        height: 160px;
+        width: 400px;
+        height: 220px;
+        margin-top: -30px;
+        margin-bottom: -80px;
+        margin-left: -30px;
       }
+      
       .qualibat-logo {
         width: 220px;
         height: auto;
@@ -371,7 +375,7 @@
       }
       .P3000-info {
         grid-area: 1 / 2 / 2 / 3;
-        color: rgba(27, 120, 188, 1);
+        color: black;
         text-align: right;
         font-weight: 600;
       }
@@ -419,6 +423,8 @@
         width: 100%;
         margin-top: 0;
         border: 2px solid black;
+        page-break-inside: avoid;
+        break-inside: avoid;
       }
 
       .recap-table th {
@@ -454,7 +460,7 @@
       }
 
       .montant-row {
-        background-color: rgba(27, 120, 188, 1);
+        background-color: black;
         color: white;
       }
 
@@ -558,15 +564,15 @@
     <div class="p3000-container">
       <div class="logo-container">
         <img class="logo" src="{% static 'logo.png' %}" alt="" />
-        <img class="qualibat-logo" src="{% static 'Qualibat RGE.png' %}" alt="Qualibat RGE" />
+
       </div>
       <div class="P3000-info">
-        <h2>SARL PEINTURE 3000</h2>
-        <p>24-26 Boulevard Gay Lussac, Immeuble énergie</p>
-        <p>13014 - Marseille</p>
-        <p>Société à Responsabilité Limitée au capital de 20 000,00€</p>
-        <p>N°Siren: 532 875 317 RCS Marseille</p>
-        <p>Mail: peinture3000@ymail.com / Tél: 09.81.19.51.74</p>
+        <h2>MJR SERVICES</h2>
+        <p>131, Boulevard de la Savine</p>
+        <p>Résidence TERRA NOVA - Bâtiment B</p>
+        <p>SASU au capital de 5 000,00€</p>
+        <p>N°Siren: 935 252 155 RCS Marseille</p>
+        <p>Mail: contact@mjrservices.fr / Tél: 04.22.91.67.07</p>
       </div>
     </div>
 
@@ -578,7 +584,6 @@
         <p>{{ societe.codepostal_societe }}, {{ societe.ville }}</p>
       </div>
 
-      {% if situation.contact_societe or client.nom or client.prenom %}
       <div class="contact-info">
         <h3>Contact:</h3>
         {% if situation.contact_societe %}
@@ -591,9 +596,7 @@
           {% endif %}
         {% else %}
           {# Fallback sur le client par défaut #}
-          {% if client.nom or client.prenom %}
           <p>{% if client.civilite %}{{ client.civilite }} {% endif %}{{ client.prenom }} {{ client.nom }}</p>
-          {% endif %}
           {% if client.poste %}<p>{{ client.poste }}</p>{% endif %}
           {% if client.client_mail %}<p class="client-mail">Mail: {{ client.client_mail }}</p>{% endif %}
           {% if client.phone_Number %}
@@ -603,7 +606,6 @@
           {% endif %}
         {% endif %}
       </div>
-      {% endif %}
     </div>
 
     <div class="date">
@@ -626,7 +628,11 @@
       <div style="width: 50%;">
         <div style="display: flex; justify-content: space-between; margin-bottom: 5px;">
           <strong style="text-decoration: underline 1.5px black; text-underline-offset: 2px;">Montant du marché HT:</strong>
+          {% if total_avenants == 0 %}
+          <span class="montanta" style="font-size: 0.8rem;font-weight: 700;background-color: yellow;color: red;border: 2px solid black;text-align: right;width: 150px;padding-right: 5px;">{{ total_marche_ht|format_montant_espace }}</span>
+          {% else %}
           <span class="montanta" style="font-size: 0.8rem;font-weight: 700;">{{ total_marche_ht|format_montant_espace }}</span>
+          {% endif %}
         </div>
         {% if total_avenants != 0 %}
         <div style="display: flex; justify-content: space-between; margin-bottom: 5px;">
@@ -638,10 +644,12 @@
           <strong style="text-decoration: underline 1.5px black; text-underline-offset: 2px;">% Avancement:</strong>
           <span class="pourcentagetableau" style="font-size: 0.8rem;color: red;font-weight: 700;">{{ situation.pourcentage_avancement|floatformat:2 }} %</span>
         </div>
+        {% if total_avenants != 0 %}
         <div style="display: flex; justify-content: space-between; ">
           <strong style="text-decoration: underline 1.5px black; text-underline-offset: 2px;">Montant total des travaux HT</strong>
           <span class="montanta" style="font-size: 0.8rem;font-weight: 700;background-color: yellow;color: red;border: 2px solid black;text-align: right;width: 150px;padding-right: 5px;">{{ total_marche_ht|add:total_avenants|format_montant_espace }}</span>
         </div>
+        {% endif %}
       </div>
     </div>
 
@@ -1015,7 +1023,7 @@
             {% for avenant in lignes_avenant %}
             <tr class="sous-partie">
               <td colspan="7">
-                <span class="sous-partie-text">{{ avenant.numero|format_avenant_numero }}</span>
+                <span class="sous-partie-text">{{ avenant.numero }}</span>
                 <span style="float: right">
                   <span class="centaine" style="font-size: 0.8rem;float: right;margin-left: 10px;width: 78px;text-align: right;">{{ avenant.montant_avancement|format_montant_espace }}</span>
                   <span class="centaine" style="font-size: 0.8rem;float: right;width: 75px;text-align: center;margin-left: 10px;transform: translateX(5px);">{{ avenant.pourcentage_avenant|floatformat:2 }} %</span>
@@ -1138,7 +1146,7 @@
       <tr class="total-row">
         <td colspan="2">
           <div class="recap-line-spacer"></div>
-          <div class="recap-line" style="background-color: rgba(27, 120, 188, 1); color: white;">
+          <div class="recap-line" style="background-color: black; color: white;">
             <span class="label" style="font-weight: bold;">- Montant total du mois HT après retenues</span>
             <span class="montanta" style="font-weight: bold;">{{ situation.montant_apres_retenues|format_montant_espace }}</span>
           </div>
@@ -1197,7 +1205,7 @@
         </div>
         <div style="display: inline; align-items: center; margin-top: 5px">
           <span style="font-weight: 700;">IBAN</span>
-          <span style="font-size: 0.8rem;;">: FR76 1130 6000 9348 1341 0455 795</span>
+          <span style="font-size: 0.8rem;;">: FR76 1130 6000 9348 1769 4950 645</span>
 
         </div>
       </div>

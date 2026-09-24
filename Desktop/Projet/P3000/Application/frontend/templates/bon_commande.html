@@ -150,15 +150,16 @@
           width: 300px;
         }
         .logo {
-
-
-          width: 250px;
-          height: 160px;
+          width: 400px;
+          height: 220px;
+          margin-top: -30px;
+          margin-bottom: -80px;
+          margin-left: -30px;
         }
         .P3000-info {
 
           grid-area: 1 / 2 / 2 / 3;
-          color: rgba(27, 120, 188, 1);
+          color: black;
           text-align: right;
           font-weight: 600;
 
@@ -263,12 +264,12 @@
         <img class="logo" src="{% static 'logo.png' %}" alt="" />
       </div>
       <div class="P3000-info">
-        <h2>SARL PEINTURE 3000</h2>
-        <p>24-26 Boulevard Gay Lussac, Immeuble énergie</p>
-        <p>13014 - Marseille</p>
-        <p>Société à Responsabilité Limitée au capital de 20 000,00€</p>
-        <p>N°Siren: 532 875 317 RCS Marseille</p>
-        <p>Mail: peinture3000@ymail.com / Tél: 09.81.19.51.74</p>
+        <h2>MJR SERVICES</h2>
+        <p>131, Boulevard de la Savine</p>
+        <p>Résidence TERRA NOVA - Bâtiment B</p>
+        <p>SASU au capital de 5 000,00€</p>
+        <p>N°Siren: 935 252 155 RCS Marseille</p>
+        <p>Mail: contact@mjrservices.fr / Tél: 04.22.91.67.07</p>
       </div>
     </div>
 
@@ -353,7 +354,6 @@
       <thead>
         <tr>
           <th style="border: 1px solid black; padding: 8px">Désignation</th>
-          <th style="border: 1px solid black; padding: 8px">Unité</th>
           <th style="border: 1px solid black; padding: 8px">Quantité</th>
           <th style="border: 1px solid black; padding: 8px">Prix unitaire</th>
           <th style="border: 1px solid black; padding: 8px">Total HT</th>
@@ -364,13 +364,6 @@
         <tr>
           <td style="border: 1px solid black; padding: 8px">
             {{ ligne.designation }}
-          </td>
-          <td style="border: 1px solid black; padding: 8px; text-align: center">
-            {% if ligne.unite %}
-              {{ ligne.unite }}
-            {% elif ligne.produit.unite %}
-              {{ ligne.produit.unite }}
-            {% endif %}
           </td>
           <td style="border: 1px solid black; padding: 8px; text-align: center">
             {{ ligne.quantite }}
@@ -385,7 +378,7 @@
         {% endfor %}
         <tr>
           <td
-            colspan="4"
+            colspan="3"
             style="border: 1px solid black; padding: 8px; text-align: right"
           >
             <strong>Total HT</strong>
@@ -399,8 +392,8 @@
     <div class="adresse">
       <div class="adresse-facturation">
         <h3>Adresse de facturation:</h3>
-        <p>24-26 Boulevard Gay Lussac</p>
-        <p>13014 - Marseille</p>
+        <p>131, Boulevard de la Savine</p>
+        <p>Résidence TERRA NOVA - Bâtiment B</p>
       </div>
       <div class="adresse-livraison">
         <h3>Adresse de Livraison et date:</h3>
@@ -408,7 +401,7 @@
         <p>En attente Livraison{% if heure_livraison %} À {{ heure_livraison }}{% endif %}</p>
         {% elif statut == 'livre_chantier' %}
         <p>
-          LIVRAISON {{ chantier.chantier_name|upper }} LE {{ date_commande }}{% if heure_livraison %} À {{ heure_livraison }}{% endif %} <br> {{ chantier.rue }} <br> {{ chantier.code_postal }} {{ chantier.ville }}
+          LIVRAISON {{ chantier.chantier_name|upper }} LE {{ date_commande }}{% if heure_livraison %} À {{ heure_livraison }}{% endif %}
         </p>
         {% elif statut == 'retrait_magasin' %}
         <p>

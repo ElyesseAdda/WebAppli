@@ -64,7 +64,7 @@
 
       /* Style pour les sections en bleu */
       .partie {
-        background-color: rgba(27, 120, 188, 1);
+        background-color: black;
         color: white;
         font-weight: bold;
         padding: 0px;
@@ -77,7 +77,7 @@
         line-height: 25px;
       }
       .sous-partie {
-        background-color: rgb(157, 197, 226);
+        background-color: #d3d3d3;
         color: black;
         padding: 5px;
         text-align: left;
@@ -340,10 +340,11 @@
         width: 300px;
       }
       .logo {
-        
-        
-        width: 220px;
-        height: 160px;
+        width: 400px;
+        height: 220px;
+        margin-top: -30px;
+        margin-bottom: -80px;
+        margin-left: -30px;
       }
       .qualibat-logo {
         width: 220px;
@@ -353,7 +354,7 @@
       .P3000-info {
         
         grid-area: 1 / 2 / 2 / 3;
-        color: rgba(27, 120, 188, 1);
+        color: black;
         text-align: right;
         font-weight: 600;
 
@@ -401,9 +402,10 @@
 
       .recap-table {
         width: 100%;
-        
         margin-top: 20px;
         border: 2px solid black;
+        page-break-inside: avoid;
+        break-inside: avoid;
       }
 
       .recap-table th {
@@ -434,7 +436,7 @@
       }
 
       .montant-row {
-        background-color: rgba(27, 120, 188, 1);
+        background-color: black;
         color: white;
       }
 
@@ -581,15 +583,15 @@
     <div class="p3000-container">
       <div class="logo-container">
         <img class="logo" src="{% static 'logo.png' %}" alt="" />
-        <img class="qualibat-logo" src="{% static 'Qualibat RGE.png' %}" alt="Qualibat RGE" />
+
       </div>
       <div class="P3000-info">
-        <h2>SARL PEINTURE 3000</h2>
-        <p>24-26 Boulevard Gay Lussac, Immeuble énergie</p>
-        <p>13014 - Marseille</p>
-        <p>Société à Responsabilité Limitée au capital de 20 000,00€</p>
-        <p>N°Siren: 532 875 317 RCS Marseille</p>
-        <p>Mail: peinture3000@ymail.com / Tél: 09.81.19.51.74</p>
+        <h2>MJR SERVICES</h2>
+        <p>131, Boulevard de la Savine</p>
+        <p>Résidence TERRA NOVA - Bâtiment B</p>
+        <p>SASU au capital de 5 000,00€</p>
+        <p>N°Siren: 935 252 155 RCS Marseille</p>
+        <p>Mail: contact@mjrservices.fr / Tél: 04.22.91.67.07</p>
       </div>
     </div>
 
@@ -601,7 +603,6 @@
         <p>{{ societe.codepostal_societe }}, {{ societe.ville_societe }}</p>
       </div>
 
-      {% if facture.contact_societe or client.name or client.surname %}
       <div class="contact-info">
         <h3>Contact:</h3>
         {% if facture.contact_societe %}
@@ -614,9 +615,7 @@
           {% endif %}
         {% else %}
           {# Fallback sur le client par défaut #}
-          {% if client.name or client.surname %}
           <p>{% if client.civilite %}{{ client.civilite }} {% endif %}{{ client.name }} {{ client.surname }}</p>
-          {% endif %}
           {% if client.poste %}<p>Poste: {{ client.poste }}</p>{% endif %}
           {% if client.client_mail %}<p class="client-mail">Mail: {{ client.client_mail }}</p>{% endif %}
           {% if client.phone_Number %}
@@ -626,18 +625,10 @@
           {% endif %}
         {% endif %}
       </div>
-      {% endif %}
     </div>
 
     <div class="date">
-      <p>
-        A Marseille, le
-        {% if facture.date_envoi %}
-          {{ facture.date_envoi|date:"d/m/Y" }}
-        {% else %}
-          {{ facture.date_creation|date:"d/m/Y" }}
-        {% endif %}
-      </p>
+      <p>A Marseille, le {{ facture.date_creation|date:"d/m/Y" }}</p>
     </div>
 
     <div class="header">
@@ -947,7 +938,7 @@
     </div>
     </div>
     <!-- Totaux HT, TVA et TTC -->
-    <table class="recap-table">
+    <table class="recap-table" style="margin-bottom: 20px;">
       <tr>
         <th colspan="2">RÉCAPITULATIF</th>
       </tr>
@@ -1010,7 +1001,7 @@
     </div>
     <div style="display: inline; align-items: center; margin-top: 5px">
       <span style="font-weight: 700;">IBAN</span>
-      <span style="font-size: 0.8rem;;">: FR76 1130 6000 9348 1341 0455 795</span>
+      <span style="font-size: 0.8rem;;">: FR76 1130 6000 9348 1769 4950 645</span>
 
     </div>
     
