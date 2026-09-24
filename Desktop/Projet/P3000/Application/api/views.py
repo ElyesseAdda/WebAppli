@@ -5327,6 +5327,23 @@ def create_devis(request):
     request_id = request.headers.get('X-Request-ID') or request.META.get('HTTP_X_REQUEST_ID') or 'no-request-id'
     devis_chantier = request.data.get('devis_chantier', False)
     numero_in = request.data.get('numero')
+    chantier_name_in = (request.data.get('chantier_name') or '').strip()
+
+    # Le nom d'appel d'offres est unique. Ce contrôle doit passer avant celui du
+    # numéro : sinon un nom déjà pris remonte comme « numéro de devis déjà existant ».
+    if devis_chantier and chantier_name_in:
+        existing_appel = AppelOffres.objects.filter(
+            chantier_name__iexact=chantier_name_in
+        ).only('id', 'chantier_name').first()
+        if existing_appel:
+            return Response(
+                {
+                    'error': f"Un appel d'offres avec le nom « {existing_appel.chantier_name} » existe déjà.",
+                    'duplicate_appel_offres_name': existing_appel.chantier_name,
+                    'existing_appel_offres_id': existing_appel.id,
+                },
+                status=400,
+            )
 
     # ✅ Pré-check: éviter de créer des objets (AppelOffres, etc.) si le numéro existe déjà.
     try:
@@ -5649,6 +5666,21 @@ def create_devis(request):
             return Response(response_data, status=201)
             
     except IntegrityError as e:
+        error_text = str(e).lower()
+        name_conflict = (
+            'chantier_name' in error_text
+            or 'appeloffres' in error_text
+            or 'appel_offres' in error_text
+        )
+        if devis_chantier and name_conflict:
+            return Response(
+                {
+                    'error': f"Un appel d'offres avec le nom « {chantier_name_in} » existe déjà.",
+                    'duplicate_appel_offres_name': chantier_name_in,
+                },
+                status=400,
+            )
+
         existing = None
         try:
             if numero_in:
