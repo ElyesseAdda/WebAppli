@@ -47,10 +47,13 @@ PROTECTED_COMMON=(
     "$APP_PATH/frontend/static/css/planningHebdo.css"
     "$APP_PATH/frontend/static/css/creationPartie.css"
     "$APP_PATH/frontend/src/img/logo.png"
+    "$APP_PATH/frontend/src/img/apple-touch-icon.png"
     "$APP_PATH/frontend/src/img/image.png"
     "$APP_PATH/frontend/src/img/signature_p3000.png"
+    "$APP_PATH/frontend/src/img/MJR SERVICES logo.jpg"
     "$APP_PATH/frontend/static/frontend/src/img/logo.png"
     "$APP_PATH/staticfiles/logo.png"
+    "$APP_PATH/staticfiles/apple-touch-icon.png"
     "$APP_PATH/staticfiles/signature_p3000.png"
     "$APP_PATH/frontend/static/manifest.json"
     "$APP_PATH/frontend/static/manifest_rapports.json"
@@ -111,6 +114,8 @@ REMOVED_ELEKABLE=(
 PROTECTED_MJRSERVICE=(
     "$APP_PATH/deploy/env-mjrservice.example"
     "$APP_PATH/deploy/deploy-client.sh"
+    "$APP_PATH/frontend/templates/frontend/index.html"
+    "$APP_PATH/frontend/templates/frontend/index_production.html"
 )
 
 # =============================================================================

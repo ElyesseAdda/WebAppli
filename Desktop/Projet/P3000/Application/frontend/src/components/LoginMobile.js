@@ -13,7 +13,7 @@ import {
 import { Visibility, VisibilityOff, Person, Lock } from "@mui/icons-material";
 import { createTheme, ThemeProvider } from "@mui/material/styles";
 import { useNavigate } from "react-router-dom";
-import logo from "../img/apple-touch-icon.png";
+import logo from "../img/logo.png";
 
 // Thème mobile optimisé
 const mobileTheme = createTheme({
@@ -116,8 +116,8 @@ const LoginMobile = ({ onLoginSuccess }) => {
         if (onLoginSuccess) {
           onLoginSuccess(data.user);
         }
-        // Rediriger vers l'application Rapport Elekable (home PWA mobile)
-        navigate("/rapports-mobile");
+        // Hub mobile P3000 (choix Rapports / Distributeurs / Drive selon droits)
+        navigate("/mobile-home");
       } else {
         setError(data.error || "Identifiants incorrects");
       }
@@ -175,10 +175,11 @@ const LoginMobile = ({ onLoginSuccess }) => {
           >
             <img
               src={logo}
-              alt="MJR SERVICES"
+              alt="Peinture 3000"
               style={{
-                width: "120px",
-                height: "120px",
+                width: "160px",
+                height: "auto",
+                maxHeight: "120px",
                 objectFit: "contain",
               }}
             />
@@ -195,7 +196,7 @@ const LoginMobile = ({ onLoginSuccess }) => {
               color: "text.primary",
             }}
           >
-            MJR SERVICES
+            Peinture 3000
           </Typography>
 
           <Typography
@@ -206,7 +207,7 @@ const LoginMobile = ({ onLoginSuccess }) => {
               color: "text.secondary",
             }}
           >
-            Gestion des distributeurs automatiques
+            Suite de gestion administrative et technique
           </Typography>
 
           {/* Formulaire */}
