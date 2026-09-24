@@ -14,6 +14,16 @@ import {
 import React, { useEffect, useState } from "react";
 import NewFournisseurForm from "./Founisseur/NewFournisseurForm";
 
+const libelleFournisseur = (fournisseur) =>
+  fournisseur?.name || fournisseur?.Fournisseur_mail || "";
+
+const trierFournisseurs = (liste) =>
+  [...(liste || [])].sort((a, b) =>
+    libelleFournisseur(a).localeCompare(libelleFournisseur(b), "fr", {
+      sensitivity: "base",
+    })
+  );
+
 function SelectionFournisseurModal({ open, onClose, onSubmit, numeroBC, initialChantierId }) {
   const [fournisseurs, setFournisseurs] = useState([]);
   const [chantiers, setChantiers] = useState([]);
@@ -60,7 +70,7 @@ function SelectionFournisseurModal({ open, onClose, onSubmit, numeroBC, initialC
     // Charger la liste des fournisseurs
     fetch("/api/fournisseurs/")
       .then((response) => response.json())
-      .then((data) => setFournisseurs(data))
+      .then((data) => setFournisseurs(trierFournisseurs(data)))
       .catch((error) => console.error("Erreur:", error));
 
     // Charger la liste des chantiers
@@ -168,7 +178,7 @@ function SelectionFournisseurModal({ open, onClose, onSubmit, numeroBC, initialC
     // Rafraîchir la liste des fournisseurs après création
     fetch("/api/fournisseurs/")
       .then((response) => response.json())
-      .then((data) => setFournisseurs(data));
+      .then((data) => setFournisseurs(trierFournisseurs(data)));
     handleCloseFournisseurModal();
   };
 

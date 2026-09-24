@@ -5,9 +5,11 @@ const puppeteer = require("puppeteer");
 /**
  * Génération PDF d'un diagramme de Gantt.
  *
- * Script distinct de `generate_pdf.js` car celui-ci force `landscape: false`,
- * ce qui écrase le `@page { size: A4 landscape }` du template. Un Gantt n'est
- * lisible qu'en paysage : le viewport et le format sont donc inversés ici.
+ * Script distinct de `generate_pdf.js` car celui-ci force le portrait.
+ * Ici la feuille est un A4 paysage explicite (297 mm × 210 mm, sans
+ * `landscape: true`, qui inverserait ces dimensions). Le diagramme
+ * occupe toujours toute la largeur : un planning court est étiré en
+ * hauteur, un planning long est réduit sans rétrécir la feuille.
  */
 async function generateGanttPDF() {
   const args = process.argv.slice(2);
@@ -48,10 +50,12 @@ async function generateGanttPDF() {
     const page = await browser.newPage();
 
     try {
-      // Dimensions A4 paysage
+      // A4 paysage à 96 dpi : 297 mm × 210 mm.
+      const pageWidthPx = Math.round((297 / 25.4) * 96);
+      const pageHeightPx = Math.round((210 / 25.4) * 96);
       await page.setViewport({
-        width: 1123,
-        height: 794,
+        width: pageWidthPx,
+        height: pageHeightPx,
         deviceScaleFactor: 1,
       });
 
@@ -99,21 +103,64 @@ async function generateGanttPDF() {
           // Une image manquante ne doit pas bloquer la génération
         });
 
+      await page.evaluate(() => document.fonts && document.fonts.ready).catch(() => {});
+
+      // Largeur toujours égale à la feuille. Si le planning est plus court
+      // que la page, les lignes s'étirent pour la remplir. S'il est plus
+      // haut, on l'élargit puis on le réduit : une fois imprimé, il
+      // retrouve toute la largeur et tient sur une seule page.
+      const pdfScale = await page.evaluate(
+        ({ pageWidthPx, pageHeightPx }) => {
+          const pageEl = document.querySelector(".page");
+          if (!pageEl) return 1;
+
+          const targetHeight = pageHeightPx - 8;
+          const contentHeight = Math.ceil(
+            Math.max(pageEl.scrollHeight, pageEl.getBoundingClientRect().height)
+          );
+
+          if (contentHeight > targetHeight) {
+            const fit = targetHeight / contentHeight;
+            pageEl.style.width = `${pageWidthPx / fit}px`;
+            if (fit < 0.1) {
+              document.documentElement.style.zoom = String(fit / 0.1);
+              return 0.1;
+            }
+            return fit;
+          }
+
+          const rows = Array.from(document.querySelectorAll(".rangee"));
+          if (!rows.length || contentHeight >= targetHeight - 1) return 1;
+
+          const extra = (targetHeight - contentHeight) / rows.length;
+          rows.forEach((row) => {
+            const next = row.getBoundingClientRect().height + extra;
+            row.style.minHeight = `${next}px`;
+            const zone = row.querySelector(".zone-barres");
+            if (zone) zone.style.minHeight = `${next}px`;
+          });
+          return 1;
+        },
+        { pageWidthPx, pageHeightPx }
+      );
+
+      await page.emulateMediaType("print");
+
       await page.pdf({
         path: pdfPath,
-        format: "A4",
+        width: "297mm",
+        height: "210mm",
         printBackground: true,
-        landscape: true,
+        landscape: false,
         margin: {
-          top: "15px",
-          right: "15px",
-          bottom: "15px",
-          left: "15px",
+          top: "0",
+          right: "0",
+          bottom: "0",
+          left: "0",
         },
         preferCSSPageSize: false,
-        scale: 1,
+        scale: pdfScale,
         displayHeaderFooter: false,
-        pageRanges: "",
       });
 
       await browser.close();
