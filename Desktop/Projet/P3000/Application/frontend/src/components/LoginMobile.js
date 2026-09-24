@@ -116,8 +116,8 @@ const LoginMobile = ({ onLoginSuccess }) => {
         if (onLoginSuccess) {
           onLoginSuccess(data.user);
         }
-        // Rediriger vers la page distributeurs sur mobile
-        navigate("/distributeurs");
+        // Hub mobile MJR (Distributeur → lien externe P3000)
+        navigate("/mobile-home");
       } else {
         setError(data.error || "Identifiants incorrects");
       }

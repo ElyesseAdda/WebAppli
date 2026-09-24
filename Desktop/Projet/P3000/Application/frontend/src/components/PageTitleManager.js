@@ -1,7 +1,7 @@
 import { useEffect } from "react";
 import { matchPath, useLocation } from "react-router-dom";
 
-const BASE_TITLE = "Webapplication P3000";
+const BASE_TITLE = "MJR Services";
 
 const ROUTE_TITLES = [
   { path: "/", title: "Dashboard" },

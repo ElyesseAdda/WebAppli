@@ -8,6 +8,7 @@ import {
 } from "@mui/icons-material";
 import { useNavigate } from "react-router-dom";
 import { useAuth, getUserMobileAccess } from "../hooks/useAuth";
+import DISTRIBUTEURS_NAV from "../config/distributeursNav";
 import logo from "../img/logo.png";
 
 const SECTIONS = [
@@ -19,14 +20,20 @@ const SECTIONS = [
     route: "/rapports-mobile",
     gradient: "linear-gradient(135deg, #1976d2 0%, #42a5f5 100%)",
   },
-  {
-    key: "can_access_distributeur",
-    label: "Distributeur",
-    description: "Gestion des distributeurs",
-    icon: DistributeurIcon,
-    route: "/distributeurs",
-    gradient: "linear-gradient(135deg, #388e3c 0%, #66bb6a 100%)",
-  },
+  ...(DISTRIBUTEURS_NAV?.showInMobileHome
+    ? [
+        {
+          key: "can_access_distributeur",
+          label: DISTRIBUTEURS_NAV.label || "Distributeur",
+          description: "Gestion des distributeurs",
+          icon: DistributeurIcon,
+          route: DISTRIBUTEURS_NAV.to || "/distributeurs",
+          external: !!(DISTRIBUTEURS_NAV.external && DISTRIBUTEURS_NAV.href),
+          href: DISTRIBUTEURS_NAV.href || null,
+          gradient: "linear-gradient(135deg, #388e3c 0%, #66bb6a 100%)",
+        },
+      ]
+    : []),
   {
     key: "can_access_drive",
     label: "Drive",
@@ -36,6 +43,14 @@ const SECTIONS = [
     gradient: "linear-gradient(135deg, #f57c00 0%, #ffb74d 100%)",
   },
 ];
+
+const openSection = (section, navigate) => {
+  if (section.external && section.href) {
+    window.location.assign(section.href);
+    return;
+  }
+  navigate(section.route);
+};
 
 const MobileHomePage = () => {
   const { user, loading } = useAuth();
@@ -47,7 +62,9 @@ const MobileHomePage = () => {
   // Redirection automatique si une seule section disponible
   useEffect(() => {
     if (!loading && user && availableSections.length === 1) {
-      navigate(availableSections[0].route, { replace: true });
+      openSection(availableSections[0], (route) =>
+        navigate(route, { replace: true })
+      );
     }
   }, [loading, user, availableSections.length]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -160,7 +177,7 @@ const MobileHomePage = () => {
               <Paper
                 key={section.key}
                 elevation={0}
-                onClick={() => navigate(section.route)}
+                onClick={() => openSection(section, navigate)}
                 sx={{
                   background: section.gradient,
                   borderRadius: 3,
