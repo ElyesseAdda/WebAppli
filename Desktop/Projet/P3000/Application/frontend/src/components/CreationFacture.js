@@ -51,11 +51,9 @@ const CreationFacture = ({ devis, onClose, onSubmit }) => {
         }
       } catch (error) {
         console.error("Erreur lors du chargement du numéro de facture:", error);
-        // En cas d'erreur, utiliser un format par défaut
-        const currentYear = new Date().getFullYear();
         setFormData((prev) => ({
           ...prev,
-          numero_facture: `Facture n°01.${currentYear}`,
+          numero_facture: "",
         }));
       }
     };
@@ -198,8 +196,8 @@ const CreationFacture = ({ devis, onClose, onSubmit }) => {
           name="numero_facture"
           value={formData.numero_facture}
           onChange={handleInputChange}
-          required
           margin="normal"
+          helperText="Laissé vide, le numéro est attribué à l'enregistrement."
         />
         <TextField
           fullWidth

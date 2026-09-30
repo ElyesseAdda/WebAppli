@@ -72,20 +72,11 @@ const DevisModal = ({
         });
       } catch (error) {
         console.error("Erreur lors de la récupération du numéro:", error);
-        const currentYear = new Date().getFullYear();
-        // Déterminer le format de fallback selon le type
-        const isChantierExistant = devisData.chantier && devisData.chantier !== -1;
-        let defaultNumero;
-        if (devisData.devis_chantier || !isChantierExistant) {
-          defaultNumero = `Devis de travaux n°001.${currentYear}`;
-        } else {
-          defaultNumero = `Devis de travaux n°001.${currentYear} - TS n°01`;
-        }
-        setFullNumero(defaultNumero);
+        setFullNumero("");
         handleChange({
           target: {
             name: "numero",
-            value: defaultNumero,
+            value: "",
           },
         });
       }

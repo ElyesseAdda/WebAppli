@@ -1135,21 +1135,9 @@ const DevisAvance = () => {
       setDevisData(prev => ({ ...prev, numero: numero }));
       return numero;
     } catch (error) {
-      // Erreur lors de la génération du numéro de devis
-      const currentYear = new Date().getFullYear();
-      const chantierIdToUse = chantierIdParam !== null ? chantierIdParam : selectedChantierId;
-      const isChantierExistant = chantierIdToUse && chantierIdToUse !== -1;
-      
-      // Déterminer le format de fallback selon le type
-      let fallbackNumber;
-      if (devisType === "chantier" || !isChantierExistant) {
-        fallbackNumber = `Devis de travaux n°001.${currentYear}`;
-      } else {
-        fallbackNumber = `Devis de travaux n°001.${currentYear} - TS n°01`;
-      }
-      
-      setDevisData(prev => ({ ...prev, numero: fallbackNumber }));
-      return fallbackNumber;
+      console.error("Erreur lors de la génération du numéro de devis:", error);
+      setDevisData(prev => ({ ...prev, numero: "" }));
+      return "";
     } finally {
       setIsGeneratingNumber(false);
     }
@@ -3193,7 +3181,7 @@ const DevisAvance = () => {
                 appelOffresId: appelOffresId,
                 appelOffresName: appelOffresName,
                 societeName: societeName,
-                numero: devisData.numero,
+                numero: response.data.numero || devisData.numero,
               });
               // Ajouter le chemin personnalisé du drive si défini
               if (effectiveDrivePath) {
@@ -3246,7 +3234,7 @@ const DevisAvance = () => {
                 chantierData.societe?.nom_societe ||
                 societe.nom_societe ||
                 "Société",
-              numero: devisData.numero,
+              numero: response.data.numero || devisData.numero,
             });
             // Ajouter le chemin personnalisé du drive si défini
             if (effectiveDrivePath) {
