@@ -4207,6 +4207,8 @@ def create_default_emetteurs(sender, **kwargs):
 # Modèles dédiés à la fonctionnalité « Rapport d'intervention / Vigik+ ».
 # Ils sont définis dans ``api/models_rapport.py`` et réexportés ici afin
 # de rester accessibles via ``from api.models import RapportIntervention``.
+from .models_numero import DocumentNumeroCompteur  # noqa: E402
+
 from .models_rapport import (  # noqa: E402  (import après signaux/post_migrate)
     TitreRapport,
     Residence,

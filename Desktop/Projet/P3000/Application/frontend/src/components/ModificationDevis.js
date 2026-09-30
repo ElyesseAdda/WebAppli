@@ -755,13 +755,10 @@ const ModificationDevis = () => {
   const generateDevisNumber = async () => {
     try {
       const response = await axios.get("/api/get-next-devis-number/");
-      return `DEV-${response.data.next_number}-${new Date()
-        .getFullYear()
-        .toString()
-        .slice(-2)}`;
+      return response.data.numero;
     } catch (error) {
       console.error("Erreur lors de la génération du numéro de devis:", error);
-      return `DEV-ERR-${new Date().getFullYear().toString().slice(-2)}`;
+      return "";
     }
   };
 
