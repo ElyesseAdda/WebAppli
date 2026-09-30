@@ -22,6 +22,16 @@ from .serializers import (
     FolderItemSerializer
 )
 from .utils import build_document_key, generate_presigned_url, generate_presigned_post, custom_slugify, clean_drive_path, format_avenant_numero, get_next_chantier_avenant_numero
+from .numero_documents import (
+    NumeroDejaUtilise,
+    claim_devis_numero,
+    claim_facture_numero,
+    claim_situation_numero,
+    is_numero_devis_officiel,
+    peek_devis_numero,
+    peek_facture_numero,
+    peek_situation_numero,
+)
 from rest_framework.pagination import PageNumberPagination
 from rest_framework.decorators import action, api_view, permission_classes
 from django.http import JsonResponse, HttpResponse
@@ -5345,9 +5355,10 @@ def create_devis(request):
                 status=400,
             )
 
-    # ✅ Pré-check: éviter de créer des objets (AppelOffres, etc.) si le numéro existe déjà.
+    # Un numéro au format automatique est réattribué à l'enregistrement s'il est déjà pris.
+    # On ne bloque ici que les numéros saisis à la main.
     try:
-        if numero_in:
+        if numero_in and not is_numero_devis_officiel(numero_in):
             existing = Devis.objects.filter(numero=numero_in).only('id', 'numero').first()
             if existing:
                 return Response(
@@ -5370,6 +5381,20 @@ def create_devis(request):
             # alors qu'aucun devis n'est finalement persisté (rollback).
             devis = None
             appel_offres = None
+
+            def numero_devis_a_enregistrer():
+                chantier_raw = request.data.get('chantier')
+                chantier_id = None
+                if chantier_raw not in (None, '', -1, '-1'):
+                    try:
+                        chantier_id = int(chantier_raw)
+                    except (TypeError, ValueError):
+                        chantier_id = None
+                return claim_devis_numero(
+                    request.data.get('numero'),
+                    is_ts=not bool(devis_chantier) and bool(chantier_id),
+                    chantier_id=chantier_id,
+                )
             
             # Si c'est un devis de chantier, créer un appel d'offres au lieu d'un chantier
             if devis_chantier:
@@ -5460,7 +5485,7 @@ def create_devis(request):
                 
                 # Création du devis lié à l'appel d'offres
                 devis_data = {
-                    'numero': request.data['numero'],
+                    'numero': numero_devis_a_enregistrer(),
                     'appel_offres': appel_offres,
                     'price_ht': Decimal(str(request.data['price_ht'])),
                     'price_ttc': Decimal(str(request.data['price_ttc'])),
@@ -5545,7 +5570,7 @@ def create_devis(request):
                 
                 # Création du devis de base (comme avant)
                 devis_data = {
-                    'numero': request.data['numero'],
+                    'numero': numero_devis_a_enregistrer(),
                     'chantier_id': request.data['chantier'],
                     'price_ht': Decimal(str(request.data['price_ht'])),
                     'price_ttc': Decimal(str(request.data['price_ttc'])),
@@ -5735,154 +5760,18 @@ def get_next_devis_number(request):
     try:
         chantier_id = request.GET.get('chantier_id')
         devis_chantier = request.GET.get('devis_chantier') == 'true'
-        is_ts = request.GET.get('is_ts') == 'true'
-        prefix = request.GET.get('prefix', 'DEV')  # Préfixe personnalisable
-        
-        print(f"Paramètres reçus - chantier_id: {chantier_id}, devis_chantier: {devis_chantier}, is_ts: {is_ts}")
-        
-        # Obtenir l'année en cours
-        current_year = timezone.now().year
-        year_suffix = str(current_year)[-2:]
-        
-        # Déterminer le type de devis
-        is_ts_devis = chantier_id and not devis_chantier
-
-        # IMPORTANT:
-        # L'ancien code utilisait "le dernier devis par id" pour calculer la séquence.
-        # Si des numéros ont été modifiés/importés/supprimés, l'id n'est pas un indicateur fiable
-        # et on peut renvoyer un numéro déjà existant -> IntegrityError sur la contrainte unique.
-        #
-        # Ici on calcule la séquence à partir du MAX réel trouvé dans les numéros.
-        def _extract_seq_from_numero(numero: str):
-            if not numero:
-                return None
-            # Format principal: "Devis de travaux n°015.2026"
-            m = re.search(r'Devis de travaux n°(\d+)\.', numero)
-            if m:
-                try:
-                    return int(m.group(1))
-                except ValueError:
-                    return None
-            # Ancien format générique: "Devis n°017.2026"
-            m = re.search(r'Devis n°(\d+)\.', numero)
-            if m:
-                try:
-                    return int(m.group(1))
-                except ValueError:
-                    return None
-            # Ancien format: "DEV-001-26"
-            m = re.search(r'DEV-(\d+)-', numero)
-            if m:
-                try:
-                    return int(m.group(1))
-                except ValueError:
-                    return None
-            return None
-
-        sequences = []
-
-        # Format principal (année complète .2026)
-        for numero in Devis.objects.filter(
-            numero__startswith="Devis de travaux n°",
-            numero__contains=f".{current_year}"
-        ).values_list('numero', flat=True):
-            seq = _extract_seq_from_numero(numero)
-            if seq is not None:
-                sequences.append(seq)
-
-        # Ancien format générique "Devis n°"
-        for numero in Devis.objects.filter(
-            numero__startswith="Devis n°",
-            numero__contains=f".{current_year}"
-        ).values_list('numero', flat=True):
-            seq = _extract_seq_from_numero(numero)
-            if seq is not None:
-                sequences.append(seq)
-
-        # Ancien format "DEV-001-26" (suffixe année sur 2 chiffres)
-        for numero in Devis.objects.filter(
-            numero__startswith="DEV-",
-            numero__endswith=f"-{year_suffix}"
-        ).values_list('numero', flat=True):
-            seq = _extract_seq_from_numero(numero)
-            if seq is not None:
-                sequences.append(seq)
-
-        next_sequence = (max(sequences) + 1) if sequences else 1
-        
-        # Si c'est un devis TS, calculer le numéro de TS pour ce chantier
-        next_ts_num = None
-        if is_ts_devis:
-            # IMPORTANT: éviter count()+1 (si TS n°02 a été supprimé, count()=2 peut renvoyer 3 alors que TS n°03 existe déjà).
-            ts_numbers = []
-            for numero in Devis.objects.filter(
-                Q(chantier_id=chantier_id) &
-                Q(devis_chantier=False) &
-                Q(numero__contains=f".{current_year}") &
-                Q(numero__contains=" - TS n°")
-            ).values_list('numero', flat=True):
-                m = re.search(r' - TS n°(\d+)$', numero)
-                if m:
-                    try:
-                        ts_numbers.append(int(m.group(1)))
-                    except ValueError:
-                        pass
-            next_ts_num = (max(ts_numbers) + 1) if ts_numbers else 1
-
-            # Formater avec le suffixe TS
-            candidate_sequence = next_sequence
-            while True:
-                numero = (
-                    f"Devis de travaux n°{str(candidate_sequence).zfill(3)}.{current_year} "
-                    f"- TS n°{str(next_ts_num).zfill(2)}"
-                )
-                if not Devis.objects.filter(numero=numero).exists():
-                    break
-                candidate_sequence += 1
-
-            next_sequence = candidate_sequence
-            print(
-                f"Génération du numéro de devis TS: {numero} "
-                f"(séquence globale: {next_sequence}, TS n°: {next_ts_num}, chantier: {chantier_id})"
-            )
-        else:
-            # Devis de travaux simple
-            candidate_sequence = next_sequence
-            while True:
-                numero = f"Devis de travaux n°{str(candidate_sequence).zfill(3)}.{current_year}"
-                if not Devis.objects.filter(numero=numero).exists():
-                    break
-                candidate_sequence += 1
-
-            next_sequence = candidate_sequence
-            print(f"Génération du numéro de devis de travaux: {numero} (séquence: {next_sequence}, année: {current_year})")
-        
+        is_ts_devis = bool(chantier_id) and not devis_chantier
+        preview = peek_devis_numero(is_ts=is_ts_devis, chantier_id=chantier_id or None)
         return Response({
-            'numero': numero,
-            'next_ts': str(next_ts_num).zfill(2) if next_ts_num else None,
-            'sequence': str(next_sequence).zfill(3),
-            'year': current_year
+            'numero': preview['numero'],
+            'next_ts': preview['next_ts'],
+            'sequence': preview['sequence'],
+            'year': preview['year'],
         })
-        
     except Exception as e:
-        print(f"Erreur dans get_next_devis_number: {str(e)}")
-        import traceback
-        traceback.print_exc()
-        current_year = timezone.now().year
-        # Déterminer le format selon le type
-        chantier_id = request.GET.get('chantier_id')
-        devis_chantier = request.GET.get('devis_chantier') == 'true'
-        is_ts_devis = chantier_id and not devis_chantier
-        if is_ts_devis:
-            fallback_numero = f"Devis de travaux n°001.{current_year} - TS n°01"
-        else:
-            fallback_numero = f"Devis de travaux n°001.{current_year}"
-        return Response({
-            'numero': fallback_numero,
-            'next_ts': "01" if is_ts_devis else None,
-            'sequence': "001",
-            'year': current_year
-        })
+        print(f'Erreur dans get_next_devis_number: {str(e)}')
+        return Response({'error': 'Impossible de calculer le prochain numéro de devis'}, status=500)
+
 
 @api_view(['GET'])
 def get_chantier_relations(request):
@@ -6402,32 +6291,25 @@ def create_facture(request):
                 'error': 'Une facture existe déjà pour ce devis'
             }, status=400)
         
-        # ✅ Obtenir le numéro de facture : utiliser celui fourni ou générer un nouveau via le service
-        numero_facture = request.data.get('numero')
-        if not numero_facture or numero_facture.strip() == '':
-            # Si aucun numéro n'est fourni, utiliser le service de numérotation unifié
-            numero_facture = NumeroService.get_next_facture_number()
-        
-        # ✅ Préparer les données de la facture avec contact_societe depuis le devis
-        facture_data = {
-            'numero': numero_facture,
-            'devis': devis,
-            'date_echeance': request.data.get('date_echeance'),
-            'mode_paiement': request.data.get('mode_paiement'),
-            # Transférer les coûts estimés du devis
-            'cout_estime_main_oeuvre': devis.cout_estime_main_oeuvre,
-            'cout_estime_materiel': devis.cout_estime_materiel
-        }
-        
-        # ✅ Copier contact_societe depuis le devis si disponible
-        if devis.contact_societe:
-            facture_data['contact_societe'] = devis.contact_societe
-        
-        if devis.societe_devis:
-            facture_data['societe_devis'] = devis.societe_devis
-        
-        # Créer la facture
-        facture = Facture.objects.create(**facture_data)
+        # Le numéro définitif est réservé dans la même transaction que la création.
+        try:
+            with transaction.atomic():
+                numero_facture = claim_facture_numero(request.data.get('numero'))
+                facture_data = {
+                    'numero': numero_facture,
+                    'devis': devis,
+                    'date_echeance': request.data.get('date_echeance'),
+                    'mode_paiement': request.data.get('mode_paiement'),
+                    'cout_estime_main_oeuvre': devis.cout_estime_main_oeuvre,
+                    'cout_estime_materiel': devis.cout_estime_materiel
+                }
+                if devis.contact_societe:
+                    facture_data['contact_societe'] = devis.contact_societe
+                if devis.societe_devis:
+                    facture_data['societe_devis'] = devis.societe_devis
+                facture = Facture.objects.create(**facture_data)
+        except NumeroDejaUtilise as exc:
+            return Response({'error': str(exc)}, status=400)
 
         # Sérialiser la réponse
         serializer = FactureSerializer(facture)
@@ -7131,29 +7013,18 @@ def get_next_facture_number(request):
     Utilise le système de numérotation partagé avec les situations
     """
     try:
-        # Utiliser le service de numérotation partagé
-        next_numero = NumeroService.get_next_facture_number()
-        
-        # Extraire l'année et le numéro de séquence du format "Facture n°XX.YYYY"
-        current_year = str(datetime.now().year)
-        sequence_match = re.search(r'n°(\d+)\.', next_numero)
-        sequence = sequence_match.group(1) if sequence_match else "01"
-        
+        preview = peek_facture_numero()
         return Response({
-            'numero': next_numero,
-            'sequence': sequence,
-            'year': current_year
+            'numero': preview['numero'],
+            'sequence': preview['sequence'],
+            'year': str(preview['year']),
         })
     except Exception as e:
         print(f"Erreur dans get_next_facture_number: {str(e)}")
-        import traceback
-        traceback.print_exc()
-        current_year = str(datetime.now().year)
-        return Response({
-            'numero': f"Facture n°01.{current_year}",
-            'sequence': "01",
-            'year': current_year
-        })
+        return Response(
+            {'error': 'Impossible de calculer le prochain numéro de facture'},
+            status=500,
+        )
 
 
 @api_view(['GET'])
@@ -8544,8 +8415,8 @@ def create_facture_cie(request):
                 status=status.HTTP_400_BAD_REQUEST
             )
         
-        # ✅ Utiliser le service de numérotation unifié pour obtenir le prochain numéro de facture
-        base_numero = NumeroService.get_next_facture_number()
+        # Réservé sous verrou, partagé avec les factures et les situations.
+        base_numero = claim_facture_numero(None)
         
         # Construire le numéro de facture CIE avec la désignation si elle existe
         if designation:
@@ -8653,15 +8524,20 @@ class SituationViewSet(viewsets.ModelViewSet):
                     except Devis.DoesNotExist:
                         pass
             
-            # Utiliser le SituationCreateSerializer pour la validation et la création
-            serializer = SituationCreateSerializer(data=data)
-            if not serializer.is_valid():
-                print("❌ Erreurs de validation:", serializer.errors)
-                return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-
-            # Créer la situation
-            # print("✅ Validation réussie, création de la situation...")
-            situation = serializer.save()
+            try:
+                with transaction.atomic():
+                    data['numero_situation'] = claim_situation_numero(
+                        data.get('numero_situation'),
+                        data.get('chantier'),
+                    )
+                    serializer = SituationCreateSerializer(data=data)
+                    if not serializer.is_valid():
+                        transaction.set_rollback(True)
+                        print("❌ Erreurs de validation:", serializer.errors)
+                        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+                    situation = serializer.save()
+            except NumeroDejaUtilise as exc:
+                return Response({'numero_situation': [str(exc)]}, status=status.HTTP_400_BAD_REQUEST)
             # print(f"✅ Situation créée avec ID: {situation.id}")
 
             # Créer les lignes de situation
@@ -8905,12 +8781,19 @@ def create_situation(request):
                 except Devis.DoesNotExist:
                     pass
 
-        # Utiliser le SituationCreateSerializer au lieu de SituationSerializer
+        try:
+            data['numero_situation'] = claim_situation_numero(
+                data.get('numero_situation'),
+                data.get('chantier'),
+            )
+        except NumeroDejaUtilise as exc:
+            return Response({'numero_situation': [str(exc)]}, status=status.HTTP_400_BAD_REQUEST)
+
         serializer = SituationCreateSerializer(data=data)
         if not serializer.is_valid():
+            transaction.set_rollback(True)
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
-        # Créer la situation
         situation = serializer.save()
         
         # Si aucune date de création n'est fournie, utiliser la date actuelle
@@ -9544,152 +9427,24 @@ def get_factures_cie(request, chantier_id):
 class NumeroService:
     @staticmethod
     def get_next_facture_number(prefix="FACT"):
-        """Génère le prochain numéro de facture unique pour toute l'application (recommence à 01 chaque année)"""
-        current_year = str(datetime.now().year)
-        current_month = str(datetime.now().month).zfill(2)
-        
-        # Récupérer toutes les factures ET situations de l'année en cours uniquement
-        all_factures = Facture.objects.filter(
-            numero__contains=f'.{current_year}'  # Filtre pour le nouveau format: XX.2025
-        ).order_by('-id')
-        
-        all_situations = Situation.objects.filter(
-            numero_situation__contains=f'.{current_year} -'  # Format: Facture n°XX.2025 - Situation
-        ).order_by('-id')
-        
-        # Trouver le dernier numéro de séquence utilisé pour l'année en cours
-        last_num = 0
-        
-        # Vérifier toutes les factures de l'année
-        for facture in all_factures:
-            try:
-                # Format attendu: Facture n°08.2025
-                if 'Facture n°' in facture.numero and f'.{current_year}' in facture.numero:
-                    # Extraire le numéro avant le point
-                    numero_part = facture.numero.split('Facture n°')[1].split('.')[0]
-                    num = int(numero_part)
-                    last_num = max(last_num, num)
-            except (IndexError, ValueError):
-                pass
-        
-        # Vérifier toutes les situations de l'année
-        for situation in all_situations:
-            try:
-                # Format attendu: Facture n°08.2025 - Situation n°01
-                if 'Facture n°' in situation.numero_situation and f'.{current_year}' in situation.numero_situation:
-                    # Extraire le numéro avant le point
-                    numero_part = situation.numero_situation.split('Facture n°')[1].split('.')[0]
-                    num = int(numero_part)
-                    last_num = max(last_num, num)
-            except (IndexError, ValueError):
-                pass
-        
-        # Incrémenter pour l'année en cours (recommence à 01 chaque année)
-        next_num = last_num + 1
-        return f"Facture n°{next_num:02d}.{current_year}"
+        """Apercu du prochain numero de facture, partage avec les situations."""
+        return peek_facture_numero()["numero"]
 
     @staticmethod
     def get_next_situation_number(chantier_id):
-        """Génère le prochain numéro de situation pour un chantier spécifique"""
-        # Récupérer la dernière situation du chantier (tri par ID pour éviter les problèmes de tri alphabétique)
-        last_situation = Situation.objects.filter(
-            chantier_id=chantier_id
-        ).order_by('-id').first()
-        
-        # Déterminer le prochain numéro de situation spécifique au chantier
-        next_sit_num = 1
-        if last_situation and last_situation.numero_situation:
-            try:
-                current_sit_num = int(last_situation.numero_situation.split('n°')[1])
-                next_sit_num = current_sit_num + 1
-            except (IndexError, ValueError):
-                next_sit_num = 1
-            
-        # Générer le numéro de facture de base (unique et incrémental)
-        base_numero = NumeroService.get_next_facture_number()
-        
-        return f"{base_numero} - Situation n°{next_sit_num:02d}"
+        """Apercu du prochain numero de situation pour un chantier."""
+        return peek_situation_numero(chantier_id)["numero"]
 
-@api_view(['GET'])
+
+@api_view(["GET"])
 def get_next_numero(request, chantier_id=None):
-    """Récupère le prochain numéro de facture ou situation (recommence à 01 chaque année)"""
+    """Apercu du prochain numero de facture ou de situation."""
     try:
-        current_year = str(datetime.now().year)
-        
-        # Récupérer toutes les factures et situations de l'année en cours uniquement
-        prefix = request.GET.get('prefix', 'FACT')
-        
-        all_factures = Facture.objects.filter(
-            numero__contains=f'.{current_year}'
-        ).order_by('-id')  # Tri par ID pour éviter les problèmes de tri alphabétique
-        
-        all_situations = Situation.objects.filter(
-            numero_situation__contains=f'.{current_year} -'
-        ).order_by('-id')  # Tri par ID pour éviter les problèmes de tri alphabétique
-        
-        # Trouver le dernier numéro de séquence utilisé pour l'année en cours
-        last_num = 0
-        
-        # Vérifier toutes les factures de l'année
-        for facture in all_factures:
-            try:
-                # Format attendu: Facture n°08.2025
-                if 'Facture n°' in facture.numero and f'.{current_year}' in facture.numero:
-                    # Extraire le numéro avant le point
-                    numero_part = facture.numero.split('Facture n°')[1].split('.')[0]
-                    num = int(numero_part)
-                    last_num = max(last_num, num)
-            except (IndexError, ValueError):
-                pass
-        
-        # Vérifier toutes les situations de l'année
-        for situation in all_situations:
-            try:
-                # Format attendu: Facture n°08.2025 - Situation n°01
-                if 'Facture n°' in situation.numero_situation and f'.{current_year}' in situation.numero_situation:
-                    # Extraire le numéro avant le point
-                    numero_part = situation.numero_situation.split('Facture n°')[1].split('.')[0]
-                    num = int(numero_part)
-                    last_num = max(last_num, num)
-            except (IndexError, ValueError):
-                pass
-        
-        # Incrémenter pour obtenir le prochain numéro (recommence à 01 chaque année)
-        next_num = last_num + 1
-        base_numero = f"Facture n°{next_num:02d}.{current_year}"
-            
         if chantier_id:
-            # Pour une situation, on ajoute le numéro de situation spécifique au chantier
-            # Le numéro de situation continue la numérotation même après un changement d'année
-            # On cherche donc toutes les situations du chantier, toutes années confondues
-            last_situation = Situation.objects.filter(
-                chantier_id=chantier_id,
-                numero_situation__contains='Situation n°'
-            ).order_by('-id').first()  # Tri par ID au lieu de numero_situation
-            
-            next_sit_num = 1
-            if last_situation and last_situation.numero_situation:
-                try:
-                    # Format attendu: "Facture n°14.2025 - Situation n°01"
-                    # Extraire la partie après "Situation n°"
-                    if 'Situation n°' in last_situation.numero_situation:
-                        sit_part = last_situation.numero_situation.split('Situation n°')[1].strip()
-                        # Prendre seulement les chiffres (au cas où il y aurait d'autres caractères)
-                        sit_num_str = ''.join(filter(str.isdigit, sit_part))
-                        if sit_num_str:
-                            current_sit_num = int(sit_num_str)
-                            next_sit_num = current_sit_num + 1
-                except (IndexError, ValueError) as e:
-                    # En cas d'erreur, on recommence à 1
-                    next_sit_num = 1
-            
-            numero = f"{base_numero} - Situation n°{next_sit_num:02d}"
-        else:
-            numero = base_numero
-        
-        return Response({'numero': numero})
+            return Response({"numero": peek_situation_numero(chantier_id)["numero"]})
+        return Response({"numero": peek_facture_numero()["numero"]})
     except Exception as e:
-        return Response({'error': str(e)}, status=400)
+        return Response({"error": str(e)}, status=400)
 
 
 class SituationLigneSupplementaireViewSet(viewsets.ModelViewSet):

@@ -49,11 +49,9 @@ const FactureModal = ({ open, onClose, onSubmit, devis }) => {
           }));
         } catch (error) {
           console.error("Erreur lors de la récupération du numéro de facture:", error);
-          // Fallback : utiliser le format partagé avec les situations
-          const currentYear = new Date().getFullYear();
           setFormData((prev) => ({
             ...prev,
-            numero_facture: `Facture n°01.${currentYear}`,
+            numero_facture: "",
           }));
         } finally {
           setLoadingNumero(false);
@@ -129,9 +127,12 @@ ${devis.societe.codepostal_societe} ${devis.societe.ville_societe}`;
               setFormData({ ...formData, numero_facture: e.target.value })
             }
             margin="normal"
-            required
             disabled={loadingNumero}
-            helperText={loadingNumero ? "Génération du numéro..." : ""}
+            helperText={
+              loadingNumero
+                ? "Génération du numéro..."
+                : "Laissé vide, le numéro est attribué à l'enregistrement."
+            }
           />
           <TextField
             fullWidth
