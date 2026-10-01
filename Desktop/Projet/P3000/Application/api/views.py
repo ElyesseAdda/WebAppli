@@ -3588,13 +3588,19 @@ class DistributeurCellViewSet(viewsets.ModelViewSet):
             .first()
         )
         previous_level = int(last_line.quantite) if last_line else 0
+        produit_ligne = last_line.stock_product if last_line and last_line.stock_product_id else None
         return Response({
             'previous_level': previous_level,
-            'prix_vente': str(cell.prix_vente or 0),
+            'prix_vente': str(
+                cell.prix_vente
+                if cell.prix_vente is not None
+                else (last_line.prix_vente if last_line else 0)
+            ),
             'cout_unitaire': str(last_line.cout_unitaire or 0) if last_line else '0',
             'nom_produit': (
                 (cell.stock_product.nom if cell.stock_product_id else None)
                 or cell.nom_produit
+                or (produit_ligne.nom if produit_ligne else '')
                 or ''
             ),
         })
@@ -3635,109 +3641,24 @@ class DistributeurCellViewSet(viewsets.ModelViewSet):
         if remaining_action not in ['restock', 'loss']:
             return Response({'error': "remaining_action doit être 'restock' ou 'loss'"}, status=status.HTTP_400_BAD_REQUEST)
 
-        last_line = DistributeurReapproLigne.objects.filter(
-            cell=cell,
-            session__statut='termine'
-        ).select_related('session').order_by('-session__date_fin', '-id').first()
-        previous_level = int(last_line.quantite) if last_line else 0
-        if old_remaining_qty > previous_level:
-            return Response(
-                {
-                    'error': 'La quantité restante dépasse le dernier niveau connu pour cette case',
-                    'previous_level': previous_level,
-                },
-                status=status.HTTP_400_BAD_REQUEST
-            )
-
-        sold_qty = max(previous_level - old_remaining_qty, 0)
-
-        # Nettoyer la payload pour la mise à jour de la case (sans les champs métier du workflow)
         cell_payload = dict(request.data)
         cell_payload.pop('old_remaining_qty', None)
         cell_payload.pop('remaining_action', None)
 
-        montant_reliquat = Decimal('0')
         prix_vente_case = cell.prix_vente or Decimal('0')
         try:
             with transaction.atomic():
-                last_locked = None
-                if last_line:
-                    last_locked = (
-                        DistributeurReapproLigne.objects.select_for_update()
-                        .filter(pk=last_line.pk)
-                        .first()
-                    )
-
-                # Le chargement précédent a déjà sorti le stock et compté toute la quantité
-                # comme vendue. On ramène la vente au nombre réellement parti, sans débiter
-                # une seconde fois. Le reliquat revient en stock ou devient une perte au prix d'achat.
-                if last_locked and old_remaining_qty > 0:
-                    trace = list(last_locked.consommation_lots or [])
-                    if trace:
-                        new_trace, montant_reliquat, manque = _rendre_unites_trace(
-                            trace,
-                            old_remaining_qty,
-                            old_product.id,
-                            remettre_en_stock=(remaining_action == 'restock'),
-                        )
-                        if manque:
-                            raise _StockInsuffisantError([{
-                                'produit': old_product.nom or f'Produit #{old_product.pk}',
-                                'requis': old_remaining_qty,
-                                'disponible': old_remaining_qty - int(manque),
-                            }])
-                        last_locked.consommation_lots = new_trace
-                        cout_trace = _cout_pondere_trace(new_trace)
-                        if cout_trace is not None:
-                            last_locked.cout_unitaire = cout_trace
-                    else:
-                        cout = last_locked.cout_unitaire or Decimal('0')
-                        montant_reliquat = (Decimal(str(cout)) * old_remaining_qty).quantize(Decimal('0.01'))
-                        if remaining_action == 'restock':
-                            nom_produit = (old_product.nom or old_product.nom_produit or '').strip() or f'Produit #{old_product.pk}'
-                            achat = StockPurchase.objects.create(
-                                lieu_achat='Retour distributeur',
-                                date_achat=timezone.now(),
-                            )
-                            item = StockPurchaseItem.objects.create(
-                                achat=achat,
-                                produit=old_product,
-                                nom_produit=nom_produit,
-                                quantite=old_remaining_qty,
-                                prix_unitaire=cout,
-                                montant_total=montant_reliquat,
-                                unite='pièce',
-                            )
-                            StockLot.objects.create(
-                                produit=old_product,
-                                purchase_item=item,
-                                quantite_restante=old_remaining_qty,
-                                prix_achat_unitaire=cout,
-                                date_achat=achat.date_achat,
-                            )
-                    if not last_locked.stock_product_id:
-                        last_locked.stock_product = old_product
-                    last_locked.quantite = sold_qty
-                    last_locked.save()
-                    if remaining_action == 'loss':
-                        StockLoss.objects.create(
-                            produit=old_product,
-                            quantite=old_remaining_qty,
-                            montant_total=montant_reliquat,
-                            nature='perte',
-                            date_perte=timezone.now(),
-                            commentaire=(
-                                f"Reliquat non vendu — case L{cell.row_index + 1}C{cell.col_index + 1}"
-                            ),
-                        )
-                    _sync_product_quantite(old_product.id)
-                elif last_locked and not last_locked.stock_product_id:
-                    last_locked.stock_product = old_product
-                    last_locked.save(update_fields=['stock_product'])
-
+                previous_level, sold_qty, montant_reliquat = _regler_reliquat_case(
+                    cell, old_remaining_qty, remaining_action
+                )
                 serializer = self.get_serializer(cell, data=cell_payload, partial=True)
                 serializer.is_valid(raise_exception=True)
                 self.perform_update(serializer)
+        except _ReliquatInvalide as exc:
+            return Response(
+                {'error': exc.message, 'previous_level': exc.previous_level},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
         except _StockInsuffisantError as exc:
             info = (exc.insuffisant or [{}])[0]
             return Response(
@@ -3762,6 +3683,61 @@ class DistributeurCellViewSet(viewsets.ModelViewSet):
                 'prix_vente': str(prix_vente_case),
             },
             status=status.HTTP_200_OK
+        )
+
+    @action(detail=True, methods=['post'], url_path='vider')
+    def vider(self, request, pk=None):
+        """Vide la case. Le dernier chargement demande combien il reste encore dedans."""
+        cell = self.get_object()
+        try:
+            old_remaining_qty = int(request.data.get('old_remaining_qty', 0))
+        except (TypeError, ValueError):
+            return Response({'error': 'Quantité restante invalide'}, status=status.HTTP_400_BAD_REQUEST)
+        if old_remaining_qty < 0:
+            return Response({'error': 'La quantité restante ne peut pas être négative'}, status=status.HTTP_400_BAD_REQUEST)
+        remaining_action = (request.data.get('remaining_action') or 'restock').strip().lower()
+        if remaining_action not in ['restock', 'loss']:
+            return Response({'error': "remaining_action doit être 'restock' ou 'loss'"}, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            with transaction.atomic():
+                previous_level, sold_qty, montant_reliquat = _regler_reliquat_case(
+                    cell, old_remaining_qty, remaining_action
+                )
+                cell.stock_product = None
+                cell.nom_produit = None
+                cell.image_url = None
+                cell.image_s3_key = None
+                cell.prix_vente = None
+                cell.save(update_fields=[
+                    'stock_product', 'nom_produit', 'image_url', 'image_s3_key', 'prix_vente', 'updated_at',
+                ])
+        except _ReliquatInvalide as exc:
+            return Response(
+                {'error': exc.message, 'previous_level': exc.previous_level},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        except _StockInsuffisantError as exc:
+            info = (exc.insuffisant or [{}])[0]
+            return Response(
+                {
+                    'error': "Impossible d'ajuster le reliquat : la trace des lots d'origine est incomplète.",
+                    'disponible': info.get('disponible'),
+                    'requis': info.get('requis'),
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        return Response(
+            {
+                'message': 'Case vidée. Le non-vendu est remis en stock ou compté en perte au prix d\'achat.',
+                'previous_level': previous_level,
+                'sold_qty': sold_qty,
+                'remaining_qty': old_remaining_qty,
+                'remaining_action': remaining_action,
+                'montant_achat_reliquat': str(montant_reliquat),
+            },
+            status=status.HTTP_200_OK,
         )
 
 
@@ -3948,6 +3924,122 @@ def _rendre_unites_trace(trace, quantite, produit_id, remettre_en_stock):
         return None, montant, a_rendre
     conserves.reverse()
     return conserves, montant.quantize(Decimal('0.01')), 0
+
+
+class _ReliquatInvalide(Exception):
+    def __init__(self, message, previous_level=None):
+        self.message = message
+        self.previous_level = previous_level
+
+
+def _regler_reliquat_case(cell, old_remaining_qty, remaining_action):
+    """Ramène la dernière vente au nombre réellement parti.
+
+    Le reliquat revient dans ses lots, ou devient une perte au prix d'achat.
+    À appeler dans une transaction. Le produit est celui de la ligne, même si
+    la case a déjà été vidée.
+    """
+    last_line = (
+        DistributeurReapproLigne.objects.filter(cell=cell, session__statut='termine')
+        .order_by('-session__date_fin', '-id')
+        .first()
+    )
+    previous_level = int(last_line.quantite) if last_line else 0
+    if old_remaining_qty > previous_level:
+        raise _ReliquatInvalide(
+            'La quantité restante dépasse le dernier niveau connu pour cette case',
+            previous_level,
+        )
+    sold_qty = max(previous_level - old_remaining_qty, 0)
+    montant_reliquat = Decimal('0')
+    if not last_line:
+        return previous_level, sold_qty, montant_reliquat
+
+    last_locked = (
+        DistributeurReapproLigne.objects.select_for_update(of=('self',))
+        .filter(pk=last_line.pk)
+        .first()
+    )
+    if not last_locked:
+        return previous_level, sold_qty, montant_reliquat
+
+    product = None
+    if last_locked.stock_product_id:
+        product = StockProduct.objects.filter(pk=last_locked.stock_product_id).first()
+    elif cell.stock_product_id:
+        product = cell.stock_product
+    if old_remaining_qty > 0 and product is None:
+        raise _StockInsuffisantError([{
+            'produit': cell.nom_produit or f'Case L{cell.row_index + 1}C{cell.col_index + 1}',
+            'requis': old_remaining_qty,
+            'disponible': 0,
+        }])
+
+    if old_remaining_qty > 0 and product is not None:
+        trace = list(last_locked.consommation_lots or [])
+        if trace:
+            new_trace, montant_reliquat, manque = _rendre_unites_trace(
+                trace,
+                old_remaining_qty,
+                product.id,
+                remettre_en_stock=(remaining_action == 'restock'),
+            )
+            if manque:
+                raise _StockInsuffisantError([{
+                    'produit': product.nom or f'Produit #{product.pk}',
+                    'requis': old_remaining_qty,
+                    'disponible': old_remaining_qty - int(manque),
+                }])
+            last_locked.consommation_lots = new_trace
+            cout_trace = _cout_pondere_trace(new_trace)
+            if cout_trace is not None:
+                last_locked.cout_unitaire = cout_trace
+        else:
+            cout = last_locked.cout_unitaire or Decimal('0')
+            montant_reliquat = (Decimal(str(cout)) * old_remaining_qty).quantize(Decimal('0.01'))
+            if remaining_action == 'restock':
+                nom_produit = (product.nom or product.nom_produit or '').strip() or f'Produit #{product.pk}'
+                achat = StockPurchase.objects.create(
+                    lieu_achat='Retour distributeur',
+                    date_achat=timezone.now(),
+                )
+                item = StockPurchaseItem.objects.create(
+                    achat=achat,
+                    produit=product,
+                    nom_produit=nom_produit,
+                    quantite=old_remaining_qty,
+                    prix_unitaire=cout,
+                    montant_total=montant_reliquat,
+                    unite='pièce',
+                )
+                StockLot.objects.create(
+                    produit=product,
+                    purchase_item=item,
+                    quantite_restante=old_remaining_qty,
+                    prix_achat_unitaire=cout,
+                    date_achat=achat.date_achat,
+                )
+        if not last_locked.stock_product_id:
+            last_locked.stock_product = product
+        last_locked.quantite = sold_qty
+        last_locked.save()
+        if remaining_action == 'loss':
+            StockLoss.objects.create(
+                produit=product,
+                quantite=old_remaining_qty,
+                montant_total=montant_reliquat,
+                nature='perte',
+                date_perte=timezone.now(),
+                commentaire=(
+                    f"Reliquat non vendu — case L{cell.row_index + 1}C{cell.col_index + 1}"
+                ),
+            )
+        _sync_product_quantite(product.id)
+    elif not last_locked.stock_product_id and product is not None:
+        last_locked.stock_product = product
+        last_locked.save(update_fields=['stock_product'])
+
+    return previous_level, sold_qty, montant_reliquat
 
 
 class _StockInsuffisantError(Exception):

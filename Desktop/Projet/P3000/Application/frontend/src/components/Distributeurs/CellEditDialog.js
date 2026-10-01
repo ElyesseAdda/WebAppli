@@ -39,6 +39,7 @@ const CellEditDialog = ({
   const [niveauInfo, setNiveauInfo] = useState(null);
   const [feedbackModal, setFeedbackModal] = useState({ open: false, title: "", message: "" });
   const [openDeleteWarning, setOpenDeleteWarning] = useState(false);
+  const [emptyMode, setEmptyMode] = useState(false);
 
   useEffect(() => {
     if (open) {
@@ -171,30 +172,77 @@ const CellEditDialog = ({
     onClose();
   };
 
-  const handleDelete = () => {
-    if (cell && cell.id) {
-      // Vider la case (sans supprimer l'enregistrement) pour préserver l'historique
-      // des ventes et du recap (bénéfices, CA). On enlève seulement le lien produit et l'image.
-      axios
-        .patch(`/api/distributeur-cells/${cell.id}/`, {
-          stock_product: null,
-          image_url: null,
-          image_s3_key: null,
-        })
-        .then(() => {
-          onSave(null); // Rafraîchir la grille
-          onClose();
-        })
-        .catch((err) => {
-          console.error("Erreur en vidant la case:", err);
-          if (err.response?.data) {
-            setFeedbackModal({
-              open: true,
-              title: "Erreur",
-              message: `Erreur: ${JSON.stringify(err.response.data)}`,
-            });
-          }
-        });
+  const viderCase = async (remainingQty, action) => {
+    const resp = await axios.post(`/api/distributeur-cells/${cell.id}/vider/`, {
+      old_remaining_qty: remainingQty,
+      remaining_action: action,
+    });
+    const d = resp.data || {};
+    const actionLabel = d.remaining_action === "loss" ? "perte au prix d'achat" : "remis en stock";
+    const cout = d.montant_achat_reliquat != null && Number(d.remaining_qty) > 0
+      ? ` (${Number(d.montant_achat_reliquat).toFixed(2)} € au prix d'achat)`
+      : "";
+    onSave(null, {
+      message: Number(d.previous_level) > 0
+        ? `Case vidée : vendu ${d.sold_qty ?? 0}, non vendu ${d.remaining_qty ?? 0} ${actionLabel}${cout}.`
+        : "Case vidée.",
+    });
+    setOpenChangeProductFlow(false);
+    setEmptyMode(false);
+    onClose();
+  };
+
+  const handleDelete = async () => {
+    if (!cell || !cell.id) return;
+    try {
+      const res = await axios.get(`/api/distributeur-cells/${cell.id}/niveau/`);
+      const level = Number(res.data?.previous_level || 0);
+      setPreviousLevel(level);
+      setNiveauInfo(res.data || null);
+      if (level > 0) {
+        setEmptyMode(true);
+        setOldRemainingQty("");
+        setRemainingAction("restock");
+        setOpenChangeProductFlow(true);
+        return;
+      }
+      setOpenDeleteWarning(true);
+    } catch (error) {
+      setFeedbackModal({
+        open: true,
+        title: "Erreur",
+        message: "Impossible de lire le dernier chargement de cette case.",
+      });
+    }
+  };
+
+  const handleConfirmEmpty = async () => {
+    const parsedRemaining = parseInt(oldRemainingQty, 10);
+    if (isNaN(parsedRemaining) || parsedRemaining < 0) {
+      setFeedbackModal({
+        open: true,
+        title: "Valeur invalide",
+        message: "Veuillez saisir une quantité restante valide (0 ou plus).",
+      });
+      return;
+    }
+    if (parsedRemaining > previousLevel) {
+      setFeedbackModal({
+        open: true,
+        title: "Valeur invalide",
+        message: `Le dernier chargement est de ${previousLevel}. Le reste ne peut pas le dépasser.`,
+      });
+      return;
+    }
+    try {
+      await viderCase(parsedRemaining, remainingAction);
+    } catch (err) {
+      const data = err.response?.data;
+      setFeedbackModal({
+        open: true,
+        title: "Erreur",
+        message: (data && (data.error || JSON.stringify(data))) || "Impossible de vider la case.",
+      });
     }
   };
 
@@ -339,7 +387,7 @@ const CellEditDialog = ({
 
       <DialogActions sx={{ px: 2, pb: 2, justifyContent: "space-between" }}>
         <Button
-          onClick={() => setOpenDeleteWarning(true)}
+          onClick={handleDelete}
           color="error"
           disabled={!cell || !cell.id}
           sx={{ borderRadius: "12px" }}
@@ -391,7 +439,14 @@ const CellEditDialog = ({
           color="error"
           onClick={() => {
             setOpenDeleteWarning(false);
-            handleDelete();
+            viderCase(0, "restock").catch((err) => {
+              const data = err.response?.data;
+              setFeedbackModal({
+                open: true,
+                title: "Erreur",
+                message: (data && (data.error || JSON.stringify(data))) || "Impossible de vider la case.",
+              });
+            });
           }}
         >
           Oui, vider la case
@@ -406,7 +461,7 @@ const CellEditDialog = ({
       fullWidth
     >
       <DialogTitle sx={{ fontWeight: 800 }}>
-        Changement de produit
+        {emptyMode ? "Vider la case" : "Changement de produit"}
       </DialogTitle>
       <DialogContent>
         <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
@@ -447,9 +502,9 @@ const CellEditDialog = ({
         </Typography>
       </DialogContent>
       <DialogActions sx={{ px: 2, pb: 2 }}>
-        <Button onClick={() => setOpenChangeProductFlow(false)}>Annuler</Button>
-        <Button variant="contained" onClick={handleConfirmChangeProductFlow}>
-          Valider le changement
+        <Button onClick={() => { setOpenChangeProductFlow(false); setEmptyMode(false); }}>Annuler</Button>
+        <Button variant="contained" onClick={emptyMode ? handleConfirmEmpty : handleConfirmChangeProductFlow}>
+          {emptyMode ? "Vider la case" : "Valider le changement"}
         </Button>
       </DialogActions>
     </Dialog>
