@@ -1182,6 +1182,11 @@ const DistributeursDashboard = ({ initialDistributeurId = null, onDistributeurId
                       Frais période : -{Number(resume.total_frais).toFixed(2)} €
                     </Typography>
                   )}
+                  {resume.total_pertes_achat != null && (
+                    <Typography component="span" variant="caption" sx={{ color: "rgba(255,255,255,0.85)", fontSize: "0.7rem" }}>
+                      Pertes stock (prix d'achat, hors marge) : {Number(resume.total_pertes_achat).toFixed(2)} €
+                    </Typography>
+                  )}
                 </Box>
                 <Typography variant="caption" sx={{ display: "block", mt: 1, opacity: 0.8 }}>
                   Cliquer pour changer la période

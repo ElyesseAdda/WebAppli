@@ -16,8 +16,6 @@ import {
   Chip,
   Fab,
   LinearProgress,
-  FormControlLabel,
-  Checkbox,
   Grid,
   FormControl,
   InputLabel,
@@ -55,8 +53,9 @@ const StockTab = ({ isDesktop: propIsDesktop }) => {
   const [quantity, setQuantity] = useState("");
   const [actionType, setActionType] = useState("add"); // "add" or "remove"
   const [prixUnitaire, setPrixUnitaire] = useState(""); // optionnel pour ajout manuel (création lot)
-  const [isPerte, setIsPerte] = useState(false); // pour retrait : perte (casse, vol...)
+  const [natureSortie, setNatureSortie] = useState("autre");
   const [commentairePerte, setCommentairePerte] = useState("");
+  const [pertesMois, setPertesMois] = useState(null);
   const [openProductDialog, setOpenProductDialog] = useState(false);
   const [editingProduct, setEditingProduct] = useState(null);
   const [openPurchaseDialog, setOpenPurchaseDialog] = useState(false);
@@ -111,7 +110,21 @@ const StockTab = ({ isDesktop: propIsDesktop }) => {
     fetchProducts();
     fetchPurchases();
     fetchLots();
+    fetchPertesMois();
   }, []);
+
+  const fetchPertesMois = async () => {
+    const now = new Date();
+    try {
+      const response = await axios.get("/api/stock-products/pertes-mois/", {
+        params: { year: now.getFullYear(), month: now.getMonth() + 1 },
+      });
+      setPertesMois(response.data);
+    } catch (error) {
+      console.error("Erreur chargement pertes:", error);
+      setPertesMois(null);
+    }
+  };
 
   const fetchProducts = async (forceRefresh = false) => {
     try {
@@ -302,7 +315,7 @@ const StockTab = ({ isDesktop: propIsDesktop }) => {
     setActionType(type);
     setQuantity("");
     setPrixUnitaire("");
-    setIsPerte(false);
+    setNatureSortie("autre");
     setCommentairePerte("");
     setOpenQuantityDialog(true);
   };
@@ -312,7 +325,7 @@ const StockTab = ({ isDesktop: propIsDesktop }) => {
     setSelectedProduct(null);
     setQuantity("");
     setPrixUnitaire("");
-    setIsPerte(false);
+    setNatureSortie("autre");
     setCommentairePerte("");
   };
 
@@ -335,11 +348,19 @@ const StockTab = ({ isDesktop: propIsDesktop }) => {
           payload.prix_unitaire = parseFloat(prix);
         }
       } else {
-        payload.is_perte = !!isPerte;
-        if (isPerte && commentairePerte.trim()) payload.commentaire = commentairePerte.trim();
+        payload.nature = natureSortie;
+        if (commentairePerte.trim()) payload.commentaire = commentairePerte.trim();
       }
 
       const response = await axios.post(endpoint, payload);
+      if (actionType === "remove" && response?.data?.montant_achat != null) {
+        const cout = Number(response.data.montant_achat).toFixed(2);
+        if (response.data.nature === "perte") {
+          alert(`Perte enregistrée : ${cout} € au prix d'achat. Ce montant est dans les pertes du mois.`);
+        } else {
+          alert(`Sortie enregistrée. Coût d'achat sorti : ${cout} €. Cette sortie n'est pas une perte.`);
+        }
+      }
       const nouvelleQuantite = response?.data?.quantite;
 
       handleCloseQuantityDialog();
@@ -354,6 +375,7 @@ const StockTab = ({ isDesktop: propIsDesktop }) => {
       }
       fetchProducts(true);
       fetchLots(true);
+      fetchPertesMois();
     } catch (error) {
       console.error("Erreur modification stock:", error);
       alert(
@@ -457,7 +479,7 @@ const StockTab = ({ isDesktop: propIsDesktop }) => {
               Stock Central
             </Typography>
             <IconButton 
-              onClick={() => { fetchProducts(); fetchLots(); }}
+              onClick={() => { fetchProducts(); fetchLots(); fetchPertesMois(); }}
               sx={{ bgcolor: "action.hover", borderRadius: "12px" }}
             >
               <MdInventory size={22} color="#666" />
@@ -471,6 +493,11 @@ const StockTab = ({ isDesktop: propIsDesktop }) => {
             ) : (
               <Typography variant="body1" sx={{ fontWeight: 700 }}>
                 Valeur du stock : <Typography component="span" sx={{ color: "primary.main", fontWeight: 800 }}>{Number(stockValueTotal).toFixed(2)} €</Typography>
+              </Typography>
+            )}
+            {pertesMois && (
+              <Typography variant="body2" sx={{ fontWeight: 700, color: "error.main" }}>
+                Pertes du mois : {Number(pertesMois.total_montant || 0).toFixed(2)} € (prix d'achat)
               </Typography>
             )}
           </Box>
@@ -594,10 +621,15 @@ const StockTab = ({ isDesktop: propIsDesktop }) => {
           ) : (
             <Typography variant="body1" sx={{ fontWeight: 700 }}>
               Valeur du stock : <Typography component="span" sx={{ color: "primary.main", fontWeight: 800 }}>{Number(stockValueTotal).toFixed(2)} €</Typography>
+              {pertesMois && (
+                <Typography component="span" sx={{ display: "block", color: "error.main", fontWeight: 700, fontSize: "0.9rem" }}>
+                  Pertes du mois : {Number(pertesMois.total_montant || 0).toFixed(2)} € (prix d'achat)
+                </Typography>
+              )}
             </Typography>
           )}
           <IconButton 
-            onClick={() => { fetchProducts(); fetchLots(); }}
+            onClick={() => { fetchProducts(); fetchLots(); fetchPertesMois(); }}
             sx={{ bgcolor: "background.paper", borderRadius: "12px", border: "1px solid", borderColor: "divider" }}
           >
             <MdInventory size={22} color="#666" />
@@ -1486,33 +1518,39 @@ const StockTab = ({ isDesktop: propIsDesktop }) => {
 
           {actionType === "remove" && (
             <>
-              <FormControlLabel
-                control={
-                  <Checkbox
-                    checked={isPerte}
-                    onChange={(e) => setIsPerte(e.target.checked)}
-                    color="primary"
-                  />
-                }
-                label="C'est une perte (casse, vol, péremption…)"
-                sx={{ mt: 2, display: "block" }}
+              <FormControl fullWidth sx={{ mt: 2 }}>
+                <InputLabel>Nature de la sortie</InputLabel>
+                <Select
+                  value={natureSortie}
+                  label="Nature de la sortie"
+                  onChange={(e) => setNatureSortie(e.target.value)}
+                >
+                  <MenuItem value="autre">Autre sortie</MenuItem>
+                  <MenuItem value="perte">Perte (casse, vol, péremption)</MenuItem>
+                  <MenuItem value="don">Don</MenuItem>
+                  <MenuItem value="usage">Usage interne</MenuItem>
+                  <MenuItem value="correction">Correction</MenuItem>
+                </Select>
+              </FormControl>
+              <Typography variant="caption" sx={{ display: "block", mt: 1, color: "text.secondary" }}>
+                {natureSortie === "perte"
+                  ? "Une perte est comptée à part, uniquement au prix d'achat, et ajoutée au total du mois."
+                  : "Cette sortie retire le stock au prix d'achat, sans entrer dans les pertes du mois."}
+              </Typography>
+              <TextField
+                fullWidth
+                label="Commentaire (optionnel)"
+                value={commentairePerte}
+                onChange={(e) => setCommentairePerte(e.target.value)}
+                placeholder="Ex: casse, vol..."
+                variant="filled"
+                size="small"
+                sx={{ mt: 1 }}
+                InputProps={{
+                  disableUnderline: true,
+                  sx: { borderRadius: "16px", bgcolor: "grey.100" }
+                }}
               />
-              {isPerte && (
-                <TextField
-                  fullWidth
-                  label="Commentaire (optionnel)"
-                  value={commentairePerte}
-                  onChange={(e) => setCommentairePerte(e.target.value)}
-                  placeholder="Ex: casse, vol..."
-                  variant="filled"
-                  size="small"
-                  sx={{ mt: 1 }}
-                  InputProps={{
-                    disableUnderline: true,
-                    sx: { borderRadius: "16px", bgcolor: "grey.100" }
-                  }}
-                />
-              )}
             </>
           )}
           

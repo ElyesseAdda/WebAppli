@@ -3240,6 +3240,15 @@ class DistributeurViewSet(viewsets.ModelViewSet):
 
         benefice_total = float(benefice) + benefice_reappro - total_frais
 
+        # Pertes du stock central sur la période, au prix d'achat seulement.
+        # Elles ne sont pas soustraites du bénéfice de chaque machine : le stock est commun.
+        pertes_qs = StockLoss.objects.filter(nature='perte')
+        if start_date:
+            pertes_qs = pertes_qs.filter(date_perte__date__gte=start_date)
+        if end_date:
+            pertes_qs = pertes_qs.filter(date_perte__date__lte=end_date)
+        total_pertes_achat = float(pertes_qs.aggregate(total=Sum('montant_total'))['total'] or 0)
+
         return Response({
             'distributeur_id': distributeur.id,
             'total_entrees': float(total_entrees),
@@ -3247,6 +3256,7 @@ class DistributeurViewSet(viewsets.ModelViewSet):
             'benefice': float(benefice),
             'benefice_reappro': round(benefice_reappro, 2),
             'total_frais': round(total_frais, 2),
+            'total_pertes_achat': round(total_pertes_achat, 2),
             'benefice_total': round(benefice_total, 2),
             'total_ca': round(total_ca, 2),
         })
@@ -3325,46 +3335,33 @@ class DistributeurViewSet(viewsets.ModelViewSet):
             sessions_reappro = sessions_reappro.filter(date_fin__date__lte=end_date)
         sessions_ids = list(sessions_reappro.values_list('id', flat=True))
 
-        # Bénéfice, quantité vendue et CA par cellule — uniquement depuis les réappro
-        # Pas de table "ventes" : recharger 5 Coca = 5 Coca vendus
-        lignes_agg = DistributeurReapproLigne.objects.filter(
+        # Marge = prix de la case - coût d'achat figé sur la ligne.
+        # Le produit est celui du mouvement, pas le produit actuel de la case.
+        lignes = DistributeurReapproLigne.objects.filter(
             session_id__in=sessions_ids
-        ).values('cell_id').annotate(
-            benefice=Sum(
-                F('quantite') * (F('prix_vente') - Coalesce(F('cout_unitaire'), 0)),
-                output_field=models.DecimalField(max_digits=12, decimal_places=2),
-            ),
-            quantite_vendue=Sum('quantite'),
-            ca_ventes=Sum(
-                F('quantite') * F('prix_vente'),
-                output_field=models.DecimalField(max_digits=12, decimal_places=2),
-            ),
-        )
-        benefice_by_cell = {r['cell_id']: float(r['benefice'] or 0) for r in lignes_agg}
-        qte_by_cell = {r['cell_id']: int(r['quantite_vendue'] or 0) for r in lignes_agg}
-        ca_by_cell = {r['cell_id']: float(r['ca_ventes'] or 0) for r in lignes_agg}
-
-        # Agrégation : par stock_product_id si lié (nom = StockProduct.nom), sinon par nom libre
-        cells = distributeur.cells.select_related('stock_product').order_by(
-            'row_index', 'col_index'
-        )
+        ).select_related('cell', 'cell__stock_product', 'stock_product')
         by_key = {}
-        for cell in cells:
-            benefice = benefice_by_cell.get(cell.id, 0)
-            quantite_vendue = qte_by_cell.get(cell.id, 0)
-            ca_ventes = ca_by_cell.get(cell.id, 0)
+        for lig in lignes:
+            cell = lig.cell
+            product = lig.stock_product or (
+                cell.stock_product if cell is not None and cell.stock_product_id else None
+            )
+            quantite_vendue = int(lig.quantite or 0)
+            prix = float(lig.prix_vente or 0)
+            cout = float(lig.cout_unitaire or 0)
+            benefice = quantite_vendue * (prix - cout)
+            ca_ventes = quantite_vendue * prix
 
-            if cell.stock_product_id:
-                cle = f"stock:{cell.stock_product_id}"
-                sp = cell.stock_product
+            if product is not None:
+                cle = f"stock:{product.id}"
                 nom = (
-                    (sp.nom or sp.nom_produit or "").strip()
-                    or f"Produit #{cell.stock_product_id}"
+                    (product.nom or product.nom_produit or "").strip()
+                    or f"Produit #{product.id}"
                 )
-                stock_product_id = cell.stock_product_id
+                stock_product_id = product.id
             else:
-                nom = (cell.nom_produit or "").strip() or (
-                    f"L{cell.row_index + 1}C{cell.col_index + 1}"
+                nom = ((cell.nom_produit if cell else "") or "").strip() or (
+                    f"L{(cell.row_index if cell else 0) + 1}C{(cell.col_index if cell else 0) + 1}"
                 )
                 cle = f"free:{nom.lower()}"
                 stock_product_id = None
@@ -3529,6 +3526,28 @@ class DistributeurCellViewSet(viewsets.ModelViewSet):
             status=status.HTTP_405_METHOD_NOT_ALLOWED
         )
 
+    @action(detail=True, methods=['get'], url_path='niveau')
+    def niveau(self, request, pk=None):
+        """Dernier chargement de la case : quantité, prix de vente et coût d'achat."""
+        cell = self.get_object()
+        last_line = (
+            DistributeurReapproLigne.objects.filter(cell=cell, session__statut='termine')
+            .select_related('session', 'stock_product')
+            .order_by('-session__date_fin', '-id')
+            .first()
+        )
+        previous_level = int(last_line.quantite) if last_line else 0
+        return Response({
+            'previous_level': previous_level,
+            'prix_vente': str(cell.prix_vente or 0),
+            'cout_unitaire': str(last_line.cout_unitaire or 0) if last_line else '0',
+            'nom_produit': (
+                (cell.stock_product.nom if cell.stock_product_id else None)
+                or cell.nom_produit
+                or ''
+            ),
+        })
+
     @action(detail=True, methods=['post'], url_path='change-product')
     def change_product(self, request, pk=None):
         """
@@ -3586,88 +3605,110 @@ class DistributeurCellViewSet(viewsets.ModelViewSet):
         cell_payload.pop('old_remaining_qty', None)
         cell_payload.pop('remaining_action', None)
 
-        with transaction.atomic():
-            # Coût unitaire moyen pour l'ancien produit (lots disponibles puis fallback tous lots)
-            cout_unitaire = Decimal('0')
-            lots_avec_stock = StockLot.objects.filter(produit=old_product, quantite_restante__gt=0)
-            agg = lots_avec_stock.aggregate(
-                total_val=Sum(F('prix_achat_unitaire') * F('quantite_restante')),
-                total_qty=Sum('quantite_restante'),
+        montant_reliquat = Decimal('0')
+        prix_vente_case = cell.prix_vente or Decimal('0')
+        try:
+            with transaction.atomic():
+                last_locked = None
+                if last_line:
+                    last_locked = (
+                        DistributeurReapproLigne.objects.select_for_update()
+                        .filter(pk=last_line.pk)
+                        .first()
+                    )
+
+                # Le chargement précédent a déjà sorti le stock et compté toute la quantité
+                # comme vendue. On ramène la vente au nombre réellement parti, sans débiter
+                # une seconde fois. Le reliquat revient en stock ou devient une perte au prix d'achat.
+                if last_locked and old_remaining_qty > 0:
+                    trace = list(last_locked.consommation_lots or [])
+                    if trace:
+                        new_trace, montant_reliquat, manque = _rendre_unites_trace(
+                            trace,
+                            old_remaining_qty,
+                            old_product.id,
+                            remettre_en_stock=(remaining_action == 'restock'),
+                        )
+                        if manque:
+                            raise _StockInsuffisantError([{
+                                'produit': old_product.nom or f'Produit #{old_product.pk}',
+                                'requis': old_remaining_qty,
+                                'disponible': old_remaining_qty - int(manque),
+                            }])
+                        last_locked.consommation_lots = new_trace
+                        cout_trace = _cout_pondere_trace(new_trace)
+                        if cout_trace is not None:
+                            last_locked.cout_unitaire = cout_trace
+                    else:
+                        cout = last_locked.cout_unitaire or Decimal('0')
+                        montant_reliquat = (Decimal(str(cout)) * old_remaining_qty).quantize(Decimal('0.01'))
+                        if remaining_action == 'restock':
+                            nom_produit = (old_product.nom or old_product.nom_produit or '').strip() or f'Produit #{old_product.pk}'
+                            achat = StockPurchase.objects.create(
+                                lieu_achat='Retour distributeur',
+                                date_achat=timezone.now(),
+                            )
+                            item = StockPurchaseItem.objects.create(
+                                achat=achat,
+                                produit=old_product,
+                                nom_produit=nom_produit,
+                                quantite=old_remaining_qty,
+                                prix_unitaire=cout,
+                                montant_total=montant_reliquat,
+                                unite='pièce',
+                            )
+                            StockLot.objects.create(
+                                produit=old_product,
+                                purchase_item=item,
+                                quantite_restante=old_remaining_qty,
+                                prix_achat_unitaire=cout,
+                                date_achat=achat.date_achat,
+                            )
+                    if not last_locked.stock_product_id:
+                        last_locked.stock_product = old_product
+                    last_locked.quantite = sold_qty
+                    last_locked.save()
+                    if remaining_action == 'loss':
+                        StockLoss.objects.create(
+                            produit=old_product,
+                            quantite=old_remaining_qty,
+                            montant_total=montant_reliquat,
+                            nature='perte',
+                            date_perte=timezone.now(),
+                            commentaire=(
+                                f"Reliquat non vendu — case L{cell.row_index + 1}C{cell.col_index + 1}"
+                            ),
+                        )
+                    _sync_product_quantite(old_product.id)
+                elif last_locked and not last_locked.stock_product_id:
+                    last_locked.stock_product = old_product
+                    last_locked.save(update_fields=['stock_product'])
+
+                serializer = self.get_serializer(cell, data=cell_payload, partial=True)
+                serializer.is_valid(raise_exception=True)
+                self.perform_update(serializer)
+        except _StockInsuffisantError as exc:
+            info = (exc.insuffisant or [{}])[0]
+            return Response(
+                {
+                    'error': (
+                        "Impossible d'ajuster le reliquat : la trace des lots d'origine est incomplète."
+                    ),
+                    'disponible': info.get('disponible'),
+                    'requis': info.get('requis'),
+                },
+                status=status.HTTP_400_BAD_REQUEST,
             )
-            total_val = agg.get('total_val')
-            total_qty = agg.get('total_qty')
-            if total_qty and total_qty > 0 and total_val is not None:
-                cout_unitaire = total_val / total_qty
-            else:
-                cout_moyen = StockLot.objects.filter(produit=old_product).aggregate(avg=Avg('prix_achat_unitaire'))['avg']
-                if cout_moyen is not None:
-                    cout_unitaire = cout_moyen
-
-            # 1) Ventes validées dans la prochaine session de mouvement
-            if sold_qty > 0:
-                session = DistributeurReapproSession.objects.filter(
-                    distributeur_id=cell.distributeur_id,
-                    statut='en_cours'
-                ).order_by('-date_debut').first()
-                if not session:
-                    session = DistributeurReapproSession.objects.create(
-                        distributeur_id=cell.distributeur_id,
-                        statut='en_cours',
-                        date_debut=timezone.now(),
-                    )
-                ligne = DistributeurReapproLigne.objects.filter(session=session, cell=cell).first()
-                old_prix_vente = cell.prix_vente or 0
-                if ligne:
-                    ligne.quantite = int(ligne.quantite) + sold_qty
-                    ligne.prix_vente = old_prix_vente
-                    ligne.cout_unitaire = cout_unitaire
-                    ligne.save(update_fields=['quantite', 'prix_vente', 'cout_unitaire'])
-                else:
-                    DistributeurReapproLigne.objects.create(
-                        session=session,
-                        cell=cell,
-                        quantite=sold_qty,
-                        prix_vente=old_prix_vente,
-                        cout_unitaire=cout_unitaire,
-                    )
-
-            # 2) Reliquat ancien produit -> retour stock + lot ajustement, ou perte
-            if old_remaining_qty > 0 and remaining_action == 'restock':
-                nom_produit = (old_product.nom or old_product.nom_produit or '').strip() or f'Produit #{old_product.pk}'
-                achat = StockPurchase.objects.create(
-                    lieu_achat='Retour distributeur',
-                    date_achat=timezone.now(),
-                )
-                item = StockPurchaseItem.objects.create(
-                    achat=achat,
-                    produit=old_product,
-                    nom_produit=nom_produit,
-                    quantite=old_remaining_qty,
-                    prix_unitaire=cout_unitaire,
-                    montant_total=Decimal(old_remaining_qty) * cout_unitaire,
-                    unite='pièce',
-                )
-                StockProduct.objects.filter(pk=old_product.pk).update(quantite=F('quantite') + old_remaining_qty)
-                StockLot.objects.create(
-                    produit=old_product,
-                    purchase_item=item,
-                    quantite_restante=old_remaining_qty,
-                    prix_achat_unitaire=cout_unitaire,
-                    date_achat=achat.date_achat,
-                )
-
-            # 3) Mise à jour de la case vers le nouveau produit
-            serializer = self.get_serializer(cell, data=cell_payload, partial=True)
-            serializer.is_valid(raise_exception=True)
-            self.perform_update(serializer)
 
         return Response(
             {
-                'message': 'Produit de case changé avec prise en compte des ventes/reliquats',
+                'message': 'Produit de case changé. Le non-vendu est traité à part, la marge reste au prix de la case moins le coût d\'achat.',
                 'previous_level': previous_level,
                 'sold_qty': sold_qty,
                 'remaining_qty': old_remaining_qty,
                 'remaining_action': remaining_action,
+                'montant_achat_reliquat': str(montant_reliquat),
+                'prix_vente': str(prix_vente_case),
             },
             status=status.HTTP_200_OK
         )
@@ -3735,6 +3776,131 @@ def _stock_disponible(product):
         return int(total)
     except (TypeError, ValueError):
         return 0
+
+
+def _sync_product_quantite(product_id):
+    remaining = StockLot.objects.filter(produit_id=product_id).aggregate(
+        total=Sum('quantite_restante')
+    )['total'] or 0
+    StockProduct.objects.filter(pk=product_id).update(quantite=max(0, int(remaining)))
+
+
+def _ligne_stock_product(lig):
+    """Produit figé sur la ligne, sinon celui de la case."""
+    if getattr(lig, 'stock_product_id', None):
+        return lig.stock_product
+    cell = getattr(lig, 'cell', None)
+    if cell is None:
+        return None
+    return _resolve_cell_stock_product(cell)
+
+
+def _cout_pondere_trace(trace):
+    total_q = 0
+    total_v = Decimal('0')
+    for item in trace or []:
+        try:
+            qte = int(item.get('quantite') or 0)
+            lot_id = item.get('lot_id')
+        except (TypeError, ValueError, AttributeError):
+            continue
+        if qte <= 0 or not lot_id:
+            continue
+        lot = StockLot.objects.filter(pk=lot_id).first()
+        if not lot:
+            continue
+        total_q += qte
+        total_v += Decimal(str(lot.prix_achat_unitaire or 0)) * qte
+    if total_q <= 0:
+        return None
+    return (total_v / Decimal(total_q)).quantize(Decimal('0.01'))
+
+
+def _fusionner_traces(base, extra):
+    merged = []
+    index = {}
+    for item in list(base or []) + list(extra or []):
+        try:
+            lot_id = item.get('lot_id')
+            qte = int(item.get('quantite') or 0)
+        except (TypeError, ValueError, AttributeError):
+            continue
+        if not lot_id or qte <= 0:
+            continue
+        if lot_id in index:
+            index[lot_id]['quantite'] = int(index[lot_id]['quantite']) + qte
+        else:
+            row = {'lot_id': lot_id, 'quantite': qte}
+            merged.append(row)
+            index[lot_id] = row
+    return merged
+
+
+def _consommer_fifo(product, quantite):
+    """Consomme des lots du plus ancien au plus récent. À appeler dans une transaction."""
+    lots = list(
+        StockLot.objects.filter(produit=product, quantite_restante__gt=0)
+        .order_by('date_achat', 'created_at')
+        .select_for_update()
+    )
+    restant = int(quantite)
+    trace = []
+    montant = Decimal('0')
+    for lot in lots:
+        if restant <= 0:
+            break
+        prise = min(restant, int(lot.quantite_restante or 0))
+        if prise <= 0:
+            continue
+        montant += Decimal(str(lot.prix_achat_unitaire or 0)) * prise
+        lot.quantite_restante = int(lot.quantite_restante or 0) - prise
+        lot.save(update_fields=['quantite_restante'])
+        trace.append({'lot_id': lot.id, 'quantite': int(prise)})
+        restant -= prise
+    if restant > 0:
+        raise _StockInsuffisantError([{
+            'produit': product.nom or product.nom_produit or f'Produit #{product.pk}',
+            'requis': int(quantite),
+            'disponible': int(quantite) - restant,
+        }])
+    return trace, montant.quantize(Decimal('0.01'))
+
+
+def _rendre_unites_trace(trace, quantite, produit_id, remettre_en_stock):
+    """Retire des unités en partant de la fin de la trace. À appeler dans une transaction.
+
+    Retourne (nouvelle_trace, montant_achat, quantite_non_couverte).
+    """
+    a_rendre = int(quantite)
+    montant = Decimal('0')
+    conserves = []
+    for item in reversed(list(trace or [])):
+        try:
+            qte = int(item.get('quantite') or 0)
+            lot_id = item.get('lot_id')
+        except (TypeError, ValueError, AttributeError):
+            conserves.append(item)
+            continue
+        if a_rendre <= 0 or qte <= 0 or not lot_id:
+            conserves.append(item)
+            continue
+        lot = StockLot.objects.select_for_update().filter(pk=lot_id, produit_id=produit_id).first()
+        if lot is None:
+            return None, montant, a_rendre
+        prix = Decimal(str(lot.prix_achat_unitaire or 0))
+        rendu = min(qte, a_rendre)
+        montant += prix * rendu
+        if remettre_en_stock:
+            lot.quantite_restante = int(lot.quantite_restante or 0) + rendu
+            lot.save(update_fields=['quantite_restante'])
+        left = qte - rendu
+        if left > 0:
+            conserves.append({'lot_id': lot_id, 'quantite': left})
+        a_rendre -= rendu
+    if a_rendre > 0:
+        return None, montant, a_rendre
+    conserves.reverse()
+    return conserves, montant.quantize(Decimal('0.01')), 0
 
 
 class _StockInsuffisantError(Exception):
@@ -3886,6 +4052,7 @@ class DistributeurReapproSessionViewSet(viewsets.ModelViewSet):
                 'quantite': quantite,
                 'prix_vente': prix_vente,
                 'cout_unitaire': cout_unitaire,
+                'stock_product': produit_stock,
                 # La consommation effective des lots n'existe qu'après validation (terminer)
                 'consommation_lots': [],
             },
@@ -3924,9 +4091,9 @@ class DistributeurReapproSessionViewSet(viewsets.ModelViewSet):
         def collect_by_product(lignes_qs):
             grouped = defaultdict(lambda: {'quantite': 0, 'product': None, 'cells': []})
             for lig in lignes_qs:
-                if not lig.cell:
+                if not lig.cell and not getattr(lig, 'stock_product_id', None):
                     continue
-                product = _resolve_cell_stock_product(lig.cell)
+                product = _ligne_stock_product(lig)
                 if not product:
                     continue
                 entry = grouped[product.id]
@@ -3969,10 +4136,33 @@ class DistributeurReapproSessionViewSet(viewsets.ModelViewSet):
                 # of=('self',) : PostgreSQL refuse FOR UPDATE sur le côté nullable
                 # d'un OUTER JOIN (cell.stock_product est null=True).
                 lignes_locked = list(
-                    session.lignes.select_related('cell', 'cell__stock_product')
+                    session.lignes.select_related('cell', 'cell__stock_product', 'stock_product')
                     .select_for_update(of=('self',))
                     .all()
                 )
+                orphelines = []
+                for lig in lignes_locked:
+                    if int(lig.quantite or 0) <= 0 or _ligne_stock_product(lig):
+                        continue
+                    cell = lig.cell
+                    if cell is not None:
+                        orphelines.append(
+                            (cell.nom_produit or '').strip()
+                            or f"L{cell.row_index + 1}C{cell.col_index + 1}"
+                        )
+                    else:
+                        orphelines.append(f"Ligne {lig.id}")
+                if orphelines:
+                    return Response(
+                        {
+                            'error': (
+                                "Chaque case doit être liée à un produit du stock "
+                                "pour sortir les unités au coût d'achat."
+                            ),
+                            'cases': orphelines,
+                        },
+                        status=status.HTTP_400_BAD_REQUEST,
+                    )
                 by_product = collect_by_product(lignes_locked)
                 insuffisant = insuffisant_from_grouped(by_product)
                 if insuffisant:
@@ -3980,7 +4170,7 @@ class DistributeurReapproSessionViewSet(viewsets.ModelViewSet):
 
                 touched_product_ids = set()
                 for lig in lignes_locked:
-                    product = _resolve_cell_stock_product(lig.cell) if lig.cell else None
+                    product = _ligne_stock_product(lig)
                     if not product:
                         continue
                     quantite = int(lig.quantite or 0)
@@ -4009,7 +4199,12 @@ class DistributeurReapproSessionViewSet(viewsets.ModelViewSet):
                             'cellules': [_reappro_product_label(product, lig.cell, product.id)],
                         }])
                     lig.consommation_lots = consommation_lots
-                    lig.save(update_fields=['consommation_lots'])
+                    if not lig.stock_product_id:
+                        lig.stock_product = product
+                    cout_reel = _cout_pondere_trace(consommation_lots)
+                    if cout_reel is not None:
+                        lig.cout_unitaire = cout_reel
+                    lig.save(update_fields=['consommation_lots', 'stock_product', 'cout_unitaire'])
                     touched_product_ids.add(product.id)
 
                 for product_id in touched_product_ids:
@@ -4065,93 +4260,101 @@ class DistributeurReapproSessionViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_400_BAD_REQUEST
             )
 
-        with transaction.atomic():
-            session = DistributeurReapproSession.objects.select_for_update().get(pk=session.pk)
-            lignes = list(
-                session.lignes.select_related('cell', 'cell__stock_product')
-                .all()
-            )
+        try:
+            with transaction.atomic():
+                session = DistributeurReapproSession.objects.select_for_update().get(pk=session.pk)
+                lignes = list(
+                    session.lignes.select_related('cell', 'cell__stock_product', 'stock_product')
+                    .all()
+                )
 
-            if session.statut == 'termine':
-                for lig in lignes:
-                    product = getattr(lig.cell, 'stock_product', None)
-                    if not product:
-                        continue
-
-                    consommation_lots = lig.consommation_lots or []
-                    if not consommation_lots:
-                        # Compatibilité legacy (anciennes sessions sans trace des lots):
-                        # on recrée un lot d'ajustement pour remettre les unités dans le FIFO.
-                        quantite_legacy = int(lig.quantite or 0)
-                        if quantite_legacy <= 0:
-                            continue
-                        cout_unitaire_legacy = lig.cout_unitaire if lig.cout_unitaire is not None else Decimal('0')
-                        achat = StockPurchase.objects.create(
-                            lieu_achat=f"Annulation mouvement distributeur #{session.id}",
-                            date_achat=timezone.now(),
-                            total=Decimal('0'),
-                        )
-                        item = StockPurchaseItem.objects.create(
-                            achat=achat,
-                            produit=product,
-                            nom_produit=product.nom or product.nom_produit or f"Produit #{product.id}",
-                            quantite=quantite_legacy,
-                            prix_unitaire=cout_unitaire_legacy,
-                            unite="pièce",
-                            creer_produit=False,
-                        )
-                        StockLot.objects.create(
-                            produit=product,
-                            purchase_item=item,
-                            quantite_restante=quantite_legacy,
-                            prix_achat_unitaire=cout_unitaire_legacy,
-                            date_achat=timezone.now(),
-                        )
-                        StockProduct.objects.filter(pk=product.pk).update(
-                            quantite=F('quantite') + quantite_legacy
-                        )
-                        continue
-
-                    quantite_restauree = 0
-                    for item in consommation_lots:
-                        lot_id = item.get('lot_id')
-                        try:
-                            quantite = int(item.get('quantite') or 0)
-                        except (TypeError, ValueError):
-                            quantite = 0
-                        if not lot_id or quantite <= 0:
+                if session.statut == 'termine':
+                    for lig in lignes:
+                        product = _ligne_stock_product(lig)
+                        if not product:
                             continue
 
-                        lot = StockLot.objects.select_for_update().filter(
-                            pk=lot_id,
-                            produit_id=product.id,
-                        ).first()
-                        if not lot:
-                            return Response(
-                                {
-                                    'error': (
-                                        "Impossible d'annuler ce mouvement automatiquement : "
-                                        "un lot de stock d'origine est introuvable."
-                                    ),
-                                    'session_id': session.id,
-                                    'ligne_id': lig.id,
-                                    'lot_id': lot_id,
-                                },
-                                status=status.HTTP_400_BAD_REQUEST,
+                        consommation_lots = lig.consommation_lots or []
+                        if not consommation_lots:
+                            # Compatibilité legacy (anciennes sessions sans trace des lots):
+                            # on recrée un lot d'ajustement pour remettre les unités dans le FIFO.
+                            quantite_legacy = int(lig.quantite or 0)
+                            if quantite_legacy <= 0:
+                                continue
+                            cout_unitaire_legacy = lig.cout_unitaire if lig.cout_unitaire is not None else Decimal('0')
+                            achat = StockPurchase.objects.create(
+                                lieu_achat=f"Annulation mouvement distributeur #{session.id}",
+                                date_achat=timezone.now(),
+                                total=Decimal('0'),
                             )
+                            item = StockPurchaseItem.objects.create(
+                                achat=achat,
+                                produit=product,
+                                nom_produit=product.nom or product.nom_produit or f"Produit #{product.id}",
+                                quantite=quantite_legacy,
+                                prix_unitaire=cout_unitaire_legacy,
+                                unite="pièce",
+                                creer_produit=False,
+                            )
+                            StockLot.objects.create(
+                                produit=product,
+                                purchase_item=item,
+                                quantite_restante=quantite_legacy,
+                                prix_achat_unitaire=cout_unitaire_legacy,
+                                date_achat=timezone.now(),
+                            )
+                            StockProduct.objects.filter(pk=product.pk).update(
+                                quantite=F('quantite') + quantite_legacy
+                            )
+                            continue
 
-                        lot.quantite_restante = (lot.quantite_restante or 0) + quantite
-                        lot.save(update_fields=['quantite_restante'])
-                        quantite_restauree += quantite
+                        quantite_restauree = 0
+                        for item in consommation_lots:
+                            lot_id = item.get('lot_id')
+                            try:
+                                quantite = int(item.get('quantite') or 0)
+                            except (TypeError, ValueError):
+                                quantite = 0
+                            if not lot_id or quantite <= 0:
+                                continue
 
-                    if quantite_restauree > 0:
-                        StockProduct.objects.filter(pk=product.pk).update(
-                            quantite=F('quantite') + quantite_restauree
-                        )
+                            lot = StockLot.objects.select_for_update().filter(
+                                pk=lot_id,
+                                produit_id=product.id,
+                            ).first()
+                            if not lot:
+                                raise _StockInsuffisantError([{
+                                    'produit': product.nom or f'Produit #{product.id}',
+                                    'requis': quantite,
+                                    'disponible': 0,
+                                    'lot_id': lot_id,
+                                    'ligne_id': lig.id,
+                                }])
 
-            session.statut = 'annule'
-            session.date_fin = timezone.now()
-            session.save(update_fields=['statut', 'date_fin', 'updated_at'])
+                            lot.quantite_restante = (lot.quantite_restante or 0) + quantite
+                            lot.save(update_fields=['quantite_restante'])
+                            quantite_restauree += quantite
+
+                        if quantite_restauree > 0:
+                            _sync_product_quantite(product.pk)
+
+                session.statut = 'annule'
+                session.date_fin = timezone.now()
+                session.save(update_fields=['statut', 'date_fin', 'updated_at'])
+        except _StockInsuffisantError as exc:
+            info = (exc.insuffisant or [{}])[0]
+            return Response(
+                {
+                    'error': (
+                        "Impossible d'annuler ce mouvement automatiquement : "
+                        "un lot de stock d'origine est introuvable. Aucun stock n'a été modifié."
+                    ),
+                    'session_id': session.id,
+                    'ligne_id': info.get('ligne_id'),
+                    'lot_id': info.get('lot_id'),
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
 
         serializer = DistributeurReapproSessionSerializer(session)
         return Response(serializer.data, status=status.HTTP_200_OK)
@@ -4170,6 +4373,101 @@ class DistributeurReapproLigneViewSet(viewsets.ModelViewSet):
             queryset = queryset.filter(session_id=session_id)
         return queryset
 
+    def update(self, request, *args, **kwargs):
+        return self._save_ligne(request, partial=kwargs.get('partial', False))
+
+    def partial_update(self, request, *args, **kwargs):
+        return self._save_ligne(request, partial=True)
+
+    def _save_ligne(self, request, partial):
+        """Corrige une ligne. Sur un mouvement terminé, la quantité ajuste les lots au prix d'achat."""
+        ligne = self.get_object()
+        serializer = self.get_serializer(ligne, data=request.data, partial=partial)
+        serializer.is_valid(raise_exception=True)
+        old_qty = int(ligne.quantite or 0)
+        new_qty = int(serializer.validated_data.get('quantite', old_qty) or 0)
+        if new_qty < 0:
+            return Response({'error': 'Quantité invalide'}, status=status.HTTP_400_BAD_REQUEST)
+
+        session = ligne.session
+        if session.statut == 'termine' and new_qty != old_qty:
+            try:
+                with transaction.atomic():
+                    ligne = (
+                        DistributeurReapproLigne.objects.select_for_update()
+                        .select_related('cell', 'cell__stock_product', 'stock_product', 'session')
+                        .get(pk=ligne.pk)
+                    )
+                    product = _ligne_stock_product(ligne)
+                    if not product:
+                        return Response(
+                            {'error': "Cette case n'est pas liée à un produit stock. La quantité ne peut pas être modifiée."},
+                            status=status.HTTP_400_BAD_REQUEST,
+                        )
+                    trace = list(ligne.consommation_lots or [])
+                    if new_qty > old_qty:
+                        extra_trace, _montant = _consommer_fifo(product, new_qty - old_qty)
+                        trace = _fusionner_traces(trace, extra_trace)
+                    else:
+                        a_rendre = old_qty - new_qty
+                        if trace:
+                            new_trace, _montant, manque = _rendre_unites_trace(
+                                trace, a_rendre, product.id, remettre_en_stock=True,
+                            )
+                            if manque:
+                                raise _StockInsuffisantError([{
+                                    'produit': product.nom or f'Produit #{product.id}',
+                                    'requis': a_rendre,
+                                    'disponible': a_rendre - int(manque),
+                                }])
+                            trace = new_trace
+                        else:
+                            cout = ligne.cout_unitaire or Decimal('0')
+                            achat = StockPurchase.objects.create(
+                                lieu_achat=f"Correction mouvement distributeur #{session.id}",
+                                date_achat=timezone.now(),
+                            )
+                            item = StockPurchaseItem.objects.create(
+                                achat=achat,
+                                produit=product,
+                                nom_produit=product.nom or product.nom_produit or f'Produit #{product.id}',
+                                quantite=a_rendre,
+                                prix_unitaire=cout,
+                                montant_total=(Decimal(str(cout)) * a_rendre).quantize(Decimal('0.01')),
+                                unite='pièce',
+                            )
+                            StockLot.objects.create(
+                                produit=product,
+                                purchase_item=item,
+                                quantite_restante=a_rendre,
+                                prix_achat_unitaire=cout,
+                                date_achat=achat.date_achat,
+                            )
+                    cout_trace = _cout_pondere_trace(trace)
+                    serializer.validated_data['quantite'] = new_qty
+                    serializer.validated_data['consommation_lots'] = trace
+                    if cout_trace is not None:
+                        serializer.validated_data['cout_unitaire'] = cout_trace
+                    if not ligne.stock_product_id:
+                        serializer.validated_data['stock_product'] = product
+                    serializer.save()
+                    _sync_product_quantite(product.id)
+            except _StockInsuffisantError as exc:
+                info = (exc.insuffisant or [{}])[0]
+                return Response(
+                    {
+                        'error': (
+                            f"Stock insuffisant pour cette correction : "
+                            f"{info.get('disponible', 0)} disponible, {info.get('requis', new_qty)} demandé."
+                        ),
+                    },
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+        else:
+            serializer.save()
+
+        ligne.refresh_from_db()
+        return Response(self.get_serializer(ligne).data)
 
 class DistributeurFraisViewSet(viewsets.ModelViewSet):
     """Frais du distributeur : entretien, frais banque TPE, etc. CRUD complet."""
@@ -4294,6 +4592,13 @@ class StockProductViewSet(viewsets.ModelViewSet):
             is_perte = is_perte.strip().lower() in ('1', 'true', 'yes', 'oui')
         else:
             is_perte = bool(is_perte)
+        nature = str(request.data.get('nature') or '').strip().lower()
+        natures_connues = {choice[0] for choice in StockLoss.NATURE_CHOICES}
+        if not nature:
+            nature = 'perte' if is_perte else 'autre'
+        if nature not in natures_connues:
+            return Response({'error': 'Nature de sortie invalide'}, status=status.HTTP_400_BAD_REQUEST)
+        is_perte = nature == 'perte'
         commentaire = request.data.get('commentaire') or ''
 
         try:
@@ -4331,8 +4636,7 @@ class StockProductViewSet(viewsets.ModelViewSet):
                         prise = min(restant_a_retirer, int(lot.quantite_restante or 0))
                         if prise <= 0:
                             continue
-                        if is_perte:
-                            montant_perte += Decimal(str(lot.prix_achat_unitaire or 0)) * prise
+                        montant_perte += Decimal(str(lot.prix_achat_unitaire or 0)) * prise
                         lot.quantite_restante = int(lot.quantite_restante or 0) - prise
                         lot.save(update_fields=['quantite_restante'])
                         restant_a_retirer -= prise
@@ -4357,14 +4661,14 @@ class StockProductViewSet(viewsets.ModelViewSet):
                     product.quantite = int(product.quantite or 0) - quantite
                     product.save(update_fields=['quantite', 'updated_at'])
 
-                if is_perte:
-                    StockLoss.objects.create(
-                        produit=product,
-                        quantite=quantite,
-                        montant_total=montant_perte,
-                        date_perte=timezone.now(),
-                        commentaire=(commentaire or '').strip() or None,
-                    )
+                StockLoss.objects.create(
+                    produit=product,
+                    quantite=quantite,
+                    montant_total=montant_perte.quantize(Decimal('0.01')),
+                    nature=nature,
+                    date_perte=timezone.now(),
+                    commentaire=(commentaire or '').strip() or None,
+                )
         except _StockInsuffisantError as exc:
             info = (exc.insuffisant or [{}])[0]
             disponible = int(info.get('disponible') or 0)
@@ -4381,11 +4685,51 @@ class StockProductViewSet(viewsets.ModelViewSet):
             )
 
         return Response({
-            'message': 'Quantité retirée' + (' (perte enregistrée)' if is_perte else ''),
+            'message': 'Quantité retirée' + (' (perte au prix d\'achat)' if is_perte else ''),
             'quantite': product.quantite,
+            'nature': nature,
             'perte_enregistree': is_perte,
-            'montant_perte': str(montant_perte) if is_perte else None,
+            'montant_achat': str(montant_perte.quantize(Decimal('0.01'))),
+            'montant_perte': str(montant_perte.quantize(Decimal('0.01'))) if is_perte else None,
         }, status=status.HTTP_200_OK)
+
+    @action(detail=False, methods=['get'], url_path='pertes-mois')
+    def pertes_mois(self, request):
+        """Coût des pertes du mois, uniquement au prix d'achat. Les autres sorties sont exclues."""
+        now = timezone.localtime()
+        try:
+            year = int(request.query_params.get('year') or now.year)
+            month = int(request.query_params.get('month') or now.month)
+        except (TypeError, ValueError):
+            return Response({'error': 'Période invalide'}, status=status.HTTP_400_BAD_REQUEST)
+        if not 1 <= month <= 12:
+            return Response({'error': 'Mois invalide'}, status=status.HTTP_400_BAD_REQUEST)
+        start_date = date(year, month, 1)
+        _, last_day = calendar.monthrange(year, month)
+        end_date = date(year, month, last_day)
+        qs = StockLoss.objects.filter(
+            nature='perte',
+            date_perte__date__gte=start_date,
+            date_perte__date__lte=end_date,
+        ).select_related('produit').order_by('-date_perte')
+        totaux = qs.aggregate(montant=Sum('montant_total'), qte=Sum('quantite'))
+        lignes = []
+        for perte in qs[:80]:
+            lignes.append({
+                'id': perte.id,
+                'produit': (perte.produit.nom if perte.produit_id else '') or '',
+                'quantite': int(perte.quantite or 0),
+                'montant_achat': float(perte.montant_total or 0),
+                'date': perte.date_perte.isoformat() if perte.date_perte else None,
+                'commentaire': perte.commentaire or '',
+            })
+        return Response({
+            'year': year,
+            'month': month,
+            'total_montant': float(totaux.get('montant') or 0),
+            'total_quantite': int(totaux.get('qte') or 0),
+            'lignes': lignes,
+        })
 
 
 class StockPurchaseViewSet(viewsets.ModelViewSet):
@@ -18137,7 +18481,7 @@ def preview_distributeur_monthly_report(request, distributeur_id):
         statut='termine',
         date_fin__date__gte=start_date,
         date_fin__date__lte=end_date
-    ).prefetch_related('lignes', 'lignes__cell')
+    ).prefetch_related('lignes', 'lignes__cell', 'lignes__stock_product')
     
     # ========== 2. RÉCUPÉRER LES MOUVEMENTS DU MOIS ==========
     mouvements = DistributeurMouvement.objects.filter(
@@ -18158,6 +18502,7 @@ def preview_distributeur_monthly_report(request, distributeur_id):
     # Note: StockLoss n'est pas rattaché à un distributeur dans le modèle actuel.
     # On agrège donc les pertes du mois et on les rattache par nom de produit.
     pertes_qs = StockLoss.objects.filter(
+        nature='perte',
         date_perte__date__gte=start_date,
         date_perte__date__lte=end_date
     ).select_related('produit')
@@ -18184,7 +18529,12 @@ def preview_distributeur_monthly_report(request, distributeur_id):
     
     for session in sessions_reappro:
         for ligne in session.lignes.all():
-            cell_name = ligne.cell.nom_produit if ligne.cell else "Produit inconnu"
+            if ligne.stock_product_id and ligne.stock_product:
+                cell_name = ligne.stock_product.nom or "Produit inconnu"
+            elif ligne.cell:
+                cell_name = ligne.cell.nom_produit or "Produit inconnu"
+            else:
+                cell_name = "Produit inconnu"
             journal_entrees.append({
                 'date': session.date_fin.strftime('%d/%m/%Y') if session.date_fin else '',
                 'produit': cell_name,
@@ -18226,7 +18576,12 @@ def preview_distributeur_monthly_report(request, distributeur_id):
     
     for session in sessions_reappro:
         for ligne in session.lignes.all():
-            cell_name = ligne.cell.nom_produit if ligne.cell else "Produit inconnu"
+            if ligne.stock_product_id and ligne.stock_product:
+                cell_name = ligne.stock_product.nom or "Produit inconnu"
+            elif ligne.cell:
+                cell_name = ligne.cell.nom_produit or "Produit inconnu"
+            else:
+                cell_name = "Produit inconnu"
             ca_ligne = float(ligne.prix_vente or 0) * ligne.quantite
             benefice_ligne = float(ligne.benefice) if hasattr(ligne, 'benefice') else (
                 float(ligne.prix_vente or 0) - float(ligne.cout_unitaire or 0)
