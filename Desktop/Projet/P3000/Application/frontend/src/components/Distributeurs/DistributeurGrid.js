@@ -83,8 +83,10 @@ const DistributeurGrid = ({ distributeur, onUpdateGrid }) => {
     
     try {
       if (cellData === null) {
-        // Cellule supprimée, recharger
         await fetchCells();
+        if (options?.message) {
+          setSnackbar({ open: true, severity: "success", message: options.message });
+        }
         return;
       }
 

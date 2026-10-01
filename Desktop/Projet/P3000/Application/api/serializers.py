@@ -1061,17 +1061,22 @@ class DistributeurCellSerializer(serializers.ModelSerializer):
         return None
 
     def validate(self, data):
-        """Valide : soit stock_product, soit nom_produit ou image_url."""
-        stock_product = data.get('stock_product')
-        nom_produit = data.get('nom_produit')
-        image_url = data.get('image_url')
-        if stock_product:
+        """Une case neuve doit avoir un contenu. Une case déjà créée peut être vidée."""
+        if self.instance is not None and getattr(self, 'partial', False):
+            stock_product = data['stock_product'] if 'stock_product' in data else self.instance.stock_product_id
+            nom_produit = data['nom_produit'] if 'nom_produit' in data else self.instance.nom_produit
+            image_url = data['image_url'] if 'image_url' in data else self.instance.image_url
+        else:
+            stock_product = data.get('stock_product')
+            nom_produit = data.get('nom_produit')
+            image_url = data.get('image_url')
+        if stock_product or nom_produit or image_url:
             return data
-        if not nom_produit and not image_url:
-            raise serializers.ValidationError(
-                "Au moins un produit lié (stock), un nom de produit ou une URL d'image doit être fourni"
-            )
-        return data
+        if self.instance is not None:
+            return data
+        raise serializers.ValidationError(
+            "Au moins un produit lié (stock), un nom de produit ou une URL d'image doit être fourni"
+        )
 
     def get_image_display_url(self, obj):
         """Retourne l'URL d'affichage de l'image (S3 présignée ou URL directe)"""
