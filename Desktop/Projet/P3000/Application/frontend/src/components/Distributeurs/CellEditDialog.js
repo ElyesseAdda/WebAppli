@@ -35,6 +35,8 @@ const CellEditDialog = ({
   const [openChangeProductFlow, setOpenChangeProductFlow] = useState(false);
   const [oldRemainingQty, setOldRemainingQty] = useState("");
   const [remainingAction, setRemainingAction] = useState("restock");
+  const [previousLevel, setPreviousLevel] = useState(0);
+  const [niveauInfo, setNiveauInfo] = useState(null);
   const [feedbackModal, setFeedbackModal] = useState({ open: false, title: "", message: "" });
   const [openDeleteWarning, setOpenDeleteWarning] = useState(false);
 
@@ -60,7 +62,7 @@ const CellEditDialog = ({
     }
   }, [cell, open]);
 
-  const handleSave = () => {
+  const handleSave = async () => {
     if (!stockProductId) {
       setFeedbackModal({
         open: true,
@@ -100,10 +102,25 @@ const CellEditDialog = ({
       Number(cell.stock_product) !== Number(stockProductId);
 
     if (isRealProductChange) {
-      setOldRemainingQty("");
-      setRemainingAction("restock");
-      setOpenChangeProductFlow(true);
-      return;
+      try {
+        const res = await axios.get(`/api/distributeur-cells/${cell.id}/niveau/`);
+        const level = Number(res.data?.previous_level || 0);
+        setPreviousLevel(level);
+        setNiveauInfo(res.data || null);
+        if (level > 0) {
+          setOldRemainingQty("");
+          setRemainingAction("restock");
+          setOpenChangeProductFlow(true);
+          return;
+        }
+      } catch (error) {
+        setFeedbackModal({
+          open: true,
+          title: "Erreur",
+          message: "Impossible de lire le stock restant dans cette case.",
+        });
+        return;
+      }
     }
 
     onSave(cellData);
@@ -117,6 +134,14 @@ const CellEditDialog = ({
         open: true,
         title: "Valeur invalide",
         message: "Veuillez saisir une quantité restante valide (0 ou plus).",
+      });
+      return;
+    }
+    if (parsedRemaining > previousLevel) {
+      setFeedbackModal({
+        open: true,
+        title: "Valeur invalide",
+        message: `Le dernier chargement est de ${previousLevel}. Le reste ne peut pas le dépasser.`,
       });
       return;
     }
@@ -384,18 +409,26 @@ const CellEditDialog = ({
         Changement de produit
       </DialogTitle>
       <DialogContent>
+        <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+          Dernier chargement de {niveauInfo?.nom_produit || "cette case"} : {previousLevel} unité{previousLevel > 1 ? "s" : ""}.
+        </Typography>
         <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-          Combien d'unités de l'ancien produit restent dans le distributeur pour cette case ?
+          Prix de vente de la case : {Number(niveauInfo?.prix_vente || 0).toFixed(2)} €. Coût d'achat : {Number(niveauInfo?.cout_unitaire || 0).toFixed(2)} €. La marge vendue = prix de la case − coût d'achat.
         </Typography>
         <TextField
           fullWidth
           type="number"
-          label="Unités restantes ancien produit"
+          label="Unités encore dans la case (non vendues)"
           value={oldRemainingQty}
           onChange={(e) => setOldRemainingQty(e.target.value)}
-          inputProps={{ min: 0 }}
-          sx={{ mb: 2 }}
+          inputProps={{ min: 0, max: previousLevel }}
+          sx={{ mb: 1 }}
         />
+        <Typography variant="body2" sx={{ mb: 2, fontWeight: 700 }}>
+          {Number.isNaN(parseInt(oldRemainingQty, 10))
+            ? "Saisissez le reste pour voir le nombre vendu."
+            : `Vendu : ${Math.max(previousLevel - parseInt(oldRemainingQty, 10), 0)} · Non vendu : ${parseInt(oldRemainingQty, 10)}`}
+        </Typography>
         <FormControl fullWidth>
           <InputLabel>Traitement du reliquat</InputLabel>
           <Select
@@ -408,7 +441,9 @@ const CellEditDialog = ({
           </Select>
         </FormControl>
         <Typography variant="caption" sx={{ mt: 1.5, display: "block", color: "text.secondary" }}>
-          La différence (ancien niveau - restant) sera ajoutée automatiquement dans le prochain mouvement.
+          {remainingAction === "loss"
+            ? "Le non-vendu est une perte : seul le prix d'achat est compté, pas le prix de vente."
+            : "Le non-vendu revient en stock, au coût d'achat. Le vendu reste la marge de la case."}
         </Typography>
       </DialogContent>
       <DialogActions sx={{ px: 2, pb: 2 }}>
