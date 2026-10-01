@@ -4281,46 +4281,105 @@ class StockProductViewSet(viewsets.ModelViewSet):
 
     @action(detail=True, methods=['post'])
     def remove_quantity(self, request, pk=None):
-        """Retirer de la quantité. Si is_perte=True, consomme en FIFO et crée une StockLoss avec le coût calculé."""
-        product = self.get_object()
+        """Retire une quantité du stock.
+
+        Le stock affiché est recalculé depuis les lots (validation d'un mouvement,
+        modification d'un lot). Une sortie doit donc consommer les lots en FIFO,
+        sinon le compteur revient à l'ancienne quantité.
+        is_perte=True enregistre en plus une perte valorisée.
+        """
         quantite = request.data.get('quantite', 0)
         is_perte = request.data.get('is_perte', False)
+        if isinstance(is_perte, str):
+            is_perte = is_perte.strip().lower() in ('1', 'true', 'yes', 'oui')
+        else:
+            is_perte = bool(is_perte)
         commentaire = request.data.get('commentaire') or ''
 
         try:
             quantite = int(quantite)
         except (TypeError, ValueError):
             quantite = 0
-        if quantite <= 0 or product.quantite < quantite:
-            return Response({'error': 'Quantité insuffisante ou invalide'}, status=status.HTTP_400_BAD_REQUEST)
+        if quantite <= 0:
+            return Response({'error': 'Quantité invalide'}, status=status.HTTP_400_BAD_REQUEST)
 
         montant_perte = Decimal('0')
-        with transaction.atomic():
-            if is_perte:
+        try:
+            with transaction.atomic():
+                product = StockProduct.objects.select_for_update().filter(pk=pk).first()
+                if product is None:
+                    return Response({'error': 'Produit introuvable'}, status=status.HTTP_404_NOT_FOUND)
+
                 lots = list(
                     StockLot.objects.filter(produit=product, quantite_restante__gt=0)
                     .order_by('date_achat', 'created_at')
                     .select_for_update()
                 )
-                restant_a_retirer = quantite
-                for lot in lots:
-                    if restant_a_retirer <= 0:
-                        break
-                    prise = min(restant_a_retirer, lot.quantite_restante)
-                    montant_perte += Decimal(str(lot.prix_achat_unitaire)) * prise
-                    lot.quantite_restante -= prise
-                    lot.save(update_fields=['quantite_restante'])
-                    restant_a_retirer -= prise
-            StockProduct.objects.filter(pk=product.pk).update(quantite=F('quantite') - quantite)
-            if is_perte:
-                StockLoss.objects.create(
-                    produit=product,
-                    quantite=quantite,
-                    montant_total=montant_perte,
-                    date_perte=timezone.now(),
-                    commentaire=(commentaire or '').strip() or None,
-                )
-            product.refresh_from_db()
+                disponible_lots = sum(int(lot.quantite_restante or 0) for lot in lots)
+
+                if lots:
+                    if disponible_lots < quantite:
+                        raise _StockInsuffisantError([{
+                            'produit': product.nom or product.nom_produit or f'Produit #{product.pk}',
+                            'requis': quantite,
+                            'disponible': disponible_lots,
+                        }])
+                    restant_a_retirer = quantite
+                    for lot in lots:
+                        if restant_a_retirer <= 0:
+                            break
+                        prise = min(restant_a_retirer, int(lot.quantite_restante or 0))
+                        if prise <= 0:
+                            continue
+                        if is_perte:
+                            montant_perte += Decimal(str(lot.prix_achat_unitaire or 0)) * prise
+                        lot.quantite_restante = int(lot.quantite_restante or 0) - prise
+                        lot.save(update_fields=['quantite_restante'])
+                        restant_a_retirer -= prise
+                    if restant_a_retirer > 0:
+                        raise _StockInsuffisantError([{
+                            'produit': product.nom or product.nom_produit or f'Produit #{product.pk}',
+                            'requis': quantite,
+                            'disponible': disponible_lots,
+                        }])
+                    remaining = StockLot.objects.filter(produit=product).aggregate(
+                        total=Sum('quantite_restante')
+                    )['total'] or 0
+                    product.quantite = max(0, int(remaining))
+                    product.save(update_fields=['quantite', 'updated_at'])
+                else:
+                    # Ancien stock sans lot : seul le compteur existe.
+                    if int(product.quantite or 0) < quantite:
+                        return Response(
+                            {'error': 'Quantité insuffisante ou invalide'},
+                            status=status.HTTP_400_BAD_REQUEST,
+                        )
+                    product.quantite = int(product.quantite or 0) - quantite
+                    product.save(update_fields=['quantite', 'updated_at'])
+
+                if is_perte:
+                    StockLoss.objects.create(
+                        produit=product,
+                        quantite=quantite,
+                        montant_total=montant_perte,
+                        date_perte=timezone.now(),
+                        commentaire=(commentaire or '').strip() or None,
+                    )
+        except _StockInsuffisantError as exc:
+            info = (exc.insuffisant or [{}])[0]
+            disponible = int(info.get('disponible') or 0)
+            return Response(
+                {
+                    'error': (
+                        f'Stock insuffisant : {disponible} en stock, '
+                        f'{quantite} demandé. La sortie n\'a pas été enregistrée.'
+                    ),
+                    'disponible': disponible,
+                    'requis': quantite,
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
         return Response({
             'message': 'Quantité retirée' + (' (perte enregistrée)' if is_perte else ''),
             'quantite': product.quantite,

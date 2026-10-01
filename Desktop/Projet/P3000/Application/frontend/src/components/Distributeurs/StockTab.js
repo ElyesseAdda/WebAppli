@@ -339,11 +339,21 @@ const StockTab = ({ isDesktop: propIsDesktop }) => {
         if (isPerte && commentairePerte.trim()) payload.commentaire = commentairePerte.trim();
       }
 
-      await axios.post(endpoint, payload);
+      const response = await axios.post(endpoint, payload);
+      const nouvelleQuantite = response?.data?.quantite;
 
       handleCloseQuantityDialog();
-      fetchProducts();
-      fetchLots();
+      if (nouvelleQuantite != null) {
+        setProducts((prev) =>
+          prev.map((p) =>
+            p.id === selectedProduct.id
+              ? { ...p, quantite: parseInt(nouvelleQuantite, 10) || 0 }
+              : p
+          )
+        );
+      }
+      fetchProducts(true);
+      fetchLots(true);
     } catch (error) {
       console.error("Erreur modification stock:", error);
       alert(
