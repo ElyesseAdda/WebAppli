@@ -88,6 +88,50 @@ const getReapproSessionDisplayDate = (session) => {
   return Number.isNaN(d.getTime()) ? null : d;
 };
 
+const parseISODate = (value) => {
+  const [year, month, day] = String(value).slice(0, 10).split("-").map(Number);
+  if (!year || !month || !day) return null;
+  return new Date(year, month - 1, day);
+};
+
+const fraisOccurrences = (frais, start, end) => {
+  const debut = frais?.date_frais ? parseISODate(frais.date_frais) : null;
+  if (!debut || !end || debut > end) return 0;
+  const recurrence = frais.recurrence || "";
+  if (!recurrence) {
+    if (start && debut < start) return 0;
+    return 1;
+  }
+  const windowStart = start && start > debut ? start : debut;
+  if (recurrence === "mensuel") {
+    let count = 0;
+    let year = debut.getFullYear();
+    let month = debut.getMonth();
+    while (new Date(year, month, 1) <= end) {
+      const last = new Date(year, month + 1, 0).getDate();
+      const occurrence = new Date(year, month, Math.min(debut.getDate(), last));
+      if (occurrence >= windowStart && occurrence <= end) count += 1;
+      month += 1;
+      if (month > 11) {
+        month = 0;
+        year += 1;
+      }
+    }
+    return count;
+  }
+  if (recurrence === "hebdomadaire") {
+    let first = debut;
+    if (windowStart > debut) {
+      const delta = Math.round((windowStart - debut) / 86400000);
+      const reste = ((delta % 7) + 7) % 7;
+      first = reste === 0 ? windowStart : new Date(windowStart.getTime() + (7 - reste) * 86400000);
+    }
+    if (first > end) return 0;
+    return Math.floor((end - first) / 86400000 / 7) + 1;
+  }
+  return 0;
+};
+
 const getDefaultMouvementForm = () => ({
   mouvement_type: "entree",
   quantite: 1,
@@ -380,19 +424,30 @@ const DistributeursDashboard = ({ initialDistributeurId = null, onDistributeurId
     }
   };
 
-  // Frais filtrés par la période bénéfice courante (mois / annuel / global)
+  // Frais de la période. Un mensuel ou un hebdo compte à chaque échéance, pas seulement le mois de saisie.
   const fraisFilteredByPeriod = useMemo(() => {
     if (!fraisList.length) return [];
-    if (benefitViewMode === "global") return fraisList;
-    return fraisList.filter((f) => {
-      const d = f.date_frais ? new Date(f.date_frais) : null;
-      if (!d) return false;
-      if (benefitViewMode === "mois") {
-        return d.getFullYear() === benefitYear && d.getMonth() + 1 === benefitMonth;
-      }
-      if (benefitViewMode === "annuel") return d.getFullYear() === benefitYear;
-      return true;
-    });
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    let start = null;
+    let end = today;
+    if (benefitViewMode === "mois") {
+      start = new Date(benefitYear, benefitMonth - 1, 1);
+      end = new Date(benefitYear, benefitMonth, 0);
+    } else if (benefitViewMode === "annuel") {
+      start = new Date(benefitYear, 0, 1);
+      end = new Date(benefitYear, 11, 31);
+    }
+    return fraisList
+      .map((frais) => {
+        const occurrences = fraisOccurrences(frais, start, end);
+        return {
+          ...frais,
+          occurrences,
+          montant_periode: Number(frais.montant || 0) * occurrences,
+        };
+      })
+      .filter((frais) => frais.occurrences > 0);
   }, [fraisList, benefitViewMode, benefitYear, benefitMonth]);
 
   const fetchReapproSessions = async (distributeurId) => {
@@ -2523,6 +2578,9 @@ const DistributeursDashboard = ({ initialDistributeurId = null, onDistributeurId
                       <MenuItem value="hebdomadaire">Hebdomadaire</MenuItem>
                     </Select>
                   </FormControl>
+                  <Typography variant="caption" sx={{ display: "block", mt: 0.5, color: "text.secondary" }}>
+                    Mensuel ou hebdomadaire : déduit à chaque échéance à partir de cette date.
+                  </Typography>
                 </Grid>
               </Grid>
 
@@ -2570,7 +2628,7 @@ const DistributeursDashboard = ({ initialDistributeurId = null, onDistributeurId
               Historique période
             </Typography>
             <Typography variant="caption" sx={{ fontWeight: 800, color: "error.main", bgcolor: "error.50", px: 1.5, py: 0.5, borderRadius: "10px" }}>
-              Total : -{fraisFilteredByPeriod.reduce((acc, f) => acc + Number(f.montant), 0).toFixed(2)} €
+              Total : -{fraisFilteredByPeriod.reduce((acc, f) => acc + Number(f.montant_periode ?? f.montant), 0).toFixed(2)} €
             </Typography>
           </Box>
 
@@ -2624,13 +2682,14 @@ const DistributeursDashboard = ({ initialDistributeurId = null, onDistributeurId
                         )}
                         <Typography variant="caption" sx={{ color: "primary.main", fontWeight: 700 }}>
                           {f.recurrence === "mensuel" ? "Mensuel" : f.recurrence === "hebdomadaire" ? "Hebdo" : ""}
+                          {Number(f.occurrences) > 1 ? ` × ${f.occurrences}` : ""}
                         </Typography>
                       </Box>
                     </Box>
 
                     <Box sx={{ textAlign: "right", mr: 1 }}>
                       <Typography variant="subtitle1" sx={{ fontWeight: 900, color: "error.main" }}>
-                        -{Number(f.montant).toFixed(2)} €
+                        -{Number(f.montant_periode ?? f.montant).toFixed(2)} €
                       </Typography>
                     </Box>
 

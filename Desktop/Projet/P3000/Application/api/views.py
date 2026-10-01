@@ -3157,6 +3157,61 @@ class StockMovementViewSet(viewsets.ModelViewSet):
     serializer_class = StockMovementSerializer
 
 
+def _occurrences_frais(frais, start_date, end_date):
+    """Nombre de fois où un frais tombe dans [start_date, end_date].
+
+    Ponctuel : une seule fois, à sa date.
+    Mensuel : le jour anniversaire de chaque mois, à partir de la date de départ.
+    Hebdomadaire : tous les 7 jours à partir de la date de départ.
+    """
+    debut = frais.date_frais
+    if debut is None or end_date is None or debut > end_date:
+        return 0
+    recurrence = (frais.recurrence or '').strip()
+    if not recurrence:
+        if start_date and debut < start_date:
+            return 0
+        return 1
+    window_start = debut if start_date is None or start_date < debut else start_date
+    if recurrence == 'mensuel':
+        count = 0
+        year, month = debut.year, debut.month
+        while True:
+            last_day = calendar.monthrange(year, month)[1]
+            occurrence = date(year, month, min(debut.day, last_day))
+            if occurrence > end_date:
+                break
+            if occurrence >= window_start:
+                count += 1
+            if month == 12:
+                year, month = year + 1, 1
+            else:
+                month += 1
+        return count
+    if recurrence == 'hebdomadaire':
+        if window_start <= debut:
+            first = debut
+        else:
+            delta = (window_start - debut).days
+            reste = delta % 7
+            first = window_start if reste == 0 else window_start + timedelta(days=7 - reste)
+        if first > end_date:
+            return 0
+        return ((end_date - first).days // 7) + 1
+    return 0
+
+
+def _frais_montant_periode(distributeur, start_date, end_date):
+    """Total des frais d'une machine sur la période. Sans fin, l'horizon est aujourd'hui."""
+    horizon = end_date or timezone.localdate()
+    total = Decimal('0')
+    for frais in DistributeurFrais.objects.filter(distributeur=distributeur):
+        fois = _occurrences_frais(frais, start_date, horizon)
+        if fois:
+            total += Decimal(str(frais.montant or 0)) * fois
+    return total
+
+
 class DistributeurViewSet(viewsets.ModelViewSet):
     queryset = Distributeur.objects.all().order_by('nom')
     serializer_class = DistributeurSerializer
@@ -3229,14 +3284,8 @@ class DistributeurViewSet(viewsets.ModelViewSet):
             for l in s.lignes.all()
         )
 
-        # Frais (entretien, TPE, etc.) dans la période
-        frais_qs = DistributeurFrais.objects.filter(distributeur=distributeur)
-        if start_date:
-            frais_qs = frais_qs.filter(date_frais__gte=start_date)
-        if end_date:
-            frais_qs = frais_qs.filter(date_frais__lte=end_date)
-        total_frais = frais_qs.aggregate(total=Sum('montant'))['total'] or 0
-        total_frais = float(total_frais)
+        # Frais : un mensuel ou un hebdomadaire se rejoue à partir de sa date.
+        total_frais = float(_frais_montant_periode(distributeur, start_date, end_date))
 
         benefice_total = float(benefice) + benefice_reappro - total_frais
 
@@ -3288,6 +3337,13 @@ class DistributeurViewSet(viewsets.ModelViewSet):
                     by_month[key] += montant
                 else:
                     by_month[key] -= montant
+        for key in list(by_month.keys()):
+            year, month = key
+            debut_mois = date(year, month, 1)
+            _, dernier = calendar.monthrange(year, month)
+            by_month[key] -= float(
+                _frais_montant_periode(distributeur, debut_mois, date(year, month, dernier))
+            )
         if not by_month:
             return Response({'year': None, 'month': None, 'benefice': None})
         best_key = max(by_month.keys(), key=lambda k: by_month[k])
@@ -3473,12 +3529,7 @@ class DistributeurViewSet(viewsets.ModelViewSet):
                     float(l.benefice) for s in sessions_reappro for l in s.lignes.all()
                 )
 
-                frais_qs = DistributeurFrais.objects.filter(
-                    distributeur=distributeur,
-                    date_frais__gte=start_date,
-                    date_frais__lte=end_date,
-                )
-                total_frais = float(frais_qs.aggregate(t=Sum('montant'))['t'] or 0)
+                total_frais = float(_frais_montant_periode(distributeur, start_date, end_date))
 
                 total_benefice += benefice_mvt + benefice_reappro - total_frais
 
@@ -3751,7 +3802,7 @@ def _reappro_product_label(product=None, cell=None, product_id=None):
 
 
 def _resolve_cell_stock_product(cell):
-    """Produit stock lié à la case, sinon correspondance par nom (comme add_ligne)."""
+    """Produit stock lié à la case, sinon nom identique (casse ignorée)."""
     product = getattr(cell, 'stock_product', None)
     if product is not None:
         return product
@@ -3761,11 +3812,7 @@ def _resolve_cell_stock_product(cell):
     product = StockProduct.objects.filter(
         Q(nom__iexact=nom_cell) | Q(nom_produit__iexact=nom_cell)
     ).first()
-    if product:
-        return product
-    return StockProduct.objects.filter(
-        Q(nom__icontains=nom_cell) | Q(nom_produit__icontains=nom_cell)
-    ).first()
+    return product
 
 
 def _stock_disponible(product):
@@ -3923,6 +3970,20 @@ class DistributeurReapproSessionViewSet(viewsets.ModelViewSet):
             queryset = queryset.filter(statut=statut)
         return queryset
 
+    def destroy(self, request, *args, **kwargs):
+        session = self.get_object()
+        if session.statut == 'termine':
+            return Response(
+                {
+                    'error': (
+                        "Un mouvement terminé ne peut pas être supprimé : le stock est déjà sorti. "
+                        "Annulez le mouvement pour rendre les unités."
+                    )
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        return super().destroy(request, *args, **kwargs)
+
     @action(detail=True, methods=['post'], url_path='add-ligne')
     def add_ligne(self, request, pk=None):
         """Ajoute ou met à jour une ligne (case + quantite) pour cette session. prix_vente = cell.prix_vente."""
@@ -3985,19 +4046,10 @@ class DistributeurReapproSessionViewSet(viewsets.ModelViewSet):
                         produit_stock.id, produit_stock.nom, produit_stock.nom_produit,
                     )
                 else:
-                    produit_stock = StockProduct.objects.filter(
-                        Q(nom__icontains=nom_cell) | Q(nom_produit__icontains=nom_cell)
-                    ).first()
-                    if produit_stock:
-                        logger.info(
-                            "[add_ligne] Produit trouvé (icontains): id=%s, nom=%r, nom_produit=%r",
-                            produit_stock.id, produit_stock.nom, produit_stock.nom_produit,
-                        )
-                    else:
-                        logger.warning(
-                            "[add_ligne] Aucun StockProduct trouvé pour nom_cell=%r -> cout_unitaire=0",
-                            nom_cell,
-                        )
+                    logger.warning(
+                        "[add_ligne] Aucun StockProduct trouvé pour nom_cell=%r -> cout_unitaire=0",
+                        nom_cell,
+                    )
         if produit_stock:
                 lots_avec_stock = StockLot.objects.filter(
                     produit=produit_stock, quantite_restante__gt=0
@@ -4270,11 +4322,43 @@ class DistributeurReapproSessionViewSet(viewsets.ModelViewSet):
 
                 if session.statut == 'termine':
                     for lig in lignes:
+                        consommation_lots = lig.consommation_lots or []
+                        if consommation_lots:
+                            # La case a pu changer de produit : on rend chaque lot à son
+                            # produit d'origine, pas au produit affiché maintenant.
+                            produits_touches = set()
+                            for item in consommation_lots:
+                                lot_id = item.get('lot_id')
+                                try:
+                                    quantite = int(item.get('quantite') or 0)
+                                except (TypeError, ValueError):
+                                    quantite = 0
+                                if not lot_id or quantite <= 0:
+                                    continue
+                                lot = StockLot.objects.select_for_update().filter(pk=lot_id).first()
+                                if not lot or (
+                                    lig.stock_product_id and lot.produit_id != lig.stock_product_id
+                                ):
+                                    raise _StockInsuffisantError([{
+                                        'produit': (
+                                            lig.stock_product.nom if lig.stock_product_id else f'Lot {lot_id}'
+                                        ),
+                                        'requis': quantite,
+                                        'disponible': 0,
+                                        'lot_id': lot_id,
+                                        'ligne_id': lig.id,
+                                    }])
+                                lot.quantite_restante = (lot.quantite_restante or 0) + quantite
+                                lot.save(update_fields=['quantite_restante'])
+                                produits_touches.add(lot.produit_id)
+                            for produit_id in produits_touches:
+                                _sync_product_quantite(produit_id)
+                            continue
+
                         product = _ligne_stock_product(lig)
                         if not product:
                             continue
 
-                        consommation_lots = lig.consommation_lots or []
                         if not consommation_lots:
                             # Compatibilité legacy (anciennes sessions sans trace des lots):
                             # on recrée un lot d'ajustement pour remettre les unités dans le FIFO.
@@ -4307,36 +4391,6 @@ class DistributeurReapproSessionViewSet(viewsets.ModelViewSet):
                                 quantite=F('quantite') + quantite_legacy
                             )
                             continue
-
-                        quantite_restauree = 0
-                        for item in consommation_lots:
-                            lot_id = item.get('lot_id')
-                            try:
-                                quantite = int(item.get('quantite') or 0)
-                            except (TypeError, ValueError):
-                                quantite = 0
-                            if not lot_id or quantite <= 0:
-                                continue
-
-                            lot = StockLot.objects.select_for_update().filter(
-                                pk=lot_id,
-                                produit_id=product.id,
-                            ).first()
-                            if not lot:
-                                raise _StockInsuffisantError([{
-                                    'produit': product.nom or f'Produit #{product.id}',
-                                    'requis': quantite,
-                                    'disponible': 0,
-                                    'lot_id': lot_id,
-                                    'ligne_id': lig.id,
-                                }])
-
-                            lot.quantite_restante = (lot.quantite_restante or 0) + quantite
-                            lot.save(update_fields=['quantite_restante'])
-                            quantite_restauree += quantite
-
-                        if quantite_restauree > 0:
-                            _sync_product_quantite(product.pk)
 
                 session.statut = 'annule'
                 session.date_fin = timezone.now()
@@ -4394,7 +4448,7 @@ class DistributeurReapproLigneViewSet(viewsets.ModelViewSet):
             try:
                 with transaction.atomic():
                     ligne = (
-                        DistributeurReapproLigne.objects.select_for_update()
+                        DistributeurReapproLigne.objects.select_for_update(of=('self',))
                         .select_related('cell', 'cell__stock_product', 'stock_product', 'session')
                         .get(pk=ligne.pk)
                     )
@@ -18438,6 +18492,35 @@ def get_chantiers_drive_paths(request):
 
 # ==================== DISTRIBUTEUR MONTHLY REPORT ====================
 
+def _niveaux_machine_distributeur(distributeur, cutoff, inclusive):
+    """Dernière quantité terminée par produit, avant ou jusqu'à une date."""
+    from collections import defaultdict
+    qs = DistributeurReapproLigne.objects.filter(
+        session__distributeur=distributeur,
+        session__statut='termine',
+        session__date_fin__isnull=False,
+    ).select_related('cell', 'stock_product', 'session')
+    if inclusive:
+        qs = qs.filter(session__date_fin__date__lte=cutoff)
+    else:
+        qs = qs.filter(session__date_fin__date__lt=cutoff)
+    qs = qs.order_by('cell_id', '-session__date_fin', '-id')
+    deja_vu = set()
+    totaux = defaultdict(int)
+    for lig in qs:
+        if lig.cell_id in deja_vu:
+            continue
+        deja_vu.add(lig.cell_id)
+        if lig.stock_product_id and (getattr(lig.stock_product, 'nom', None) or '').strip():
+            nom = lig.stock_product.nom.strip()
+        elif lig.cell and (lig.cell.nom_produit or '').strip():
+            nom = lig.cell.nom_produit.strip()
+        else:
+            continue
+        totaux[nom] += int(lig.quantite or 0)
+    return totaux
+
+
 def preview_distributeur_monthly_report(request, distributeur_id):
     """
     Vue pour prévisualiser le rapport mensuel d'un distributeur
@@ -18490,35 +18573,23 @@ def preview_distributeur_monthly_report(request, distributeur_id):
         date_mouvement__date__lte=end_date
     ).order_by('date_mouvement')
     
-    # ========== 3. RÉCUPÉRER LES FRAIS DU MOIS ==========
-    frais = DistributeurFrais.objects.filter(
-        distributeur=distributeur,
-        date_frais__gte=start_date,
-        date_frais__lte=end_date
-    )
-    total_frais = sum(float(f.montant or 0) for f in frais)
+    # Un frais mensuel ou hebdomadaire commencé avant ce mois compte encore.
+    total_frais = float(_frais_montant_periode(distributeur, start_date, end_date))
 
-    # ========== 3.bis RÉCUPÉRER LES PERTES STOCK DU MOIS ==========
-    # Note: StockLoss n'est pas rattaché à un distributeur dans le modèle actuel.
-    # On agrège donc les pertes du mois et on les rattache par nom de produit.
+    # Pertes du stock central, au prix d'achat. Elles ne sont rattachées à ce
+    # distributeur que si le produit est dans une de ses cases.
     pertes_qs = StockLoss.objects.filter(
         nature='perte',
         date_perte__date__gte=start_date,
         date_perte__date__lte=end_date
     ).select_related('produit')
     pertes_by_product = defaultdict(lambda: {'quantite': 0, 'montant': 0.0})
-    total_pertes_unites = 0
-    total_pertes_montant = 0.0
     for perte in pertes_qs:
         produit_nom = (perte.produit.nom or '').strip() if perte.produit else ''
         if not produit_nom:
             continue
-        qte = int(perte.quantite or 0)
-        montant = float(perte.montant_total or 0)
-        pertes_by_product[produit_nom]['quantite'] += qte
-        pertes_by_product[produit_nom]['montant'] += montant
-        total_pertes_unites += qte
-        total_pertes_montant += montant
+        pertes_by_product[produit_nom]['quantite'] += int(perte.quantite or 0)
+        pertes_by_product[produit_nom]['montant'] += float(perte.montant_total or 0)
     
     # ========== 4. CALCULER LES DONNÉES AGRÉGÉES ==========
     
@@ -18596,9 +18667,26 @@ def preview_distributeur_monthly_report(request, distributeur_id):
             produits_detail[cell_name]['ca'] += ca_ligne
             produits_detail[cell_name]['prix_vente'] = float(ligne.prix_vente or 0)
 
-    # Injecter les pertes (par nom produit) dans le détail
+    noms_machine = set(produits_detail.keys())
+    for cell in distributeur.cells.select_related('stock_product'):
+        if cell.stock_product_id and (cell.stock_product.nom or '').strip():
+            noms_machine.add(cell.stock_product.nom.strip())
+        elif (cell.nom_produit or '').strip():
+            noms_machine.add(cell.nom_produit.strip())
+
+    total_pertes_unites = 0
+    total_pertes_montant = 0.0
     for produit_nom, perte_data in pertes_by_product.items():
+        if produit_nom not in noms_machine:
+            continue
         produits_detail[produit_nom]['pertes'] += int(perte_data['quantite'] or 0)
+        total_pertes_unites += int(perte_data['quantite'] or 0)
+        total_pertes_montant += float(perte_data['montant'] or 0)
+
+    for nom, qte in _niveaux_machine_distributeur(distributeur, start_date, inclusive=False).items():
+        produits_detail[nom]['stock_debut'] = qte
+    for nom, qte in _niveaux_machine_distributeur(distributeur, end_date, inclusive=True).items():
+        produits_detail[nom]['stock_fin'] = qte
     
     # Calculer bénéfice mouvements
     benefice_mouvements = 0
@@ -18781,12 +18869,24 @@ def distributeur_available_months(request, distributeur_id):
             key = (mouvement.date_mouvement.year, mouvement.date_mouvement.month)
             months_data[key]['has_data'] = True
     
-    # Frais
-    frais = DistributeurFrais.objects.filter(distributeur=distributeur)
-    for f in frais:
-        if f.date_frais:
-            key = (f.date_frais.year, f.date_frais.month)
-            months_data[key]['has_data'] = True
+    # Frais : un récurrent marque chaque mois jusqu'à aujourd'hui
+    aujourd_hui = timezone.localdate()
+    for f in DistributeurFrais.objects.filter(distributeur=distributeur):
+        if not f.date_frais:
+            continue
+        if (f.recurrence or '').strip() in ('mensuel', 'hebdomadaire'):
+            curseur = date(f.date_frais.year, f.date_frais.month, 1)
+            fin_mois = date(aujourd_hui.year, aujourd_hui.month, 1)
+            while curseur <= fin_mois:
+                _, dernier = calendar.monthrange(curseur.year, curseur.month)
+                if _occurrences_frais(f, curseur, date(curseur.year, curseur.month, dernier)):
+                    months_data[(curseur.year, curseur.month)]['has_data'] = True
+                if curseur.month == 12:
+                    curseur = date(curseur.year + 1, 1, 1)
+                else:
+                    curseur = date(curseur.year, curseur.month + 1, 1)
+        else:
+            months_data[(f.date_frais.year, f.date_frais.month)]['has_data'] = True
     
     # Convertir en liste triée (du plus récent au plus ancien)
     month_names = ['Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin', 
