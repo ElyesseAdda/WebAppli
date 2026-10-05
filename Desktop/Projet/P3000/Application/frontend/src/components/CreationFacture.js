@@ -160,14 +160,20 @@ const CreationFacture = ({ devis, onClose, onSubmit }) => {
       }
 
       // Calculer la date d'échéance basée sur la date d'envoi et le délai
-      const dateEcheanceFormatted = dateEcheanceCalculee
-        ? dateEcheanceCalculee.toISOString().split("T")[0]
-        : null;
-      const dateEnvoiFormatted = formData.date_envoi
-        ? formData.date_envoi instanceof Date
-          ? formData.date_envoi.toISOString().split("T")[0]
-          : formData.date_envoi
-        : null;
+      const formatLocalDate = (value) => {
+        if (!value) return null;
+        if (typeof value === "string" && /^\d{4}-\d{2}-\d{2}/.test(value)) {
+          return value.slice(0, 10);
+        }
+        const date = value instanceof Date ? value : new Date(value);
+        if (Number.isNaN(date.getTime())) return null;
+        const year = date.getFullYear();
+        const month = String(date.getMonth() + 1).padStart(2, "0");
+        const day = String(date.getDate()).padStart(2, "0");
+        return `${year}-${month}-${day}`;
+      };
+      const dateEcheanceFormatted = formatLocalDate(dateEcheanceCalculee);
+      const dateEnvoiFormatted = formatLocalDate(formData.date_envoi);
 
       const factureData = {
         numero: formData.numero_facture,
