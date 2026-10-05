@@ -237,7 +237,10 @@ def generate_devis_travaux_pdf_drive(request):
             }, status=404)
         
         # URL de prévisualisation pour les devis de travaux
-        preview_url = request.build_absolute_uri(f"/api/preview-saved-devis/{devis_id}/")
+        from datetime import datetime
+        preview_url = request.build_absolute_uri(
+            f"/api/preview-saved-devis/{devis_id}/?v={datetime.now().strftime('%Y%m%d%H%M%S%f')}"
+        )
         
         # Préparer les paramètres pour la génération du PDF
         pdf_kwargs = {
@@ -356,7 +359,10 @@ def generate_devis_marche_pdf_drive(request):
         print(f"🔍 DEBUG pdf_views - devis_name final: '{devis_name}'")
         
         # URL de prévisualisation - utiliser l'ID du devis
-        preview_url = request.build_absolute_uri(f"/api/preview-saved-devis/{devis_id}/")
+        from datetime import datetime
+        preview_url = request.build_absolute_uri(
+            f"/api/preview-saved-devis/{devis_id}/?v={datetime.now().strftime('%Y%m%d%H%M%S%f')}"
+        )
         
         # Préparer les paramètres pour la génération du PDF
         pdf_kwargs = {

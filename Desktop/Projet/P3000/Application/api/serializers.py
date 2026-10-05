@@ -15,6 +15,55 @@ from .models import (
     Agence, UserNotification
 )
 from decimal import Decimal, ROUND_HALF_UP
+from datetime import datetime, time, timezone as datetime_timezone
+from zoneinfo import ZoneInfo
+
+
+def parse_devis_date_creation(value):
+    """
+    Retient le jour calendaire choisi et le stocke à 12:00 UTC.
+    Minuit ou midi UTC correspondent au jour saisi dans le formulaire.
+    Une heure réelle est lue en heure de Paris, comme dans la liste des devis.
+    """
+    from django.utils import timezone
+    from django.utils.dateparse import parse_date, parse_datetime
+
+    if value is None or value == '':
+        return None
+
+    paris = ZoneInfo('Europe/Paris')
+    calendar_day = None
+
+    if isinstance(value, datetime):
+        moment = value
+    elif isinstance(value, str):
+        text = value.strip()
+        moment = parse_datetime(text)
+        if moment is None:
+            calendar_day = parse_date(text[:10] if len(text) >= 10 else text)
+    else:
+        moment = None
+        if hasattr(value, 'year') and hasattr(value, 'month') and hasattr(value, 'day') and not hasattr(value, 'hour'):
+            calendar_day = value
+
+    if calendar_day is None and moment is not None:
+        if timezone.is_naive(moment):
+            moment = timezone.make_aware(moment, datetime_timezone.utc)
+        utc_moment = moment.astimezone(datetime_timezone.utc)
+        if (
+            utc_moment.hour in (0, 12)
+            and utc_moment.minute == 0
+            and utc_moment.second == 0
+            and utc_moment.microsecond == 0
+        ):
+            calendar_day = utc_moment.date()
+        else:
+            calendar_day = utc_moment.astimezone(paris).date()
+
+    if calendar_day is None:
+        return None
+
+    return datetime.combine(calendar_day, time(12, 0), tzinfo=datetime_timezone.utc)
 
 class DevisLigneSerializer(serializers.ModelSerializer):
     ligne_detail = serializers.PrimaryKeyRelatedField(queryset=LigneDetail.objects.all())
@@ -214,7 +263,10 @@ class DevisSerializer(serializers.ModelSerializer):
             'contact_societe', 'societe_devis',
             'status_updated_at', 'status_updated_by_name', 'tags',
         ]
-        read_only_fields = ['client']  # ✅ Retirer date_creation pour permettre sa modification
+        read_only_fields = ['client']
+        extra_kwargs = {
+            'date_creation': {'required': False, 'read_only': False},
+        }
 
     # Ancienne méthode commentée (lignes_speciales est maintenant un JSONField, pas une relation)
     # def get_lignes_speciales(self, obj):
@@ -461,6 +513,12 @@ class DevisSerializer(serializers.ModelSerializer):
         return devis
     
     def update(self, instance, validated_data):
+        from django.db import transaction
+
+        with transaction.atomic():
+            return self._update_devis(instance, validated_data)
+
+    def _update_devis(self, instance, validated_data):
         if 'lignes' in validated_data:
             DevisLigne.objects.filter(devis=instance).delete()
             
@@ -495,40 +553,26 @@ class DevisSerializer(serializers.ModelSerializer):
         if 'parties_metadata' in validated_data:
             instance.parties_metadata = validated_data.pop('parties_metadata')
 
-        # ✅ Gérer explicitement date_creation si fournie (parser si string)
-        if 'date_creation' in validated_data:
-            from django.utils.dateparse import parse_datetime, parse_date
-            from django.utils import timezone
-            from datetime import datetime
-            date_creation = validated_data.pop('date_creation')
-            if date_creation:
-                try:
-                    # Si c'est une string, la parser
-                    if isinstance(date_creation, str):
-                        # Essayer de parser comme datetime ISO complet d'abord
-                        parsed_date = parse_datetime(date_creation)
-                        if parsed_date:
-                            instance.date_creation = parsed_date
-                        else:
-                            # Si échec, essayer comme date simple "YYYY-MM-DD"
-                            parsed_date_simple = parse_date(date_creation)
-                            if parsed_date_simple:
-                                # Convertir la date en datetime à minuit (timezone-aware)
-                                instance.date_creation = timezone.make_aware(
-                                    datetime.combine(parsed_date_simple, datetime.min.time())
-                                )
-                    # Si c'est déjà un datetime, l'utiliser directement
-                    elif hasattr(date_creation, 'isoformat'):
-                        instance.date_creation = date_creation
-                except (ValueError, TypeError) as e:
-                    # En cas d'erreur, garder la date existante
-                    pass
+        # La date du formulaire doit être réécrite même si le champ a été ignoré
+        # par la validation (lecture seule, format, etc.).
+        raw_date = validated_data.pop('date_creation', None)
+        if raw_date is None:
+            initial = getattr(self, 'initial_data', None)
+            if isinstance(initial, dict) and initial.get('date_creation'):
+                raw_date = initial.get('date_creation')
+
+        parsed_date = parse_devis_date_creation(raw_date) if raw_date else None
+        if parsed_date is not None:
+            instance.date_creation = parsed_date
 
         # Mettre à jour les autres champs
         for attr, value in validated_data.items():
             setattr(instance, attr, value)
         
         instance.save()
+        if parsed_date is not None:
+            Devis.objects.filter(pk=instance.pk).update(date_creation=parsed_date)
+            instance.date_creation = parsed_date
         return instance
 
 class ContactSocieteSerializer(serializers.ModelSerializer):
@@ -1061,17 +1105,22 @@ class DistributeurCellSerializer(serializers.ModelSerializer):
         return None
 
     def validate(self, data):
-        """Valide : soit stock_product, soit nom_produit ou image_url."""
-        stock_product = data.get('stock_product')
-        nom_produit = data.get('nom_produit')
-        image_url = data.get('image_url')
-        if stock_product:
+        """Une case neuve doit avoir un contenu. Une case déjà créée peut être vidée."""
+        if self.instance is not None and getattr(self, 'partial', False):
+            stock_product = data['stock_product'] if 'stock_product' in data else self.instance.stock_product_id
+            nom_produit = data['nom_produit'] if 'nom_produit' in data else self.instance.nom_produit
+            image_url = data['image_url'] if 'image_url' in data else self.instance.image_url
+        else:
+            stock_product = data.get('stock_product')
+            nom_produit = data.get('nom_produit')
+            image_url = data.get('image_url')
+        if stock_product or nom_produit or image_url:
             return data
-        if not nom_produit and not image_url:
-            raise serializers.ValidationError(
-                "Au moins un produit lié (stock), un nom de produit ou une URL d'image doit être fourni"
-            )
-        return data
+        if self.instance is not None:
+            return data
+        raise serializers.ValidationError(
+            "Au moins un produit lié (stock), un nom de produit ou une URL d'image doit être fourni"
+        )
 
     def get_image_display_url(self, obj):
         """Retourne l'URL d'affichage de l'image (S3 présignée ou URL directe)"""

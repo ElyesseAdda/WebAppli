@@ -122,7 +122,10 @@ def regenerate_devis_pdf(request, devis_id):
                     logger.info(f"ℹ️ Ancien PDF non trouvé à {old_s3_file_path}, peut-être déjà déplacé ou inexistant")
             
             # URL de prévisualisation
-            preview_url = request.build_absolute_uri(f"/api/preview-saved-devis/{devis.id}/")
+            from datetime import datetime
+            preview_url = request.build_absolute_uri(
+                f"/api/preview-saved-devis/{devis.id}/?v={datetime.now().strftime('%Y%m%d%H%M%S')}"
+            )
             logger.info(f"🔗 URL de prévisualisation: {preview_url}")
             
             # Générer le PDF avec le PDF Manager
@@ -217,7 +220,10 @@ def regenerate_devis_pdf(request, devis_id):
                     logger.info(f"ℹ️ Ancien PDF non trouvé à {old_s3_file_path}, peut-être déjà déplacé ou inexistant")
             
             # URL de prévisualisation
-            preview_url = request.build_absolute_uri(f"/api/preview-saved-devis/{devis.id}/")
+            from datetime import datetime
+            preview_url = request.build_absolute_uri(
+                f"/api/preview-saved-devis/{devis.id}/?v={datetime.now().strftime('%Y%m%d%H%M%S')}"
+            )
             logger.info(f"🔗 URL de prévisualisation: {preview_url}")
             
             # Générer le PDF avec le PDF Manager

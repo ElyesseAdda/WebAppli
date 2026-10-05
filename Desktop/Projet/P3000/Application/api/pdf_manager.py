@@ -524,9 +524,10 @@ class PDFManager:
                 script_name = 'generate_gantt_pdf.js'
                 output_filename = 'gantt_temp.pdf'
             else:
-                # Utiliser le script par défaut
+                # Fichier temporaire unique : un nom fixe réutilisait le PDF du devis précédent
                 script_name = 'generate_pdf.js'
-                output_filename = f"{document_type}_temp.pdf"
+                stamp = datetime.now().strftime('%Y%m%d%H%M%S%f')
+                output_filename = f"{document_type}_{stamp}.pdf"
             
             script_path = os.path.join(self.node_scripts_dir, script_name)
             temp_pdf_path = os.path.join(self.temp_dir, output_filename)
@@ -824,9 +825,10 @@ class PDFManager:
                 script_name = 'generate_gantt_pdf.js'
                 output_filename = 'gantt_temp.pdf'
             else:
-                # Utiliser le script par défaut
+                # Fichier temporaire unique : un nom fixe réutilisait le PDF du devis précédent
                 script_name = 'generate_pdf.js'
-                output_filename = f"{document_type}_temp.pdf"
+                stamp = datetime.now().strftime('%Y%m%d%H%M%S%f')
+                output_filename = f"{document_type}_{stamp}.pdf"
             
             script_path = os.path.join(self.node_scripts_dir, script_name)
             temp_pdf_path = os.path.join(self.temp_dir, output_filename)

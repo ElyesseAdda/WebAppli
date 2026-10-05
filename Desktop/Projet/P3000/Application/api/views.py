@@ -22,6 +22,16 @@ from .serializers import (
     FolderItemSerializer
 )
 from .utils import build_document_key, generate_presigned_url, generate_presigned_post, custom_slugify, clean_drive_path, format_avenant_numero, get_next_chantier_avenant_numero
+from .numero_documents import (
+    NumeroDejaUtilise,
+    claim_devis_numero,
+    claim_facture_numero,
+    claim_situation_numero,
+    is_numero_devis_officiel,
+    peek_devis_numero,
+    peek_facture_numero,
+    peek_situation_numero,
+)
 from rest_framework.pagination import PageNumberPagination
 from rest_framework.decorators import action, api_view, permission_classes
 from django.http import JsonResponse, HttpResponse
@@ -3147,6 +3157,61 @@ class StockMovementViewSet(viewsets.ModelViewSet):
     serializer_class = StockMovementSerializer
 
 
+def _occurrences_frais(frais, start_date, end_date):
+    """Nombre de fois où un frais tombe dans [start_date, end_date].
+
+    Ponctuel : une seule fois, à sa date.
+    Mensuel : le jour anniversaire de chaque mois, à partir de la date de départ.
+    Hebdomadaire : tous les 7 jours à partir de la date de départ.
+    """
+    debut = frais.date_frais
+    if debut is None or end_date is None or debut > end_date:
+        return 0
+    recurrence = (frais.recurrence or '').strip()
+    if not recurrence:
+        if start_date and debut < start_date:
+            return 0
+        return 1
+    window_start = debut if start_date is None or start_date < debut else start_date
+    if recurrence == 'mensuel':
+        count = 0
+        year, month = debut.year, debut.month
+        while True:
+            last_day = calendar.monthrange(year, month)[1]
+            occurrence = date(year, month, min(debut.day, last_day))
+            if occurrence > end_date:
+                break
+            if occurrence >= window_start:
+                count += 1
+            if month == 12:
+                year, month = year + 1, 1
+            else:
+                month += 1
+        return count
+    if recurrence == 'hebdomadaire':
+        if window_start <= debut:
+            first = debut
+        else:
+            delta = (window_start - debut).days
+            reste = delta % 7
+            first = window_start if reste == 0 else window_start + timedelta(days=7 - reste)
+        if first > end_date:
+            return 0
+        return ((end_date - first).days // 7) + 1
+    return 0
+
+
+def _frais_montant_periode(distributeur, start_date, end_date):
+    """Total des frais d'une machine sur la période. Sans fin, l'horizon est aujourd'hui."""
+    horizon = end_date or timezone.localdate()
+    total = Decimal('0')
+    for frais in DistributeurFrais.objects.filter(distributeur=distributeur):
+        fois = _occurrences_frais(frais, start_date, horizon)
+        if fois:
+            total += Decimal(str(frais.montant or 0)) * fois
+    return total
+
+
 class DistributeurViewSet(viewsets.ModelViewSet):
     queryset = Distributeur.objects.all().order_by('nom')
     serializer_class = DistributeurSerializer
@@ -3219,16 +3284,19 @@ class DistributeurViewSet(viewsets.ModelViewSet):
             for l in s.lignes.all()
         )
 
-        # Frais (entretien, TPE, etc.) dans la période
-        frais_qs = DistributeurFrais.objects.filter(distributeur=distributeur)
-        if start_date:
-            frais_qs = frais_qs.filter(date_frais__gte=start_date)
-        if end_date:
-            frais_qs = frais_qs.filter(date_frais__lte=end_date)
-        total_frais = frais_qs.aggregate(total=Sum('montant'))['total'] or 0
-        total_frais = float(total_frais)
+        # Frais : un mensuel ou un hebdomadaire se rejoue à partir de sa date.
+        total_frais = float(_frais_montant_periode(distributeur, start_date, end_date))
 
         benefice_total = float(benefice) + benefice_reappro - total_frais
+
+        # Pertes du stock central sur la période, au prix d'achat seulement.
+        # Elles ne sont pas soustraites du bénéfice de chaque machine : le stock est commun.
+        pertes_qs = StockLoss.objects.filter(nature='perte')
+        if start_date:
+            pertes_qs = pertes_qs.filter(date_perte__date__gte=start_date)
+        if end_date:
+            pertes_qs = pertes_qs.filter(date_perte__date__lte=end_date)
+        total_pertes_achat = float(pertes_qs.aggregate(total=Sum('montant_total'))['total'] or 0)
 
         return Response({
             'distributeur_id': distributeur.id,
@@ -3237,6 +3305,7 @@ class DistributeurViewSet(viewsets.ModelViewSet):
             'benefice': float(benefice),
             'benefice_reappro': round(benefice_reappro, 2),
             'total_frais': round(total_frais, 2),
+            'total_pertes_achat': round(total_pertes_achat, 2),
             'benefice_total': round(benefice_total, 2),
             'total_ca': round(total_ca, 2),
         })
@@ -3268,6 +3337,13 @@ class DistributeurViewSet(viewsets.ModelViewSet):
                     by_month[key] += montant
                 else:
                     by_month[key] -= montant
+        for key in list(by_month.keys()):
+            year, month = key
+            debut_mois = date(year, month, 1)
+            _, dernier = calendar.monthrange(year, month)
+            by_month[key] -= float(
+                _frais_montant_periode(distributeur, debut_mois, date(year, month, dernier))
+            )
         if not by_month:
             return Response({'year': None, 'month': None, 'benefice': None})
         best_key = max(by_month.keys(), key=lambda k: by_month[k])
@@ -3315,46 +3391,33 @@ class DistributeurViewSet(viewsets.ModelViewSet):
             sessions_reappro = sessions_reappro.filter(date_fin__date__lte=end_date)
         sessions_ids = list(sessions_reappro.values_list('id', flat=True))
 
-        # Bénéfice, quantité vendue et CA par cellule — uniquement depuis les réappro
-        # Pas de table "ventes" : recharger 5 Coca = 5 Coca vendus
-        lignes_agg = DistributeurReapproLigne.objects.filter(
+        # Marge = prix de la case - coût d'achat figé sur la ligne.
+        # Le produit est celui du mouvement, pas le produit actuel de la case.
+        lignes = DistributeurReapproLigne.objects.filter(
             session_id__in=sessions_ids
-        ).values('cell_id').annotate(
-            benefice=Sum(
-                F('quantite') * (F('prix_vente') - Coalesce(F('cout_unitaire'), 0)),
-                output_field=models.DecimalField(max_digits=12, decimal_places=2),
-            ),
-            quantite_vendue=Sum('quantite'),
-            ca_ventes=Sum(
-                F('quantite') * F('prix_vente'),
-                output_field=models.DecimalField(max_digits=12, decimal_places=2),
-            ),
-        )
-        benefice_by_cell = {r['cell_id']: float(r['benefice'] or 0) for r in lignes_agg}
-        qte_by_cell = {r['cell_id']: int(r['quantite_vendue'] or 0) for r in lignes_agg}
-        ca_by_cell = {r['cell_id']: float(r['ca_ventes'] or 0) for r in lignes_agg}
-
-        # Agrégation : par stock_product_id si lié (nom = StockProduct.nom), sinon par nom libre
-        cells = distributeur.cells.select_related('stock_product').order_by(
-            'row_index', 'col_index'
-        )
+        ).select_related('cell', 'cell__stock_product', 'stock_product')
         by_key = {}
-        for cell in cells:
-            benefice = benefice_by_cell.get(cell.id, 0)
-            quantite_vendue = qte_by_cell.get(cell.id, 0)
-            ca_ventes = ca_by_cell.get(cell.id, 0)
+        for lig in lignes:
+            cell = lig.cell
+            product = lig.stock_product or (
+                cell.stock_product if cell is not None and cell.stock_product_id else None
+            )
+            quantite_vendue = int(lig.quantite or 0)
+            prix = float(lig.prix_vente or 0)
+            cout = float(lig.cout_unitaire or 0)
+            benefice = quantite_vendue * (prix - cout)
+            ca_ventes = quantite_vendue * prix
 
-            if cell.stock_product_id:
-                cle = f"stock:{cell.stock_product_id}"
-                sp = cell.stock_product
+            if product is not None:
+                cle = f"stock:{product.id}"
                 nom = (
-                    (sp.nom or sp.nom_produit or "").strip()
-                    or f"Produit #{cell.stock_product_id}"
+                    (product.nom or product.nom_produit or "").strip()
+                    or f"Produit #{product.id}"
                 )
-                stock_product_id = cell.stock_product_id
+                stock_product_id = product.id
             else:
-                nom = (cell.nom_produit or "").strip() or (
-                    f"L{cell.row_index + 1}C{cell.col_index + 1}"
+                nom = ((cell.nom_produit if cell else "") or "").strip() or (
+                    f"L{(cell.row_index if cell else 0) + 1}C{(cell.col_index if cell else 0) + 1}"
                 )
                 cle = f"free:{nom.lower()}"
                 stock_product_id = None
@@ -3466,12 +3529,7 @@ class DistributeurViewSet(viewsets.ModelViewSet):
                     float(l.benefice) for s in sessions_reappro for l in s.lignes.all()
                 )
 
-                frais_qs = DistributeurFrais.objects.filter(
-                    distributeur=distributeur,
-                    date_frais__gte=start_date,
-                    date_frais__lte=end_date,
-                )
-                total_frais = float(frais_qs.aggregate(t=Sum('montant'))['t'] or 0)
+                total_frais = float(_frais_montant_periode(distributeur, start_date, end_date))
 
                 total_benefice += benefice_mvt + benefice_reappro - total_frais
 
@@ -3519,6 +3577,34 @@ class DistributeurCellViewSet(viewsets.ModelViewSet):
             status=status.HTTP_405_METHOD_NOT_ALLOWED
         )
 
+    @action(detail=True, methods=['get'], url_path='niveau')
+    def niveau(self, request, pk=None):
+        """Dernier chargement de la case : quantité, prix de vente et coût d'achat."""
+        cell = self.get_object()
+        last_line = (
+            DistributeurReapproLigne.objects.filter(cell=cell, session__statut='termine')
+            .select_related('session', 'stock_product')
+            .order_by('-session__date_fin', '-id')
+            .first()
+        )
+        previous_level = int(last_line.quantite) if last_line else 0
+        produit_ligne = last_line.stock_product if last_line and last_line.stock_product_id else None
+        return Response({
+            'previous_level': previous_level,
+            'prix_vente': str(
+                cell.prix_vente
+                if cell.prix_vente is not None
+                else (last_line.prix_vente if last_line else 0)
+            ),
+            'cout_unitaire': str(last_line.cout_unitaire or 0) if last_line else '0',
+            'nom_produit': (
+                (cell.stock_product.nom if cell.stock_product_id else None)
+                or cell.nom_produit
+                or (produit_ligne.nom if produit_ligne else '')
+                or ''
+            ),
+        })
+
     @action(detail=True, methods=['post'], url_path='change-product')
     def change_product(self, request, pk=None):
         """
@@ -3555,111 +3641,103 @@ class DistributeurCellViewSet(viewsets.ModelViewSet):
         if remaining_action not in ['restock', 'loss']:
             return Response({'error': "remaining_action doit être 'restock' ou 'loss'"}, status=status.HTTP_400_BAD_REQUEST)
 
-        last_line = DistributeurReapproLigne.objects.filter(
-            cell=cell,
-            session__statut='termine'
-        ).select_related('session').order_by('-session__date_fin', '-id').first()
-        previous_level = int(last_line.quantite) if last_line else 0
-        if old_remaining_qty > previous_level:
-            return Response(
-                {
-                    'error': 'La quantité restante dépasse le dernier niveau connu pour cette case',
-                    'previous_level': previous_level,
-                },
-                status=status.HTTP_400_BAD_REQUEST
-            )
-
-        sold_qty = max(previous_level - old_remaining_qty, 0)
-
-        # Nettoyer la payload pour la mise à jour de la case (sans les champs métier du workflow)
         cell_payload = dict(request.data)
         cell_payload.pop('old_remaining_qty', None)
         cell_payload.pop('remaining_action', None)
 
-        with transaction.atomic():
-            # Coût unitaire moyen pour l'ancien produit (lots disponibles puis fallback tous lots)
-            cout_unitaire = Decimal('0')
-            lots_avec_stock = StockLot.objects.filter(produit=old_product, quantite_restante__gt=0)
-            agg = lots_avec_stock.aggregate(
-                total_val=Sum(F('prix_achat_unitaire') * F('quantite_restante')),
-                total_qty=Sum('quantite_restante'),
+        prix_vente_case = cell.prix_vente or Decimal('0')
+        try:
+            with transaction.atomic():
+                previous_level, sold_qty, montant_reliquat = _regler_reliquat_case(
+                    cell, old_remaining_qty, remaining_action
+                )
+                serializer = self.get_serializer(cell, data=cell_payload, partial=True)
+                serializer.is_valid(raise_exception=True)
+                self.perform_update(serializer)
+        except _ReliquatInvalide as exc:
+            return Response(
+                {'error': exc.message, 'previous_level': exc.previous_level},
+                status=status.HTTP_400_BAD_REQUEST,
             )
-            total_val = agg.get('total_val')
-            total_qty = agg.get('total_qty')
-            if total_qty and total_qty > 0 and total_val is not None:
-                cout_unitaire = total_val / total_qty
-            else:
-                cout_moyen = StockLot.objects.filter(produit=old_product).aggregate(avg=Avg('prix_achat_unitaire'))['avg']
-                if cout_moyen is not None:
-                    cout_unitaire = cout_moyen
-
-            # 1) Ventes validées dans la prochaine session de mouvement
-            if sold_qty > 0:
-                session = DistributeurReapproSession.objects.filter(
-                    distributeur_id=cell.distributeur_id,
-                    statut='en_cours'
-                ).order_by('-date_debut').first()
-                if not session:
-                    session = DistributeurReapproSession.objects.create(
-                        distributeur_id=cell.distributeur_id,
-                        statut='en_cours',
-                        date_debut=timezone.now(),
-                    )
-                ligne = DistributeurReapproLigne.objects.filter(session=session, cell=cell).first()
-                old_prix_vente = cell.prix_vente or 0
-                if ligne:
-                    ligne.quantite = int(ligne.quantite) + sold_qty
-                    ligne.prix_vente = old_prix_vente
-                    ligne.cout_unitaire = cout_unitaire
-                    ligne.save(update_fields=['quantite', 'prix_vente', 'cout_unitaire'])
-                else:
-                    DistributeurReapproLigne.objects.create(
-                        session=session,
-                        cell=cell,
-                        quantite=sold_qty,
-                        prix_vente=old_prix_vente,
-                        cout_unitaire=cout_unitaire,
-                    )
-
-            # 2) Reliquat ancien produit -> retour stock + lot ajustement, ou perte
-            if old_remaining_qty > 0 and remaining_action == 'restock':
-                nom_produit = (old_product.nom or old_product.nom_produit or '').strip() or f'Produit #{old_product.pk}'
-                achat = StockPurchase.objects.create(
-                    lieu_achat='Retour distributeur',
-                    date_achat=timezone.now(),
-                )
-                item = StockPurchaseItem.objects.create(
-                    achat=achat,
-                    produit=old_product,
-                    nom_produit=nom_produit,
-                    quantite=old_remaining_qty,
-                    prix_unitaire=cout_unitaire,
-                    montant_total=Decimal(old_remaining_qty) * cout_unitaire,
-                    unite='pièce',
-                )
-                StockProduct.objects.filter(pk=old_product.pk).update(quantite=F('quantite') + old_remaining_qty)
-                StockLot.objects.create(
-                    produit=old_product,
-                    purchase_item=item,
-                    quantite_restante=old_remaining_qty,
-                    prix_achat_unitaire=cout_unitaire,
-                    date_achat=achat.date_achat,
-                )
-
-            # 3) Mise à jour de la case vers le nouveau produit
-            serializer = self.get_serializer(cell, data=cell_payload, partial=True)
-            serializer.is_valid(raise_exception=True)
-            self.perform_update(serializer)
+        except _StockInsuffisantError as exc:
+            info = (exc.insuffisant or [{}])[0]
+            return Response(
+                {
+                    'error': (
+                        "Impossible d'ajuster le reliquat : la trace des lots d'origine est incomplète."
+                    ),
+                    'disponible': info.get('disponible'),
+                    'requis': info.get('requis'),
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
 
         return Response(
             {
-                'message': 'Produit de case changé avec prise en compte des ventes/reliquats',
+                'message': 'Produit de case changé. Le non-vendu est traité à part, la marge reste au prix de la case moins le coût d\'achat.',
                 'previous_level': previous_level,
                 'sold_qty': sold_qty,
                 'remaining_qty': old_remaining_qty,
                 'remaining_action': remaining_action,
+                'montant_achat_reliquat': str(montant_reliquat),
+                'prix_vente': str(prix_vente_case),
             },
             status=status.HTTP_200_OK
+        )
+
+    @action(detail=True, methods=['post'], url_path='vider')
+    def vider(self, request, pk=None):
+        """Vide la case. Le dernier chargement demande combien il reste encore dedans."""
+        cell = self.get_object()
+        try:
+            old_remaining_qty = int(request.data.get('old_remaining_qty', 0))
+        except (TypeError, ValueError):
+            return Response({'error': 'Quantité restante invalide'}, status=status.HTTP_400_BAD_REQUEST)
+        if old_remaining_qty < 0:
+            return Response({'error': 'La quantité restante ne peut pas être négative'}, status=status.HTTP_400_BAD_REQUEST)
+        remaining_action = (request.data.get('remaining_action') or 'restock').strip().lower()
+        if remaining_action not in ['restock', 'loss']:
+            return Response({'error': "remaining_action doit être 'restock' ou 'loss'"}, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            with transaction.atomic():
+                previous_level, sold_qty, montant_reliquat = _regler_reliquat_case(
+                    cell, old_remaining_qty, remaining_action
+                )
+                cell.stock_product = None
+                cell.nom_produit = None
+                cell.image_url = None
+                cell.image_s3_key = None
+                cell.prix_vente = None
+                cell.save(update_fields=[
+                    'stock_product', 'nom_produit', 'image_url', 'image_s3_key', 'prix_vente', 'updated_at',
+                ])
+        except _ReliquatInvalide as exc:
+            return Response(
+                {'error': exc.message, 'previous_level': exc.previous_level},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        except _StockInsuffisantError as exc:
+            info = (exc.insuffisant or [{}])[0]
+            return Response(
+                {
+                    'error': "Impossible d'ajuster le reliquat : la trace des lots d'origine est incomplète.",
+                    'disponible': info.get('disponible'),
+                    'requis': info.get('requis'),
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        return Response(
+            {
+                'message': 'Case vidée. Le non-vendu est remis en stock ou compté en perte au prix d\'achat.',
+                'previous_level': previous_level,
+                'sold_qty': sold_qty,
+                'remaining_qty': old_remaining_qty,
+                'remaining_action': remaining_action,
+                'montant_achat_reliquat': str(montant_reliquat),
+            },
+            status=status.HTTP_200_OK,
         )
 
 
@@ -3700,7 +3778,7 @@ def _reappro_product_label(product=None, cell=None, product_id=None):
 
 
 def _resolve_cell_stock_product(cell):
-    """Produit stock lié à la case, sinon correspondance par nom (comme add_ligne)."""
+    """Produit stock lié à la case, sinon nom identique (casse ignorée)."""
     product = getattr(cell, 'stock_product', None)
     if product is not None:
         return product
@@ -3710,11 +3788,7 @@ def _resolve_cell_stock_product(cell):
     product = StockProduct.objects.filter(
         Q(nom__iexact=nom_cell) | Q(nom_produit__iexact=nom_cell)
     ).first()
-    if product:
-        return product
-    return StockProduct.objects.filter(
-        Q(nom__icontains=nom_cell) | Q(nom_produit__icontains=nom_cell)
-    ).first()
+    return product
 
 
 def _stock_disponible(product):
@@ -3725,6 +3799,247 @@ def _stock_disponible(product):
         return int(total)
     except (TypeError, ValueError):
         return 0
+
+
+def _sync_product_quantite(product_id):
+    remaining = StockLot.objects.filter(produit_id=product_id).aggregate(
+        total=Sum('quantite_restante')
+    )['total'] or 0
+    StockProduct.objects.filter(pk=product_id).update(quantite=max(0, int(remaining)))
+
+
+def _ligne_stock_product(lig):
+    """Produit figé sur la ligne, sinon celui de la case."""
+    if getattr(lig, 'stock_product_id', None):
+        return lig.stock_product
+    cell = getattr(lig, 'cell', None)
+    if cell is None:
+        return None
+    return _resolve_cell_stock_product(cell)
+
+
+def _cout_pondere_trace(trace):
+    total_q = 0
+    total_v = Decimal('0')
+    for item in trace or []:
+        try:
+            qte = int(item.get('quantite') or 0)
+            lot_id = item.get('lot_id')
+        except (TypeError, ValueError, AttributeError):
+            continue
+        if qte <= 0 or not lot_id:
+            continue
+        lot = StockLot.objects.filter(pk=lot_id).first()
+        if not lot:
+            continue
+        total_q += qte
+        total_v += Decimal(str(lot.prix_achat_unitaire or 0)) * qte
+    if total_q <= 0:
+        return None
+    return (total_v / Decimal(total_q)).quantize(Decimal('0.01'))
+
+
+def _fusionner_traces(base, extra):
+    merged = []
+    index = {}
+    for item in list(base or []) + list(extra or []):
+        try:
+            lot_id = item.get('lot_id')
+            qte = int(item.get('quantite') or 0)
+        except (TypeError, ValueError, AttributeError):
+            continue
+        if not lot_id or qte <= 0:
+            continue
+        if lot_id in index:
+            index[lot_id]['quantite'] = int(index[lot_id]['quantite']) + qte
+        else:
+            row = {'lot_id': lot_id, 'quantite': qte}
+            merged.append(row)
+            index[lot_id] = row
+    return merged
+
+
+def _consommer_fifo(product, quantite):
+    """Consomme des lots du plus ancien au plus récent. À appeler dans une transaction."""
+    lots = list(
+        StockLot.objects.filter(produit=product, quantite_restante__gt=0)
+        .order_by('date_achat', 'created_at')
+        .select_for_update()
+    )
+    restant = int(quantite)
+    trace = []
+    montant = Decimal('0')
+    for lot in lots:
+        if restant <= 0:
+            break
+        prise = min(restant, int(lot.quantite_restante or 0))
+        if prise <= 0:
+            continue
+        montant += Decimal(str(lot.prix_achat_unitaire or 0)) * prise
+        lot.quantite_restante = int(lot.quantite_restante or 0) - prise
+        lot.save(update_fields=['quantite_restante'])
+        trace.append({'lot_id': lot.id, 'quantite': int(prise)})
+        restant -= prise
+    if restant > 0:
+        raise _StockInsuffisantError([{
+            'produit': product.nom or product.nom_produit or f'Produit #{product.pk}',
+            'requis': int(quantite),
+            'disponible': int(quantite) - restant,
+        }])
+    return trace, montant.quantize(Decimal('0.01'))
+
+
+def _rendre_unites_trace(trace, quantite, produit_id, remettre_en_stock):
+    """Retire des unités en partant de la fin de la trace. À appeler dans une transaction.
+
+    Retourne (nouvelle_trace, montant_achat, quantite_non_couverte).
+    """
+    a_rendre = int(quantite)
+    montant = Decimal('0')
+    conserves = []
+    for item in reversed(list(trace or [])):
+        try:
+            qte = int(item.get('quantite') or 0)
+            lot_id = item.get('lot_id')
+        except (TypeError, ValueError, AttributeError):
+            conserves.append(item)
+            continue
+        if a_rendre <= 0 or qte <= 0 or not lot_id:
+            conserves.append(item)
+            continue
+        lot = StockLot.objects.select_for_update().filter(pk=lot_id, produit_id=produit_id).first()
+        if lot is None:
+            return None, montant, a_rendre
+        prix = Decimal(str(lot.prix_achat_unitaire or 0))
+        rendu = min(qte, a_rendre)
+        montant += prix * rendu
+        if remettre_en_stock:
+            lot.quantite_restante = int(lot.quantite_restante or 0) + rendu
+            lot.save(update_fields=['quantite_restante'])
+        left = qte - rendu
+        if left > 0:
+            conserves.append({'lot_id': lot_id, 'quantite': left})
+        a_rendre -= rendu
+    if a_rendre > 0:
+        return None, montant, a_rendre
+    conserves.reverse()
+    return conserves, montant.quantize(Decimal('0.01')), 0
+
+
+class _ReliquatInvalide(Exception):
+    def __init__(self, message, previous_level=None):
+        self.message = message
+        self.previous_level = previous_level
+
+
+def _regler_reliquat_case(cell, old_remaining_qty, remaining_action):
+    """Ramène la dernière vente au nombre réellement parti.
+
+    Le reliquat revient dans ses lots, ou devient une perte au prix d'achat.
+    À appeler dans une transaction. Le produit est celui de la ligne, même si
+    la case a déjà été vidée.
+    """
+    last_line = (
+        DistributeurReapproLigne.objects.filter(cell=cell, session__statut='termine')
+        .order_by('-session__date_fin', '-id')
+        .first()
+    )
+    previous_level = int(last_line.quantite) if last_line else 0
+    if old_remaining_qty > previous_level:
+        raise _ReliquatInvalide(
+            'La quantité restante dépasse le dernier niveau connu pour cette case',
+            previous_level,
+        )
+    sold_qty = max(previous_level - old_remaining_qty, 0)
+    montant_reliquat = Decimal('0')
+    if not last_line:
+        return previous_level, sold_qty, montant_reliquat
+
+    last_locked = (
+        DistributeurReapproLigne.objects.select_for_update(of=('self',))
+        .filter(pk=last_line.pk)
+        .first()
+    )
+    if not last_locked:
+        return previous_level, sold_qty, montant_reliquat
+
+    product = None
+    if last_locked.stock_product_id:
+        product = StockProduct.objects.filter(pk=last_locked.stock_product_id).first()
+    elif cell.stock_product_id:
+        product = cell.stock_product
+    if old_remaining_qty > 0 and product is None:
+        raise _StockInsuffisantError([{
+            'produit': cell.nom_produit or f'Case L{cell.row_index + 1}C{cell.col_index + 1}',
+            'requis': old_remaining_qty,
+            'disponible': 0,
+        }])
+
+    if old_remaining_qty > 0 and product is not None:
+        trace = list(last_locked.consommation_lots or [])
+        if trace:
+            new_trace, montant_reliquat, manque = _rendre_unites_trace(
+                trace,
+                old_remaining_qty,
+                product.id,
+                remettre_en_stock=(remaining_action == 'restock'),
+            )
+            if manque:
+                raise _StockInsuffisantError([{
+                    'produit': product.nom or f'Produit #{product.pk}',
+                    'requis': old_remaining_qty,
+                    'disponible': old_remaining_qty - int(manque),
+                }])
+            last_locked.consommation_lots = new_trace
+            cout_trace = _cout_pondere_trace(new_trace)
+            if cout_trace is not None:
+                last_locked.cout_unitaire = cout_trace
+        else:
+            cout = last_locked.cout_unitaire or Decimal('0')
+            montant_reliquat = (Decimal(str(cout)) * old_remaining_qty).quantize(Decimal('0.01'))
+            if remaining_action == 'restock':
+                nom_produit = (product.nom or product.nom_produit or '').strip() or f'Produit #{product.pk}'
+                achat = StockPurchase.objects.create(
+                    lieu_achat='Retour distributeur',
+                    date_achat=timezone.now(),
+                )
+                item = StockPurchaseItem.objects.create(
+                    achat=achat,
+                    produit=product,
+                    nom_produit=nom_produit,
+                    quantite=old_remaining_qty,
+                    prix_unitaire=cout,
+                    montant_total=montant_reliquat,
+                    unite='pièce',
+                )
+                StockLot.objects.create(
+                    produit=product,
+                    purchase_item=item,
+                    quantite_restante=old_remaining_qty,
+                    prix_achat_unitaire=cout,
+                    date_achat=achat.date_achat,
+                )
+        if not last_locked.stock_product_id:
+            last_locked.stock_product = product
+        last_locked.quantite = sold_qty
+        last_locked.save()
+        if remaining_action == 'loss':
+            StockLoss.objects.create(
+                produit=product,
+                quantite=old_remaining_qty,
+                montant_total=montant_reliquat,
+                nature='perte',
+                date_perte=timezone.now(),
+                commentaire=(
+                    f"Reliquat non vendu — case L{cell.row_index + 1}C{cell.col_index + 1}"
+                ),
+            )
+        _sync_product_quantite(product.id)
+    elif not last_locked.stock_product_id and product is not None:
+        last_locked.stock_product = product
+        last_locked.save(update_fields=['stock_product'])
+
+    return previous_level, sold_qty, montant_reliquat
 
 
 class _StockInsuffisantError(Exception):
@@ -3746,6 +4061,20 @@ class DistributeurReapproSessionViewSet(viewsets.ModelViewSet):
         if statut:
             queryset = queryset.filter(statut=statut)
         return queryset
+
+    def destroy(self, request, *args, **kwargs):
+        session = self.get_object()
+        if session.statut == 'termine':
+            return Response(
+                {
+                    'error': (
+                        "Un mouvement terminé ne peut pas être supprimé : le stock est déjà sorti. "
+                        "Annulez le mouvement pour rendre les unités."
+                    )
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        return super().destroy(request, *args, **kwargs)
 
     @action(detail=True, methods=['post'], url_path='add-ligne')
     def add_ligne(self, request, pk=None):
@@ -3809,19 +4138,10 @@ class DistributeurReapproSessionViewSet(viewsets.ModelViewSet):
                         produit_stock.id, produit_stock.nom, produit_stock.nom_produit,
                     )
                 else:
-                    produit_stock = StockProduct.objects.filter(
-                        Q(nom__icontains=nom_cell) | Q(nom_produit__icontains=nom_cell)
-                    ).first()
-                    if produit_stock:
-                        logger.info(
-                            "[add_ligne] Produit trouvé (icontains): id=%s, nom=%r, nom_produit=%r",
-                            produit_stock.id, produit_stock.nom, produit_stock.nom_produit,
-                        )
-                    else:
-                        logger.warning(
-                            "[add_ligne] Aucun StockProduct trouvé pour nom_cell=%r -> cout_unitaire=0",
-                            nom_cell,
-                        )
+                    logger.warning(
+                        "[add_ligne] Aucun StockProduct trouvé pour nom_cell=%r -> cout_unitaire=0",
+                        nom_cell,
+                    )
         if produit_stock:
                 lots_avec_stock = StockLot.objects.filter(
                     produit=produit_stock, quantite_restante__gt=0
@@ -3876,6 +4196,7 @@ class DistributeurReapproSessionViewSet(viewsets.ModelViewSet):
                 'quantite': quantite,
                 'prix_vente': prix_vente,
                 'cout_unitaire': cout_unitaire,
+                'stock_product': produit_stock,
                 # La consommation effective des lots n'existe qu'après validation (terminer)
                 'consommation_lots': [],
             },
@@ -3914,9 +4235,9 @@ class DistributeurReapproSessionViewSet(viewsets.ModelViewSet):
         def collect_by_product(lignes_qs):
             grouped = defaultdict(lambda: {'quantite': 0, 'product': None, 'cells': []})
             for lig in lignes_qs:
-                if not lig.cell:
+                if not lig.cell and not getattr(lig, 'stock_product_id', None):
                     continue
-                product = _resolve_cell_stock_product(lig.cell)
+                product = _ligne_stock_product(lig)
                 if not product:
                     continue
                 entry = grouped[product.id]
@@ -3959,10 +4280,33 @@ class DistributeurReapproSessionViewSet(viewsets.ModelViewSet):
                 # of=('self',) : PostgreSQL refuse FOR UPDATE sur le côté nullable
                 # d'un OUTER JOIN (cell.stock_product est null=True).
                 lignes_locked = list(
-                    session.lignes.select_related('cell', 'cell__stock_product')
+                    session.lignes.select_related('cell', 'cell__stock_product', 'stock_product')
                     .select_for_update(of=('self',))
                     .all()
                 )
+                orphelines = []
+                for lig in lignes_locked:
+                    if int(lig.quantite or 0) <= 0 or _ligne_stock_product(lig):
+                        continue
+                    cell = lig.cell
+                    if cell is not None:
+                        orphelines.append(
+                            (cell.nom_produit or '').strip()
+                            or f"L{cell.row_index + 1}C{cell.col_index + 1}"
+                        )
+                    else:
+                        orphelines.append(f"Ligne {lig.id}")
+                if orphelines:
+                    return Response(
+                        {
+                            'error': (
+                                "Chaque case doit être liée à un produit du stock "
+                                "pour sortir les unités au coût d'achat."
+                            ),
+                            'cases': orphelines,
+                        },
+                        status=status.HTTP_400_BAD_REQUEST,
+                    )
                 by_product = collect_by_product(lignes_locked)
                 insuffisant = insuffisant_from_grouped(by_product)
                 if insuffisant:
@@ -3970,7 +4314,7 @@ class DistributeurReapproSessionViewSet(viewsets.ModelViewSet):
 
                 touched_product_ids = set()
                 for lig in lignes_locked:
-                    product = _resolve_cell_stock_product(lig.cell) if lig.cell else None
+                    product = _ligne_stock_product(lig)
                     if not product:
                         continue
                     quantite = int(lig.quantite or 0)
@@ -3999,7 +4343,12 @@ class DistributeurReapproSessionViewSet(viewsets.ModelViewSet):
                             'cellules': [_reappro_product_label(product, lig.cell, product.id)],
                         }])
                     lig.consommation_lots = consommation_lots
-                    lig.save(update_fields=['consommation_lots'])
+                    if not lig.stock_product_id:
+                        lig.stock_product = product
+                    cout_reel = _cout_pondere_trace(consommation_lots)
+                    if cout_reel is not None:
+                        lig.cout_unitaire = cout_reel
+                    lig.save(update_fields=['consommation_lots', 'stock_product', 'cout_unitaire'])
                     touched_product_ids.add(product.id)
 
                 for product_id in touched_product_ids:
@@ -4055,93 +4404,103 @@ class DistributeurReapproSessionViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_400_BAD_REQUEST
             )
 
-        with transaction.atomic():
-            session = DistributeurReapproSession.objects.select_for_update().get(pk=session.pk)
-            lignes = list(
-                session.lignes.select_related('cell', 'cell__stock_product')
-                .all()
-            )
+        try:
+            with transaction.atomic():
+                session = DistributeurReapproSession.objects.select_for_update().get(pk=session.pk)
+                lignes = list(
+                    session.lignes.select_related('cell', 'cell__stock_product', 'stock_product')
+                    .all()
+                )
 
-            if session.statut == 'termine':
-                for lig in lignes:
-                    product = getattr(lig.cell, 'stock_product', None)
-                    if not product:
-                        continue
-
-                    consommation_lots = lig.consommation_lots or []
-                    if not consommation_lots:
-                        # Compatibilité legacy (anciennes sessions sans trace des lots):
-                        # on recrée un lot d'ajustement pour remettre les unités dans le FIFO.
-                        quantite_legacy = int(lig.quantite or 0)
-                        if quantite_legacy <= 0:
-                            continue
-                        cout_unitaire_legacy = lig.cout_unitaire if lig.cout_unitaire is not None else Decimal('0')
-                        achat = StockPurchase.objects.create(
-                            lieu_achat=f"Annulation mouvement distributeur #{session.id}",
-                            date_achat=timezone.now(),
-                            total=Decimal('0'),
-                        )
-                        item = StockPurchaseItem.objects.create(
-                            achat=achat,
-                            produit=product,
-                            nom_produit=product.nom or product.nom_produit or f"Produit #{product.id}",
-                            quantite=quantite_legacy,
-                            prix_unitaire=cout_unitaire_legacy,
-                            unite="pièce",
-                            creer_produit=False,
-                        )
-                        StockLot.objects.create(
-                            produit=product,
-                            purchase_item=item,
-                            quantite_restante=quantite_legacy,
-                            prix_achat_unitaire=cout_unitaire_legacy,
-                            date_achat=timezone.now(),
-                        )
-                        StockProduct.objects.filter(pk=product.pk).update(
-                            quantite=F('quantite') + quantite_legacy
-                        )
-                        continue
-
-                    quantite_restauree = 0
-                    for item in consommation_lots:
-                        lot_id = item.get('lot_id')
-                        try:
-                            quantite = int(item.get('quantite') or 0)
-                        except (TypeError, ValueError):
-                            quantite = 0
-                        if not lot_id or quantite <= 0:
+                if session.statut == 'termine':
+                    for lig in lignes:
+                        consommation_lots = lig.consommation_lots or []
+                        if consommation_lots:
+                            # La case a pu changer de produit : on rend chaque lot à son
+                            # produit d'origine, pas au produit affiché maintenant.
+                            produits_touches = set()
+                            for item in consommation_lots:
+                                lot_id = item.get('lot_id')
+                                try:
+                                    quantite = int(item.get('quantite') or 0)
+                                except (TypeError, ValueError):
+                                    quantite = 0
+                                if not lot_id or quantite <= 0:
+                                    continue
+                                lot = StockLot.objects.select_for_update().filter(pk=lot_id).first()
+                                if not lot or (
+                                    lig.stock_product_id and lot.produit_id != lig.stock_product_id
+                                ):
+                                    raise _StockInsuffisantError([{
+                                        'produit': (
+                                            lig.stock_product.nom if lig.stock_product_id else f'Lot {lot_id}'
+                                        ),
+                                        'requis': quantite,
+                                        'disponible': 0,
+                                        'lot_id': lot_id,
+                                        'ligne_id': lig.id,
+                                    }])
+                                lot.quantite_restante = (lot.quantite_restante or 0) + quantite
+                                lot.save(update_fields=['quantite_restante'])
+                                produits_touches.add(lot.produit_id)
+                            for produit_id in produits_touches:
+                                _sync_product_quantite(produit_id)
                             continue
 
-                        lot = StockLot.objects.select_for_update().filter(
-                            pk=lot_id,
-                            produit_id=product.id,
-                        ).first()
-                        if not lot:
-                            return Response(
-                                {
-                                    'error': (
-                                        "Impossible d'annuler ce mouvement automatiquement : "
-                                        "un lot de stock d'origine est introuvable."
-                                    ),
-                                    'session_id': session.id,
-                                    'ligne_id': lig.id,
-                                    'lot_id': lot_id,
-                                },
-                                status=status.HTTP_400_BAD_REQUEST,
+                        product = _ligne_stock_product(lig)
+                        if not product:
+                            continue
+
+                        if not consommation_lots:
+                            # Compatibilité legacy (anciennes sessions sans trace des lots):
+                            # on recrée un lot d'ajustement pour remettre les unités dans le FIFO.
+                            quantite_legacy = int(lig.quantite or 0)
+                            if quantite_legacy <= 0:
+                                continue
+                            cout_unitaire_legacy = lig.cout_unitaire if lig.cout_unitaire is not None else Decimal('0')
+                            achat = StockPurchase.objects.create(
+                                lieu_achat=f"Annulation mouvement distributeur #{session.id}",
+                                date_achat=timezone.now(),
+                                total=Decimal('0'),
                             )
+                            item = StockPurchaseItem.objects.create(
+                                achat=achat,
+                                produit=product,
+                                nom_produit=product.nom or product.nom_produit or f"Produit #{product.id}",
+                                quantite=quantite_legacy,
+                                prix_unitaire=cout_unitaire_legacy,
+                                unite="pièce",
+                                creer_produit=False,
+                            )
+                            StockLot.objects.create(
+                                produit=product,
+                                purchase_item=item,
+                                quantite_restante=quantite_legacy,
+                                prix_achat_unitaire=cout_unitaire_legacy,
+                                date_achat=timezone.now(),
+                            )
+                            StockProduct.objects.filter(pk=product.pk).update(
+                                quantite=F('quantite') + quantite_legacy
+                            )
+                            continue
 
-                        lot.quantite_restante = (lot.quantite_restante or 0) + quantite
-                        lot.save(update_fields=['quantite_restante'])
-                        quantite_restauree += quantite
-
-                    if quantite_restauree > 0:
-                        StockProduct.objects.filter(pk=product.pk).update(
-                            quantite=F('quantite') + quantite_restauree
-                        )
-
-            session.statut = 'annule'
-            session.date_fin = timezone.now()
-            session.save(update_fields=['statut', 'date_fin', 'updated_at'])
+                session.statut = 'annule'
+                session.date_fin = timezone.now()
+                session.save(update_fields=['statut', 'date_fin', 'updated_at'])
+        except _StockInsuffisantError as exc:
+            info = (exc.insuffisant or [{}])[0]
+            return Response(
+                {
+                    'error': (
+                        "Impossible d'annuler ce mouvement automatiquement : "
+                        "un lot de stock d'origine est introuvable. Aucun stock n'a été modifié."
+                    ),
+                    'session_id': session.id,
+                    'ligne_id': info.get('ligne_id'),
+                    'lot_id': info.get('lot_id'),
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
 
         serializer = DistributeurReapproSessionSerializer(session)
         return Response(serializer.data, status=status.HTTP_200_OK)
@@ -4160,6 +4519,101 @@ class DistributeurReapproLigneViewSet(viewsets.ModelViewSet):
             queryset = queryset.filter(session_id=session_id)
         return queryset
 
+    def update(self, request, *args, **kwargs):
+        return self._save_ligne(request, partial=kwargs.get('partial', False))
+
+    def partial_update(self, request, *args, **kwargs):
+        return self._save_ligne(request, partial=True)
+
+    def _save_ligne(self, request, partial):
+        """Corrige une ligne. Sur un mouvement terminé, la quantité ajuste les lots au prix d'achat."""
+        ligne = self.get_object()
+        serializer = self.get_serializer(ligne, data=request.data, partial=partial)
+        serializer.is_valid(raise_exception=True)
+        old_qty = int(ligne.quantite or 0)
+        new_qty = int(serializer.validated_data.get('quantite', old_qty) or 0)
+        if new_qty < 0:
+            return Response({'error': 'Quantité invalide'}, status=status.HTTP_400_BAD_REQUEST)
+
+        session = ligne.session
+        if session.statut == 'termine' and new_qty != old_qty:
+            try:
+                with transaction.atomic():
+                    ligne = (
+                        DistributeurReapproLigne.objects.select_for_update(of=('self',))
+                        .select_related('cell', 'cell__stock_product', 'stock_product', 'session')
+                        .get(pk=ligne.pk)
+                    )
+                    product = _ligne_stock_product(ligne)
+                    if not product:
+                        return Response(
+                            {'error': "Cette case n'est pas liée à un produit stock. La quantité ne peut pas être modifiée."},
+                            status=status.HTTP_400_BAD_REQUEST,
+                        )
+                    trace = list(ligne.consommation_lots or [])
+                    if new_qty > old_qty:
+                        extra_trace, _montant = _consommer_fifo(product, new_qty - old_qty)
+                        trace = _fusionner_traces(trace, extra_trace)
+                    else:
+                        a_rendre = old_qty - new_qty
+                        if trace:
+                            new_trace, _montant, manque = _rendre_unites_trace(
+                                trace, a_rendre, product.id, remettre_en_stock=True,
+                            )
+                            if manque:
+                                raise _StockInsuffisantError([{
+                                    'produit': product.nom or f'Produit #{product.id}',
+                                    'requis': a_rendre,
+                                    'disponible': a_rendre - int(manque),
+                                }])
+                            trace = new_trace
+                        else:
+                            cout = ligne.cout_unitaire or Decimal('0')
+                            achat = StockPurchase.objects.create(
+                                lieu_achat=f"Correction mouvement distributeur #{session.id}",
+                                date_achat=timezone.now(),
+                            )
+                            item = StockPurchaseItem.objects.create(
+                                achat=achat,
+                                produit=product,
+                                nom_produit=product.nom or product.nom_produit or f'Produit #{product.id}',
+                                quantite=a_rendre,
+                                prix_unitaire=cout,
+                                montant_total=(Decimal(str(cout)) * a_rendre).quantize(Decimal('0.01')),
+                                unite='pièce',
+                            )
+                            StockLot.objects.create(
+                                produit=product,
+                                purchase_item=item,
+                                quantite_restante=a_rendre,
+                                prix_achat_unitaire=cout,
+                                date_achat=achat.date_achat,
+                            )
+                    cout_trace = _cout_pondere_trace(trace)
+                    serializer.validated_data['quantite'] = new_qty
+                    serializer.validated_data['consommation_lots'] = trace
+                    if cout_trace is not None:
+                        serializer.validated_data['cout_unitaire'] = cout_trace
+                    if not ligne.stock_product_id:
+                        serializer.validated_data['stock_product'] = product
+                    serializer.save()
+                    _sync_product_quantite(product.id)
+            except _StockInsuffisantError as exc:
+                info = (exc.insuffisant or [{}])[0]
+                return Response(
+                    {
+                        'error': (
+                            f"Stock insuffisant pour cette correction : "
+                            f"{info.get('disponible', 0)} disponible, {info.get('requis', new_qty)} demandé."
+                        ),
+                    },
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+        else:
+            serializer.save()
+
+        ligne.refresh_from_db()
+        return Response(self.get_serializer(ligne).data)
 
 class DistributeurFraisViewSet(viewsets.ModelViewSet):
     """Frais du distributeur : entretien, frais banque TPE, etc. CRUD complet."""
@@ -4271,52 +4725,157 @@ class StockProductViewSet(viewsets.ModelViewSet):
 
     @action(detail=True, methods=['post'])
     def remove_quantity(self, request, pk=None):
-        """Retirer de la quantité. Si is_perte=True, consomme en FIFO et crée une StockLoss avec le coût calculé."""
-        product = self.get_object()
+        """Retire une quantité du stock.
+
+        Le stock affiché est recalculé depuis les lots (validation d'un mouvement,
+        modification d'un lot). Une sortie doit donc consommer les lots en FIFO,
+        sinon le compteur revient à l'ancienne quantité.
+        is_perte=True enregistre en plus une perte valorisée.
+        """
         quantite = request.data.get('quantite', 0)
         is_perte = request.data.get('is_perte', False)
+        if isinstance(is_perte, str):
+            is_perte = is_perte.strip().lower() in ('1', 'true', 'yes', 'oui')
+        else:
+            is_perte = bool(is_perte)
+        nature = str(request.data.get('nature') or '').strip().lower()
+        natures_connues = {choice[0] for choice in StockLoss.NATURE_CHOICES}
+        if not nature:
+            nature = 'perte' if is_perte else 'autre'
+        if nature not in natures_connues:
+            return Response({'error': 'Nature de sortie invalide'}, status=status.HTTP_400_BAD_REQUEST)
+        is_perte = nature == 'perte'
         commentaire = request.data.get('commentaire') or ''
 
         try:
             quantite = int(quantite)
         except (TypeError, ValueError):
             quantite = 0
-        if quantite <= 0 or product.quantite < quantite:
-            return Response({'error': 'Quantité insuffisante ou invalide'}, status=status.HTTP_400_BAD_REQUEST)
+        if quantite <= 0:
+            return Response({'error': 'Quantité invalide'}, status=status.HTTP_400_BAD_REQUEST)
 
         montant_perte = Decimal('0')
-        with transaction.atomic():
-            if is_perte:
+        try:
+            with transaction.atomic():
+                product = StockProduct.objects.select_for_update().filter(pk=pk).first()
+                if product is None:
+                    return Response({'error': 'Produit introuvable'}, status=status.HTTP_404_NOT_FOUND)
+
                 lots = list(
                     StockLot.objects.filter(produit=product, quantite_restante__gt=0)
                     .order_by('date_achat', 'created_at')
                     .select_for_update()
                 )
-                restant_a_retirer = quantite
-                for lot in lots:
-                    if restant_a_retirer <= 0:
-                        break
-                    prise = min(restant_a_retirer, lot.quantite_restante)
-                    montant_perte += Decimal(str(lot.prix_achat_unitaire)) * prise
-                    lot.quantite_restante -= prise
-                    lot.save(update_fields=['quantite_restante'])
-                    restant_a_retirer -= prise
-            StockProduct.objects.filter(pk=product.pk).update(quantite=F('quantite') - quantite)
-            if is_perte:
+                disponible_lots = sum(int(lot.quantite_restante or 0) for lot in lots)
+
+                if lots:
+                    if disponible_lots < quantite:
+                        raise _StockInsuffisantError([{
+                            'produit': product.nom or product.nom_produit or f'Produit #{product.pk}',
+                            'requis': quantite,
+                            'disponible': disponible_lots,
+                        }])
+                    restant_a_retirer = quantite
+                    for lot in lots:
+                        if restant_a_retirer <= 0:
+                            break
+                        prise = min(restant_a_retirer, int(lot.quantite_restante or 0))
+                        if prise <= 0:
+                            continue
+                        montant_perte += Decimal(str(lot.prix_achat_unitaire or 0)) * prise
+                        lot.quantite_restante = int(lot.quantite_restante or 0) - prise
+                        lot.save(update_fields=['quantite_restante'])
+                        restant_a_retirer -= prise
+                    if restant_a_retirer > 0:
+                        raise _StockInsuffisantError([{
+                            'produit': product.nom or product.nom_produit or f'Produit #{product.pk}',
+                            'requis': quantite,
+                            'disponible': disponible_lots,
+                        }])
+                    remaining = StockLot.objects.filter(produit=product).aggregate(
+                        total=Sum('quantite_restante')
+                    )['total'] or 0
+                    product.quantite = max(0, int(remaining))
+                    product.save(update_fields=['quantite', 'updated_at'])
+                else:
+                    # Ancien stock sans lot : seul le compteur existe.
+                    if int(product.quantite or 0) < quantite:
+                        return Response(
+                            {'error': 'Quantité insuffisante ou invalide'},
+                            status=status.HTTP_400_BAD_REQUEST,
+                        )
+                    product.quantite = int(product.quantite or 0) - quantite
+                    product.save(update_fields=['quantite', 'updated_at'])
+
                 StockLoss.objects.create(
                     produit=product,
                     quantite=quantite,
-                    montant_total=montant_perte,
+                    montant_total=montant_perte.quantize(Decimal('0.01')),
+                    nature=nature,
                     date_perte=timezone.now(),
                     commentaire=(commentaire or '').strip() or None,
                 )
-            product.refresh_from_db()
+        except _StockInsuffisantError as exc:
+            info = (exc.insuffisant or [{}])[0]
+            disponible = int(info.get('disponible') or 0)
+            return Response(
+                {
+                    'error': (
+                        f'Stock insuffisant : {disponible} en stock, '
+                        f'{quantite} demandé. La sortie n\'a pas été enregistrée.'
+                    ),
+                    'disponible': disponible,
+                    'requis': quantite,
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
         return Response({
-            'message': 'Quantité retirée' + (' (perte enregistrée)' if is_perte else ''),
+            'message': 'Quantité retirée' + (' (perte au prix d\'achat)' if is_perte else ''),
             'quantite': product.quantite,
+            'nature': nature,
             'perte_enregistree': is_perte,
-            'montant_perte': str(montant_perte) if is_perte else None,
+            'montant_achat': str(montant_perte.quantize(Decimal('0.01'))),
+            'montant_perte': str(montant_perte.quantize(Decimal('0.01'))) if is_perte else None,
         }, status=status.HTTP_200_OK)
+
+    @action(detail=False, methods=['get'], url_path='pertes-mois')
+    def pertes_mois(self, request):
+        """Coût des pertes du mois, uniquement au prix d'achat. Les autres sorties sont exclues."""
+        now = timezone.localtime()
+        try:
+            year = int(request.query_params.get('year') or now.year)
+            month = int(request.query_params.get('month') or now.month)
+        except (TypeError, ValueError):
+            return Response({'error': 'Période invalide'}, status=status.HTTP_400_BAD_REQUEST)
+        if not 1 <= month <= 12:
+            return Response({'error': 'Mois invalide'}, status=status.HTTP_400_BAD_REQUEST)
+        start_date = date(year, month, 1)
+        _, last_day = calendar.monthrange(year, month)
+        end_date = date(year, month, last_day)
+        qs = StockLoss.objects.filter(
+            nature='perte',
+            date_perte__date__gte=start_date,
+            date_perte__date__lte=end_date,
+        ).select_related('produit').order_by('-date_perte')
+        totaux = qs.aggregate(montant=Sum('montant_total'), qte=Sum('quantite'))
+        lignes = []
+        for perte in qs[:80]:
+            lignes.append({
+                'id': perte.id,
+                'produit': (perte.produit.nom if perte.produit_id else '') or '',
+                'quantite': int(perte.quantite or 0),
+                'montant_achat': float(perte.montant_total or 0),
+                'date': perte.date_perte.isoformat() if perte.date_perte else None,
+                'commentaire': perte.commentaire or '',
+            })
+        return Response({
+            'year': year,
+            'month': month,
+            'total_montant': float(totaux.get('montant') or 0),
+            'total_quantite': int(totaux.get('qte') or 0),
+            'lignes': lignes,
+        })
 
 
 class StockPurchaseViewSet(viewsets.ModelViewSet):
@@ -5345,9 +5904,10 @@ def create_devis(request):
                 status=400,
             )
 
-    # ✅ Pré-check: éviter de créer des objets (AppelOffres, etc.) si le numéro existe déjà.
+    # Un numéro au format automatique est réattribué à l'enregistrement s'il est déjà pris.
+    # On ne bloque ici que les numéros saisis à la main.
     try:
-        if numero_in:
+        if numero_in and not is_numero_devis_officiel(numero_in):
             existing = Devis.objects.filter(numero=numero_in).only('id', 'numero').first()
             if existing:
                 return Response(
@@ -5370,6 +5930,20 @@ def create_devis(request):
             # alors qu'aucun devis n'est finalement persisté (rollback).
             devis = None
             appel_offres = None
+
+            def numero_devis_a_enregistrer():
+                chantier_raw = request.data.get('chantier')
+                chantier_id = None
+                if chantier_raw not in (None, '', -1, '-1'):
+                    try:
+                        chantier_id = int(chantier_raw)
+                    except (TypeError, ValueError):
+                        chantier_id = None
+                return claim_devis_numero(
+                    request.data.get('numero'),
+                    is_ts=not bool(devis_chantier) and bool(chantier_id),
+                    chantier_id=chantier_id,
+                )
             
             # Si c'est un devis de chantier, créer un appel d'offres au lieu d'un chantier
             if devis_chantier:
@@ -5460,7 +6034,7 @@ def create_devis(request):
                 
                 # Création du devis lié à l'appel d'offres
                 devis_data = {
-                    'numero': request.data['numero'],
+                    'numero': numero_devis_a_enregistrer(),
                     'appel_offres': appel_offres,
                     'price_ht': Decimal(str(request.data['price_ht'])),
                     'price_ttc': Decimal(str(request.data['price_ttc'])),
@@ -5545,7 +6119,7 @@ def create_devis(request):
                 
                 # Création du devis de base (comme avant)
                 devis_data = {
-                    'numero': request.data['numero'],
+                    'numero': numero_devis_a_enregistrer(),
                     'chantier_id': request.data['chantier'],
                     'price_ht': Decimal(str(request.data['price_ht'])),
                     'price_ttc': Decimal(str(request.data['price_ttc'])),
@@ -5735,154 +6309,18 @@ def get_next_devis_number(request):
     try:
         chantier_id = request.GET.get('chantier_id')
         devis_chantier = request.GET.get('devis_chantier') == 'true'
-        is_ts = request.GET.get('is_ts') == 'true'
-        prefix = request.GET.get('prefix', 'DEV')  # Préfixe personnalisable
-        
-        print(f"Paramètres reçus - chantier_id: {chantier_id}, devis_chantier: {devis_chantier}, is_ts: {is_ts}")
-        
-        # Obtenir l'année en cours
-        current_year = timezone.now().year
-        year_suffix = str(current_year)[-2:]
-        
-        # Déterminer le type de devis
-        is_ts_devis = chantier_id and not devis_chantier
-
-        # IMPORTANT:
-        # L'ancien code utilisait "le dernier devis par id" pour calculer la séquence.
-        # Si des numéros ont été modifiés/importés/supprimés, l'id n'est pas un indicateur fiable
-        # et on peut renvoyer un numéro déjà existant -> IntegrityError sur la contrainte unique.
-        #
-        # Ici on calcule la séquence à partir du MAX réel trouvé dans les numéros.
-        def _extract_seq_from_numero(numero: str):
-            if not numero:
-                return None
-            # Format principal: "Devis de travaux n°015.2026"
-            m = re.search(r'Devis de travaux n°(\d+)\.', numero)
-            if m:
-                try:
-                    return int(m.group(1))
-                except ValueError:
-                    return None
-            # Ancien format générique: "Devis n°017.2026"
-            m = re.search(r'Devis n°(\d+)\.', numero)
-            if m:
-                try:
-                    return int(m.group(1))
-                except ValueError:
-                    return None
-            # Ancien format: "DEV-001-26"
-            m = re.search(r'DEV-(\d+)-', numero)
-            if m:
-                try:
-                    return int(m.group(1))
-                except ValueError:
-                    return None
-            return None
-
-        sequences = []
-
-        # Format principal (année complète .2026)
-        for numero in Devis.objects.filter(
-            numero__startswith="Devis de travaux n°",
-            numero__contains=f".{current_year}"
-        ).values_list('numero', flat=True):
-            seq = _extract_seq_from_numero(numero)
-            if seq is not None:
-                sequences.append(seq)
-
-        # Ancien format générique "Devis n°"
-        for numero in Devis.objects.filter(
-            numero__startswith="Devis n°",
-            numero__contains=f".{current_year}"
-        ).values_list('numero', flat=True):
-            seq = _extract_seq_from_numero(numero)
-            if seq is not None:
-                sequences.append(seq)
-
-        # Ancien format "DEV-001-26" (suffixe année sur 2 chiffres)
-        for numero in Devis.objects.filter(
-            numero__startswith="DEV-",
-            numero__endswith=f"-{year_suffix}"
-        ).values_list('numero', flat=True):
-            seq = _extract_seq_from_numero(numero)
-            if seq is not None:
-                sequences.append(seq)
-
-        next_sequence = (max(sequences) + 1) if sequences else 1
-        
-        # Si c'est un devis TS, calculer le numéro de TS pour ce chantier
-        next_ts_num = None
-        if is_ts_devis:
-            # IMPORTANT: éviter count()+1 (si TS n°02 a été supprimé, count()=2 peut renvoyer 3 alors que TS n°03 existe déjà).
-            ts_numbers = []
-            for numero in Devis.objects.filter(
-                Q(chantier_id=chantier_id) &
-                Q(devis_chantier=False) &
-                Q(numero__contains=f".{current_year}") &
-                Q(numero__contains=" - TS n°")
-            ).values_list('numero', flat=True):
-                m = re.search(r' - TS n°(\d+)$', numero)
-                if m:
-                    try:
-                        ts_numbers.append(int(m.group(1)))
-                    except ValueError:
-                        pass
-            next_ts_num = (max(ts_numbers) + 1) if ts_numbers else 1
-
-            # Formater avec le suffixe TS
-            candidate_sequence = next_sequence
-            while True:
-                numero = (
-                    f"Devis de travaux n°{str(candidate_sequence).zfill(3)}.{current_year} "
-                    f"- TS n°{str(next_ts_num).zfill(2)}"
-                )
-                if not Devis.objects.filter(numero=numero).exists():
-                    break
-                candidate_sequence += 1
-
-            next_sequence = candidate_sequence
-            print(
-                f"Génération du numéro de devis TS: {numero} "
-                f"(séquence globale: {next_sequence}, TS n°: {next_ts_num}, chantier: {chantier_id})"
-            )
-        else:
-            # Devis de travaux simple
-            candidate_sequence = next_sequence
-            while True:
-                numero = f"Devis de travaux n°{str(candidate_sequence).zfill(3)}.{current_year}"
-                if not Devis.objects.filter(numero=numero).exists():
-                    break
-                candidate_sequence += 1
-
-            next_sequence = candidate_sequence
-            print(f"Génération du numéro de devis de travaux: {numero} (séquence: {next_sequence}, année: {current_year})")
-        
+        is_ts_devis = bool(chantier_id) and not devis_chantier
+        preview = peek_devis_numero(is_ts=is_ts_devis, chantier_id=chantier_id or None)
         return Response({
-            'numero': numero,
-            'next_ts': str(next_ts_num).zfill(2) if next_ts_num else None,
-            'sequence': str(next_sequence).zfill(3),
-            'year': current_year
+            'numero': preview['numero'],
+            'next_ts': preview['next_ts'],
+            'sequence': preview['sequence'],
+            'year': preview['year'],
         })
-        
     except Exception as e:
-        print(f"Erreur dans get_next_devis_number: {str(e)}")
-        import traceback
-        traceback.print_exc()
-        current_year = timezone.now().year
-        # Déterminer le format selon le type
-        chantier_id = request.GET.get('chantier_id')
-        devis_chantier = request.GET.get('devis_chantier') == 'true'
-        is_ts_devis = chantier_id and not devis_chantier
-        if is_ts_devis:
-            fallback_numero = f"Devis de travaux n°001.{current_year} - TS n°01"
-        else:
-            fallback_numero = f"Devis de travaux n°001.{current_year}"
-        return Response({
-            'numero': fallback_numero,
-            'next_ts': "01" if is_ts_devis else None,
-            'sequence': "001",
-            'year': current_year
-        })
+        print(f'Erreur dans get_next_devis_number: {str(e)}')
+        return Response({'error': 'Impossible de calculer le prochain numéro de devis'}, status=500)
+
 
 @api_view(['GET'])
 def get_chantier_relations(request):
@@ -6402,32 +6840,25 @@ def create_facture(request):
                 'error': 'Une facture existe déjà pour ce devis'
             }, status=400)
         
-        # ✅ Obtenir le numéro de facture : utiliser celui fourni ou générer un nouveau via le service
-        numero_facture = request.data.get('numero')
-        if not numero_facture or numero_facture.strip() == '':
-            # Si aucun numéro n'est fourni, utiliser le service de numérotation unifié
-            numero_facture = NumeroService.get_next_facture_number()
-        
-        # ✅ Préparer les données de la facture avec contact_societe depuis le devis
-        facture_data = {
-            'numero': numero_facture,
-            'devis': devis,
-            'date_echeance': request.data.get('date_echeance'),
-            'mode_paiement': request.data.get('mode_paiement'),
-            # Transférer les coûts estimés du devis
-            'cout_estime_main_oeuvre': devis.cout_estime_main_oeuvre,
-            'cout_estime_materiel': devis.cout_estime_materiel
-        }
-        
-        # ✅ Copier contact_societe depuis le devis si disponible
-        if devis.contact_societe:
-            facture_data['contact_societe'] = devis.contact_societe
-        
-        if devis.societe_devis:
-            facture_data['societe_devis'] = devis.societe_devis
-        
-        # Créer la facture
-        facture = Facture.objects.create(**facture_data)
+        # Le numéro définitif est réservé dans la même transaction que la création.
+        try:
+            with transaction.atomic():
+                numero_facture = claim_facture_numero(request.data.get('numero'))
+                facture_data = {
+                    'numero': numero_facture,
+                    'devis': devis,
+                    'date_echeance': request.data.get('date_echeance'),
+                    'mode_paiement': request.data.get('mode_paiement'),
+                    'cout_estime_main_oeuvre': devis.cout_estime_main_oeuvre,
+                    'cout_estime_materiel': devis.cout_estime_materiel
+                }
+                if devis.contact_societe:
+                    facture_data['contact_societe'] = devis.contact_societe
+                if devis.societe_devis:
+                    facture_data['societe_devis'] = devis.societe_devis
+                facture = Facture.objects.create(**facture_data)
+        except NumeroDejaUtilise as exc:
+            return Response({'error': str(exc)}, status=400)
 
         # Sérialiser la réponse
         serializer = FactureSerializer(facture)
@@ -7131,29 +7562,18 @@ def get_next_facture_number(request):
     Utilise le système de numérotation partagé avec les situations
     """
     try:
-        # Utiliser le service de numérotation partagé
-        next_numero = NumeroService.get_next_facture_number()
-        
-        # Extraire l'année et le numéro de séquence du format "Facture n°XX.YYYY"
-        current_year = str(datetime.now().year)
-        sequence_match = re.search(r'n°(\d+)\.', next_numero)
-        sequence = sequence_match.group(1) if sequence_match else "01"
-        
+        preview = peek_facture_numero()
         return Response({
-            'numero': next_numero,
-            'sequence': sequence,
-            'year': current_year
+            'numero': preview['numero'],
+            'sequence': preview['sequence'],
+            'year': str(preview['year']),
         })
     except Exception as e:
         print(f"Erreur dans get_next_facture_number: {str(e)}")
-        import traceback
-        traceback.print_exc()
-        current_year = str(datetime.now().year)
-        return Response({
-            'numero': f"Facture n°01.{current_year}",
-            'sequence': "01",
-            'year': current_year
-        })
+        return Response(
+            {'error': 'Impossible de calculer le prochain numéro de facture'},
+            status=500,
+        )
 
 
 @api_view(['GET'])
@@ -8544,8 +8964,8 @@ def create_facture_cie(request):
                 status=status.HTTP_400_BAD_REQUEST
             )
         
-        # ✅ Utiliser le service de numérotation unifié pour obtenir le prochain numéro de facture
-        base_numero = NumeroService.get_next_facture_number()
+        # Réservé sous verrou, partagé avec les factures et les situations.
+        base_numero = claim_facture_numero(None)
         
         # Construire le numéro de facture CIE avec la désignation si elle existe
         if designation:
@@ -8653,15 +9073,20 @@ class SituationViewSet(viewsets.ModelViewSet):
                     except Devis.DoesNotExist:
                         pass
             
-            # Utiliser le SituationCreateSerializer pour la validation et la création
-            serializer = SituationCreateSerializer(data=data)
-            if not serializer.is_valid():
-                print("❌ Erreurs de validation:", serializer.errors)
-                return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-
-            # Créer la situation
-            # print("✅ Validation réussie, création de la situation...")
-            situation = serializer.save()
+            try:
+                with transaction.atomic():
+                    data['numero_situation'] = claim_situation_numero(
+                        data.get('numero_situation'),
+                        data.get('chantier'),
+                    )
+                    serializer = SituationCreateSerializer(data=data)
+                    if not serializer.is_valid():
+                        transaction.set_rollback(True)
+                        print("❌ Erreurs de validation:", serializer.errors)
+                        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+                    situation = serializer.save()
+            except NumeroDejaUtilise as exc:
+                return Response({'numero_situation': [str(exc)]}, status=status.HTTP_400_BAD_REQUEST)
             # print(f"✅ Situation créée avec ID: {situation.id}")
 
             # Créer les lignes de situation
@@ -8905,12 +9330,19 @@ def create_situation(request):
                 except Devis.DoesNotExist:
                     pass
 
-        # Utiliser le SituationCreateSerializer au lieu de SituationSerializer
+        try:
+            data['numero_situation'] = claim_situation_numero(
+                data.get('numero_situation'),
+                data.get('chantier'),
+            )
+        except NumeroDejaUtilise as exc:
+            return Response({'numero_situation': [str(exc)]}, status=status.HTTP_400_BAD_REQUEST)
+
         serializer = SituationCreateSerializer(data=data)
         if not serializer.is_valid():
+            transaction.set_rollback(True)
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
-        # Créer la situation
         situation = serializer.save()
         
         # Si aucune date de création n'est fournie, utiliser la date actuelle
@@ -9544,152 +9976,24 @@ def get_factures_cie(request, chantier_id):
 class NumeroService:
     @staticmethod
     def get_next_facture_number(prefix="FACT"):
-        """Génère le prochain numéro de facture unique pour toute l'application (recommence à 01 chaque année)"""
-        current_year = str(datetime.now().year)
-        current_month = str(datetime.now().month).zfill(2)
-        
-        # Récupérer toutes les factures ET situations de l'année en cours uniquement
-        all_factures = Facture.objects.filter(
-            numero__contains=f'.{current_year}'  # Filtre pour le nouveau format: XX.2025
-        ).order_by('-id')
-        
-        all_situations = Situation.objects.filter(
-            numero_situation__contains=f'.{current_year} -'  # Format: Facture n°XX.2025 - Situation
-        ).order_by('-id')
-        
-        # Trouver le dernier numéro de séquence utilisé pour l'année en cours
-        last_num = 0
-        
-        # Vérifier toutes les factures de l'année
-        for facture in all_factures:
-            try:
-                # Format attendu: Facture n°08.2025
-                if 'Facture n°' in facture.numero and f'.{current_year}' in facture.numero:
-                    # Extraire le numéro avant le point
-                    numero_part = facture.numero.split('Facture n°')[1].split('.')[0]
-                    num = int(numero_part)
-                    last_num = max(last_num, num)
-            except (IndexError, ValueError):
-                pass
-        
-        # Vérifier toutes les situations de l'année
-        for situation in all_situations:
-            try:
-                # Format attendu: Facture n°08.2025 - Situation n°01
-                if 'Facture n°' in situation.numero_situation and f'.{current_year}' in situation.numero_situation:
-                    # Extraire le numéro avant le point
-                    numero_part = situation.numero_situation.split('Facture n°')[1].split('.')[0]
-                    num = int(numero_part)
-                    last_num = max(last_num, num)
-            except (IndexError, ValueError):
-                pass
-        
-        # Incrémenter pour l'année en cours (recommence à 01 chaque année)
-        next_num = last_num + 1
-        return f"Facture n°{next_num:02d}.{current_year}"
+        """Apercu du prochain numero de facture, partage avec les situations."""
+        return peek_facture_numero()["numero"]
 
     @staticmethod
     def get_next_situation_number(chantier_id):
-        """Génère le prochain numéro de situation pour un chantier spécifique"""
-        # Récupérer la dernière situation du chantier (tri par ID pour éviter les problèmes de tri alphabétique)
-        last_situation = Situation.objects.filter(
-            chantier_id=chantier_id
-        ).order_by('-id').first()
-        
-        # Déterminer le prochain numéro de situation spécifique au chantier
-        next_sit_num = 1
-        if last_situation and last_situation.numero_situation:
-            try:
-                current_sit_num = int(last_situation.numero_situation.split('n°')[1])
-                next_sit_num = current_sit_num + 1
-            except (IndexError, ValueError):
-                next_sit_num = 1
-            
-        # Générer le numéro de facture de base (unique et incrémental)
-        base_numero = NumeroService.get_next_facture_number()
-        
-        return f"{base_numero} - Situation n°{next_sit_num:02d}"
+        """Apercu du prochain numero de situation pour un chantier."""
+        return peek_situation_numero(chantier_id)["numero"]
 
-@api_view(['GET'])
+
+@api_view(["GET"])
 def get_next_numero(request, chantier_id=None):
-    """Récupère le prochain numéro de facture ou situation (recommence à 01 chaque année)"""
+    """Apercu du prochain numero de facture ou de situation."""
     try:
-        current_year = str(datetime.now().year)
-        
-        # Récupérer toutes les factures et situations de l'année en cours uniquement
-        prefix = request.GET.get('prefix', 'FACT')
-        
-        all_factures = Facture.objects.filter(
-            numero__contains=f'.{current_year}'
-        ).order_by('-id')  # Tri par ID pour éviter les problèmes de tri alphabétique
-        
-        all_situations = Situation.objects.filter(
-            numero_situation__contains=f'.{current_year} -'
-        ).order_by('-id')  # Tri par ID pour éviter les problèmes de tri alphabétique
-        
-        # Trouver le dernier numéro de séquence utilisé pour l'année en cours
-        last_num = 0
-        
-        # Vérifier toutes les factures de l'année
-        for facture in all_factures:
-            try:
-                # Format attendu: Facture n°08.2025
-                if 'Facture n°' in facture.numero and f'.{current_year}' in facture.numero:
-                    # Extraire le numéro avant le point
-                    numero_part = facture.numero.split('Facture n°')[1].split('.')[0]
-                    num = int(numero_part)
-                    last_num = max(last_num, num)
-            except (IndexError, ValueError):
-                pass
-        
-        # Vérifier toutes les situations de l'année
-        for situation in all_situations:
-            try:
-                # Format attendu: Facture n°08.2025 - Situation n°01
-                if 'Facture n°' in situation.numero_situation and f'.{current_year}' in situation.numero_situation:
-                    # Extraire le numéro avant le point
-                    numero_part = situation.numero_situation.split('Facture n°')[1].split('.')[0]
-                    num = int(numero_part)
-                    last_num = max(last_num, num)
-            except (IndexError, ValueError):
-                pass
-        
-        # Incrémenter pour obtenir le prochain numéro (recommence à 01 chaque année)
-        next_num = last_num + 1
-        base_numero = f"Facture n°{next_num:02d}.{current_year}"
-            
         if chantier_id:
-            # Pour une situation, on ajoute le numéro de situation spécifique au chantier
-            # Le numéro de situation continue la numérotation même après un changement d'année
-            # On cherche donc toutes les situations du chantier, toutes années confondues
-            last_situation = Situation.objects.filter(
-                chantier_id=chantier_id,
-                numero_situation__contains='Situation n°'
-            ).order_by('-id').first()  # Tri par ID au lieu de numero_situation
-            
-            next_sit_num = 1
-            if last_situation and last_situation.numero_situation:
-                try:
-                    # Format attendu: "Facture n°14.2025 - Situation n°01"
-                    # Extraire la partie après "Situation n°"
-                    if 'Situation n°' in last_situation.numero_situation:
-                        sit_part = last_situation.numero_situation.split('Situation n°')[1].strip()
-                        # Prendre seulement les chiffres (au cas où il y aurait d'autres caractères)
-                        sit_num_str = ''.join(filter(str.isdigit, sit_part))
-                        if sit_num_str:
-                            current_sit_num = int(sit_num_str)
-                            next_sit_num = current_sit_num + 1
-                except (IndexError, ValueError) as e:
-                    # En cas d'erreur, on recommence à 1
-                    next_sit_num = 1
-            
-            numero = f"{base_numero} - Situation n°{next_sit_num:02d}"
-        else:
-            numero = base_numero
-        
-        return Response({'numero': numero})
+            return Response({"numero": peek_situation_numero(chantier_id)["numero"]})
+        return Response({"numero": peek_facture_numero()["numero"]})
     except Exception as e:
-        return Response({'error': str(e)}, status=400)
+        return Response({"error": str(e)}, status=400)
 
 
 class SituationLigneSupplementaireViewSet(viewsets.ModelViewSet):
@@ -18280,6 +18584,35 @@ def get_chantiers_drive_paths(request):
 
 # ==================== DISTRIBUTEUR MONTHLY REPORT ====================
 
+def _niveaux_machine_distributeur(distributeur, cutoff, inclusive):
+    """Dernière quantité terminée par produit, avant ou jusqu'à une date."""
+    from collections import defaultdict
+    qs = DistributeurReapproLigne.objects.filter(
+        session__distributeur=distributeur,
+        session__statut='termine',
+        session__date_fin__isnull=False,
+    ).select_related('cell', 'stock_product', 'session')
+    if inclusive:
+        qs = qs.filter(session__date_fin__date__lte=cutoff)
+    else:
+        qs = qs.filter(session__date_fin__date__lt=cutoff)
+    qs = qs.order_by('cell_id', '-session__date_fin', '-id')
+    deja_vu = set()
+    totaux = defaultdict(int)
+    for lig in qs:
+        if lig.cell_id in deja_vu:
+            continue
+        deja_vu.add(lig.cell_id)
+        if lig.stock_product_id and (getattr(lig.stock_product, 'nom', None) or '').strip():
+            nom = lig.stock_product.nom.strip()
+        elif lig.cell and (lig.cell.nom_produit or '').strip():
+            nom = lig.cell.nom_produit.strip()
+        else:
+            continue
+        totaux[nom] += int(lig.quantite or 0)
+    return totaux
+
+
 def preview_distributeur_monthly_report(request, distributeur_id):
     """
     Vue pour prévisualiser le rapport mensuel d'un distributeur
@@ -18323,7 +18656,7 @@ def preview_distributeur_monthly_report(request, distributeur_id):
         statut='termine',
         date_fin__date__gte=start_date,
         date_fin__date__lte=end_date
-    ).prefetch_related('lignes', 'lignes__cell')
+    ).prefetch_related('lignes', 'lignes__cell', 'lignes__stock_product')
     
     # ========== 2. RÉCUPÉRER LES MOUVEMENTS DU MOIS ==========
     mouvements = DistributeurMouvement.objects.filter(
@@ -18332,34 +18665,23 @@ def preview_distributeur_monthly_report(request, distributeur_id):
         date_mouvement__date__lte=end_date
     ).order_by('date_mouvement')
     
-    # ========== 3. RÉCUPÉRER LES FRAIS DU MOIS ==========
-    frais = DistributeurFrais.objects.filter(
-        distributeur=distributeur,
-        date_frais__gte=start_date,
-        date_frais__lte=end_date
-    )
-    total_frais = sum(float(f.montant or 0) for f in frais)
+    # Un frais mensuel ou hebdomadaire commencé avant ce mois compte encore.
+    total_frais = float(_frais_montant_periode(distributeur, start_date, end_date))
 
-    # ========== 3.bis RÉCUPÉRER LES PERTES STOCK DU MOIS ==========
-    # Note: StockLoss n'est pas rattaché à un distributeur dans le modèle actuel.
-    # On agrège donc les pertes du mois et on les rattache par nom de produit.
+    # Pertes du stock central, au prix d'achat. Elles ne sont rattachées à ce
+    # distributeur que si le produit est dans une de ses cases.
     pertes_qs = StockLoss.objects.filter(
+        nature='perte',
         date_perte__date__gte=start_date,
         date_perte__date__lte=end_date
     ).select_related('produit')
     pertes_by_product = defaultdict(lambda: {'quantite': 0, 'montant': 0.0})
-    total_pertes_unites = 0
-    total_pertes_montant = 0.0
     for perte in pertes_qs:
         produit_nom = (perte.produit.nom or '').strip() if perte.produit else ''
         if not produit_nom:
             continue
-        qte = int(perte.quantite or 0)
-        montant = float(perte.montant_total or 0)
-        pertes_by_product[produit_nom]['quantite'] += qte
-        pertes_by_product[produit_nom]['montant'] += montant
-        total_pertes_unites += qte
-        total_pertes_montant += montant
+        pertes_by_product[produit_nom]['quantite'] += int(perte.quantite or 0)
+        pertes_by_product[produit_nom]['montant'] += float(perte.montant_total or 0)
     
     # ========== 4. CALCULER LES DONNÉES AGRÉGÉES ==========
     
@@ -18370,7 +18692,12 @@ def preview_distributeur_monthly_report(request, distributeur_id):
     
     for session in sessions_reappro:
         for ligne in session.lignes.all():
-            cell_name = ligne.cell.nom_produit if ligne.cell else "Produit inconnu"
+            if ligne.stock_product_id and ligne.stock_product:
+                cell_name = ligne.stock_product.nom or "Produit inconnu"
+            elif ligne.cell:
+                cell_name = ligne.cell.nom_produit or "Produit inconnu"
+            else:
+                cell_name = "Produit inconnu"
             journal_entrees.append({
                 'date': session.date_fin.strftime('%d/%m/%Y') if session.date_fin else '',
                 'produit': cell_name,
@@ -18412,7 +18739,12 @@ def preview_distributeur_monthly_report(request, distributeur_id):
     
     for session in sessions_reappro:
         for ligne in session.lignes.all():
-            cell_name = ligne.cell.nom_produit if ligne.cell else "Produit inconnu"
+            if ligne.stock_product_id and ligne.stock_product:
+                cell_name = ligne.stock_product.nom or "Produit inconnu"
+            elif ligne.cell:
+                cell_name = ligne.cell.nom_produit or "Produit inconnu"
+            else:
+                cell_name = "Produit inconnu"
             ca_ligne = float(ligne.prix_vente or 0) * ligne.quantite
             benefice_ligne = float(ligne.benefice) if hasattr(ligne, 'benefice') else (
                 float(ligne.prix_vente or 0) - float(ligne.cout_unitaire or 0)
@@ -18427,9 +18759,26 @@ def preview_distributeur_monthly_report(request, distributeur_id):
             produits_detail[cell_name]['ca'] += ca_ligne
             produits_detail[cell_name]['prix_vente'] = float(ligne.prix_vente or 0)
 
-    # Injecter les pertes (par nom produit) dans le détail
+    noms_machine = set(produits_detail.keys())
+    for cell in distributeur.cells.select_related('stock_product'):
+        if cell.stock_product_id and (cell.stock_product.nom or '').strip():
+            noms_machine.add(cell.stock_product.nom.strip())
+        elif (cell.nom_produit or '').strip():
+            noms_machine.add(cell.nom_produit.strip())
+
+    total_pertes_unites = 0
+    total_pertes_montant = 0.0
     for produit_nom, perte_data in pertes_by_product.items():
+        if produit_nom not in noms_machine:
+            continue
         produits_detail[produit_nom]['pertes'] += int(perte_data['quantite'] or 0)
+        total_pertes_unites += int(perte_data['quantite'] or 0)
+        total_pertes_montant += float(perte_data['montant'] or 0)
+
+    for nom, qte in _niveaux_machine_distributeur(distributeur, start_date, inclusive=False).items():
+        produits_detail[nom]['stock_debut'] = qte
+    for nom, qte in _niveaux_machine_distributeur(distributeur, end_date, inclusive=True).items():
+        produits_detail[nom]['stock_fin'] = qte
     
     # Calculer bénéfice mouvements
     benefice_mouvements = 0
@@ -18612,12 +18961,24 @@ def distributeur_available_months(request, distributeur_id):
             key = (mouvement.date_mouvement.year, mouvement.date_mouvement.month)
             months_data[key]['has_data'] = True
     
-    # Frais
-    frais = DistributeurFrais.objects.filter(distributeur=distributeur)
-    for f in frais:
-        if f.date_frais:
-            key = (f.date_frais.year, f.date_frais.month)
-            months_data[key]['has_data'] = True
+    # Frais : un récurrent marque chaque mois jusqu'à aujourd'hui
+    aujourd_hui = timezone.localdate()
+    for f in DistributeurFrais.objects.filter(distributeur=distributeur):
+        if not f.date_frais:
+            continue
+        if (f.recurrence or '').strip() in ('mensuel', 'hebdomadaire'):
+            curseur = date(f.date_frais.year, f.date_frais.month, 1)
+            fin_mois = date(aujourd_hui.year, aujourd_hui.month, 1)
+            while curseur <= fin_mois:
+                _, dernier = calendar.monthrange(curseur.year, curseur.month)
+                if _occurrences_frais(f, curseur, date(curseur.year, curseur.month, dernier)):
+                    months_data[(curseur.year, curseur.month)]['has_data'] = True
+                if curseur.month == 12:
+                    curseur = date(curseur.year + 1, 1, 1)
+                else:
+                    curseur = date(curseur.year, curseur.month + 1, 1)
+        else:
+            months_data[(f.date_frais.year, f.date_frais.month)]['has_data'] = True
     
     # Convertir en liste triée (du plus récent au plus ancien)
     month_names = ['Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin', 

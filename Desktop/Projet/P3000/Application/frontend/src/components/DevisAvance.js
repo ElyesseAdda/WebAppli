@@ -246,7 +246,10 @@ const DevisAvance = () => {
   const [currentSocieteId, setCurrentSocieteId] = useState(null);
 
   // États pour la sélection de société alternative (affichage devis uniquement)
+  // societeDevisChoisi : vrai seulement si l'utilisateur a choisi cette société
+  // pour CE devis. Un ancien brouillon ne doit pas la réappliquer.
   const [societeDevisId, setSocieteDevisId] = useState(null);
+  const [societeDevisChoisi, setSocieteDevisChoisi] = useState(false);
   const [availableSocietes, setAvailableSocietes] = useState([]);
   const [showSelectSocieteDevisModal, setShowSelectSocieteDevisModal] = useState(false);
   const [showCreateSocieteDevisModal, setShowCreateSocieteDevisModal] = useState(false);
@@ -302,6 +305,7 @@ const DevisAvance = () => {
     currentSocieteId: null,
     selectedSocieteId: null,
     societeDevisId: null,
+    societeDevisChoisi: false,
     customDrivePath: null,
     chantierDrivePath: null,
     clientId: null
@@ -544,6 +548,7 @@ const DevisAvance = () => {
       });
       if (response.data?.id) {
         setSocieteDevisId(response.data.id);
+        setSocieteDevisChoisi(true);
         fetchContactsSociete(response.data.id);
         setSelectedContactId(null);
         await fetchAvailableSocietes();
@@ -641,6 +646,7 @@ const DevisAvance = () => {
             await fetchContactsSociete(chantierData.societe.id);
             // Réinitialiser la société devis alternative
             setSocieteDevisId(null);
+            setSocieteDevisChoisi(false);
             
             // Récupérer les informations du client
             if (chantierData.societe.client_name) {
@@ -683,6 +689,7 @@ const DevisAvance = () => {
             await fetchContactsSociete(chantierData.societe);
             // Réinitialiser la société devis alternative
             setSocieteDevisId(null);
+            setSocieteDevisChoisi(false);
             
             if (societeData.client_name) {
               const clientId = typeof societeData.client_name === 'object' 
@@ -874,6 +881,10 @@ const DevisAvance = () => {
     
     // Mettre à jour aussi l'état societe pour l'affichage immédiat
     setSociete(updatedSociete);
+    // La société saisie pour cet appel d'offres ne doit pas être remplacée
+    // par une société d'affichage choisie sur un devis précédent.
+    setSocieteDevisId(null);
+    setSocieteDevisChoisi(false);
     
     setShowSocieteInfoModal(false);
     setShowChantierForm(true);
@@ -1136,21 +1147,9 @@ const DevisAvance = () => {
       setDevisData(prev => ({ ...prev, numero: numero }));
       return numero;
     } catch (error) {
-      // Erreur lors de la génération du numéro de devis
-      const currentYear = new Date().getFullYear();
-      const chantierIdToUse = chantierIdParam !== null ? chantierIdParam : selectedChantierId;
-      const isChantierExistant = chantierIdToUse && chantierIdToUse !== -1;
-      
-      // Déterminer le format de fallback selon le type
-      let fallbackNumber;
-      if (devisType === "chantier" || !isChantierExistant) {
-        fallbackNumber = `Devis de travaux n°001.${currentYear}`;
-      } else {
-        fallbackNumber = `Devis de travaux n°001.${currentYear} - TS n°01`;
-      }
-      
-      setDevisData(prev => ({ ...prev, numero: fallbackNumber }));
-      return fallbackNumber;
+      console.error("Erreur lors de la génération du numéro de devis:", error);
+      setDevisData(prev => ({ ...prev, numero: "" }));
+      return "";
     } finally {
       setIsGeneratingNumber(false);
     }
@@ -1862,8 +1861,15 @@ const DevisAvance = () => {
         setSelectedSocieteId(draft.selectedSocieteId ?? null);
       }
       
-      if (typeof draft.societeDevisId !== 'undefined') {
-        setSocieteDevisId(draft.societeDevisId ?? null);
+      // N'accepter la société d'affichage du brouillon que si elle a été
+      // choisie explicitement pour ce devis. Les anciens brouillons
+      // réinjectaient sinon une société sans rapport (ex. SSCV Lumia).
+      if (draft.societeDevisChoisi && draft.societeDevisId) {
+        setSocieteDevisId(draft.societeDevisId);
+        setSocieteDevisChoisi(true);
+      } else {
+        setSocieteDevisId(null);
+        setSocieteDevisChoisi(false);
       }
       
       // ✅ Restaurer les chemins du drive
@@ -1910,6 +1916,9 @@ const DevisAvance = () => {
     }
     
     draftSaveTimeoutRef.current = setTimeout(() => {
+      if (skipDraftWriteRef.current) {
+        return;
+      }
       const draftPayload = {
         devisData,
         client,
@@ -1930,7 +1939,8 @@ const DevisAvance = () => {
         selectedContactId,
         currentSocieteId,
         selectedSocieteId,
-        societeDevisId,
+        societeDevisId: societeDevisChoisi ? societeDevisId : null,
+        societeDevisChoisi,
         customDrivePath,
         chantierDrivePath,
         clientId
@@ -1970,6 +1980,7 @@ const DevisAvance = () => {
     currentSocieteId,
     selectedSocieteId,
     societeDevisId,
+    societeDevisChoisi,
     customDrivePath,
     chantierDrivePath,
     clientId
@@ -2025,7 +2036,8 @@ const DevisAvance = () => {
       selectedContactId,
       currentSocieteId,
       selectedSocieteId,
-      societeDevisId,
+      societeDevisId: societeDevisChoisi ? societeDevisId : null,
+      societeDevisChoisi,
       customDrivePath,
       chantierDrivePath,
       clientId
@@ -2053,6 +2065,7 @@ const DevisAvance = () => {
     currentSocieteId,
     selectedSocieteId,
     societeDevisId,
+    societeDevisChoisi,
     customDrivePath,
     chantierDrivePath,
     clientId
@@ -2061,6 +2074,9 @@ const DevisAvance = () => {
   // ✅ Sauvegarde synchrone avant fermeture de la page (beforeunload)
   useEffect(() => {
     const handleBeforeUnload = () => {
+      if (skipDraftWriteRef.current) {
+        return;
+      }
       // Sauvegarder immédiatement sans timeout en utilisant les valeurs de la ref
       const latest = latestDraftRef.current;
       if (latest.draftStorageKey && latest.isDraftHydrated) {
@@ -2092,6 +2108,7 @@ const DevisAvance = () => {
             currentSocieteId: latest.currentSocieteId,
             selectedSocieteId: latest.selectedSocieteId,
             societeDevisId: latest.societeDevisId,
+            societeDevisChoisi: latest.societeDevisChoisi,
             customDrivePath: latest.customDrivePath,
             chantierDrivePath: latest.chantierDrivePath,
             clientId: latest.clientId
@@ -2123,6 +2140,7 @@ const DevisAvance = () => {
   }, []); // Pas de dépendances, on utilise la ref qui est toujours à jour
   
   const clearDraftStorage = React.useCallback(() => {
+    skipDraftWriteRef.current = true;
     if (!draftStorageKey) {
       return;
     }
@@ -2135,6 +2153,9 @@ const DevisAvance = () => {
 
   // ✅ Anti double-envoi: empêche 2 POST create-devis simultanés (double clic / latence UI)
   const saveInFlightRef = useRef(false);
+  // Empêche beforeunload de réécrire le brouillon juste après un reset,
+  // avec l'ancienne société d'affichage encore dans la ref.
+  const skipDraftWriteRef = useRef(false);
   
   const resetDevisFormState = React.useCallback(() => {
     setDevisData(createInitialDevisData());
@@ -2172,6 +2193,8 @@ const DevisAvance = () => {
     setContactsSociete([]);
     setSelectedContactId(null);
     setCurrentSocieteId(null);
+    setSocieteDevisId(null);
+    setSocieteDevisChoisi(false);
   }, []);
 
   // ✅ Plus besoin de synchronisation : devisItems est la source de vérité unique
@@ -3017,8 +3040,9 @@ const DevisAvance = () => {
         // ✅ Si l'ID de la société est déjà disponible (cas où on a sélectionné un client existant), l'utiliser directement
         if (pendingChantierData.societe?.id && !pendingChantierData.societe?.needsCreation) {
           finalSocieteId = pendingChantierData.societe.id;
-        } else if (selectedSocieteId) {
-          // ✅ Utiliser selectedSocieteId si disponible (important pour les appels d'offres avec société sélectionnée)
+        } else if (selectedSocieteId && !pendingChantierData.societe?.nom_societe) {
+          // Ancien identifiant seulement s'il n'y a pas de nom saisi.
+          // Sinon le nom entré pour cet appel d'offres est prioritaire.
           finalSocieteId = selectedSocieteId;
         } else {
           // ✅ Vérifier si la société existe (même si on a un ID, on vérifie pour être sûr)
@@ -3135,7 +3159,7 @@ const DevisAvance = () => {
           price_ht: total_ht,
           price_ttc: montant_ttc,
           contact_societe: selectedContactId || null,
-          societe_devis: societeDevisId || null,
+          societe_devis: societeDevisChoisi ? (societeDevisId || null) : null,
         },
         selectedChantierId: finalChantierId,
         clientIds: finalClientId ? [finalClientId] : [],
@@ -3194,7 +3218,7 @@ const DevisAvance = () => {
                 appelOffresId: appelOffresId,
                 appelOffresName: appelOffresName,
                 societeName: societeName,
-                numero: devisData.numero,
+                numero: response.data.numero || devisData.numero,
               });
               // Ajouter le chemin personnalisé du drive si défini
               if (effectiveDrivePath) {
@@ -3247,7 +3271,7 @@ const DevisAvance = () => {
                 chantierData.societe?.nom_societe ||
                 societe.nom_societe ||
                 "Société",
-              numero: devisData.numero,
+              numero: response.data.numero || devisData.numero,
             });
             // Ajouter le chemin personnalisé du drive si défini
             if (effectiveDrivePath) {
@@ -3287,6 +3311,7 @@ const DevisAvance = () => {
     resetDevisFormState();
     clearDraftStorage();
     await generateDevisNumber(null);
+    skipDraftWriteRef.current = false;
   };
 
   // Charger les chantiers au montage du composant
@@ -3569,7 +3594,8 @@ const DevisAvance = () => {
               availableSocietes={availableSocietes}
               selectedSocieteDevisId={societeDevisId}
               onSocieteDevisSelect={(id) => {
-                setSocieteDevisId(id);
+                setSocieteDevisId(id || null);
+                setSocieteDevisChoisi(Boolean(id));
                 if (id) {
                   fetchContactsSociete(id);
                   setSelectedContactId(null);
@@ -3604,6 +3630,8 @@ const DevisAvance = () => {
               }}
               onSocieteChange={(updatedSociete) => {
                 setSociete(updatedSociete);
+                setSocieteDevisId(null);
+                setSocieteDevisChoisi(false);
                 setPendingChantierData((prev) => ({
                   ...prev,
                   societe: {
@@ -3963,7 +3991,7 @@ const DevisAvance = () => {
                         price_ht: total_ht,
                         price_ttc: montant_ttc,
                         contact_societe: selectedContactId || null,
-                        societe_devis: societeDevisId || null,
+                        societe_devis: societeDevisChoisi ? (societeDevisId || null) : null,
                       },
                       selectedChantierId,
                       clientIds: finalClientId ? [finalClientId] : []
@@ -4132,7 +4160,8 @@ const DevisAvance = () => {
         onClose={() => setShowSelectSocieteDevisModal(false)}
         filteredSocietes={availableSocietes}
         onSocieteSelect={(societeId) => {
-          setSocieteDevisId(societeId);
+          setSocieteDevisId(societeId || null);
+          setSocieteDevisChoisi(Boolean(societeId));
           setShowSelectSocieteDevisModal(false);
           if (societeId) {
             fetchContactsSociete(societeId);
