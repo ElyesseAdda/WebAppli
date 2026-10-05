@@ -59,6 +59,21 @@ const RECURRING_SPECIAL_LINE_TEMPLATE = {
   isRecurringSpecial: true
 };
 
+const toDateInputValue = (value) => {
+  if (!value) {
+    const now = new Date();
+    const month = String(now.getMonth() + 1).padStart(2, '0');
+    const day = String(now.getDate()).padStart(2, '0');
+    return `${now.getFullYear()}-${month}-${day}`;
+  }
+  if (/^\d{4}-\d{2}-\d{2}$/.test(value)) return value;
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return toDateInputValue(null);
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${date.getFullYear()}-${month}-${day}`;
+};
+
 const isRecurringSpecialLine = (item) => (
   item &&
   item.type === 'ligne_speciale' &&
@@ -76,7 +91,7 @@ const ModificationDevisV2 = () => {
   // États pour les données
   const [devisData, setDevisData] = useState({
     numero: '',
-    date_creation: new Date().toISOString().split('T')[0],
+    date_creation: toDateInputValue(null),
     nature_travaux: '',
     tva_rate: 20,
     price_ht: 0,
@@ -143,6 +158,7 @@ const ModificationDevisV2 = () => {
   const [chantierSearchQuery, setChantierSearchQuery] = useState('');
   const [chantierDropdownOpen, setChantierDropdownOpen] = useState(false);
   const chantierDropdownRef = useRef(null);
+  const initializedDevisIdRef = useRef(null);
 
   // Hook de chargement
   const {
@@ -647,14 +663,18 @@ const ModificationDevisV2 = () => {
     }
   }, [fetchContactsSociete, fetchAvailableSocietes]);
 
-  // Initialiser les données quand le devis est chargé
+  // Initialiser les données quand le devis est chargé.
+  // Une seule fois par devis, sinon un rechargement écrase la date saisie.
   useEffect(() => {
-    if (loadedDevisData) {
+    if (loadedDevisData && initializedDevisIdRef.current !== loadedDevisData.id) {
+      initializedDevisIdRef.current = loadedDevisData.id;
       setDevisData({
         id: loadedDevisData.id,
         numero: loadedDevisData.numero || '',
-        date_creation: loadedDevisData.date_creation?.split('T')[0] || new Date().toISOString().split('T')[0],
+        date_creation: toDateInputValue(loadedDevisData.date_creation),
         nature_travaux: loadedDevisData.nature_travaux || '',
+        description: loadedDevisData.description || '',
+        status: loadedDevisData.status || 'En attente',
         tva_rate: loadedDevisData.tva_rate ?? 20,
         price_ht: loadedDevisData.price_ht ?? 0,
         price_ttc: loadedDevisData.price_ttc ?? 0,
@@ -1024,7 +1044,7 @@ const ModificationDevisV2 = () => {
           onError: (error) => {
             console.error("❌ Erreur lors de la génération du PDF:", error);
           },
-        });
+        }, true);
 
         // Si un conflit est détecté, ne pas rediriger (l'utilisateur doit résoudre le conflit)
         if (pdfResult && pdfResult.conflict_detected) {

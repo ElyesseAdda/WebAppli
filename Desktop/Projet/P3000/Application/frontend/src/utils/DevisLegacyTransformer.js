@@ -477,10 +477,10 @@ const convertDateToISO = (dateString) => {
     return dateString;
   }
   
-  // Si la date est au format "YYYY-MM-DD", la convertir en ISO 8601 complet
-  // Mettre l'heure à 00:00:00.000 UTC
+  // Jour calendaire saisi : midi UTC, pour que le jour reste le même
+  // en UTC et en heure de Paris (minuit UTC peut basculer sur la veille).
   if (/^\d{4}-\d{2}-\d{2}$/.test(dateString)) {
-    return `${dateString}T00:00:00.000Z`;
+    return `${dateString}T12:00:00.000Z`;
   }
   
   // Sinon, essayer de parser la date et la convertir
