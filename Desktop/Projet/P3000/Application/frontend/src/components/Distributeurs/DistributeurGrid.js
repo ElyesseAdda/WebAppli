@@ -83,8 +83,10 @@ const DistributeurGrid = ({ distributeur, onUpdateGrid }) => {
     
     try {
       if (cellData === null) {
-        // Cellule supprimée, recharger
         await fetchCells();
+        if (options?.message) {
+          setSnackbar({ open: true, severity: "success", message: options.message });
+        }
         return;
       }
 
@@ -106,11 +108,12 @@ const DistributeurGrid = ({ distributeur, onUpdateGrid }) => {
           }
         );
         const d = resp?.data || {};
-        const actionLabel = d.remaining_action === "restock" ? "remis en stock" : "considéré en perte";
+        const actionLabel = d.remaining_action === "restock" ? "remis en stock" : "perte au prix d'achat";
+        const coutReliquat = d.montant_achat_reliquat != null ? ` (${Number(d.montant_achat_reliquat).toFixed(2)} €)` : "";
         setSnackbar({
           open: true,
           severity: "success",
-          message: `Produit changé: vendu ${d.sold_qty ?? 0}u, reliquat ${d.remaining_qty ?? 0}u ${actionLabel}.`,
+          message: `Produit changé : vendu ${d.sold_qty ?? 0}, non vendu ${d.remaining_qty ?? 0} ${actionLabel}${d.remaining_action === "loss" ? coutReliquat : ""}.`,
         });
       } else if (selectedCell && selectedCell.id) {
         // Mise à jour

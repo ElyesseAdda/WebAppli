@@ -1208,6 +1208,14 @@ class DistributeurReapproLigne(models.Model):
         blank=True,
         help_text="Trace des lots consommés lors de la validation: [{lot_id, quantite}]",
     )
+    stock_product = models.ForeignKey(
+        'StockProduct',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='reappro_lignes',
+        help_text="Produit stock au moment du mouvement — la marge reste liée à ce produit si la case change",
+    )
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
@@ -1465,7 +1473,14 @@ class StockLot(models.Model):
 
 
 class StockLoss(models.Model):
-    """Perte de stock - unités perdues (casse, vol, etc.) avec coût calculé en FIFO"""
+    """Sortie de stock. Seule la nature « perte » entre dans le coût des pertes du mois, toujours au prix d'achat."""
+    NATURE_CHOICES = [
+        ('perte', 'Perte'),
+        ('don', 'Don'),
+        ('usage', 'Usage interne'),
+        ('correction', 'Correction'),
+        ('autre', 'Autre sortie'),
+    ]
     produit = models.ForeignKey(
         StockProduct,
         on_delete=models.CASCADE,
@@ -1477,9 +1492,15 @@ class StockLoss(models.Model):
         max_digits=10,
         decimal_places=2,
         default=0,
-        help_text="Coût total des pertes (calculé en FIFO à partir des lots)"
+        help_text="Coût d'achat des unités sorties (FIFO), jamais le prix de vente"
     )
-    date_perte = models.DateTimeField(default=timezone.now, help_text="Date de la perte")
+    nature = models.CharField(
+        max_length=20,
+        choices=NATURE_CHOICES,
+        default='perte',
+        help_text="Seule la nature perte est additionnée au coût des pertes du mois",
+    )
+    date_perte = models.DateTimeField(default=timezone.now, help_text="Date de la sortie")
     commentaire = models.CharField(
         max_length=255,
         blank=True,
@@ -4207,6 +4228,8 @@ def create_default_emetteurs(sender, **kwargs):
 # Modèles dédiés à la fonctionnalité « Rapport d'intervention / Vigik+ ».
 # Ils sont définis dans ``api/models_rapport.py`` et réexportés ici afin
 # de rester accessibles via ``from api.models import RapportIntervention``.
+from .models_numero import DocumentNumeroCompteur  # noqa: E402
+
 from .models_rapport import (  # noqa: E402  (import après signaux/post_migrate)
     TitreRapport,
     Residence,
