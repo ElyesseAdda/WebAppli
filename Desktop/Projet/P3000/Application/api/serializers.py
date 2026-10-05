@@ -1440,6 +1440,20 @@ class FactureSerializer(serializers.ModelSerializer):
             })
         return data
 
+    def create(self, validated_data):
+        date_envoi = validated_data.get('date_envoi')
+        facture = super().create(validated_data)
+        if date_envoi:
+            # La date du modal devient la date de la facture, pas celle du devis.
+            moment = datetime.combine(date_envoi, time(12, 0), tzinfo=datetime_timezone.utc)
+            Facture.objects.filter(pk=facture.pk).update(
+                date_envoi=date_envoi,
+                date_creation=moment,
+            )
+            facture.date_envoi = date_envoi
+            facture.date_creation = moment
+        return facture
+
 class ChantierDetailSerializer(serializers.ModelSerializer):
     societe_details = serializers.SerializerMethodField()
     statistiques = serializers.SerializerMethodField()

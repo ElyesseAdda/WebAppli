@@ -12,6 +12,19 @@ import fr from "date-fns/locale/fr";
 import React, { useEffect, useState } from "react";
 import axios from "axios";
 
+const formatLocalDate = (value) => {
+  if (!value) return null;
+  if (typeof value === "string" && /^\d{4}-\d{2}-\d{2}/.test(value)) {
+    return value.slice(0, 10);
+  }
+  const date = value instanceof Date ? value : new Date(value);
+  if (Number.isNaN(date.getTime())) return null;
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+};
+
 const FactureModal = ({ open, onClose, onSubmit, devis }) => {
   const [formData, setFormData] = useState({
     numero_facture: "",
@@ -79,17 +92,9 @@ ${devis.societe.codepostal_societe} ${devis.societe.ville_societe}`;
   const handleSubmit = (e) => {
     e.preventDefault();
 
-    // Calculer la date d'échéance basée sur la date d'envoi et le délai
-    const dateEcheanceFormatted = dateEcheanceCalculee
-      ? dateEcheanceCalculee.toISOString().split("T")[0]
-      : null;
-
-    // Formater la date d'envoi
-    const dateEnvoiFormatted = formData.date_envoi
-      ? (formData.date_envoi instanceof Date
-          ? formData.date_envoi.toISOString().split("T")[0]
-          : formData.date_envoi)
-      : null;
+    // Jour calendaire local : toISOString() décale la date à la veille en France.
+    const dateEcheanceFormatted = formatLocalDate(dateEcheanceCalculee);
+    const dateEnvoiFormatted = formatLocalDate(formData.date_envoi);
 
     // Si l'adresse de facturation est vide, utiliser l'adresse de la société
     const finalFormData = {
