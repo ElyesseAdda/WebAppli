@@ -205,7 +205,7 @@ const PlanningHebdoAgent = ({
   const fetchAgents = async () => {
     setIsLoading(true);
     try {
-      const response = await axios.get("/api/agent/");
+      const response = await axios.get("/api/agent/?include_inactive=true");
       setAgents(response.data);
       // Ne pas sélectionner automatiquement un agent ici
       // La sélection est gérée par le composant parent (PlanningContainer)
@@ -437,7 +437,7 @@ const PlanningHebdoAgent = ({
     };
 
     fetchData();
-  }, [selectedAgentId, selectedWeek, selectedYear, chantiers]);
+  }, [selectedAgentId, selectedWeek, selectedYear, chantiers, isAgentJournalier]);
 
   // Fonction pour générer les dates de la semaine
   const getDatesOfWeek = (weekNumber) => {
