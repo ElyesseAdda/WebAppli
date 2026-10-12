@@ -280,6 +280,32 @@ class StorageManager:
         except Exception as e:
             raise
     
+    def ensure_folder_markers(self, folder_path: str) -> bool:
+        """
+        Écrit un fichier .keep pour le dossier et chacun de ses parents.
+
+        S3 n'affiche un dossier que s'il existe une clé « dossier/.keep »
+        ou un fichier déjà rangé dessous. Sans ce marqueur, le nom reste
+        invisible jusqu'à une création manuelle.
+        """
+        path = (folder_path or '').replace('\\', '/').strip('/')
+        if not path:
+            return True
+        try:
+            current = ''
+            for part in path.split('/'):
+                if not part or part == '.keep':
+                    continue
+                current = f"{current}/{part}" if current else part
+                self.s3_client.put_object(
+                    Bucket=self.bucket_name,
+                    Key=f"{current}/.keep",
+                    Body=b'',
+                )
+            return True
+        except Exception:
+            return False
+
     def create_folder(self, folder_path: str) -> bool:
         """
         Crée un dossier virtuel dans S3
@@ -290,22 +316,7 @@ class StorageManager:
         Returns:
             True si succès
         """
-        try:
-            # S'assurer que le chemin se termine par /
-            if not folder_path.endswith('/'):
-                folder_path += '/'
-            
-            # Créer un fichier .keep pour marquer le dossier
-            self.s3_client.put_object(
-                Bucket=self.bucket_name,
-                Key=f"{folder_path}.keep",
-                Body=b''
-            )
-            
-            return True
-            
-        except Exception as e:
-            return False
+        return self.ensure_folder_markers(folder_path)
     
     def delete_object(self, key: str) -> bool:
         """
@@ -702,6 +713,8 @@ class StorageManager:
             True si succès
         """
         try:
+            if '/' in key:
+                self.ensure_folder_markers(key.rsplit('/', 1)[0])
             # Déterminer le content type
             content_type = get_content_type(key)
             
