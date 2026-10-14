@@ -9,6 +9,7 @@ Git Branches:
 ├── main                    → Client P3000 (production existante)
 ├── client/elekable         → Client Elekable
 ├── client/mjrservice       → Client MJRSERVICE
+├── client/demo             → Environnement de démonstration
 ├── client/<nouveau>        → Futurs clients
 └── client/template         → Template pour nouveaux clients
 
@@ -17,7 +18,8 @@ VPS Structure:
 ├── p3000/                  → P3000 (port 8000) - INCHANGÉ
 ├── elekable/               → Elekable (port 8001)
 ├── mjrservice/             → MJRSERVICE (port 8002)
-└── <nouveau-client>/       → Futurs clients (ports 8003, etc.)
+├── demo/                   → Environnement DEMO (port 8003)
+└── <nouveau-client>/       → Futurs clients (ports 8004, etc.)
 
 Infrastructure partagée:
 ├── PostgreSQL              → Une DB par client (p3000db, p3000db_elekable, etc.)
@@ -33,6 +35,9 @@ Infrastructure partagée:
 | P3000 | `main` | myp3000app.com | 8000 | p3000db | agency-drive-prod | — | 0 |
 | Elekable | `client/elekable` | elekable.fr | 8001 | p3000db_elekable | elekable | — | 1 |
 | MJRSERVICE | `client/mjrservice` | mjrserviceapp.com | 8002 | p3000db_mjrservice | mjrservices | eu-north-1 (Stockholm) | 2 |
+| **DEMO** | `client/demo` | demo.myp3000app.com | 8003 | p3000db_demo | p3000-demo | eu-west-3 (Paris) | 3 |
+
+> **Note** : L'environnement DEMO est destiné aux tests et démonstrations clients. Les données sont réinitialisées automatiquement chaque lundi. Voir [DEMO_CLIENT_SETUP.md](./DEMO_CLIENT_SETUP.md) pour plus de détails.
 
 ## Workflow Git
 
