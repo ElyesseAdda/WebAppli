@@ -1,0 +1,37 @@
+version: '3.8'
+
+services:
+  onlyoffice-documentserver:
+    image: onlyoffice/documentserver:latest
+    container_name: onlyoffice-documentserver
+    restart: always
+    ports:
+      - "8080:80"
+    environment:
+      - JWT_ENABLED=true
+      - JWT_SECRET=CHANGEME_VOTRE_JWT_SECRET
+      - JWT_HEADER=Authorization
+      - JWT_IN_BODY=true
+      # Limites de ressources (optionnel)
+      - WOPI_ENABLED=false
+      - USE_UNAUTHORIZED_STORAGE=false
+    volumes:
+      - /app/onlyoffice/DocumentServer/logs:/var/log/onlyoffice
+      - /app/onlyoffice/DocumentServer/data:/var/www/onlyoffice/Data
+      - /app/onlyoffice/DocumentServer/lib:/var/lib/onlyoffice
+      - /app/onlyoffice/DocumentServer/fonts:/usr/share/fonts/truetype/custom
+    networks:
+      - onlyoffice-network
+    # Limites de ressources Docker (optionnel)
+    deploy:
+      resources:
+        limits:
+          cpus: '2'
+          memory: 4G
+        reservations:
+          cpus: '1'
+          memory: 2G
+
+networks:
+  onlyoffice-network:
+    driver: bridge

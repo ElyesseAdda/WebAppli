@@ -1,0 +1,62 @@
+[Unit]
+Description=P3000 Gunicorn Application
+Documentation=https://github.com/ElyesseAdda/WebAppli
+After=network.target postgresql.service redis.service
+Wants=postgresql.service redis.service
+
+[Service]
+Type=notify
+User=www-data
+Group=www-data
+
+# Répertoires
+RuntimeDirectory=gunicorn
+WorkingDirectory=/var/www/p3000/Desktop/Projet/P3000/Application
+
+# Environnement
+Environment="PATH=/var/www/p3000/venv/bin"
+Environment="PYTHONPATH=/var/www/p3000/Desktop/Projet/P3000/Application"
+EnvironmentFile=/var/www/p3000/Desktop/Projet/P3000/Application/.env
+
+# Commande de démarrage
+ExecStart=/var/www/p3000/venv/bin/gunicorn \
+    --workers 4 \
+    --threads 2 \
+    --worker-class gthread \
+    --worker-tmp-dir /dev/shm \
+    --bind 127.0.0.1:8000 \
+    --access-logfile /var/log/gunicorn/p3000_access.log \
+    --error-logfile /var/log/gunicorn/p3000_error.log \
+    --log-level info \
+    --timeout 120 \
+    --graceful-timeout 30 \
+    --keep-alive 5 \
+    --max-requests 1000 \
+    --max-requests-jitter 50 \
+    Application.wsgi:application
+
+# Reload du processus
+ExecReload=/bin/kill -s HUP $MAINPID
+
+# Mode de terminaison
+KillMode=mixed
+KillSignal=SIGTERM
+TimeoutStopSec=5
+
+# Sécurité et isolation
+PrivateTmp=true
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/www/p3000 /var/log/gunicorn /var/log/p3000
+
+# Redémarrage automatique
+Restart=always
+RestartSec=3
+
+# Limites de ressources (optionnel)
+LimitNOFILE=65536
+LimitNPROC=512
+
+[Install]
+WantedBy=multi-user.target
