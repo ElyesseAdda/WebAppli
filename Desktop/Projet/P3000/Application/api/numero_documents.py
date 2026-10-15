@@ -288,7 +288,7 @@ def claim_devis_numero(requested, *, is_ts=False, chantier_id=None, year=None):
             and sequence_demandee not in utilises
             and (
                 not is_ts
-                or (ts_demande == ts_attendu and ts_demande not in ts_utilises)
+                or (ts_demande is not None and ts_demande not in ts_utilises)
             )
             and not Devis.objects.filter(numero=requested).exists()
         )
@@ -325,8 +325,9 @@ def claim_facture_numero(requested=None, year=None):
             utilises,
             _plancher(DocumentNumeroCompteur.SERIE_FACTURE, year, utilises),
         )
+        # ✅ Assouplir la condition : accepter la séquence demandée si elle n'est pas utilisée
         honorer = (
-            sequence_demandee == attendue
+            sequence_demandee is not None
             and sequence_demandee not in utilises
             and not Facture.objects.filter(numero=requested).exists()
         )
@@ -367,13 +368,13 @@ def claim_situation_numero(requested, chantier_id, year=None):
                 sit_num = sit_demande
 
         sequence_demandee = None
+        # ✅ Assouplir la condition : accepter la séquence facture demandée si elle n'est pas utilisée
         if (
             parsed
             and int(parsed.group(2)) == year
-            and int(parsed.group(1)) == facture_attendue
-            and sit_num == (int(parsed.group(3)) if parsed else None)
+            and int(parsed.group(1)) not in facture_utilises
         ):
-            sequence_demandee = facture_attendue
+            sequence_demandee = int(parsed.group(1))
 
         sequence = _reserver_sequence(
             DocumentNumeroCompteur.SERIE_FACTURE,
