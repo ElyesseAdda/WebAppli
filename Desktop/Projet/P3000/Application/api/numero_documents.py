@@ -192,12 +192,14 @@ def _reserver_sequence(serie, year, utilises, sequence_demandee=None):
     plancher = max(compteur.dernier_numero, _max_plausible(utilises))
     attendue = _prochain_libre(utilises, plancher)
 
+    # ✅ Assouplir la condition : accepter la séquence demandée si elle n'est pas utilisée,
+    # même si elle ne correspond pas exactement à l'attendue
     if (
         sequence_demandee
-        and sequence_demandee == attendue
         and sequence_demandee not in utilises
     ):
-        compteur.dernier_numero = sequence_demandee
+        # Mettre à jour le compteur avec la valeur maximale entre la séquence demandée et la précédente
+        compteur.dernier_numero = max(sequence_demandee, compteur.dernier_numero)
         compteur.save(update_fields=['dernier_numero'])
         return sequence_demandee
 
@@ -279,8 +281,10 @@ def claim_devis_numero(requested, *, is_ts=False, chantier_id=None, year=None):
             utilises,
             _plancher(DocumentNumeroCompteur.SERIE_DEVIS, year, utilises),
         )
+        # ✅ Assouplir la condition : accepter le numéro demandé s'il n'est pas utilisé,
+        # même s'il ne correspond pas exactement à la séquence attendue
         honorer = (
-            sequence_demandee == attendue
+            sequence_demandee is not None
             and sequence_demandee not in utilises
             and (
                 not is_ts
