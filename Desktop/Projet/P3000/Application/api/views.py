@@ -983,10 +983,16 @@ class PartieViewSet(viewsets.ModelViewSet):
                     queryset = Partie.objects.none()
             except (Devis.DoesNotExist, Exception) as e:
                 # Si le devis n'existe pas ou erreur, revenir au comportement normal
-                queryset = Partie.objects.filter(Q(is_deleted=False) | Q(is_deleted__isnull=True))
+                queryset = Partie.objects.filter(
+                    (Q(is_deleted=False) | Q(is_deleted__isnull=True)),
+                    devis__isnull=True,
+                )
         else:
-            # Comportement normal : filtrer les parties non supprimées
-            queryset = Partie.objects.filter(Q(is_deleted=False) | Q(is_deleted__isnull=True))
+            # Catalogue uniquement (exclure les copies isolées des devis unifiés)
+            queryset = Partie.objects.filter(
+                (Q(is_deleted=False) | Q(is_deleted__isnull=True)),
+                devis__isnull=True,
+            )
         
         type_filter = self.request.query_params.get('type')
         if type_filter:
@@ -1057,8 +1063,11 @@ class PartieViewSet(viewsets.ModelViewSet):
         """
         Récupère la liste des types de domaines existants
         """
-        # Filtrer aussi les domaines des parties non supprimées
-        domaines = Partie.objects.filter(Q(is_deleted=False) | Q(is_deleted__isnull=True)).values_list('type', flat=True).distinct().order_by('type')
+        # Filtrer aussi les domaines des parties catalogue non supprimées
+        domaines = Partie.objects.filter(
+            (Q(is_deleted=False) | Q(is_deleted__isnull=True)),
+            devis__isnull=True,
+        ).values_list('type', flat=True).distinct().order_by('type')
         return Response(list(domaines))
     
     @action(detail=False, methods=['get'])
@@ -1078,8 +1087,11 @@ class PartieViewSet(viewsets.ModelViewSet):
         """
         search_query = request.query_params.get('q', '').strip()
         
-        # Base queryset - exclure les parties supprimées
-        queryset = Partie.objects.filter(Q(is_deleted=False) | Q(is_deleted__isnull=True))
+        # Catalogue uniquement (pas les copies isolées devis)
+        queryset = Partie.objects.filter(
+            (Q(is_deleted=False) | Q(is_deleted__isnull=True)),
+            devis__isnull=True,
+        )
         
         # Filtrer par recherche si fournie
         if search_query:
@@ -1145,10 +1157,16 @@ class SousPartieViewSet(viewsets.ModelViewSet):
                     queryset = SousPartie.objects.none()
             except (Devis.DoesNotExist, Exception) as e:
                 # Si le devis n'existe pas ou erreur, revenir au comportement normal
-                queryset = SousPartie.objects.filter(Q(is_deleted=False) | Q(is_deleted__isnull=True))
+                queryset = SousPartie.objects.filter(
+                    (Q(is_deleted=False) | Q(is_deleted__isnull=True)),
+                    devis__isnull=True,
+                )
         else:
-            # Comportement normal : filtrer les sous-parties non supprimées
-            queryset = SousPartie.objects.filter(Q(is_deleted=False) | Q(is_deleted__isnull=True))
+            # Catalogue uniquement (exclure copies isolées)
+            queryset = SousPartie.objects.filter(
+                (Q(is_deleted=False) | Q(is_deleted__isnull=True)),
+                devis__isnull=True,
+            )
         
         return queryset
     
@@ -1183,7 +1201,10 @@ class SousPartieViewSet(viewsets.ModelViewSet):
         partie_id = request.query_params.get('partie', None)
         q = request.query_params.get('q', '').strip()
         
+        # Par défaut catalogue ; si partie_id fourni (catalogue ou copie devis), on scope sur cette partie
         queryset = SousPartie.objects.filter(is_deleted=False).prefetch_related('lignes_details')
+        if not partie_id:
+            queryset = queryset.filter(devis__isnull=True)
         
         # Filtrer par partie si spécifiée (obligatoire)
         if partie_id:
@@ -1770,10 +1791,16 @@ class LigneDetailViewSet(viewsets.ModelViewSet):
                     queryset = LigneDetail.objects.none()
             except (Devis.DoesNotExist, Exception) as e:
                 # Si le devis n'existe pas ou erreur, revenir au comportement normal
-                queryset = LigneDetail.objects.filter(Q(is_deleted=False) | Q(is_deleted__isnull=True))
+                queryset = LigneDetail.objects.filter(
+                    (Q(is_deleted=False) | Q(is_deleted__isnull=True)),
+                    devis__isnull=True,
+                )
         else:
-            # Comportement normal : filtrer les lignes non supprimées
-            queryset = LigneDetail.objects.filter(Q(is_deleted=False) | Q(is_deleted__isnull=True))
+            # Catalogue uniquement (exclure copies isolées)
+            queryset = LigneDetail.objects.filter(
+                (Q(is_deleted=False) | Q(is_deleted__isnull=True)),
+                devis__isnull=True,
+            )
         
         return queryset
     
@@ -1793,7 +1820,7 @@ class LigneDetailViewSet(viewsets.ModelViewSet):
         sous_partie_id = request.query_params.get('sous_partie', None)
         q = request.query_params.get('q', '').strip()
         
-        queryset = LigneDetail.objects.filter(is_deleted=False)
+        queryset = LigneDetail.objects.filter(is_deleted=False, devis__isnull=True)
         
         # Filtrer par sous-partie (obligatoire)
         if sous_partie_id:
@@ -6195,43 +6222,43 @@ def create_devis(request):
             if client_ids:
                 devis.client.set(client_ids)
             
-            # Création des lignes de devis
-            for ligne in request.data.get('lignes', []):
-                # Préparer les données pour la création
-                ligne_data = {
-                    'devis': devis,
-                    'ligne_detail_id': ligne['ligne_detail'],  # ← Corrigé : ligne_detail au lieu de ligne
-                    'quantite': Decimal(str(ligne['quantite'])),  # ← Corrigé : quantite au lieu de quantity
-                    'prix_unitaire': Decimal(str(ligne['prix_unitaire']))  # ← Corrigé : prix_unitaire au lieu de custom_price
-                }
-                
-                # ✅ Ajouter index_global si présent (pour conserver l'ordre des lignes)
-                # Le champ index_global est maintenant dans le modèle DevisLigne
-                if 'index_global' in ligne and ligne['index_global'] is not None:
-                    try:
-                        # index_global peut être décimal (1.101, 1.102, etc.)
-                        index_global = float(ligne['index_global'])
-                        if index_global >= 0:
-                            ligne_data['index_global'] = Decimal(str(index_global))
-                    except (ValueError, TypeError):
-                        # Si l'index n'est pas valide, utiliser default=0
-                        pass
-                
-                # ✅ Note: Le numero des lignes n'est pas stocké dans DevisLigne
-                # Il est géré via parties_metadata.lignesDetails (ordre dans le tableau)
-                # Les numéros des lignes sont calculés à l'affichage selon leur position dans parties_metadata
-                
-                # ✅ Note: total_ht est une propriété calculée (quantite * prix_unitaire)
-                # Il est envoyé dans le payload pour vérification mais n'est pas stocké
-                # Le backend calcule automatiquement total_ht = quantite * prix_unitaire
-                
-                DevisLigne.objects.create(**ligne_data)
+            # Structure isolée (système unifié) pour les nouveaux devis.
+            # Escape hatch : structure_isolee=false dans le payload → chemin legacy (catalogue partagé).
+            use_unified = request.data.get('structure_isolee', True)
+            if isinstance(use_unified, str):
+                use_unified = use_unified.lower() not in ('false', '0', 'no')
+
+            if use_unified:
+                from .devis_structure_unifiee import apply_unified_on_create
+                unified_info = apply_unified_on_create(devis, request.data)
+            else:
+                # Chemin legacy : DevisLigne → LigneDetail catalogue (inchangé)
+                for ligne in request.data.get('lignes', []):
+                    ligne_data = {
+                        'devis': devis,
+                        'ligne_detail_id': ligne['ligne_detail'],
+                        'quantite': Decimal(str(ligne['quantite'])),
+                        'prix_unitaire': Decimal(str(ligne['prix_unitaire']))
+                    }
+                    if 'index_global' in ligne and ligne['index_global'] is not None:
+                        try:
+                            index_global = float(ligne['index_global'])
+                            if index_global >= 0:
+                                ligne_data['index_global'] = Decimal(str(index_global))
+                        except (ValueError, TypeError):
+                            pass
+                    DevisLigne.objects.create(**ligne_data)
+                devis.structure_isolee = False
+                devis.save(update_fields=['structure_isolee'])
+                unified_info = {'structure_isolee': False, 'mode': 'legacy'}
             
             # Préparer la réponse avec l'ID du devis et de l'appel d'offres si applicable
             response_data = {
                 'id': devis.id,
                 'numero': devis.numero,
-                'date_creation': devis.date_creation.isoformat() if devis.date_creation else None
+                'date_creation': devis.date_creation.isoformat() if devis.date_creation else None,
+                'structure_isolee': bool(getattr(devis, 'structure_isolee', False)),
+                'mode': unified_info.get('mode', 'legacy'),
             }
             if devis_chantier and appel_offres:
                 response_data['appel_offres_id'] = appel_offres.id

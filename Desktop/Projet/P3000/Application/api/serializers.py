@@ -158,7 +158,7 @@ class DevisListSerializer(serializers.ModelSerializer):
         fields = [
             'id', 'numero', 'date_creation', 'price_ht', 'price_ttc',
             'status', 'chantier_name', 'client_name', 'societe_name',
-            'devis_chantier', 'appel_offres', 'chantier'
+            'devis_chantier', 'appel_offres', 'chantier', 'structure_isolee',
         ]
 
     def get_chantier_name(self, obj):
@@ -259,11 +259,12 @@ class DevisSerializer(serializers.ModelSerializer):
             'tva_rate', 'nature_travaux', 'description', 'status',
             'chantier', 'appel_offres', 'chantier_name', 'client_name', 'societe_name',
             'client', 'lignes', 'lignes_speciales', 'lignes_display', 'parties_metadata', 'devis_chantier',
+            'structure_isolee',
             'cout_estime_main_oeuvre', 'cout_estime_materiel', 'lignes_speciales_v2', 'version_systeme_lignes',
             'contact_societe', 'societe_devis',
             'status_updated_at', 'status_updated_by_name', 'tags',
         ]
-        read_only_fields = ['client']
+        read_only_fields = ['client', 'structure_isolee']
         extra_kwargs = {
             'date_creation': {'required': False, 'read_only': False},
         }
@@ -327,24 +328,29 @@ class DevisSerializer(serializers.ModelSerializer):
         Surcharge pour ajouter le système unifié avec mode dual (legacy/unified)
         """
         data = super().to_representation(instance)
-        
-        # DÉTECTION DU MODE
-        # Si le devis a des parties/sous-parties/lignes avec index_global > 0, utiliser le nouveau système
-        has_unified_items = (
+
+        from .devis_structure_unifiee import devis_has_structure_isolee
+
+        # Flag explicite prioritaire ; fallback sur la présence de copies scopées devis
+        has_unified_items = devis_has_structure_isolee(instance) or (
             Partie.objects.filter(devis=instance, index_global__gt=0).exists() or
             SousPartie.objects.filter(devis=instance, index_global__gt=0).exists() or
             LigneDetail.objects.filter(devis=instance, index_global__gt=0).exists()
         )
-        
-        if has_unified_items:
-            # NOUVEAU SYSTÈME : Utiliser index_global
+
+        data['structure_isolee'] = bool(getattr(instance, 'structure_isolee', False) or has_unified_items)
+
+        if has_unified_items and (
+            Partie.objects.filter(devis=instance).exists()
+            or LigneDetail.objects.filter(devis=instance).exists()
+        ):
+            # Structure isolée en DB : items unifiés + lignes DevisLigne inchangées
             data['items'] = self._get_unified_items(instance)
             data['mode'] = 'unified'
         else:
-            # ANCIEN SYSTÈME : Utiliser parties_metadata
             data['items'] = self._get_legacy_items(instance)
             data['mode'] = 'legacy'
-        
+
         return data
     
     def _get_unified_items(self, instance):
@@ -519,39 +525,60 @@ class DevisSerializer(serializers.ModelSerializer):
             return self._update_devis(instance, validated_data)
 
     def _update_devis(self, instance, validated_data):
-        if 'lignes' in validated_data:
-            DevisLigne.objects.filter(devis=instance).delete()
-            
-            lignes_data = validated_data.pop('lignes')
-            for ligne_data in lignes_data:
-                # ✅ Inclure index_global pour préserver l'ordre des lignes
-                ligne_create_data = {
-                    'devis': instance,
-                    'ligne_detail': ligne_data['ligne_detail'],
-                    'quantite': Decimal(str(ligne_data['quantite'])),
-                    'prix_unitaire': Decimal(str(ligne_data['prix_unitaire']))
-                }
-                
-                # Ajouter index_global si présent
-                if 'index_global' in ligne_data and ligne_data['index_global'] is not None:
-                    try:
-                        ligne_create_data['index_global'] = Decimal(str(ligne_data['index_global']))
-                    except (ValueError, TypeError):
-                        pass
-                
-                DevisLigne.objects.create(**ligne_create_data)
+        from .devis_structure_unifiee import (
+            apply_unified_on_update,
+            devis_has_structure_isolee,
+        )
 
-        # Mettre à jour les lignes spéciales
-        if 'lignes_speciales' in validated_data:
-            instance.lignes_speciales = validated_data.pop('lignes_speciales')
-        
-        # Mettre à jour les lignes display
-        if 'lignes_display' in validated_data:
-            instance.lignes_display = validated_data.pop('lignes_display')
-        
-        # Mettre à jour parties_metadata si présent
-        if 'parties_metadata' in validated_data:
-            instance.parties_metadata = validated_data.pop('parties_metadata')
+        lignes_data = validated_data.pop('lignes', None) if 'lignes' in validated_data else None
+        lignes_speciales = validated_data.pop('lignes_speciales', None) if 'lignes_speciales' in validated_data else None
+        lignes_display = validated_data.pop('lignes_display', None) if 'lignes_display' in validated_data else None
+        parties_metadata = validated_data.pop('parties_metadata', None) if 'parties_metadata' in validated_data else None
+
+        # Ne jamais basculer un devis legacy en unifié via un simple PUT (évite les surprises).
+        # Les devis déjà isolés restent sur le chemin unifié.
+        use_unified = devis_has_structure_isolee(instance)
+
+        if use_unified and (lignes_data is not None or parties_metadata is not None):
+            apply_unified_on_update(
+                instance,
+                validated_lignes=lignes_data if lignes_data is not None else [
+                    {
+                        'ligne_detail': dl.ligne_detail_id,
+                        'quantite': dl.quantite,
+                        'prix_unitaire': dl.prix_unitaire,
+                        'index_global': dl.index_global,
+                    }
+                    for dl in DevisLigne.objects.filter(devis=instance)
+                ],
+                parties_metadata=parties_metadata,
+                lignes_speciales=lignes_speciales,
+                lignes_display=lignes_display,
+            )
+            instance.refresh_from_db()
+        else:
+            if lignes_data is not None:
+                DevisLigne.objects.filter(devis=instance).delete()
+                for ligne_data in lignes_data:
+                    ligne_create_data = {
+                        'devis': instance,
+                        'ligne_detail': ligne_data['ligne_detail'],
+                        'quantite': Decimal(str(ligne_data['quantite'])),
+                        'prix_unitaire': Decimal(str(ligne_data['prix_unitaire']))
+                    }
+                    if 'index_global' in ligne_data and ligne_data['index_global'] is not None:
+                        try:
+                            ligne_create_data['index_global'] = Decimal(str(ligne_data['index_global']))
+                        except (ValueError, TypeError):
+                            pass
+                    DevisLigne.objects.create(**ligne_create_data)
+
+            if lignes_speciales is not None:
+                instance.lignes_speciales = lignes_speciales
+            if lignes_display is not None:
+                instance.lignes_display = lignes_display
+            if parties_metadata is not None:
+                instance.parties_metadata = parties_metadata
 
         # La date du formulaire doit être réécrite même si le champ a été ignoré
         # par la validation (lecture seule, format, etc.).
@@ -565,7 +592,8 @@ class DevisSerializer(serializers.ModelSerializer):
         if parsed_date is not None:
             instance.date_creation = parsed_date
 
-        # Mettre à jour les autres champs
+        # Mettre à jour les autres champs (structure_isolee est read_only)
+        validated_data.pop('structure_isolee', None)
         for attr, value in validated_data.items():
             setattr(instance, attr, value)
         
