@@ -34,7 +34,7 @@ const BREADCRUMB_ROUTES = [
   { path: "/RapportIntervention/:id/preview", section: "Documents", page: "Aperçu rapport", icon: MdFolderOpen },
   { path: "/RapportIntervention/:id", section: "Documents", page: "Rapport d'intervention", icon: MdFolderOpen },
   { path: "/RapportIntervention/nouveau", section: "Documents", page: "Nouveau rapport", icon: MdFolderOpen },
-  { path: "/paiements-sous-traitant/:chantierId/:sousTraitantId", section: "Tableau", page: "Paiements sous-traitant", icon: MdTableChart },
+  { path: "/paiements-sous-traitant/:chantierId/:sousTraitantId/:contratId?", section: "Tableau", page: "Paiements sous-traitant", icon: MdTableChart },
   { path: "/drive-v2/preview", section: "Drive", page: "Prévisualisation", icon: SiGoogledrive },
   { path: "/drive-v2/editor", section: "Drive", page: "Éditeur de fichier", icon: SiGoogledrive },
   { path: "/", section: "Chantier", page: "Dashboard", icon: MdConstruction },

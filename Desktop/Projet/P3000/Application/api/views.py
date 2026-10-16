@@ -12151,6 +12151,25 @@ class ContratSousTraitanceViewSet(viewsets.ModelViewSet):
             queryset = queryset.filter(sous_traitant_id=sous_traitant_id)
         return queryset
 
+    @action(detail=False, methods=['get'])
+    def resume(self, request):
+        """Associations légères sous-traitant / chantier, sans le détail des avenants."""
+        contrats = (
+            ContratSousTraitance.objects
+            .select_related('chantier')
+            .values('sous_traitant_id', 'chantier_id', 'chantier__chantier_name', 'sans_contrat')
+        )
+        data = [
+            {
+                'sous_traitant': contrat['sous_traitant_id'],
+                'chantier': contrat['chantier_id'],
+                'chantier_name': contrat['chantier__chantier_name'],
+                'sans_contrat': contrat['sans_contrat'],
+            }
+            for contrat in contrats
+        ]
+        return Response(data)
+
     def create(self, request, *args, **kwargs):
         serializer = self.get_serializer(data=request.data)
         if serializer.is_valid():
@@ -13090,27 +13109,36 @@ class FactureSousTraitantViewSet(viewsets.ModelViewSet):
         queryset = super().get_queryset()
         chantier_id = self.request.query_params.get('chantier')
         sous_traitant_id = self.request.query_params.get('sous_traitant')
+        contrat_id = self.request.query_params.get('contrat')
         if chantier_id:
             queryset = queryset.filter(chantier_id=chantier_id)
         if sous_traitant_id:
             queryset = queryset.filter(sous_traitant_id=sous_traitant_id)
+        if contrat_id:
+            queryset = queryset.filter(contrat_id=contrat_id)
         return queryset.prefetch_related('paiements')
 
     def create(self, request, *args, **kwargs):
         """Création d'une facture avec auto-génération du numéro si nécessaire"""
         chantier_id = request.data.get('chantier')
         sous_traitant_id = request.data.get('sous_traitant')
+        contrat_id = request.data.get('contrat')
         mois = request.data.get('mois')
         annee = request.data.get('annee')
         numero_facture = request.data.get('numero_facture')
         
         # Auto-génération du numéro de facture si pas fourni
         if not numero_facture and chantier_id and sous_traitant_id and mois and annee:
+            existing_filters = {
+                'chantier_id': chantier_id,
+                'sous_traitant_id': sous_traitant_id,
+                'mois': mois,
+                'annee': annee,
+            }
+            if contrat_id:
+                existing_filters['contrat_id'] = contrat_id
             existing_factures = FactureSousTraitant.objects.filter(
-                chantier_id=chantier_id,
-                sous_traitant_id=sous_traitant_id,
-                mois=mois,
-                annee=annee
+                **existing_filters
             ).count()
             numero_facture = str(existing_factures + 1)
             request.data['numero_facture'] = numero_facture
