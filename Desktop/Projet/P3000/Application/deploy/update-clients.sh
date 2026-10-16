@@ -8,6 +8,7 @@
 #   bash deploy/update-clients.sh              # Met à jour tous les clients
 #   bash deploy/update-clients.sh elekable     # Seulement elekable
 #   bash deploy/update-clients.sh mjrservice   # Seulement mjrservice
+#   bash deploy/update-clients.sh demo         # Seulement demo
 #
 # Ce script :
 #   1. Merge main → branches clients (en protégeant l'identité de chaque client)
@@ -118,6 +119,24 @@ PROTECTED_MJRSERVICE=(
     "$APP_PATH/frontend/templates/frontend/index_production.html"
 )
 
+# Branche démo : cursor/client-demo-environment-f3f5
+PROTECTED_DEMO=(
+    "$APP_PATH/deploy/.env.demo"
+    "$APP_PATH/deploy/cors-demo.json"
+    "$APP_PATH/deploy/reset_demo_data.sh"
+    "$APP_PATH/deploy/monitor_demo.sh"
+    "$APP_PATH/api/management/commands/cleanup_demo_s3.py"
+    "$APP_PATH/api/management/commands/create_demo_users.py"
+    "$APP_PATH/api/management/commands/load_demo_data.py"
+    "$APP_PATH/DEMO_CLIENT_SETUP.md"
+    "$APP_PATH/DEMO_DEPLOYMENT_SUMMARY.md"
+    "$APP_PATH/DEMO_QUICK_DEPLOY.md"
+    "$APP_PATH/DEMO_README.md"
+    "$APP_PATH/GUIDE_DEPLOIEMENT_VPS_COMPLET.md"
+)
+
+BRANCH_DEMO="cursor/client-demo-environment-f3f5"
+
 # =============================================================================
 # Fonctions
 # =============================================================================
@@ -219,6 +238,9 @@ do_merge() {
     elif [ "$branch" = "client/mjrservice" ]; then
         restore_files "$branch" "${PROTECTED_MJRSERVICE[@]}"
         log_ok "  Migrations mjrservice : nouvelles migrations de main conservées"
+    elif [ "$branch" = "$BRANCH_DEMO" ]; then
+        restore_files "$branch" "${PROTECTED_DEMO[@]}"
+        log_ok "  Migrations demo : nouvelles migrations de main conservées"
     fi
 
     # Pour tout conflit restant non couvert par la liste de protection :
@@ -286,6 +308,9 @@ do_push() {
 show_next_steps() {
     local branch="$1"
     local client="${branch#client/}"
+    if [ "$branch" = "$BRANCH_DEMO" ]; then
+        client="demo"
+    fi
     echo ""
     echo -e "${BOLD}${YELLOW}━━━  Prochaines étapes pour ${client}  ━━━${NC}"
     echo ""
@@ -297,6 +322,11 @@ show_next_steps() {
         echo "    elekable-go"
         echo "    python manage.py makemigrations"
         echo "    python manage.py migrate"
+    elif [ "$client" = "demo" ]; then
+        echo "  Branche : ${BRANCH_DEMO}"
+        echo "  Sur le serveur démo :"
+        echo "    git pull origin ${BRANCH_DEMO}"
+        echo "    # puis déploiement selon DEMO_QUICK_DEPLOY.md / reset_demo_data.sh"
     else
         echo "  Sur le serveur mjrserviceapp.com :"
         echo "    mjrservice-deploy   # ou : bash deploy/mjrservice/deploy.sh"
@@ -307,7 +337,7 @@ show_next_steps() {
 # =============================================================================
 # Point d'entrée
 # =============================================================================
-TARGET="${1:-both}"
+TARGET="${1:-all}"
 
 echo ""
 echo -e "${BOLD}${CYAN}╔══════════════════════════════════════════════════════════╗"
@@ -332,6 +362,17 @@ fi
 # S'assurer que main est à jour
 log_info "Fetch des dernières modifications..."
 git fetch origin main:main 2>/dev/null || log_warn "Impossible de fetch origin/main"
+git fetch origin "$BRANCH_DEMO" 2>/dev/null || log_warn "Impossible de fetch origin/${BRANCH_DEMO}"
+
+# Créer le tracking local de la branche démo si besoin
+if ! git show-ref --verify --quiet "refs/heads/${BRANCH_DEMO}"; then
+    if git show-ref --verify --quiet "refs/remotes/origin/${BRANCH_DEMO}"; then
+        log_info "Création du tracking local : ${BRANCH_DEMO}"
+        git branch --track "$BRANCH_DEMO" "origin/${BRANCH_DEMO}"
+    else
+        log_error "Branche ${BRANCH_DEMO} introuvable en local et sur origin."
+    fi
+fi
 
 check_git_clean
 
@@ -348,12 +389,14 @@ run_client() {
 case "$TARGET" in
     elekable)   run_client "client/elekable" ;;
     mjrservice) run_client "client/mjrservice" ;;
-    both)
+    demo)       run_client "$BRANCH_DEMO" ;;
+    all|both)
         run_client "client/mjrservice"
         run_client "client/elekable"
+        run_client "$BRANCH_DEMO"
         ;;
     *)
-        log_error "Argument invalide : '$TARGET'. Utilisez : elekable | mjrservice | both"
+        log_error "Argument invalide : '$TARGET'. Utilisez : elekable | mjrservice | demo | all"
         ;;
 esac
 

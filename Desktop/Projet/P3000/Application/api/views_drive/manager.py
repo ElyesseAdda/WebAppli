@@ -448,6 +448,7 @@ class DriveManager:
             file_path = self.normalize_path(file_path)
             file_name_normalized = normalize_filename(file_name)
             full_key = f"{file_path}{file_name_normalized}"
+            self.storage.ensure_folder_markers(file_path)
             
             upload_data = self.storage.get_presigned_upload_url(
                 key=full_key,
