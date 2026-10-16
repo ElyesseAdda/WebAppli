@@ -19,7 +19,9 @@ const DevisRecap = ({ devisData, total_ht, tva, montant_ttc, formatMontantEspace
       return;
     }
     
-    const newRate = parseFloat(inputValue);
+    // Remplacer la virgule par un point pour le parsing
+    const normalizedValue = inputValue.replace(',', '.');
+    const newRate = parseFloat(normalizedValue);
     if (!isNaN(newRate)) {
       setLocalTvaRate(newRate);
       if (onTvaRateChange) {
