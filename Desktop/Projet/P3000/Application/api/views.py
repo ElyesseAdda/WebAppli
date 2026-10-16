@@ -998,6 +998,22 @@ class PartieViewSet(viewsets.ModelViewSet):
         if type_filter:
             queryset = queryset.filter(type=type_filter)
         return queryset
+
+    def update(self, request, *args, **kwargs):
+        from .devis_structure_unifiee import guard_catalogue_mutation
+        instance = self.get_object()
+        blocked = guard_catalogue_mutation(instance, request)
+        if blocked is not None:
+            return blocked
+        return super().update(request, *args, **kwargs)
+
+    def partial_update(self, request, *args, **kwargs):
+        from .devis_structure_unifiee import guard_catalogue_mutation
+        instance = self.get_object()
+        blocked = guard_catalogue_mutation(instance, request)
+        if blocked is not None:
+            return blocked
+        return super().partial_update(request, *args, **kwargs)
     
     def get_object(self):
         """
@@ -1169,6 +1185,22 @@ class SousPartieViewSet(viewsets.ModelViewSet):
             )
         
         return queryset
+
+    def update(self, request, *args, **kwargs):
+        from .devis_structure_unifiee import guard_catalogue_mutation
+        instance = self.get_object()
+        blocked = guard_catalogue_mutation(instance, request)
+        if blocked is not None:
+            return blocked
+        return super().update(request, *args, **kwargs)
+
+    def partial_update(self, request, *args, **kwargs):
+        from .devis_structure_unifiee import guard_catalogue_mutation
+        instance = self.get_object()
+        blocked = guard_catalogue_mutation(instance, request)
+        if blocked is not None:
+            return blocked
+        return super().partial_update(request, *args, **kwargs)
     
     def destroy(self, request, *args, **kwargs):
         """Suppression logique en cascade"""
@@ -1917,6 +1949,11 @@ class LigneDetailViewSet(viewsets.ModelViewSet):
     def update(self, request, *args, **kwargs):
         try:
             instance = self.get_object()
+            from .devis_structure_unifiee import guard_catalogue_mutation
+            blocked = guard_catalogue_mutation(instance, request)
+            if blocked is not None:
+                return blocked
+
             data = request.data.copy()
             
             # Conversion des valeurs en décimal avec quantize pour 2 décimales

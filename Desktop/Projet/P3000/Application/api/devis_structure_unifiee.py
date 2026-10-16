@@ -26,6 +26,45 @@ def devis_has_structure_isolee(devis: Devis) -> bool:
     )
 
 
+def request_is_isolee_edit(request) -> bool:
+    """
+    Header ou query envoyé par ModifDevis en mode structure isolée.
+    Empêche de muter le catalogue partagé depuis l'éditeur de devis unifié.
+    """
+    if request is None:
+        return False
+    header = (request.headers.get("X-Devis-Edit-Mode") or "").strip().lower()
+    if header in ("isolee", "unified", "structure_isolee"):
+        return True
+    query = (request.query_params.get("devis_edit_mode") or "").strip().lower()
+    return query in ("isolee", "unified", "structure_isolee")
+
+
+def guard_catalogue_mutation(instance, request):
+    """
+    Si l'éditeur unifié tente de modifier un élément catalogue (devis null),
+    renvoyer un message d'erreur. Les copies (devis_id set) restent modifiables.
+    Retourne None si OK, sinon une Response DRF.
+    """
+    from rest_framework.response import Response
+    from rest_framework import status as http_status
+
+    if not request_is_isolee_edit(request):
+        return None
+    if getattr(instance, "devis_id", None):
+        return None
+    return Response(
+        {
+            "error": (
+                "Modification du catalogue interdite depuis un devis à structure isolée. "
+                "Les changements doivent rester sur les copies du devis."
+            ),
+            "code": "catalogue_mutation_blocked",
+        },
+        status=http_status.HTTP_403_FORBIDDEN,
+    )
+
+
 def _to_decimal(value, default="0") -> Decimal:
     if value is None or value == "":
         return Decimal(default)
@@ -144,6 +183,30 @@ def _remap_special_line_keys(
     return result
 
 
+def _apply_ligne_overrides(source: LigneDetail, payload: dict) -> dict:
+    """Fusionne les overrides d'édition (devis unifié) sur les champs catalogue source."""
+    fields = {
+        "description": source.description,
+        "unite": source.unite,
+        "cout_main_oeuvre": source.cout_main_oeuvre,
+        "cout_materiel": source.cout_materiel,
+        "taux_fixe": source.taux_fixe,
+        "marge": source.marge,
+        "prix": source.prix,
+    }
+    if not payload:
+        return fields
+
+    if payload.get("description") not in (None, ""):
+        fields["description"] = str(payload["description"])
+    if payload.get("unite") not in (None, ""):
+        fields["unite"] = str(payload["unite"])
+    for key in ("cout_main_oeuvre", "cout_materiel", "taux_fixe", "marge", "prix"):
+        if key in payload and payload[key] not in (None, ""):
+            fields[key] = _to_decimal(payload[key], str(fields[key] or 0))
+    return fields
+
+
 def _clone_ligne_detail(
     source: LigneDetail,
     *,
@@ -153,17 +216,19 @@ def _clone_ligne_detail(
     quantite: Decimal,
     index_global: int,
     numero: Optional[str] = None,
+    payload: Optional[dict] = None,
 ) -> LigneDetail:
+    fields = _apply_ligne_overrides(source, payload or {})
     return LigneDetail.objects.create(
         sous_partie=sous_partie,
         partie=partie,
-        description=source.description,
-        unite=source.unite,
-        cout_main_oeuvre=source.cout_main_oeuvre,
-        cout_materiel=source.cout_materiel,
-        taux_fixe=source.taux_fixe,
-        marge=source.marge,
-        prix=source.prix,
+        description=fields["description"],
+        unite=fields["unite"],
+        cout_main_oeuvre=fields["cout_main_oeuvre"],
+        cout_materiel=fields["cout_materiel"],
+        taux_fixe=fields["taux_fixe"],
+        marge=fields["marge"],
+        prix=fields["prix"],
         is_deleted=False,
         index_global=index_global,
         numero=numero or source.numero,
@@ -326,6 +391,7 @@ def materialize_unified_structure(
                     quantite=quantite,
                     index_global=ld_index,
                     numero=str(numero_ld) if numero_ld not in (None, "") else None,
+                    payload=payload,
                 )
                 ligne_map[source_ligne_id] = cloned_ld.id
                 created_ligne_ids.append(cloned_ld.id)
@@ -389,6 +455,7 @@ def materialize_unified_structure(
                 partie=catchall_partie,
                 quantite=_to_decimal(payload.get("quantite"), "1"),
                 index_global=_index_as_int(payload.get("index_global"), order),
+                payload=payload,
             )
             ligne_map[source_ligne_id] = cloned_ld.id
             created_ligne_ids.append(cloned_ld.id)

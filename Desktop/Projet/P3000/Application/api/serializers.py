@@ -68,10 +68,31 @@ def parse_devis_date_creation(value):
 class DevisLigneSerializer(serializers.ModelSerializer):
     ligne_detail = serializers.PrimaryKeyRelatedField(queryset=LigneDetail.objects.all())
     total_ht = serializers.SerializerMethodField()
+    # Overrides d'édition pour rematérialisation unifiée (non stockés sur DevisLigne)
+    description = serializers.CharField(required=False, allow_blank=True, write_only=True)
+    unite = serializers.CharField(required=False, allow_blank=True, write_only=True)
+    cout_main_oeuvre = serializers.DecimalField(
+        max_digits=10, decimal_places=2, required=False, allow_null=True, write_only=True
+    )
+    cout_materiel = serializers.DecimalField(
+        max_digits=10, decimal_places=2, required=False, allow_null=True, write_only=True
+    )
+    taux_fixe = serializers.DecimalField(
+        max_digits=5, decimal_places=2, required=False, allow_null=True, write_only=True
+    )
+    marge = serializers.DecimalField(
+        max_digits=8, decimal_places=2, required=False, allow_null=True, write_only=True
+    )
+    prix = serializers.DecimalField(
+        max_digits=10, decimal_places=2, required=False, allow_null=True, write_only=True
+    )
 
     class Meta:
         model = DevisLigne
-        fields = ['id', 'ligne_detail', 'quantite', 'prix_unitaire', 'total_ht', 'index_global']
+        fields = [
+            'id', 'ligne_detail', 'quantite', 'prix_unitaire', 'total_ht', 'index_global',
+            'description', 'unite', 'cout_main_oeuvre', 'cout_materiel', 'taux_fixe', 'marge', 'prix',
+        ]
         # ✅ index_global peut être null/blank pour les anciens devis (default=0)
         extra_kwargs = {
             'index_global': {'required': False, 'allow_null': True}
@@ -571,6 +592,7 @@ class DevisSerializer(serializers.ModelSerializer):
                             ligne_create_data['index_global'] = Decimal(str(ligne_data['index_global']))
                         except (ValueError, TypeError):
                             pass
+                    # Ignorer les overrides unifiés éventuels (description, coûts…)
                     DevisLigne.objects.create(**ligne_create_data)
 
             if lignes_speciales is not None:
@@ -693,17 +715,27 @@ class LigneDetailSerializer(serializers.ModelSerializer):
     def validate(self, data):
         """
         Vérifie si une ligne de détail similaire existe déjà dans la même sous-partie
+        (unicité catalogue uniquement — les copies isolées sont exclues).
         """
         description = data.get('description', '').strip().lower()
-        sous_partie = data.get('sous_partie')
+        sous_partie = data.get('sous_partie') or getattr(self.instance, 'sous_partie', None)
         
         if description and sous_partie:
-            # Vérifie si une ligne avec la même description existe dans la sous-partie (non supprimée)
-            existing_ligne = LigneDetail.objects.filter(
+            # Ne pas appliquer l'unicité catalogue aux copies devis
+            if self.instance is not None and getattr(self.instance, 'devis_id', None):
+                return data
+            if data.get('devis') is not None:
+                return data
+
+            existing_qs = LigneDetail.objects.filter(
                 Q(description__iexact=description) &
                 Q(sous_partie=sous_partie) &
-                Q(is_deleted=False)
-            ).first()
+                Q(is_deleted=False) &
+                Q(devis__isnull=True)
+            )
+            if self.instance is not None:
+                existing_qs = existing_qs.exclude(pk=self.instance.pk)
+            existing_ligne = existing_qs.first()
             
             if existing_ligne:
                 raise serializers.ValidationError({
@@ -723,6 +755,15 @@ class SousPartieSerializer(serializers.ModelSerializer):
         model = SousPartie
         fields = '__all__'
 
+    def create(self, validated_data):
+        # Si créée sous une partie isolée, propager devis_id
+        partie = validated_data.get('partie')
+        if partie is not None and getattr(partie, 'devis_id', None) and not validated_data.get('devis'):
+            validated_data['devis'] = partie.devis
+            if not validated_data.get('index_global'):
+                validated_data['index_global'] = 1
+        return super().create(validated_data)
+
     def validate(self, data):
         """
         Vérifie si une sous-partie similaire existe déjà dans la même partie
@@ -736,13 +777,15 @@ class SousPartieSerializer(serializers.ModelSerializer):
             description = "Lignes directes"
         
         if description and partie:
+            # Unicité catalogue seulement (copies devis isolées exclues)
+            base_qs = SousPartie.objects.filter(
+                partie=partie,
+                is_deleted=False,
+                devis__isnull=True,
+            )
             # Vérifie si une sous-partie "Lignes directes" existe déjà dans la partie
             if description == "Lignes directes":
-                existing_sous_partie = SousPartie.objects.filter(
-                    description="Lignes directes",
-                    partie=partie,
-                    is_deleted=False
-                ).first()
+                existing_sous_partie = base_qs.filter(description="Lignes directes").first()
                 
                 if existing_sous_partie:
                     nb_lignes = existing_sous_partie.lignes_details.count()
@@ -753,11 +796,7 @@ class SousPartieSerializer(serializers.ModelSerializer):
                     })
             else:
                 # Vérifie si une sous-partie avec la même description existe dans la partie (non supprimée)
-                existing_sous_partie = SousPartie.objects.filter(
-                    Q(description__iexact=description) &
-                    Q(partie=partie) &
-                    Q(is_deleted=False)
-                ).first()
+                existing_sous_partie = base_qs.filter(description__iexact=description).first()
                 
                 if existing_sous_partie:
                     nb_lignes = existing_sous_partie.lignes_details.count()

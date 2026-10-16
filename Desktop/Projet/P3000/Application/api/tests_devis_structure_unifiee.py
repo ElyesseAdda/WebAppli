@@ -218,3 +218,112 @@ class StructureIsoleeTests(TestCase):
         self.assertEqual(LigneDetail.objects.filter(devis=devis).count(), 1)
         self.assertEqual(LigneDetail.objects.filter(devis=devis2).count(), 1)
         self.assertEqual(LigneDetail.objects.filter(devis__isnull=True).count(), 1)
+
+    def test_unified_update_applies_ligne_overrides_without_touching_catalogue(self):
+        devis = self._make_devis(numero="DEV-TEST-UNI-005")
+        apply_unified_on_create(
+            devis,
+            {
+                "lignes": [
+                    {
+                        "ligne_detail": self.ligne.id,
+                        "quantite": "1",
+                        "prix_unitaire": "20",
+                        "index_global": 1.101,
+                    }
+                ],
+                "parties_metadata": {
+                    "selectedParties": [
+                        {
+                            "id": self.partie.id,
+                            "titre": self.partie.titre,
+                            "type": self.partie.type,
+                            "index_global": 1,
+                            "numero": 1,
+                            "sousParties": [
+                                {
+                                    "id": self.sous_partie.id,
+                                    "description": self.sous_partie.description,
+                                    "index_global": 1.1,
+                                    "lignesDetails": [self.ligne.id],
+                                }
+                            ],
+                        }
+                    ]
+                },
+            },
+        )
+        devis.refresh_from_db()
+        clone_id = DevisLigne.objects.get(devis=devis).ligne_detail_id
+        meta = devis.parties_metadata
+
+        from api.devis_structure_unifiee import apply_unified_on_update
+
+        apply_unified_on_update(
+            devis,
+            validated_lignes=[
+                {
+                    "ligne_detail": clone_id,
+                    "quantite": "2",
+                    "prix_unitaire": "30",
+                    "index_global": 1.101,
+                    "description": "Enduit modifié devis",
+                    "unite": "m2",
+                    "cout_main_oeuvre": "12",
+                    "cout_materiel": "6",
+                }
+            ],
+            parties_metadata={
+                "selectedParties": [
+                    {
+                        **meta["selectedParties"][0],
+                        "titre": "Partie modifiée devis",
+                        "sousParties": [
+                            {
+                                **meta["selectedParties"][0]["sousParties"][0],
+                                "description": "Sous-partie modifiée",
+                                "lignesDetails": [clone_id],
+                            }
+                        ],
+                    }
+                ]
+            },
+            lignes_speciales=devis.lignes_speciales,
+            lignes_display=devis.lignes_display,
+        )
+        devis.refresh_from_db()
+        new_clone = DevisLigne.objects.get(devis=devis).ligne_detail
+        self.assertEqual(new_clone.description, "Enduit modifié devis")
+        self.assertEqual(new_clone.cout_main_oeuvre, Decimal("12.00"))
+        self.assertEqual(devis.parties_metadata["selectedParties"][0]["titre"], "Partie modifiée devis")
+
+        self.ligne.refresh_from_db()
+        self.assertEqual(self.ligne.description, "Enduit")
+        self.assertEqual(self.ligne.cout_main_oeuvre, Decimal("10.00"))
+
+    def test_guard_blocks_catalogue_patch_in_isolee_mode(self):
+        from types import SimpleNamespace
+        from api.devis_structure_unifiee import guard_catalogue_mutation
+
+        request = SimpleNamespace(
+            headers={"X-Devis-Edit-Mode": "isolee"},
+            query_params={},
+        )
+        blocked = guard_catalogue_mutation(self.ligne, request)
+        self.assertIsNotNone(blocked)
+        self.assertEqual(blocked.status_code, 403)
+
+        clone = LigneDetail.objects.create(
+            sous_partie=self.sous_partie,
+            partie=self.partie,
+            description="Clone",
+            unite="m2",
+            cout_main_oeuvre=Decimal("1"),
+            cout_materiel=Decimal("1"),
+            taux_fixe=Decimal("20"),
+            marge=Decimal("10"),
+            prix=Decimal("2"),
+            devis=self._make_devis(numero="DEV-TEST-UNI-006"),
+            index_global=1,
+        )
+        self.assertIsNone(guard_catalogue_mutation(clone, request))

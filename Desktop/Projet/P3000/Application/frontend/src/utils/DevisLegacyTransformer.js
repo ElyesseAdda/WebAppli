@@ -154,6 +154,7 @@ const extractLignes = (devisItems) => {
     const total_ht = quantite * prix_unitaire;
     
     // ✅ Format attendu par l'API Django : { ligne_detail: ID, quantite: qty, prix_unitaire: price, total_ht: total, index_global: index }
+    // Les champs descriptifs/coûts sont envoyés pour la rematérialisation unifiée (overrides sur les copies).
     const ligneData = {
       ligne_detail: ligne.id,  // ← Nom correct pour le serializer
       quantite: quantite.toFixed(2),  // ← Nom correct pour le serializer
@@ -161,6 +162,29 @@ const extractLignes = (devisItems) => {
       // ✅ Ajouter total_ht (calculé, même si c'est une propriété côté backend)
       total_ht: total_ht.toFixed(2)
     };
+
+    if (ligne.description != null && ligne.description !== '') {
+      ligneData.description = ligne.description;
+    }
+    if (ligne.unite != null && ligne.unite !== '') {
+      ligneData.unite = ligne.unite;
+    }
+    if (ligne.cout_main_oeuvre != null && ligne.cout_main_oeuvre !== '') {
+      ligneData.cout_main_oeuvre = parseFloat(ligne.cout_main_oeuvre) || 0;
+    }
+    if (ligne.cout_materiel != null && ligne.cout_materiel !== '') {
+      ligneData.cout_materiel = parseFloat(ligne.cout_materiel) || 0;
+    }
+    if (ligne.taux_fixe != null && ligne.taux_fixe !== '') {
+      ligneData.taux_fixe = parseFloat(ligne.taux_fixe) || 0;
+    }
+    const margeValue = ligne.marge_devis != null ? ligne.marge_devis : ligne.marge;
+    if (margeValue != null && margeValue !== '') {
+      ligneData.marge = parseFloat(margeValue) || 0;
+    }
+    if (ligne.prix != null && ligne.prix !== '' && ligne.prix_devis == null) {
+      ligneData.prix = parseFloat(ligne.prix) || 0;
+    }
     
     // ✅ Ajouter index_global si présent (pour conserver l'ordre des lignes)
     // IMPORTANT : index_global peut être décimal (1.101, 1.102, etc.) donc utiliser parseFloat, pas parseInt

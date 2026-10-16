@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import axios from 'axios';
 
-const LigneDetailEditModal = ({ isOpen, onClose, ligneDetail, onSuccess }) => {
+const LigneDetailEditModal = ({ isOpen, onClose, ligneDetail, onSuccess, structureIsolee = false }) => {
   const [formData, setFormData] = useState({
     description: '',
     unite: '',
@@ -119,6 +119,7 @@ const LigneDetailEditModal = ({ isOpen, onClose, ligneDetail, onSuccess }) => {
       setIsLoading(true);
       setError('');
       const payload = {
+        id:               ligneDetail.id,
         description:      formData.description,
         unite:            formData.unite,
         cout_main_oeuvre: formData.cout_main_oeuvre || '0',
@@ -127,6 +128,14 @@ const LigneDetailEditModal = ({ isOpen, onClose, ligneDetail, onSuccess }) => {
         marge:            formData.marge            || '20',
         prix:             prixFinal,
       };
+
+      // Devis unifié : pas de PATCH catalogue ici — overrides locaux, appliqués à la rematérialisation au save.
+      if (structureIsolee) {
+        onSuccess && onSuccess(payload);
+        onClose();
+        return;
+      }
+
       const response = await axios.patch(`/api/ligne-details/${ligneDetail.id}/`, payload);
       onSuccess && onSuccess(response.data);
       onClose();
