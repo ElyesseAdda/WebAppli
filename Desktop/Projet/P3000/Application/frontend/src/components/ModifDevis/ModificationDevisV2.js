@@ -14,7 +14,6 @@ import ClientInfo from '../Devis/ClientInfo';
 import ChantierInfo from '../Devis/ChantierInfo';
 import DevisTable from '../Devis/DevisTable';
 import DevisRecap from '../Devis/DevisRecap';
-import TableauOption from '../Devis/TableauOption';
 import DevisCostPieChart from '../Devis/DevisCostPieChart';
 import ContactSocieteModal from '../ContactSocieteModal';
 import SelectSocieteModal from '../SelectSocieteModal';
@@ -1171,26 +1170,6 @@ const ModificationDevisV2 = () => {
     setPendingSpecialLines(prev => prev.filter(line => line.id !== lineId));
   };
 
-  // Transférer du tableau option vers le principal
-  const handleTransferFromOptionsToMain = (itemToTransfer) => {
-    if (!itemToTransfer) return;
-    
-    const nextIndex = getNextIndex(
-      devisItems, 
-      itemToTransfer.type === 'ligne_detail' ? 'sous_partie' : 
-      itemToTransfer.type === 'sous_partie' ? 'partie' : 'global', 
-      itemToTransfer.type === 'ligne_detail' ? itemToTransfer.sous_partie_id :
-      itemToTransfer.type === 'sous_partie' ? itemToTransfer.partie_id : null
-    );
-    
-    const transferredItem = {
-      ...itemToTransfer,
-      index_global: nextIndex || (devisItems.length > 0 ? Math.max(...devisItems.map(i => i.index_global)) + 1 : 1)
-    };
-    
-    setDevisItems(prev => sortByIndexGlobal([...prev, transferredItem]));
-  };
-
   // Affichage du chargement
   if (isLoading) {
     return (
@@ -1589,14 +1568,6 @@ const ModificationDevisV2 = () => {
               }}
             />
           </div>
-
-          {/* Section Options */}
-          <TableauOption
-            devisData={devisData}
-            devisItems={devisItems}
-            formatMontantEspace={formatMontantEspace}
-            onTransferToMain={handleTransferFromOptionsToMain}
-          />
 
           {/* Section Actions */}
           <div style={{
