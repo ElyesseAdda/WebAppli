@@ -469,7 +469,15 @@ const ModificationDevisV2 = () => {
     handleCancelBaseSelection,
     handleClearPendingLineForBase,
     handleDevisItemsReorder
-  } = useDevisHandlers(devisItems, setDevisItems, loadParties);
+  } = useDevisHandlers(devisItems, setDevisItems, loadParties, {
+    structureIsolee: Boolean(
+      loadedDevisData?.structure_isolee || loadedDevisData?.mode === 'unified'
+    ),
+  });
+
+  const structureIsolee = Boolean(
+    loadedDevisData?.structure_isolee || loadedDevisData?.mode === 'unified'
+  );
 
   // Enrichir les items pour compatibilité avec DevisTable
   const enrichedDevisItems = useMemo(() => {
@@ -1556,6 +1564,7 @@ const ModificationDevisV2 = () => {
               hasRecurringLine={hasRecurringLine}
               onLigneDetailHover={setHoveredLigneDetail}
               hoveredLigneDetail={hoveredLigneDetail}
+              structureIsolee={structureIsolee}
             />
           </div>
 

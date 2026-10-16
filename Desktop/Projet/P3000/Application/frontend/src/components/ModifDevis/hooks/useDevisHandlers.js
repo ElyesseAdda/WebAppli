@@ -59,9 +59,11 @@ const getNextSousPartieNumero = (items = [], partieId) => {
  * @param {Array} devisItems - Items du devis
  * @param {Function} setDevisItems - Setter pour les items
  * @param {Function} loadParties - Fonction pour recharger les parties disponibles (optionnel)
+ * @param {Object} options - { structureIsolee: boolean }
  * @returns {Object} Handlers
  */
-export const useDevisHandlers = (devisItems, setDevisItems, loadParties = null) => {
+export const useDevisHandlers = (devisItems, setDevisItems, loadParties = null, options = {}) => {
+  const structureIsolee = Boolean(options.structureIsolee);
   const [isReordering, setIsReordering] = useState(false);
   const [lineAwaitingPlacement, setLineAwaitingPlacement] = useState(null);
   const [isSelectingBase, setIsSelectingBase] = useState(false);
@@ -186,8 +188,8 @@ export const useDevisHandlers = (devisItems, setDevisItems, loadParties = null) 
           : item
       ));
       
-      // Mettre à jour en BDD si partie existante
-      if (!partie.isNew && !partie.isTemp) {
+      // Legacy : PATCH catalogue. Unifié : local seulement (parties_metadata + rematérialisation au save).
+      if (!structureIsolee && !partie.isNew && !partie.isTemp) {
         try {
           await axios.patch(`/api/parties/${partieId}/`, { titre: newTitre.trim() });
         } catch (error) {
@@ -195,7 +197,7 @@ export const useDevisHandlers = (devisItems, setDevisItems, loadParties = null) 
         }
       }
     }
-  }, [devisItems, setDevisItems]);
+  }, [devisItems, setDevisItems, structureIsolee]);
 
   /**
    * Modifier le numéro d'une partie
@@ -288,21 +290,24 @@ export const useDevisHandlers = (devisItems, setDevisItems, loadParties = null) 
     
     const newDescription = prompt('Modifier la description:', sousPartie.description);
     if (newDescription && newDescription.trim()) {
-      try {
-        await axios.patch(`/api/sous-parties/${sousPartieId}/`, {
-          description: newDescription.trim()
-        });
-        
-        setDevisItems(prev => prev.map(item =>
-          item.type === 'sous_partie' && item.id === sousPartieId
-            ? { ...item, description: newDescription.trim() }
-            : item
-        ));
-      } catch (error) {
-        console.error('Erreur lors de la modification de la sous-partie:', error);
+      setDevisItems(prev => prev.map(item =>
+        item.type === 'sous_partie' && item.id === sousPartieId
+          ? { ...item, description: newDescription.trim() }
+          : item
+      ));
+
+      // Legacy : PATCH catalogue. Unifié : local seulement.
+      if (!structureIsolee) {
+        try {
+          await axios.patch(`/api/sous-parties/${sousPartieId}/`, {
+            description: newDescription.trim()
+          });
+        } catch (error) {
+          console.error('Erreur lors de la modification de la sous-partie:', error);
+        }
       }
     }
-  }, [devisItems, setDevisItems]);
+  }, [devisItems, setDevisItems, structureIsolee]);
 
   /**
    * Modifier le numéro d'une sous-partie

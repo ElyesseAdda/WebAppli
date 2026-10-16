@@ -1580,6 +1580,12 @@ class Devis(models.Model):
     lignes_display = models.JSONField(default=dict, blank=True)  # Lignes spéciales de type 'display' uniquement
     parties_metadata = models.JSONField(default=dict, blank=True)  # Métadonnées des parties (numéros, ordre, etc.)
     devis_chantier = models.BooleanField(default=False)  # Nouveau champ
+    # True = structure Partie/SousPartie/LigneDetail clonée pour ce devis (système unifié).
+    # False = legacy : DevisLigne pointe vers le catalogue partagé (comportement historique).
+    structure_isolee = models.BooleanField(
+        default=False,
+        help_text="True si le devis possède une copie isolée de sa structure (système unifié)",
+    )
     
     # Contact de la société (optionnel, remplace le client par défaut)
     contact_societe = models.ForeignKey('ContactSociete', on_delete=models.SET_NULL, null=True, blank=True, related_name='devis', verbose_name="Contact société")
@@ -1830,10 +1836,10 @@ class TauxFixe(models.Model):
     def save(self, *args, **kwargs):
         # Sauvegarder le nouveau taux
         super().save(*args, **kwargs)
-        # Mettre à jour tous les prix des lignes détails
-        LigneDetail.objects.all().update(taux_fixe=self.valeur)
-        # Recalculer les prix pour toutes les lignes
-        for ligne in LigneDetail.objects.all():
+        # Ne toucher que le catalogue (pas les copies isolées des devis unifiés)
+        catalogue = LigneDetail.objects.filter(devis__isnull=True)
+        catalogue.update(taux_fixe=self.valeur)
+        for ligne in catalogue:
             ligne.calculer_prix()
             ligne.save(update_fields=['prix'])
     class Meta:
@@ -1887,9 +1893,10 @@ class LigneDetail(models.Model):
 
     class Meta:
         constraints = [
+            # Unicité catalogue uniquement — les copies isolées (devis non null) peuvent dupliquer
             models.UniqueConstraint(
                 fields=['sous_partie', 'description', 'unite'],
-                condition=models.Q(is_deleted=False),
+                condition=models.Q(is_deleted=False, devis__isnull=True),
                 name='unique_ligne_detail_active'
             )
         ]
@@ -2241,9 +2248,10 @@ class Partie(models.Model):
 
     class Meta:
         constraints = [
+            # Unicité catalogue uniquement — copies devis isolées autorisées
             models.UniqueConstraint(
                 fields=['titre', 'type'],
-                condition=models.Q(is_deleted=False),
+                condition=models.Q(is_deleted=False, devis__isnull=True),
                 name='unique_partie_active'
             )
         ]
@@ -2283,7 +2291,7 @@ class SousPartie(models.Model):
         constraints = [
             models.UniqueConstraint(
                 fields=['partie', 'description'],
-                condition=models.Q(is_deleted=False),
+                condition=models.Q(is_deleted=False, devis__isnull=True),
                 name='unique_sous_partie_active'
             )
         ]

@@ -204,7 +204,9 @@ const DevisTable = ({
   pendingRecurringAmount = 0,
   // Props pour le PieChart des coûts
   onLigneDetailHover,
-  hoveredLigneDetail
+  hoveredLigneDetail,
+  // true = devis à structure isolée : pas de mutation catalogue depuis le modal ligne
+  structureIsolee = false,
 }) => {
   // État pour suivre si une sous-partie est en cours de drag et quelle partie est affectée
   const [draggedPartieId, setDraggedPartieId] = useState(null);
@@ -2026,6 +2028,7 @@ const DevisTable = ({
           isOpen={isEditOpen}
           onClose={() => setIsEditOpen(false)}
           ligneDetail={editContext.ligne}
+          structureIsolee={structureIsolee}
           onSuccess={(updated) => {
             if (editContext?.ligne) {
               const ligneId = editContext.ligne.id;
