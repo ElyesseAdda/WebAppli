@@ -2177,6 +2177,7 @@ class FactureSousTraitantSerializer(serializers.ModelSerializer):
             'id',
             'sous_traitant',
             'chantier',
+            'contrat',
             'mois',
             'annee',
             'numero_facture',

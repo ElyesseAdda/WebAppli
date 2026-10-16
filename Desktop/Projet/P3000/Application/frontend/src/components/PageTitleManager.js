@@ -41,7 +41,7 @@ const ROUTE_TITLES = [
   { path: "/drive-v2", title: "Drive V2" },
   { path: "/drive-v2/preview", title: "Previsualisation fichier" },
   { path: "/drive-v2/editor", title: "Editeur de fichier" },
-  { path: "/paiements-sous-traitant/:chantierId/:sousTraitantId", title: "Paiements sous-traitant" },
+  { path: "/paiements-sous-traitant/:chantierId/:sousTraitantId/:contratId?", title: "Paiements sous-traitant" },
   { path: "/GestionAppelsOffres", title: "Appels d'offres" },
   { path: "/StockForm", title: "Stock" },
 ];

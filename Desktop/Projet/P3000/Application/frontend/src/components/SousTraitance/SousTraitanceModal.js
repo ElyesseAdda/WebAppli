@@ -51,7 +51,8 @@ import { formatAvenantNumero } from "../../utils/formatAvenantNumero";
 const SousTraitanceModal = ({ open, onClose, chantierId, onUpdate }) => {
   const [sousTraitants, setSousTraitants] = useState([]);
   const [sousTraitantsAvecContrat, setSousTraitantsAvecContrat] = useState([]);
-  const [sousTraitantsSansContrat, setSousTraitantsSansContrat] = useState([]);
+  const [tousSousTraitants, setTousSousTraitants] = useState([]);
+  const [chantiersParSousTraitant, setChantiersParSousTraitant] = useState({});
   const [selectedSousTraitant, setSelectedSousTraitant] = useState(null);
   const [showSousTraitantForm, setShowSousTraitantForm] = useState(false);
   const [showContratForm, setShowContratForm] = useState(false);
@@ -96,6 +97,26 @@ const SousTraitanceModal = ({ open, onClose, chantierId, onUpdate }) => {
       }
       const sousTraitantsData = await response.json();
 
+      const resumeResponse = await fetch(`/api/contrats-sous-traitance/resume/`);
+      const resumeData = resumeResponse.ok ? await resumeResponse.json() : [];
+      const chantiersMap = {};
+      resumeData.forEach((contrat) => {
+        if (!chantiersMap[contrat.sous_traitant]) {
+          chantiersMap[contrat.sous_traitant] = {};
+        }
+        const chantierKey = contrat.chantier;
+        if (!chantiersMap[contrat.sous_traitant][chantierKey]) {
+          chantiersMap[contrat.sous_traitant][chantierKey] = {
+            id: contrat.chantier,
+            name: contrat.chantier_name || `Chantier ${contrat.chantier}`,
+            count: 0,
+          };
+        }
+        chantiersMap[contrat.sous_traitant][chantierKey].count += 1;
+      });
+      setChantiersParSousTraitant(chantiersMap);
+      setTousSousTraitants(sousTraitantsData);
+
       // Récupérer uniquement les contrats du chantier sélectionné avec leurs avenants
       const contratsResponse = await fetch(
         `/api/contrats-sous-traitance/?chantier_id=${chantierId}`
@@ -105,33 +126,23 @@ const SousTraitanceModal = ({ open, onClose, chantierId, onUpdate }) => {
       }
       const contratsData = await contratsResponse.json();
 
-      // Séparer les sous-traitants avec et sans contrat pour ce chantier
       const sousTraitantsAvecContrat = [];
-      const sousTraitantsSansContrat = [];
 
       sousTraitantsData.forEach((sousTraitant) => {
-        const contrat = contratsData.find(
+        const contrats = contratsData.filter(
           (c) => c.sous_traitant === sousTraitant.id
         );
-        
-        if (contrat) {
-          // Sous-traitant avec contrat pour ce chantier (avec ou sans document)
+
+        contrats.forEach((contrat) => {
           sousTraitantsAvecContrat.push({
             ...sousTraitant,
             contrat: contrat,
           });
-        } else {
-          // Sous-traitant sans contrat pour ce chantier
-          sousTraitantsSansContrat.push({
-            ...sousTraitant,
-            contrat: null,
-          });
-        }
+        });
       });
 
       setSousTraitantsAvecContrat(sousTraitantsAvecContrat);
-      setSousTraitantsSansContrat(sousTraitantsSansContrat);
-      setSousTraitants(sousTraitantsAvecContrat); // Pour la compatibilité avec le reste du code
+      setSousTraitants(sousTraitantsAvecContrat);
     } catch (error) {
       console.error(
         "Erreur lors de la récupération des sous-traitants:",
@@ -220,18 +231,34 @@ const SousTraitanceModal = ({ open, onClose, chantierId, onUpdate }) => {
     }
   };
 
-  // Fonction de filtrage des sous-traitants par recherche
+  const getChantiersDuSousTraitant = (sousTraitantId) => {
+    const chantiers = Object.values(chantiersParSousTraitant[sousTraitantId] || {});
+    const surCeChantier =
+      chantiers.find((item) => String(item.id) === String(chantierId)) || null;
+    const autres = chantiers.filter(
+      (item) => String(item.id) !== String(chantierId)
+    );
+    return { surCeChantier, autres };
+  };
+
+  // Tous les sous-traitants restent proposés, y compris ceux qui ont déjà un contrat
   const getFilteredSousTraitantsSansContrat = () => {
-    return sousTraitantsSansContrat.filter((sousTraitant) => {
-      const matchesType = !typeFilter || sousTraitant.type === typeFilter;
-      const matchesSearch = !searchTerm || 
-        sousTraitant.entreprise.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        sousTraitant.numero_rcs.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        sousTraitant.ville.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        (sousTraitant.representant && sousTraitant.representant.toLowerCase().includes(searchTerm.toLowerCase()));
-      
-      return matchesType && matchesSearch;
-    });
+    return tousSousTraitants
+      .filter((sousTraitant) => {
+        const matchesType = !typeFilter || sousTraitant.type === typeFilter;
+        const matchesSearch = !searchTerm ||
+          sousTraitant.entreprise.toLowerCase().includes(searchTerm.toLowerCase()) ||
+          sousTraitant.numero_rcs.toLowerCase().includes(searchTerm.toLowerCase()) ||
+          sousTraitant.ville.toLowerCase().includes(searchTerm.toLowerCase()) ||
+          (sousTraitant.representant && sousTraitant.representant.toLowerCase().includes(searchTerm.toLowerCase()));
+
+        return matchesType && matchesSearch;
+      })
+      .sort((a, b) =>
+        (a.entreprise || "").localeCompare(b.entreprise || "", "fr", {
+          sensitivity: "base",
+        })
+      );
   };
 
   // Fonction pour mettre en évidence les termes de recherche
@@ -633,6 +660,21 @@ const SousTraitanceModal = ({ open, onClose, chantierId, onUpdate }) => {
                             Sans contrat
                           </Typography>
                         )}
+                        {sousTraitant.contrat && (
+                          <Typography
+                            variant="caption"
+                            sx={{
+                              backgroundColor: "rgba(25, 118, 210, 0.1)",
+                              color: "#1976d2",
+                              px: 1,
+                              py: 0.5,
+                              borderRadius: 1,
+                              fontWeight: 600,
+                            }}
+                          >
+                            Contrat #{sousTraitant.contrat.id}
+                          </Typography>
+                        )}
                       </Box>
                       {sousTraitant.type && (
                         <Typography
@@ -667,8 +709,11 @@ const SousTraitanceModal = ({ open, onClose, chantierId, onUpdate }) => {
                           edge="end"
                           onClick={(e) => {
                             e.stopPropagation();
+                            const contratId = sousTraitant.contrat?.id;
                             window.open(
-                              `/paiements-sous-traitant/${chantier.id}/${sousTraitant.id}`,
+                              contratId
+                                ? `/paiements-sous-traitant/${chantier.id}/${sousTraitant.id}/${contratId}`
+                                : `/paiements-sous-traitant/${chantier.id}/${sousTraitant.id}`,
                               "_blank"
                             );
                           }}
@@ -1241,7 +1286,7 @@ const SousTraitanceModal = ({ open, onClose, chantierId, onUpdate }) => {
         <DialogTitle>Sélectionner un sous-traitant existant</DialogTitle>
         <DialogContent>
           <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-            Choisissez un sous-traitant existant. Vous pouvez l'ajouter avec ou sans contrat.
+            Choisissez un sous-traitant existant, même s'il a déjà un contrat. Un nouveau contrat peut être créé pour ce chantier.
           </Typography>
           
           {/* Barre de recherche */}
@@ -1313,47 +1358,70 @@ const SousTraitanceModal = ({ open, onClose, chantierId, onUpdate }) => {
             </Box>
           )}
 
-          {/* Liste des sous-traitants sans contrat */}
+          {/* Liste de tous les sous-traitants, y compris ceux déjà sous contrat */}
           {getFilteredSousTraitantsSansContrat().map((sousTraitant) => {
-            // Vérifier si le sous-traitant est déjà associé au chantier
-            const aUnContrat = sousTraitantsAvecContrat.some(st => st.id === sousTraitant.id);
-            
+            const { surCeChantier, autres } = getChantiersDuSousTraitant(sousTraitant.id);
+            const autresAffiches = autres.slice(0, 2);
+            const autresRestants = autres.length - autresAffiches.length;
+
             return (
               <Paper 
                 key={sousTraitant.id} 
                 sx={{ 
                   p: 2, 
                   mb: 1, 
-                  cursor: aUnContrat ? "default" : "pointer",
                   "&:hover": {
-                    backgroundColor: aUnContrat ? "transparent" : "rgba(25, 118, 210, 0.04)",
+                    backgroundColor: "rgba(25, 118, 210, 0.04)",
                   },
-                  opacity: aUnContrat ? 0.6 : 1,
                 }}
               >
-                <Box display="flex" justifyContent="space-between" alignItems="center">
+                <Box display="flex" justifyContent="space-between" alignItems="center" gap={2}>
                   <Box>
-                    <Box display="flex" alignItems="center" gap={1}>
-                      <Typography variant="h6" sx={{ fontWeight: 600 }}>
-                        {highlightSearchTerm(sousTraitant.entreprise, searchTerm)}
-                      </Typography>
-                      {aUnContrat && (
-                        <Typography
-                          variant="caption"
-                          sx={{
-                            backgroundColor: "rgba(76, 175, 80, 0.1)",
-                            color: "#2e7d32",
-                            px: 1,
-                            py: 0.5,
-                            borderRadius: 1,
-                            fontWeight: 600,
-                          }}
-                        >
-                          Déjà associé
-                        </Typography>
-                      )}
-                    </Box>
-                    <Typography variant="body2" color="text.secondary">
+                    <Typography variant="h6" sx={{ fontWeight: 600 }}>
+                      {highlightSearchTerm(sousTraitant.entreprise, searchTerm)}
+                    </Typography>
+                    {(surCeChantier || autres.length > 0) && (
+                      <Box sx={{ display: "flex", flexWrap: "wrap", gap: 0.75, mt: 0.75 }}>
+                        {surCeChantier && (
+                          <Typography
+                            variant="caption"
+                            sx={{
+                              backgroundColor: "rgba(237, 108, 2, 0.12)",
+                              color: "#e65100",
+                              px: 1,
+                              py: 0.5,
+                              borderRadius: 1,
+                              fontWeight: 600,
+                            }}
+                          >
+                            Déjà sur ce chantier
+                            {surCeChantier.count > 1
+                              ? ` · ${surCeChantier.count} contrats`
+                              : ""}
+                          </Typography>
+                        )}
+                        {autres.length > 0 && (
+                          <Typography
+                            variant="caption"
+                            sx={{
+                              backgroundColor: "rgba(25, 118, 210, 0.1)",
+                              color: "#1565c0",
+                              px: 1,
+                              py: 0.5,
+                              borderRadius: 1,
+                              fontWeight: 600,
+                            }}
+                          >
+                            {autres.length > 1
+                              ? "Déjà des chantiers : "
+                              : "Déjà un chantier : "}
+                            {autresAffiches.map((item) => item.name).join(", ")}
+                            {autresRestants > 0 ? ` +${autresRestants}` : ""}
+                          </Typography>
+                        )}
+                      </Box>
+                    )}
+                    <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
                       {highlightSearchTerm(sousTraitant.numero_rcs, searchTerm)} • {highlightSearchTerm(sousTraitant.ville, searchTerm)}
                     </Typography>
                     {sousTraitant.representant && (
@@ -1367,33 +1435,29 @@ const SousTraitanceModal = ({ open, onClose, chantierId, onUpdate }) => {
                       </Typography>
                     )}
                   </Box>
-                  <Box display="flex" gap={1}>
-                    {!aUnContrat && (
-                      <>
-                        <Button
-                          variant="outlined"
-                          color="primary"
-                          size="small"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleAssocierSousTraitant(sousTraitant);
-                          }}
-                        >
-                          Ajouter sans contrat
-                        </Button>
-                        <Button
-                          variant="contained"
-                          color="primary"
-                          size="small"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleSelectSousTraitantForContrat(sousTraitant);
-                          }}
-                        >
-                          Créer un contrat
-                        </Button>
-                      </>
-                    )}
+                  <Box display="flex" gap={1} flexShrink={0}>
+                    <Button
+                      variant="outlined"
+                      color="primary"
+                      size="small"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleAssocierSousTraitant(sousTraitant);
+                      }}
+                    >
+                      Ajouter sans contrat
+                    </Button>
+                    <Button
+                      variant="contained"
+                      color="primary"
+                      size="small"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleSelectSousTraitantForContrat(sousTraitant);
+                      }}
+                    >
+                      Créer un contrat
+                    </Button>
                   </Box>
                 </Box>
               </Paper>
@@ -1402,9 +1466,9 @@ const SousTraitanceModal = ({ open, onClose, chantierId, onUpdate }) => {
           
           {getFilteredSousTraitantsSansContrat().length === 0 && (
             <Box sx={{ textAlign: "center", py: 4 }}>
-              {sousTraitantsSansContrat.length === 0 ? (
+              {tousSousTraitants.length === 0 ? (
                 <Typography variant="body2" color="text.secondary">
-                  Aucun sous-traitant disponible sans contrat pour ce chantier.
+                  Aucun sous-traitant disponible.
                 </Typography>
               ) : (
                 <Box>
