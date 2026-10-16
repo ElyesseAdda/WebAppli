@@ -3433,7 +3433,6 @@ class ContratSousTraitance(models.Model):
     date_modification = models.DateTimeField(auto_now=True)
 
     class Meta:
-        unique_together = ('chantier', 'sous_traitant')
         ordering = ['-date_creation']
 
     def __str__(self):

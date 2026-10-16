@@ -110,15 +110,19 @@ const SousTraitanceModal = ({ open, onClose, chantierId, onUpdate }) => {
       const sousTraitantsSansContrat = [];
 
       sousTraitantsData.forEach((sousTraitant) => {
-        const contrat = contratsData.find(
+        // Trouver tous les contrats du sous-traitant pour ce chantier
+        const contrats = contratsData.filter(
           (c) => c.sous_traitant === sousTraitant.id
         );
         
-        if (contrat) {
-          // Sous-traitant avec contrat pour ce chantier (avec ou sans document)
-          sousTraitantsAvecContrat.push({
-            ...sousTraitant,
-            contrat: contrat,
+        if (contrats.length > 0) {
+          // Sous-traitant avec contrat(s) pour ce chantier (avec ou sans document)
+          // Créer une entrée pour chaque contrat
+          contrats.forEach((contrat) => {
+            sousTraitantsAvecContrat.push({
+              ...sousTraitant,
+              contrat: contrat,
+            });
           });
         } else {
           // Sous-traitant sans contrat pour ce chantier
@@ -631,6 +635,21 @@ const SousTraitanceModal = ({ open, onClose, chantierId, onUpdate }) => {
                             }}
                           >
                             Sans contrat
+                          </Typography>
+                        )}
+                        {sousTraitant.contrat && (
+                          <Typography
+                            variant="caption"
+                            sx={{
+                              backgroundColor: "rgba(25, 118, 210, 0.1)",
+                              color: "#1976d2",
+                              px: 1,
+                              py: 0.5,
+                              borderRadius: 1,
+                              fontWeight: 600,
+                            }}
+                          >
+                            Contrat #{sousTraitant.contrat.id}
                           </Typography>
                         )}
                       </Box>
@@ -1315,8 +1334,8 @@ const SousTraitanceModal = ({ open, onClose, chantierId, onUpdate }) => {
 
           {/* Liste des sous-traitants sans contrat */}
           {getFilteredSousTraitantsSansContrat().map((sousTraitant) => {
-            // Vérifier si le sous-traitant est déjà associé au chantier
-            const aUnContrat = sousTraitantsAvecContrat.some(st => st.id === sousTraitant.id);
+            // Ne pas vérifier si déjà associé - on permet plusieurs contrats
+            const aUnContrat = false;
             
             return (
               <Paper 
