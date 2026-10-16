@@ -16,7 +16,7 @@ git push origin main
 & "C:\Program Files\Git\bin\bash.exe" "Desktop/Projet/P3000/Application/deploy/update-clients.sh"
 ```
 
-> Ce script incorpore les nouveautés de `main` dans chaque branche client (`client/elekable`, `client/mjrservice`, `cursor/client-demo-environment-f3f5`) en préservant leur identité (couleurs, logo, templates), puis push vers GitHub.
+> Ce script incorpore les nouveautés de `main` dans chaque branche client (`client/elekable`, `client/mjrservice`, `client/demo`) en préservant leur identité (couleurs, logo, templates), puis push vers GitHub.
 
 ### Étape 2 — Serveur P3000 (déploie les 3 apps d'un coup)
 
