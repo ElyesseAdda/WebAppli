@@ -76,8 +76,10 @@ const LigneDetailEditModal = ({ isOpen, onClose, ligneDetail, onSuccess }) => {
 
     if (name === 'prix') {
       // L'utilisateur saisit un prix manuellement
-      if (value !== '' && value !== '-' && !/^-?\d*\.?\d*$/.test(value)) return;
-      const newPrix = parseFloat(value);
+      // Remplacer la virgule par un point pour la validation et le parsing
+      const normalizedValue = value.replace(',', '.');
+      if (normalizedValue !== '' && normalizedValue !== '-' && !/^-?\d*\.?\d*$/.test(normalizedValue)) return;
+      const newPrix = parseFloat(normalizedValue);
 
       if (hasCoutsRemplis(formData) && !isNaN(newPrix)) {
         // Direction inversée : on recalcule la marge depuis le nouveau prix
@@ -85,11 +87,11 @@ const LigneDetailEditModal = ({ isOpen, onClose, ligneDetail, onSuccess }) => {
         const newMarge = calculerMargeDepuisPrix(newPrix, formData);
         setFormData(prev => ({
           ...prev,
-          prix:  value,
+          prix:  normalizedValue,
           marge: newMarge !== null ? newMarge.toFixed(2) : prev.marge,
         }));
       } else {
-        setFormData(prev => ({ ...prev, prix: value }));
+        setFormData(prev => ({ ...prev, prix: normalizedValue }));
       }
       return;
     }

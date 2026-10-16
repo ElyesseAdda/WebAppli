@@ -136,15 +136,24 @@ const SpecialLineEditModal = ({
             />
             
             <TextField
-              type="number"
+              type="text"
+              inputMode="decimal"
               label="Valeur"
               fullWidth
               margin="normal"
               value={editedLine.data.value}
-              onChange={(e) => setEditedLine(prev => ({
-                ...prev,
-                data: { ...prev.data, value: e.target.value }
-              }))}
+              onChange={(e) => {
+                let value = e.target.value;
+                // Remplacer la virgule par un point
+                value = value.replace(',', '.');
+                // Valider le format
+                if (value === '' || value === '-' || /^-?\d*\.?\d*$/.test(value)) {
+                  setEditedLine(prev => ({
+                    ...prev,
+                    data: { ...prev.data, value: value }
+                  }));
+                }
+              }}
             />
             
             {/* Type de valeur avec boutons */}

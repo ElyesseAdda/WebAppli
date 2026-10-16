@@ -74,8 +74,10 @@ const LigneDetailCreateModal = ({ isOpen, onClose, description, sousPartieId, pa
     // Pour le champ prix, permettre les nombres négatifs
     if (name === 'prix') {
       // Autoriser les nombres négatifs, décimaux, et le signe moins seul
-      if (value === '' || value === '-' || /^-?\d*\.?\d*$/.test(value)) {
-        setFormData(prev => ({ ...prev, [name]: value }));
+      // Remplacer la virgule par un point pour la validation
+      const normalizedValue = value.replace(',', '.');
+      if (normalizedValue === '' || normalizedValue === '-' || /^-?\d*\.?\d*$/.test(normalizedValue)) {
+        setFormData(prev => ({ ...prev, [name]: normalizedValue }));
       }
     } else {
       setFormData(prev => ({ ...prev, [name]: value }));
