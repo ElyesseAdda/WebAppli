@@ -11,12 +11,12 @@
 git add . && git commit -m "ma nouvelle fonctionnalité"
 git push origin main
 
-# Merger main → client/elekable et client/mjrservice + push automatique
+# Merger main → client/elekable, client/mjrservice et demo + push automatique
 # ⚠️ À lancer UNIQUEMENT depuis la machine de dev — jamais depuis un serveur
 & "C:\Program Files\Git\bin\bash.exe" "Desktop/Projet/P3000/Application/deploy/update-clients.sh"
 ```
 
-> Ce script incorpore les nouveautés de `main` dans chaque branche client (`client/elekable`, `client/mjrservice`) en préservant leur identité (couleurs, logo, templates), puis push vers GitHub.
+> Ce script incorpore les nouveautés de `main` dans chaque branche client (`client/elekable`, `client/mjrservice`, `cursor/client-demo-environment-f3f5`) en préservant leur identité (couleurs, logo, templates), puis push vers GitHub.
 
 ### Étape 2 — Serveur P3000 (déploie les 3 apps d'un coup)
 
@@ -49,6 +49,7 @@ all-deploy
 # Ou individuellement
 & "C:\Program Files\Git\bin\bash.exe" "Desktop/Projet/P3000/Application/deploy/update-clients.sh" elekable
 & "C:\Program Files\Git\bin\bash.exe" "Desktop/Projet/P3000/Application/deploy/update-clients.sh" mjrservice
+& "C:\Program Files\Git\bin\bash.exe" "Desktop/Projet/P3000/Application/deploy/update-clients.sh" demo
 ```
 
 ---

@@ -1439,6 +1439,7 @@ def _update_drive_metadata_after_upload(s3_file_path: str, modified_by: str = "A
         else:
             folder_path = ''
             file_name = parts[0]
+        storage.ensure_folder_markers(folder_path)
         storage.update_folder_metadata(folder_path, file_name, modified_by)
     except Exception:
         pass
