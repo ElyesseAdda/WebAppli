@@ -263,6 +263,201 @@ const buildPointageCoverageKeys = (pointageExpenses, scopedToAgence, agenceChant
   return keys;
 };
 
+const COST_ACCENT = {
+  main: "rgba(27, 120, 188, 1)",
+  soft: "rgba(27, 120, 188, 0.08)",
+  softStrong: "rgba(27, 120, 188, 0.12)",
+  border: "rgba(27, 120, 188, 0.2)",
+  borderHeader: "rgba(27, 120, 188, 0.12)",
+  badgeBorder: "rgba(27, 120, 188, 0.25)",
+  hover: "rgba(27, 120, 188, 0.1)",
+  amountBg: "rgba(27, 120, 188, 0.08)",
+  gradient:
+    "linear-gradient(145deg, rgba(27, 120, 188, 0.06) 0%, #fff 42%, #fafbfc 100%)",
+};
+
+const POSITIVE_ACCENT = {
+  main: "#1b7a4a",
+  soft: "rgba(27, 122, 74, 0.08)",
+  softStrong: "rgba(27, 122, 74, 0.12)",
+  border: "rgba(27, 122, 74, 0.28)",
+  borderHeader: "rgba(27, 122, 74, 0.16)",
+  badgeBorder: "rgba(27, 122, 74, 0.3)",
+  hover: "rgba(27, 122, 74, 0.1)",
+  amountBg: "rgba(27, 122, 74, 0.1)",
+  gradient:
+    "linear-gradient(145deg, rgba(27, 122, 74, 0.08) 0%, #fff 42%, #fafbfc 100%)",
+};
+
+function CategoryYearCard({
+  title,
+  subtitle,
+  year,
+  loading,
+  rows,
+  emptyText,
+  accent,
+  onOpen,
+  showTotal,
+}) {
+  const total = (rows || []).reduce((sum, row) => sum + (Number(row.total) || 0), 0);
+  return (
+    <Paper
+      elevation={0}
+      sx={{
+        borderRadius: 2,
+        overflow: "hidden",
+        border: "1px solid",
+        borderColor: accent.border,
+        background: accent.gradient,
+        flex: "1 1 420px",
+        maxWidth: 640,
+        width: "100%",
+      }}
+    >
+      <Box
+        sx={{
+          px: 2.5,
+          py: 1.75,
+          borderBottom: `1px solid ${accent.borderHeader}`,
+          background: accent.soft,
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          gap: 2,
+          flexWrap: "wrap",
+        }}
+      >
+        <Box>
+          <Typography
+            variant="subtitle1"
+            sx={{ fontWeight: 700, color: accent.main, letterSpacing: 0.2 }}
+          >
+            {title}
+          </Typography>
+          <Typography variant="caption" sx={{ color: "text.secondary", display: "block", mt: 0.35 }}>
+            {subtitle}
+          </Typography>
+        </Box>
+        <Box
+          sx={{
+            px: 1.5,
+            py: 0.5,
+            borderRadius: 1,
+            bgcolor: accent.softStrong,
+            border: `1px solid ${accent.badgeBorder}`,
+          }}
+        >
+          <Typography
+            variant="caption"
+            sx={{ fontWeight: 700, color: accent.main, letterSpacing: 0.5 }}
+          >
+            {year}
+          </Typography>
+        </Box>
+      </Box>
+
+      <Box sx={{ p: 2 }}>
+        {loading ? (
+          <Typography color="text.secondary" sx={{ py: 1 }}>
+            Chargement…
+          </Typography>
+        ) : !rows?.length ? (
+          <Typography
+            variant="body2"
+            color="text.secondary"
+            sx={{ py: 1.5, fontStyle: "italic" }}
+          >
+            {emptyText}
+          </Typography>
+        ) : (
+          <Stack spacing={0}>
+            {rows.map(({ cat, total: rowTotal }, index) => (
+              <Box
+                key={cat}
+                role="button"
+                tabIndex={0}
+                onClick={() => onOpen(cat, rowTotal)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" || e.key === " ") {
+                    e.preventDefault();
+                    onOpen(cat, rowTotal);
+                  }
+                }}
+                sx={{
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  gap: 2,
+                  py: 1.35,
+                  px: 1.5,
+                  borderRadius: 1,
+                  cursor: "pointer",
+                  transition: "background-color 0.15s ease",
+                  borderBottom:
+                    index < rows.length - 1 ? "1px solid rgba(0, 0, 0, 0.06)" : "none",
+                  "&:hover": { backgroundColor: accent.hover },
+                }}
+              >
+                <Typography
+                  variant="body2"
+                  sx={{ fontWeight: 600, color: "text.primary", flex: 1, minWidth: 0 }}
+                >
+                  {cat.charAt(0).toUpperCase() + cat.slice(1)}
+                </Typography>
+                <Typography
+                  variant="body2"
+                  sx={{
+                    fontWeight: 700,
+                    fontVariantNumeric: "tabular-nums",
+                    color: accent.main,
+                    whiteSpace: "nowrap",
+                    px: 1.25,
+                    py: 0.5,
+                    borderRadius: 1,
+                    bgcolor: accent.amountBg,
+                  }}
+                >
+                  {formatMontantEuroFR(rowTotal)}
+                </Typography>
+              </Box>
+            ))}
+            {showTotal ? (
+              <Box
+                sx={{
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  gap: 2,
+                  pt: 1.35,
+                  mt: 0.5,
+                  px: 1.5,
+                  borderTop: `1px solid ${accent.borderHeader}`,
+                }}
+              >
+                <Typography variant="body2" sx={{ fontWeight: 800 }}>
+                  Total
+                </Typography>
+                <Typography
+                  variant="body2"
+                  sx={{
+                    fontWeight: 800,
+                    fontVariantNumeric: "tabular-nums",
+                    color: accent.main,
+                    whiteSpace: "nowrap",
+                  }}
+                >
+                  {formatMontantEuroFR(total)}
+                </Typography>
+              </Box>
+            ) : null}
+          </Stack>
+        )}
+      </Box>
+    </Paper>
+  );
+}
+
 const AgencyExpenses = () => {
   const { agenceId } = useParams();
   const [expenses, setExpenses] = useState([]);
@@ -291,13 +486,16 @@ const AgencyExpenses = () => {
   const [yearlyTotalPlanning, setYearlyTotalPlanning] = useState(0);
   /** Totaux annuels par catégorie (dépenses saisies + planning agence sur 12 mois) */
   const [yearlyCategoryTotals, setYearlyCategoryTotals] = useState({});
+  const [yearlyPositiveTotals, setYearlyPositiveTotals] = useState({});
   const [yearlyCategoryLoading, setYearlyCategoryLoading] = useState(false);
+  const [entryKind, setEntryKind] = useState("depense");
   const [planningAgence, setPlanningAgence] = useState(null);
   const [isRecurring, setIsRecurring] = useState(false);
   const [recurrenceStart, setRecurrenceStart] = useState("");
   const [recurrenceEnd, setRecurrenceEnd] = useState("");
   const [agenceName, setAgenceName] = useState("");
   const [agenceChantierId, setAgenceChantierId] = useState(null);
+  const [agenceResolved, setAgenceResolved] = useState(!agenceId);
   const [agencesList, setAgencesList] = useState([]);
   const [yearlyRefresh, setYearlyRefresh] = useState(0);
   const triggerYearlyRefresh = () => setYearlyRefresh((n) => n + 1);
@@ -309,6 +507,7 @@ const AgencyExpenses = () => {
     total: 0,
     loading: false,
     groups: [],
+    positive: false,
   });
   const [expandedDesignations, setExpandedDesignations] = useState({});
   const [yearlySchedMonths, setYearlySchedMonths] = useState([]);
@@ -318,7 +517,7 @@ const AgencyExpenses = () => {
   const scheduleParam = agenceChantierId
     ? `&agence=1&chantier_id=${agenceChantierId}`
     : "&agence=1";
-  const scheduleReady = !agenceId || !!agenceChantierId;
+  const scheduleReady = !agenceId || agenceResolved;
 
   const rememberCategory = (cat) => {
     const name = normalizeCategoryName(cat);
@@ -337,12 +536,12 @@ const AgencyExpenses = () => {
   };
 
   const usedCategories = useMemo(() => {
-    const fromYear = Object.entries(yearlyCategoryTotals)
+    const fromYear = Object.entries({ ...yearlyCategoryTotals, ...yearlyPositiveTotals })
       .filter(([, total]) => Number(total) > 0)
       .map(([cat]) => cat);
     const fromMonth = (originalExpenses || []).map((e) => e.category);
     return uniquePreserveOrder([...fromYear, ...fromMonth]);
-  }, [yearlyCategoryTotals, originalExpenses]);
+  }, [yearlyCategoryTotals, yearlyPositiveTotals, originalExpenses]);
 
   const formCategoryOptions = useMemo(() => {
     const current = isEditing ? editingExpense?.category : newExpense.category;
@@ -369,13 +568,25 @@ const AgencyExpenses = () => {
   );
 
   useEffect(() => {
-    if (!agenceId) { setAgenceChantierId(null); return; }
+    if (!agenceId) {
+      setAgenceChantierId(null);
+      setAgenceResolved(true);
+      return;
+    }
     let cancelled = false;
+    setAgenceResolved(false);
     axios.get(`/api/agences/${agenceId}/`).then((res) => {
       if (cancelled) return;
       setAgenceName(res.data.nom || "");
       setAgenceChantierId(res.data.chantier || null);
-    }).catch(() => { if (!cancelled) { setAgenceName(""); setAgenceChantierId(null); } });
+    }).catch(() => {
+      if (!cancelled) {
+        setAgenceName("");
+        setAgenceChantierId(null);
+      }
+    }).finally(() => {
+      if (!cancelled) setAgenceResolved(true);
+    });
     return () => { cancelled = true; };
   }, [agenceId]);
 
@@ -480,6 +691,7 @@ const AgencyExpenses = () => {
         };
 
         const categoryMerged = {};
+        const positiveMerged = {};
         let yearTotal = 0;
         let sumTableau = 0;
         let sumPlanning = 0;
@@ -496,6 +708,10 @@ const AgencyExpenses = () => {
             const c = category || "Autres";
             categoryMerged[c] = (categoryMerged[c] || 0) + (Number(total) || 0);
           });
+          (em.positive_totals_by_category || []).forEach(({ category, total }) => {
+            const c = category || "Autres";
+            positiveMerged[c] = (positiveMerged[c] || 0) + (Number(total) || 0);
+          });
           categoryMerged["Planning agence"] =
             (categoryMerged["Planning agence"] || 0) + tSm;
         }
@@ -511,6 +727,7 @@ const AgencyExpenses = () => {
         }
 
         setYearlyCategoryTotals(categoryMerged);
+        setYearlyPositiveTotals(positiveMerged);
         setYearlyTotal(yearTotal);
         setYearlyTotalTableau(sumTableau);
         setYearlyTotalPlanning(sumPlanning);
@@ -521,6 +738,7 @@ const AgencyExpenses = () => {
         console.error("Erreur chargement données annuelles/planning:", e);
         if (!cancelled) {
           setYearlyCategoryTotals({});
+          setYearlyPositiveTotals({});
           setYearlyTotal(0);
           setYearlyTotalTableau(0);
           setYearlyTotalPlanning(0);
@@ -607,6 +825,7 @@ const AgencyExpenses = () => {
         recurrence_start: effectiveIsRecurring ? startDateNormalized : null,
         recurrence_end: effectiveIsRecurring && endDateNormalized ? endDateNormalized : null,
         ...(agenceId ? { agence: parseInt(agenceId, 10) } : {}),
+        is_montant_positif: entryKind === "positif",
       };
 
       const response = await axios.post("/api/agency-expenses-month/", expenseData);
@@ -952,34 +1171,64 @@ const AgencyExpenses = () => {
     return result;
   }, [expensesForTable, planningRowsFiltered]);
 
-  /** Catégories avec montant annuel > 0, ordre fixe puis catégories « extra » triées */
-  const yearlyCategoryDisplayRows = useMemo(() => {
+  const buildYearlyCategoryRows = (totals) => {
     const rows = [];
     const seen = new Set();
     for (const cat of categoriesWithPlanning) {
-      const total = Number(yearlyCategoryTotals[cat]) || 0;
+      const total = Number(totals[cat]) || 0;
       if (total > 0) {
         rows.push({ cat, total });
         seen.add(cat);
       }
     }
-    Object.keys(yearlyCategoryTotals)
+    Object.keys(totals || {})
       .filter((k) => !seen.has(k))
       .sort((a, b) => a.localeCompare(b, "fr"))
       .forEach((cat) => {
-        const total = Number(yearlyCategoryTotals[cat]) || 0;
+        const total = Number(totals[cat]) || 0;
         if (total > 0) rows.push({ cat, total });
       });
     return rows;
-  }, [yearlyCategoryTotals, categoriesWithPlanning]);
+  };
+
+  /** Catégories avec montant annuel > 0, ordre fixe puis catégories « extra » triées */
+  const yearlyCategoryDisplayRows = useMemo(
+    () => buildYearlyCategoryRows(yearlyCategoryTotals),
+    [yearlyCategoryTotals, categoriesWithPlanning]
+  );
+
+  const yearlyPositiveDisplayRows = useMemo(
+    () => buildYearlyCategoryRows(yearlyPositiveTotals),
+    [yearlyPositiveTotals, categoriesWithPlanning]
+  );
 
   /** Total mensuel : une seule fois chaque ligne réelle (pas les en-têtes de groupe qui dupliquent la somme). */
   const monthlyTotalDisplayed = useMemo(() => {
     return tableRowsCombined.reduce((total, row) => {
-      if (row.isGroupHeader) return total;
+      if (row.isGroupHeader || row.is_montant_positif) return total;
       return total + effectiveAgencyTableAmount(row);
     }, 0);
   }, [tableRowsCombined]);
+
+  const monthlyPositiveTotal = useMemo(() => {
+    return tableRowsCombined.reduce((total, row) => {
+      if (row.isGroupHeader || !row.is_montant_positif) return total;
+      return total + effectiveAgencyTableAmount(row);
+    }, 0);
+  }, [tableRowsCombined]);
+
+  const monthlyNetTotal = monthlyPositiveTotal - monthlyTotalDisplayed;
+
+  const yearlyPositiveSum = useMemo(
+    () =>
+      Object.values(yearlyPositiveTotals).reduce(
+        (sum, value) => sum + (Number(value) || 0),
+        0
+      ),
+    [yearlyPositiveTotals]
+  );
+
+  const yearlyNetTotal = yearlyTotal - yearlyPositiveSum;
 
 
   const getExpenseCommentaire = (expense) => {
@@ -1071,7 +1320,7 @@ const AgencyExpenses = () => {
     setExpandedDesignations({});
   };
 
-  const openCategoryDetail = async (cat, total) => {
+  const openCategoryDetail = async (cat, total, positive = false) => {
     const categoryName = cat || "";
     setExpandedDesignations({});
     setCategoryDetail({
@@ -1080,6 +1329,7 @@ const AgencyExpenses = () => {
       total: Number(total) || 0,
       loading: true,
       groups: [],
+      positive,
     });
 
     try {
@@ -1134,7 +1384,9 @@ const AgencyExpenses = () => {
             categoryName
           )}${agenceParam}`
         );
-        let list = asExpenseList(response.data);
+        let list = asExpenseList(response.data).filter(
+          (e) => Boolean(e.is_montant_positif) === Boolean(positive)
+        );
         if (categoryName === "Ajustement Sous-traitant") {
           list = list.filter((e) => {
             if (!isAjustementSousTraitant(e)) return true;
@@ -1156,6 +1408,7 @@ const AgencyExpenses = () => {
         total: groups.reduce((acc, g) => acc + g.total, 0),
         loading: false,
         groups,
+        positive,
       });
     } catch (error) {
       console.error("Erreur lors du chargement du détail catégorie:", error);
@@ -1165,9 +1418,14 @@ const AgencyExpenses = () => {
         total: Number(total) || 0,
         loading: false,
         groups: [],
+        positive,
       });
     }
   };
+
+  const isPositiveEntry = isEditing
+    ? Boolean(editingExpense?.is_montant_positif)
+    : entryKind === "positif";
 
   return (
     <Box sx={{ p: 3 }}>
@@ -1175,16 +1433,31 @@ const AgencyExpenses = () => {
         <Typography sx={{ fontWeight: "bold", color: "white" }} variant="h5">
           Dépenses {agenceName ? `- ${agenceName}` : "de l'Agence"} (Système Mensuel)
         </Typography>
-        <Button
-          variant="contained"
-          onClick={() => {
-            setIsEditing(false);
-            setEditingExpense(null);
-            setOpenDialog(true);
-          }}
-        >
-          Ajouter une dépense
-        </Button>
+        <Box sx={{ display: "flex", gap: 1, flexWrap: "wrap" }}>
+          <Button
+            variant="contained"
+            onClick={() => {
+              setIsEditing(false);
+              setEditingExpense(null);
+              setEntryKind("depense");
+              setOpenDialog(true);
+            }}
+          >
+            Ajouter une dépense
+          </Button>
+          <Button
+            variant="contained"
+            color="success"
+            onClick={() => {
+              setIsEditing(false);
+              setEditingExpense(null);
+              setEntryKind("positif");
+              setOpenDialog(true);
+            }}
+          >
+            Ajouter un montant positif
+          </Button>
+        </Box>
       </Box>
 
       <Box sx={{ mb: 3, display: "flex", gap: 2 }}>
@@ -1511,22 +1784,49 @@ const AgencyExpenses = () => {
               }
               
               // Ligne standard (non groupée)
+              const positiveRow = Boolean(row.is_montant_positif);
               return (
                 <TableRow
                   key={row.id}
                   sx={{
-                    backgroundColor: index % 2 === 0 ? "#ffffff" : "#f5f5f5",
-                    "&:hover": { backgroundColor: "rgba(27, 120, 188, 0.1)" },
+                    backgroundColor: positiveRow
+                      ? index % 2 === 0
+                        ? "rgba(27, 122, 74, 0.06)"
+                        : "rgba(27, 122, 74, 0.1)"
+                      : index % 2 === 0
+                        ? "#ffffff"
+                        : "#f5f5f5",
+                    "&:hover": {
+                      backgroundColor: positiveRow
+                        ? "rgba(27, 122, 74, 0.16)"
+                        : "rgba(27, 120, 188, 0.1)",
+                    },
                   }}
                 >
                   <TableCell
-                    sx={{ textAlign: "left", fontWeight: "bold", color: "rgba(27, 120, 188, 1)" }}
+                    sx={{
+                      textAlign: "left",
+                      fontWeight: "bold",
+                      color: positiveRow ? "#1b7a4a" : "rgba(27, 120, 188, 1)",
+                    }}
                   >
                     {getExpenseDescriptionCourte(row)}
                   </TableCell>
                   <TableCell align="center">{row.category}</TableCell>
-                  <TableCell align="center">
+                  <TableCell
+                    align="center"
+                    sx={positiveRow ? { color: "#1b7a4a", fontWeight: 700 } : undefined}
+                  >
                     {formatMontantEuroFR(effectiveAgencyTableAmount(row))}
+                    {positiveRow ? (
+                      <Typography
+                        variant="caption"
+                        display="block"
+                        sx={{ color: "#1b7a4a", fontWeight: 600, lineHeight: 1.2 }}
+                      >
+                        Positif
+                      </Typography>
+                    ) : null}
                   </TableCell>
                   <TableCell sx={{ minWidth: 160, maxWidth: 280, verticalAlign: "top" }}>
                     <TextField
@@ -1580,13 +1880,43 @@ const AgencyExpenses = () => {
             })}
             <TableRow sx={{ backgroundColor: "#f5f5f5" }}>
               <TableCell colSpan={2} sx={{ fontWeight: "bold" }}>
-                Total Mensuel
+                <Box
+                  sx={{
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                    gap: 2,
+                    flexWrap: "wrap",
+                  }}
+                >
+                  <span>Total Mensuel</span>
+                  <Box sx={{ display: "flex", alignItems: "baseline", gap: 2.5, flexWrap: "wrap" }}>
+                    <Typography
+                      component="span"
+                      sx={{ fontWeight: 700, color: "rgba(27, 120, 188, 1)", fontVariantNumeric: "tabular-nums" }}
+                    >
+                      − {formatMontantEuroFR(monthlyTotalDisplayed)}
+                    </Typography>
+                    <Typography
+                      component="span"
+                      sx={{ fontWeight: 700, color: "#1b7a4a", fontVariantNumeric: "tabular-nums" }}
+                    >
+                      + {formatMontantEuroFR(monthlyPositiveTotal)}
+                    </Typography>
+                  </Box>
+                </Box>
               </TableCell>
               <TableCell
                 align="center"
-                sx={{ fontWeight: "bold", color: "rgba(27, 120, 188, 1)" }}
+                sx={{
+                  fontWeight: 800,
+                  fontVariantNumeric: "tabular-nums",
+                  color: monthlyNetTotal > 0 ? "#1b7a4a" : "rgba(27, 120, 188, 1)",
+                }}
               >
-                {formatMontantEuroFR(monthlyTotalDisplayed)}
+                {monthlyNetTotal > 0
+                  ? `+ ${formatMontantEuroFR(monthlyNetTotal)}`
+                  : formatMontantEuroFR(monthlyNetTotal)}
               </TableCell>
               <TableCell />
               <TableCell />
@@ -1632,11 +1962,12 @@ const AgencyExpenses = () => {
                 Total annuel
               </Typography>
               <Typography variant="caption" sx={{ color: "text.secondary", display: "block", mt: 0.35 }}>
-                Dépenses saisies + planning agence (hors planning et ajustements déjà remplacés par un montant chargé)
+                Dépenses saisies + planning agence − montants positifs
               </Typography>
               <Typography variant="caption" sx={{ color: "text.secondary", display: "block", mt: 0.5, lineHeight: 1.4 }}>
-                Détail : tableau mensuel {formatMontantEuroFR(yearlyTotalTableau)} · planning{" "}
-                {formatMontantEuroFR(yearlyTotalPlanning)}
+                Détail : dépenses {formatMontantEuroFR(yearlyTotalTableau)} · planning{" "}
+                {formatMontantEuroFR(yearlyTotalPlanning)} · montants positifs{" "}
+                {formatMontantEuroFR(yearlyPositiveSum)}
                 {" (planning et ajustements sous-traitant d’un agent disparaissent dès qu’un montant chargé est imputé à l’agence)"}
               </Typography>
             </Box>
@@ -1658,7 +1989,7 @@ const AgencyExpenses = () => {
                   lineHeight: 1.15,
                 }}
               >
-                {formatMontantEuroFR(yearlyTotal)}
+                {formatMontantEuroFR(yearlyNetTotal)}
               </Typography>
               <Box
                 sx={{
@@ -1680,147 +2011,49 @@ const AgencyExpenses = () => {
           </Box>
         </Paper>
 
-        {/* Coûts annuels par catégorie (12 mois + planning agence) */}
-        <Paper
-          elevation={0}
-          sx={{
-            borderRadius: 2,
-            overflow: "hidden",
-            border: "1px solid",
-            borderColor: "rgba(27, 120, 188, 0.2)",
-            background:
-              "linear-gradient(145deg, rgba(27, 120, 188, 0.06) 0%, #fff 42%, #fafbfc 100%)",
-            maxWidth: 640,
-          }}
-        >
         <Box
           sx={{
-            px: 2.5,
-            py: 1.75,
-            borderBottom: "1px solid rgba(27, 120, 188, 0.12)",
-            background: "rgba(27, 120, 188, 0.08)",
             display: "flex",
-            alignItems: "center",
-            justifyContent: "space-between",
             gap: 2,
             flexWrap: "wrap",
+            alignItems: "flex-start",
+            width: "100%",
           }}
         >
-          <Box>
-            <Typography
-              variant="subtitle1"
-              sx={{ fontWeight: 700, color: "rgba(27, 120, 188, 1)", letterSpacing: 0.2 }}
-            >
-              Coût annuel par catégorie
-            </Typography>
-            <Typography variant="caption" sx={{ color: "text.secondary", display: "block", mt: 0.35 }}>
-              Synthèse sur les 12 mois — cliquez une catégorie pour voir les désignations regroupées
-            </Typography>
-          </Box>
-          <Box
-            sx={{
-              px: 1.5,
-              py: 0.5,
-              borderRadius: 1,
-              bgcolor: "rgba(27, 120, 188, 0.12)",
-              border: "1px solid rgba(27, 120, 188, 0.25)",
-            }}
-          >
-            <Typography
-              variant="caption"
-              sx={{ fontWeight: 700, color: "rgba(27, 120, 188, 1)", letterSpacing: 0.5 }}
-            >
-              {selectedYear}
-            </Typography>
-          </Box>
+          <CategoryYearCard
+            title="Coût annuel par catégorie"
+            subtitle="Synthèse sur les 12 mois — cliquez une catégorie pour voir les désignations regroupées"
+            year={selectedYear}
+            loading={yearlyCategoryLoading}
+            rows={yearlyCategoryDisplayRows}
+            emptyText="Aucune dépense pour cette année (toutes les catégories sont à 0 €)."
+            accent={COST_ACCENT}
+            onOpen={(cat, total) => openCategoryDetail(cat, total, false)}
+          />
+          <CategoryYearCard
+            title="Montants positifs par catégorie"
+            subtitle="Synthèse sur les 12 mois — cliquez une catégorie pour voir les désignations regroupées"
+            year={selectedYear}
+            loading={yearlyCategoryLoading}
+            rows={yearlyPositiveDisplayRows}
+            emptyText="Aucun montant positif pour cette année."
+            accent={POSITIVE_ACCENT}
+            onOpen={(cat, total) => openCategoryDetail(cat, total, true)}
+            showTotal
+          />
         </Box>
-
-        <Box sx={{ p: 2 }}>
-          {yearlyCategoryLoading ? (
-            <Typography color="text.secondary" sx={{ py: 1 }}>
-              Chargement…
-            </Typography>
-          ) : yearlyCategoryDisplayRows.length === 0 ? (
-            <Typography
-              variant="body2"
-              color="text.secondary"
-              sx={{ py: 1.5, fontStyle: "italic" }}
-            >
-              Aucune dépense pour cette année (toutes les catégories sont à 0 €).
-            </Typography>
-          ) : (
-            <Stack spacing={0}>
-              {yearlyCategoryDisplayRows.map(({ cat, total }, index) => (
-                <Box
-                  key={cat}
-                  role="button"
-                  tabIndex={0}
-                  onClick={() => openCategoryDetail(cat, total)}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter" || e.key === " ") {
-                      e.preventDefault();
-                      openCategoryDetail(cat, total);
-                    }
-                  }}
-                  sx={{
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "space-between",
-                    gap: 2,
-                    py: 1.35,
-                    px: 1.5,
-                    borderRadius: 1,
-                    cursor: "pointer",
-                    transition: "background-color 0.15s ease",
-                    borderBottom:
-                      index < yearlyCategoryDisplayRows.length - 1
-                        ? "1px solid rgba(0, 0, 0, 0.06)"
-                        : "none",
-                    "&:hover": {
-                      backgroundColor: "rgba(27, 120, 188, 0.1)",
-                    },
-                  }}
-                >
-                  <Typography
-                    variant="body2"
-                    sx={{
-                      fontWeight: 600,
-                      color: "text.primary",
-                      flex: 1,
-                      minWidth: 0,
-                    }}
-                  >
-                    {cat.charAt(0).toUpperCase() + cat.slice(1)}
-                  </Typography>
-                  <Typography
-                    variant="body2"
-                    sx={{
-                      fontWeight: 700,
-                      fontVariantNumeric: "tabular-nums",
-                      color: "rgba(27, 120, 188, 1)",
-                      whiteSpace: "nowrap",
-                      px: 1.25,
-                      py: 0.5,
-                      borderRadius: 1,
-                      bgcolor: "rgba(27, 120, 188, 0.08)",
-                    }}
-                  >
-                    {formatMontantEuroFR(total)}
-                  </Typography>
-                </Box>
-              ))}
-            </Stack>
-          )}
-        </Box>
-      </Paper>
       </Stack>
 
       {/* Dialog pour ajouter/modifier une dépense */}
       <Dialog open={openDialog} onClose={() => setOpenDialog(false)}>
         <DialogTitle>
           {isEditing
-            ? "Modifier la dépense"
-            : "Ajouter une nouvelle dépense"}
+            ? isPositiveEntry
+              ? "Modifier le montant positif"
+              : "Modifier la dépense"
+            : isPositiveEntry
+              ? "Ajouter un montant positif"
+              : "Ajouter une nouvelle dépense"}
         </DialogTitle>
         <DialogContent>
           <Box sx={{ display: "flex", flexDirection: "column", gap: 2, pt: 2 }}>
@@ -1930,7 +2163,7 @@ const AgencyExpenses = () => {
                   disabled={isEditing}
                 />
               }
-              label="Dépense récurrente"
+              label={isPositiveEntry ? "Montant récurrent" : "Dépense récurrente"}
             />
             <TextField
               label="Date de début"
@@ -1983,7 +2216,11 @@ const AgencyExpenses = () => {
               Arrêter la récurrence à ce mois
             </Button>
           )}
-          <Button onClick={handleSaveExpense} variant="contained">
+          <Button
+            onClick={handleSaveExpense}
+            variant="contained"
+            color={isPositiveEntry ? "success" : "primary"}
+          >
             {isEditing ? "Modifier" : "Ajouter"}
           </Button>
         </DialogActions>
@@ -2010,6 +2247,7 @@ const AgencyExpenses = () => {
               mt: 0.5,
             }}
           >
+            {categoryDetail.positive ? "Montants positifs · " : ""}
             Désignations regroupées · {selectedYear}
           </Typography>
         </DialogTitle>
@@ -2020,8 +2258,12 @@ const AgencyExpenses = () => {
               mb: 2,
               p: 1.5,
               borderRadius: 1,
-              backgroundColor: "rgba(27, 120, 188, 0.08)",
-              border: "1px solid rgba(27, 120, 188, 0.2)",
+              backgroundColor: categoryDetail.positive
+                ? "rgba(27, 122, 74, 0.08)"
+                : "rgba(27, 120, 188, 0.08)",
+              border: categoryDetail.positive
+                ? "1px solid rgba(27, 122, 74, 0.28)"
+                : "1px solid rgba(27, 120, 188, 0.2)",
               display: "flex",
               justifyContent: "space-between",
               alignItems: "center",
@@ -2039,7 +2281,7 @@ const AgencyExpenses = () => {
             <Typography
               sx={{
                 fontWeight: 800,
-                color: "rgba(27, 120, 188, 1)",
+                color: categoryDetail.positive ? "#1b7a4a" : "rgba(27, 120, 188, 1)",
                 fontVariantNumeric: "tabular-nums",
               }}
             >
@@ -2049,11 +2291,15 @@ const AgencyExpenses = () => {
 
           {categoryDetail.loading ? (
             <Typography color="text.secondary" sx={{ py: 2 }}>
-              Chargement des dépenses…
+              {categoryDetail.positive
+                ? "Chargement des montants positifs…"
+                : "Chargement des dépenses…"}
             </Typography>
           ) : categoryDetail.groups.length === 0 ? (
             <Typography color="text.secondary" sx={{ py: 2, fontStyle: "italic" }}>
-              Aucune dépense pour cette catégorie sur {selectedYear}.
+              {categoryDetail.positive
+                ? `Aucun montant positif pour cette catégorie sur ${selectedYear}.`
+                : `Aucune dépense pour cette catégorie sur ${selectedYear}.`}
             </Typography>
           ) : (
             <Stack spacing={1}>
@@ -2188,7 +2434,9 @@ const AgencyExpenses = () => {
         <DialogTitle>Confirmer la suppression</DialogTitle>
         <DialogContent>
           <Typography>
-            Êtes-vous sûr de vouloir supprimer cette dépense pour le mois de{" "}
+            Êtes-vous sûr de vouloir supprimer{" "}
+            {expenseToDelete?.is_montant_positif ? "ce montant positif" : "cette dépense"}{" "}
+            pour le mois de{" "}
             {new Date(selectedYear, selectedMonth)
               .toLocaleString("default", { month: "long" })
               .charAt(0)

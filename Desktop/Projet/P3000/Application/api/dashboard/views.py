@@ -861,7 +861,7 @@ class DashboardViewSet(viewsets.ViewSet):
 
             aem_qs = AgencyExpenseMonth.objects.filter(
                 Q(chantier__isnull=True) | Q(chantier__in=chantiers_query)
-            ).exclude(is_recurring_template=True)
+            ).exclude(is_recurring_template=True).exclude(is_montant_positif=True)
             for aem in aem_qs:
                 month_date_aem = month_year_to_date(aem.year, aem.month)
                 if not in_period(month_date_aem):

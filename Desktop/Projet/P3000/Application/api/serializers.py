@@ -1990,6 +1990,7 @@ class AgencyExpenseMonthSerializer(serializers.ModelSerializer):
             'closed_until', 'recurrence_parent',
             'agence', 'agence_nom',
             'commentaire',
+            'is_montant_positif',
             'created_at', 'updated_at'
         ]
     

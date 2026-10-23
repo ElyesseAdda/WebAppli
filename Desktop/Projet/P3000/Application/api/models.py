@@ -2853,6 +2853,10 @@ class AgencyExpenseMonth(models.Model):
     
     agence = models.ForeignKey('Agence', on_delete=models.CASCADE, null=True, blank=True, related_name='agency_expenses_month')
     commentaire = models.TextField(blank=True, null=True)
+    is_montant_positif = models.BooleanField(
+        default=False,
+        help_text="Montant positif (crédit / entrée), distinct d'une dépense",
+    )
     
     # Lien vers la dépense source (si générée depuis AgencyExpense)
     source_expense = models.ForeignKey('AgencyExpense', on_delete=models.SET_NULL, null=True, blank=True, related_name='monthly_entries')
@@ -2875,7 +2879,7 @@ class AgencyExpenseMonth(models.Model):
 
     class Meta:
         ordering = ['-year', '-month']
-        unique_together = ('description', 'category', 'month', 'year', 'agence')
+        unique_together = ('description', 'category', 'month', 'year', 'agence', 'is_montant_positif')
         verbose_name = "Dépense Mensuelle Agence"
         verbose_name_plural = "Dépenses Mensuelles Agence"
         indexes = [
