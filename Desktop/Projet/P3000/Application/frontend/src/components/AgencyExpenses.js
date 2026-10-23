@@ -21,6 +21,8 @@ import {
   TableHead,
   TableRow,
   TextField,
+  ToggleButton,
+  ToggleButtonGroup,
   Typography,
 } from "@mui/material";
 import { createFilterOptions } from "@mui/material/Autocomplete";
@@ -92,6 +94,100 @@ const chantierIdForExpense = (e, scopedToAgence, agenceChantierById) => {
   if (scopedToAgence) return null;
   if (e?.agence == null) return null;
   return agenceChantierById[String(e.agence)] ?? null;
+};
+
+const MONTH_NAMES_FR = [
+  "janvier", "février", "mars", "avril", "mai", "juin",
+  "juillet", "août", "septembre", "octobre", "novembre", "décembre",
+];
+
+const formatMonthLabel = (year, month) => {
+  const name = MONTH_NAMES_FR[(Number(month) || 1) - 1] || "";
+  if (!name || !year) return "—";
+  return `${name.charAt(0).toUpperCase()}${name.slice(1)} ${year}`;
+};
+
+const formatIsoDayFR = (iso) => {
+  const match = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(iso || ""));
+  if (!match) return "—";
+  return `${match[3]}/${match[2]}/${match[1]}`;
+};
+
+const expenseReferenceDate = (row) => {
+  const raw = row?.date_paiement_reel || row?.date_paiement;
+  const day = String(raw || "").slice(0, 10);
+  if (/^\d{4}-\d{2}-\d{2}$/.test(day)) return day;
+  const year = Number(row?.year);
+  const month = Number(row?.month);
+  if (year && month) return `${year}-${String(month).padStart(2, "0")}-01`;
+  return "";
+};
+
+const enumerateMonths = (startYear, startMonth, endYear, endMonth, limit = 24) => {
+  let y = Number(startYear);
+  let m = Number(startMonth);
+  let endY = Number(endYear);
+  let endM = Number(endMonth);
+  if (!y || !m || !endY || !endM) return { months: [], truncated: false };
+  if (y * 12 + m > endY * 12 + endM) {
+    [y, endY] = [endY, y];
+    [m, endM] = [endM, m];
+  }
+  const months = [];
+  let truncated = false;
+  while (y * 12 + m <= endY * 12 + endM) {
+    if (months.length >= limit) {
+      truncated = true;
+      break;
+    }
+    months.push({ year: y, month: m });
+    m += 1;
+    if (m > 12) {
+      m = 1;
+      y += 1;
+    }
+  }
+  return { months, truncated };
+};
+
+const monthOverlapsIso = (year, month, startIso, endIso) => {
+  const monthStart = `${year}-${String(month).padStart(2, "0")}-01`;
+  const last = new Date(year, month, 0).getDate();
+  const monthEnd = `${year}-${String(month).padStart(2, "0")}-${String(last).padStart(2, "0")}`;
+  return monthStart <= endIso && monthEnd >= startIso;
+};
+
+const localIsoDate = (date) => {
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, "0");
+  const d = String(date.getDate()).padStart(2, "0");
+  return `${y}-${m}-${d}`;
+};
+
+const periodSelectSx = {
+  minWidth: 140,
+  backgroundColor: "rgba(27, 120, 188, 1)",
+  color: "white",
+  "& .MuiSvgIcon-root": { color: "white" },
+};
+
+const MonthMenuItems = () =>
+  MONTH_NAMES_FR.map((name, index) => (
+    <MenuItem key={name} value={index}>
+      {name.charAt(0).toUpperCase() + name.slice(1)}
+    </MenuItem>
+  ));
+
+const YearMenuItems = () => {
+  const current = new Date().getFullYear();
+  return Array.from({ length: 5 }, (_, index) => {
+    const year = current - 2 + index;
+    return (
+      <MenuItem key={year} value={year}>
+        {year}
+      </MenuItem>
+    );
+  });
 };
 
 const SYSTEM_CATEGORIES = [
@@ -493,6 +589,18 @@ const AgencyExpenses = () => {
   const [openDialog, setOpenDialog] = useState(false);
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
   const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth());
+  const [periodMode, setPeriodMode] = useState("mois");
+  const [rangeStartMonth, setRangeStartMonth] = useState(0);
+  const [rangeStartYear, setRangeStartYear] = useState(new Date().getFullYear());
+  const [rangeEndMonth, setRangeEndMonth] = useState(new Date().getMonth());
+  const [rangeEndYear, setRangeEndYear] = useState(new Date().getFullYear());
+  const [rangeStartDate, setRangeStartDate] = useState(
+    `${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, "0")}-01`
+  );
+  const [rangeEndDate, setRangeEndDate] = useState(localIsoDate(new Date()));
+  const [periodSchedules, setPeriodSchedules] = useState([]);
+  const [periodTruncated, setPeriodTruncated] = useState(false);
+  const [tableReload, setTableReload] = useState(0);
   const [newExpense, setNewExpense] = useState({
     description: "",
     amount: "",
@@ -634,10 +742,138 @@ const AgencyExpenses = () => {
     };
   }, []);
 
-  // Chargement des données mensuelles (dépenses du tableau)
+  // Tableau : un mois, une plage de mois, ou une plage de jours.
   useEffect(() => {
-    fetchMonthlyExpenses();
-  }, [selectedMonth, selectedYear, agenceId]);
+    let cancelled = false;
+    const loadTable = async () => {
+      setLoading(true);
+      try {
+        let months = [];
+        let truncated = false;
+        let dayStart = rangeStartDate;
+        let dayEnd = rangeEndDate;
+        if (periodMode === "mois") {
+          months = [{ year: selectedYear, month: selectedMonth + 1 }];
+        } else if (periodMode === "jour") {
+          if (dayStart > dayEnd) [dayStart, dayEnd] = [dayEnd, dayStart];
+          const enumerated = enumerateMonths(
+            Number(dayStart.slice(0, 4)),
+            Number(dayStart.slice(5, 7)),
+            Number(dayEnd.slice(0, 4)),
+            Number(dayEnd.slice(5, 7))
+          );
+          months = enumerated.months;
+          truncated = enumerated.truncated;
+        } else {
+          const enumerated = enumerateMonths(
+            rangeStartYear,
+            rangeStartMonth + 1,
+            rangeEndYear,
+            rangeEndMonth + 1
+          );
+          months = enumerated.months;
+          truncated = enumerated.truncated;
+        }
+        if (cancelled) return;
+        setPeriodTruncated(truncated);
+
+        const responses = await Promise.all(
+          months.map(({ year, month }) =>
+            axios
+              .get(
+                `/api/agency-expenses-month/monthly_summary/?month=${month}&year=${year}${agenceParam}`
+              )
+              .then((r) =>
+                (r.data?.expenses || []).map((expense) => {
+                  const stamped = {
+                    ...expense,
+                    year: expense.year || year,
+                    month: expense.month || month,
+                  };
+                  return {
+                    ...stamped,
+                    periodLabel:
+                      periodMode === "jour"
+                        ? formatIsoDayFR(expenseReferenceDate(stamped))
+                        : formatMonthLabel(stamped.year, stamped.month),
+                  };
+                })
+              )
+              .catch(() => [])
+          )
+        );
+        let fetched = responses.flat();
+        if (periodMode === "jour") {
+          fetched = fetched.filter((expense) => {
+            const iso = expenseReferenceDate(expense);
+            return iso && iso >= dayStart && iso <= dayEnd;
+          });
+        }
+
+        let schedules = [];
+        if (periodMode !== "mois" && months.length) {
+          const years = [...new Set(months.map((item) => item.year))];
+          const yearPayloads = await Promise.all(
+            years.map(async (year) => {
+              try {
+                const res = await axios.get(
+                  `/api/schedule/yearly_summary/?year=${year}${scheduleParam}`
+                );
+                return { year, months: res.data?.months || [] };
+              } catch {
+                return { year, months: [] };
+              }
+            })
+          );
+          const wanted = new Set(months.map((item) => `${item.year}-${item.month}`));
+          yearPayloads.forEach(({ year, months: scheduleMonths }) => {
+            scheduleMonths.forEach((scheduleMonth, index) => {
+              const monthNum = Number(scheduleMonth.month) || index + 1;
+              if (!wanted.has(`${year}-${monthNum}`)) return;
+              if (
+                periodMode === "jour" &&
+                !monthOverlapsIso(year, monthNum, dayStart, dayEnd)
+              ) {
+                return;
+              }
+              schedules.push({
+                year,
+                month: monthNum,
+                details: scheduleMonth.details || [],
+              });
+            });
+          });
+        }
+
+        if (cancelled) return;
+        setOriginalExpenses(fetched);
+        setExpenses(fetched);
+        setPeriodSchedules(schedules);
+      } catch (error) {
+        console.error("Erreur lors du chargement des dépenses:", error);
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    };
+    loadTable();
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    periodMode,
+    selectedMonth,
+    selectedYear,
+    rangeStartMonth,
+    rangeStartYear,
+    rangeEndMonth,
+    rangeEndYear,
+    rangeStartDate,
+    rangeEndDate,
+    agenceId,
+    agenceParam,
+    scheduleParam,
+    tableReload,
+  ]);
 
   // Chargement consolidé : totaux annuels + planning mensuel (2 appels au lieu de ~50)
   useEffect(() => {
@@ -783,23 +1019,7 @@ const AgencyExpenses = () => {
     return () => { cancelled = true; };
   }, [selectedMonth, selectedYear, agenceId, agenceChantierId, agenceParam, scheduleReady, yearlyRefresh, agencesList]);
 
-  const fetchMonthlyExpenses = async () => {
-    try {
-      setLoading(true);
-      const response = await axios.get(
-        `/api/agency-expenses-month/monthly_summary/?month=${
-          selectedMonth + 1
-        }&year=${selectedYear}${agenceParam}`
-      );
-      const fetched = response.data?.expenses || [];
-      setOriginalExpenses(fetched);
-      setExpenses(fetched);
-    } catch (error) {
-      console.error("Erreur lors du chargement des dépenses:", error);
-    } finally {
-      setLoading(false);
-    }
-  };
+  const reloadTable = () => setTableReload((n) => n + 1);
 
   const handleAddExpense = async () => {
     if (!newExpense.description || !newExpense.amount) {
@@ -870,7 +1090,7 @@ const AgencyExpenses = () => {
       }
 
       setOpenDialog(false);
-      await fetchMonthlyExpenses();
+      reloadTable();
       triggerYearlyRefresh();
 
       setNewExpense({
@@ -893,7 +1113,7 @@ const AgencyExpenses = () => {
     try {
       setLoading(true);
       await axios.delete(`/api/agency-expenses-month/${id}/`);
-      await fetchMonthlyExpenses();
+      reloadTable();
       triggerYearlyRefresh();
     } catch (error) {
       console.error("Erreur lors de la suppression:", error);
@@ -953,7 +1173,7 @@ const AgencyExpenses = () => {
         );
 
         setOpenDialog(false);
-        await fetchMonthlyExpenses();
+        reloadTable();
         triggerYearlyRefresh();
         setIsEditing(false);
         setEditingExpense(null);
@@ -988,7 +1208,7 @@ const AgencyExpenses = () => {
       setOpenDialog(false);
       setIsEditing(false);
       setEditingExpense(null);
-      await fetchMonthlyExpenses();
+      reloadTable();
       triggerYearlyRefresh();
     } catch (error) {
       console.error("Erreur lors de l'arrêt de la récurrence:", error);
@@ -1041,9 +1261,81 @@ const AgencyExpenses = () => {
     return keys;
   }, [originalExpenses, agenceId, agencesList]);
 
-  const planningRowsVirtual = useMemo(() => {
-    if (!planningAgence?.details?.length) return [];
+  const expensesForTable = useMemo(() => {
     const scopedToAgence = Boolean(agenceId);
+    const agenceChantierById = buildAgenceChantierMap(agencesList);
+    if (periodMode !== "mois") {
+      const coverage = buildPointageCoverageKeys(
+        originalExpenses,
+        scopedToAgence,
+        agenceChantierById
+      );
+      return expenses.filter((e) => {
+        if (!isAjustementSousTraitant(e)) return true;
+        const key = yearlyPointageCoverageKey(
+          e.month,
+          e.agent,
+          chantierIdForExpense(e, scopedToAgence, agenceChantierById),
+          scopedToAgence
+        );
+        return !coverage.has(key);
+      });
+    }
+    return expenses.filter((e) => {
+      if (!isAjustementSousTraitant(e)) return true;
+      const key = pointageCoverageKey(
+        e.agent,
+        chantierIdForExpense(e, scopedToAgence, agenceChantierById),
+        scopedToAgence
+      );
+      return !monthlyPointageCoverage.has(key);
+    });
+  }, [expenses, monthlyPointageCoverage, agenceId, agencesList, periodMode, originalExpenses]);
+
+  const planningRowsVirtual = useMemo(() => {
+    const scopedToAgence = Boolean(agenceId);
+    if (periodMode !== "mois") {
+      const agenceChantierById = buildAgenceChantierMap(agencesList);
+      const coverage = buildPointageCoverageKeys(
+        originalExpenses,
+        scopedToAgence,
+        agenceChantierById
+      );
+      const rows = [];
+      periodSchedules.forEach((scheduleMonth) => {
+        (scheduleMonth.details || []).forEach((row, idx) => {
+          const key = yearlyPointageCoverageKey(
+            scheduleMonth.month,
+            row.agent_id,
+            row.chantier_id,
+            scopedToAgence
+          );
+          if (coverage.has(key)) return;
+          const cmt = (row.comment || "").trim();
+          const suffix = planningCommentKey(cmt);
+          const chantierLabel = row.chantier_nom ? `${row.chantier_nom} — ` : "";
+          const heuresLabel = formatHeuresCommeResume(
+            sumHeuresPlanningAgent(row),
+            row.type_paiement
+          );
+          rows.push({
+            id: `planning-agence-${scheduleMonth.year}-${scheduleMonth.month}-${row.agent_id}-${suffix}-${idx}`,
+            agent_id: row.agent_id,
+            chantier_id: row.chantier_id,
+            description: `${row.agent_nom} — ${chantierLabel}${heuresLabel}`,
+            planningComment: cmt,
+            category: "Planning agence",
+            amount: sumMontantPlanningAgent(row),
+            isPlanningRow: true,
+            year: scheduleMonth.year,
+            month: scheduleMonth.month,
+            periodLabel: formatMonthLabel(scheduleMonth.year, scheduleMonth.month),
+          });
+        });
+      });
+      return rows;
+    }
+    if (!planningAgence?.details?.length) return [];
     return planningAgence.details
       .filter((row) => {
         const key = pointageCoverageKey(
@@ -1070,9 +1362,12 @@ const AgencyExpenses = () => {
           category: "Planning agence",
           amount: sumMontantPlanningAgent(row),
           isPlanningRow: true,
+          year: selectedYear,
+          month: selectedMonth + 1,
+          periodLabel: formatMonthLabel(selectedYear, selectedMonth + 1),
         };
       });
-  }, [planningAgence, monthlyPointageCoverage, agenceId]);
+  }, [periodMode, periodSchedules, originalExpenses, planningAgence, monthlyPointageCoverage, agenceId, agencesList, selectedYear, selectedMonth]);
 
   const planningRowsFiltered = useMemo(() => {
     return planningRowsVirtual.filter((row) => {
@@ -1100,23 +1395,18 @@ const AgencyExpenses = () => {
     });
   }, [planningRowsVirtual, filters]);
 
-  const expensesForTable = useMemo(() => {
-    const scopedToAgence = Boolean(agenceId);
-    const agenceChantierById = buildAgenceChantierMap(agencesList);
-    return expenses.filter((e) => {
-      if (!isAjustementSousTraitant(e)) return true;
-      const key = pointageCoverageKey(
-        e.agent,
-        chantierIdForExpense(e, scopedToAgence, agenceChantierById),
-        scopedToAgence
-      );
-      return !monthlyPointageCoverage.has(key);
-    });
-  }, [expenses, monthlyPointageCoverage, agenceId, agencesList]);
-
   const tableRowsCombined = useMemo(() => {
     const allRows = [...expensesForTable, ...planningRowsFiltered];
-    
+    if (periodMode !== "mois") {
+      return allRows.sort((a, b) => {
+        const yearDiff = (Number(a.year) || 0) - (Number(b.year) || 0);
+        if (yearDiff !== 0) return yearDiff;
+        const monthDiff = (Number(a.month) || 0) - (Number(b.month) || 0);
+        if (monthDiff !== 0) return monthDiff;
+        return String(a.description || "").localeCompare(String(b.description || ""), "fr");
+      });
+    }
+ 
     // Identifier les lignes liées à un agent (Planning, Pointage, Prime, Ajustement Sous-traitant)
     const agentCategories = new Set([
       "Planning agence",
@@ -1198,7 +1488,7 @@ const AgencyExpenses = () => {
     });
     
     return result;
-  }, [expensesForTable, planningRowsFiltered]);
+  }, [expensesForTable, planningRowsFiltered, periodMode]);
 
   const buildYearlyCategoryRows = (totals) => {
     const rows = [];
@@ -1490,49 +1780,116 @@ const AgencyExpenses = () => {
         </Box>
       </Box>
 
-      <Box sx={{ mb: 3, display: "flex", gap: 2 }}>
-        <Select
-          value={selectedMonth}
-          onChange={(e) => setSelectedMonth(Number(e.target.value))}
+      <Box sx={{ mb: 3, display: "flex", gap: 1.5, flexWrap: "wrap", alignItems: "center" }}>
+        <ToggleButtonGroup
+          exclusive
+          size="small"
+          value={periodMode}
+          onChange={(_, value) => {
+            if (value) setPeriodMode(value);
+          }}
           sx={{
-            minWidth: 150,
-            backgroundColor: "rgba(27, 120, 188, 1)",
-            color: "white",
-            "& .MuiSvgIcon-root": {
+            bgcolor: "rgba(255,255,255,0.12)",
+            "& .MuiToggleButton-root": {
               color: "white",
+              borderColor: "rgba(255,255,255,0.45)",
+              textTransform: "none",
+              px: 1.5,
+            },
+            "& .Mui-selected": {
+              bgcolor: "white !important",
+              color: "rgba(27, 120, 188, 1) !important",
             },
           }}
         >
-          {Array.from({ length: 12 }, (_, i) => (
-            <MenuItem key={i} value={i}>
-              {new Date(2000, i)
-                .toLocaleString("default", { month: "long" })
-                .charAt(0)
-                .toUpperCase() +
-                new Date(2000, i)
-                  .toLocaleString("default", { month: "long" })
-                  .slice(1)}
-            </MenuItem>
-          ))}
-        </Select>
-        <Select
-          value={selectedYear}
-          onChange={(e) => setSelectedYear(Number(e.target.value))}
-          sx={{
-            minWidth: 100,
-            backgroundColor: "rgba(27, 120, 188, 1)",
-            color: "white",
-            "& .MuiSvgIcon-root": {
-              color: "white",
-            },
-          }}
-        >
-          {Array.from({ length: 5 }, (_, i) => (
-            <MenuItem key={i} value={new Date().getFullYear() - 2 + i}>
-              {new Date().getFullYear() - 2 + i}
-            </MenuItem>
-          ))}
-        </Select>
+          <ToggleButton value="mois">Un mois</ToggleButton>
+          <ToggleButton value="mois-range">De mois à mois</ToggleButton>
+          <ToggleButton value="jour">De jour à jour</ToggleButton>
+        </ToggleButtonGroup>
+        {periodMode === "mois" ? (
+          <>
+            <Select
+              value={selectedMonth}
+              onChange={(e) => setSelectedMonth(Number(e.target.value))}
+              sx={{ ...periodSelectSx, minWidth: 150 }}
+            >
+              {MonthMenuItems()}
+            </Select>
+            <Select
+              value={selectedYear}
+              onChange={(e) => setSelectedYear(Number(e.target.value))}
+              sx={{ ...periodSelectSx, minWidth: 100 }}
+            >
+              {YearMenuItems()}
+            </Select>
+          </>
+        ) : null}
+        {periodMode === "mois-range" ? (
+          <>
+            <Typography sx={{ color: "white", fontWeight: 600 }}>Du</Typography>
+            <Select
+              value={rangeStartMonth}
+              onChange={(e) => setRangeStartMonth(Number(e.target.value))}
+              sx={periodSelectSx}
+            >
+              {MonthMenuItems()}
+            </Select>
+            <Select
+              value={rangeStartYear}
+              onChange={(e) => setRangeStartYear(Number(e.target.value))}
+              sx={{ ...periodSelectSx, minWidth: 100 }}
+            >
+              {YearMenuItems()}
+            </Select>
+            <Typography sx={{ color: "white", fontWeight: 600 }}>au</Typography>
+            <Select
+              value={rangeEndMonth}
+              onChange={(e) => setRangeEndMonth(Number(e.target.value))}
+              sx={periodSelectSx}
+            >
+              {MonthMenuItems()}
+            </Select>
+            <Select
+              value={rangeEndYear}
+              onChange={(e) => {
+                const year = Number(e.target.value);
+                setRangeEndYear(year);
+                setSelectedYear(year);
+              }}
+              sx={{ ...periodSelectSx, minWidth: 100 }}
+            >
+              {YearMenuItems()}
+            </Select>
+          </>
+        ) : null}
+        {periodMode === "jour" ? (
+          <>
+            <Typography sx={{ color: "white", fontWeight: 600 }}>Du</Typography>
+            <TextField
+              type="date"
+              size="small"
+              value={rangeStartDate}
+              onChange={(e) => setRangeStartDate(e.target.value)}
+              sx={{ bgcolor: "white", borderRadius: 1, minWidth: 160 }}
+            />
+            <Typography sx={{ color: "white", fontWeight: 600 }}>au</Typography>
+            <TextField
+              type="date"
+              size="small"
+              value={rangeEndDate}
+              onChange={(e) => setRangeEndDate(e.target.value)}
+              sx={{ bgcolor: "white", borderRadius: 1, minWidth: 160 }}
+            />
+          </>
+        ) : null}
+        {periodMode !== "mois" ? (
+          <Typography variant="caption" sx={{ color: "white", flexBasis: "100%" }}>
+            {periodMode === "jour"
+              ? "Les dépenses et les avoirs sont filtrés par leur date. Le planning agence est inclus pour chaque mois touché par la période."
+              : "Les dépenses et les avoirs de chaque mois de la période sont listés, avec le mois de chacun."}
+            {periodTruncated ? " Affichage limité aux 24 premiers mois." : ""}
+          </Typography>
+        ) : null}
       </Box>
 
       <TableContainer component={Paper}>
@@ -1548,6 +1905,13 @@ const AgencyExpenses = () => {
                   placeholder="Description..."
                 />
               </FilterCell>
+              {periodMode !== "mois" ? (
+                <FilterCell>
+                  <Typography variant="caption" sx={{ color: "#fff", px: 1 }}>
+                    {periodMode === "jour" ? "Date" : "Mois"}
+                  </Typography>
+                </FilterCell>
+              ) : null}
               <FilterCell>
                 <Autocomplete
                   size="small"
@@ -1842,6 +2206,18 @@ const AgencyExpenses = () => {
                   >
                     {getExpenseDescriptionCourte(row)}
                   </TableCell>
+                  {periodMode !== "mois" ? (
+                    <TableCell
+                      align="center"
+                      sx={{
+                        color: positiveRow ? "#1b7a4a" : "text.secondary",
+                        whiteSpace: "nowrap",
+                        fontVariantNumeric: "tabular-nums",
+                      }}
+                    >
+                      {row.periodLabel || formatMonthLabel(row.year, row.month)}
+                    </TableCell>
+                  ) : null}
                   <TableCell align="center">{row.category}</TableCell>
                   <TableCell
                     align="center"
@@ -1850,6 +2226,11 @@ const AgencyExpenses = () => {
                     {formatMontantEuroFR(effectiveAgencyTableAmount(row))}
                   </TableCell>
                   <TableCell sx={{ minWidth: 160, maxWidth: 280, verticalAlign: "top" }}>
+                    {row.isPlanningRow ? (
+                      <Typography variant="body2" sx={{ fontSize: "0.82rem", color: "#555", whiteSpace: "pre-wrap" }}>
+                        {row.planningComment || "—"}
+                      </Typography>
+                    ) : row.category === "Prime" || row.category === "Pointage" ? null : (
                     <TextField
                       size="small"
                       variant="standard"
@@ -1877,12 +2258,25 @@ const AgencyExpenses = () => {
                         },
                       }}
                     />
+                    )}
                   </TableCell>
                   <TableCell>
                     <Box sx={{ display: "flex", gap: 1 }}>
-                      {row.category === "Pointage" ? (
+                      {row.isPlanningRow ? (
+                        <Typography variant="caption" sx={{ color: "#666", fontStyle: "italic", padding: "8px" }}>
+                          Planning hebdo
+                        </Typography>
+                      ) : row.category === "Prime" ? (
+                        <Typography variant="caption" sx={{ color: "#666", fontStyle: "italic", padding: "8px" }}>
+                          Gérer via "Gérer les Primes"
+                        </Typography>
+                      ) : row.category === "Pointage" ? (
                         <Typography variant="caption" sx={{ color: "#666", fontStyle: "italic", padding: "8px" }}>
                           Gérer via Tableau de pointage
+                        </Typography>
+                      ) : row.category === "Ajustement Sous-traitant" ? (
+                        <Typography variant="caption" sx={{ color: "#666", fontStyle: "italic", padding: "8px" }}>
+                          Gérer via Tableau Sous-traitant
                         </Typography>
                       ) : (
                         <>
@@ -1900,7 +2294,7 @@ const AgencyExpenses = () => {
               );
             })}
             <TableRow sx={{ backgroundColor: "#f5f5f5" }}>
-              <TableCell colSpan={2} sx={{ fontWeight: "bold" }}>
+              <TableCell colSpan={periodMode !== "mois" ? 3 : 2} sx={{ fontWeight: "bold" }}>
                 <Box
                   sx={{
                     display: "flex",
@@ -1910,7 +2304,7 @@ const AgencyExpenses = () => {
                     flexWrap: "wrap",
                   }}
                 >
-                  <span>Total Mensuel</span>
+                  <span>{periodMode === "mois" ? "Total Mensuel" : "Total période"}</span>
                   <Box sx={{ display: "flex", alignItems: "baseline", gap: 2.5, flexWrap: "wrap" }}>
                     <Typography
                       component="span"
