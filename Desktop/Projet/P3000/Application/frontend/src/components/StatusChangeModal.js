@@ -22,14 +22,41 @@ const StatusChangeModal = ({
   type = "devis",
   currentDatePaiement,
 }) => {
-  const [selectedStatus, setSelectedStatus] = React.useState(currentStatus);
+  const getTodayDate = () => {
+    const today = new Date();
+    const year = today.getFullYear();
+    const month = String(today.getMonth() + 1).padStart(2, "0");
+    const day = String(today.getDate()).padStart(2, "0");
+    return `${year}-${month}-${day}`;
+  };
+
+  const [selectedStatus, setSelectedStatus] = React.useState(currentStatus ?? "");
   const [datePaiement, setDatePaiement] = React.useState(
     currentDatePaiement || ""
   );
+  // Aligne la sélection sur le document ouvert avant le premier affichage des radios.
+  // Une valeur undefined au montage fige le groupe (MUI le traite alors comme non contrôlé).
+  const [syncKey, setSyncKey] = React.useState(null);
+  const openKey = open ? `${currentStatus ?? ""}|${currentDatePaiement ?? ""}` : null;
+  if (openKey !== syncKey) {
+    setSyncKey(openKey);
+    if (open) {
+      setSelectedStatus(currentStatus ?? "");
+      setDatePaiement(currentDatePaiement || getTodayDate());
+    }
+  }
 
   const getStatusOptions = () => {
     if (type === "facture") {
       return ["En cours", "Attente paiement", "Payée"];
+    }
+    if (type === "rapport") {
+      return [
+        { value: "brouillon", label: "Brouillon" },
+        { value: "a_faire", label: "A faire" },
+        { value: "en_cours", label: "En cours" },
+        { value: "termine", label: "Terminé" },
+      ];
     }
     return [
       "En attente",
@@ -56,21 +83,6 @@ const StatusChangeModal = ({
     onClose();
   };
 
-  // Fonction pour obtenir la date du jour au format YYYY-MM-DD
-  const getTodayDate = () => {
-    const today = new Date();
-    const year = today.getFullYear();
-    const month = String(today.getMonth() + 1).padStart(2, '0');
-    const day = String(today.getDate()).padStart(2, '0');
-    return `${year}-${month}-${day}`;
-  };
-
-  React.useEffect(() => {
-    setSelectedStatus(currentStatus);
-    // Si une date de paiement existe, l'utiliser, sinon pré-remplir avec la date du jour
-    setDatePaiement(currentDatePaiement || getTodayDate());
-  }, [currentStatus, currentDatePaiement, open]);
-
   // Lorsque "Payée" est sélectionné et qu'il n'y a pas de date, pré-remplir avec la date du jour
   React.useEffect(() => {
     if (type === "facture" && selectedStatus === "Payée" && !datePaiement) {
@@ -84,13 +96,15 @@ const StatusChangeModal = ({
         {title ||
           (type === "facture"
             ? "Modifier l'état de la facture"
+            : type === "rapport"
+            ? "Modifier le statut du rapport"
             : type === "situation"
             ? "Modifier le statut de la situation"
             : "Modifier l'état du devis")}
       </DialogTitle>
       <DialogContent>
         <RadioGroup
-          value={selectedStatus}
+          value={selectedStatus ?? ""}
           onChange={(e) => setSelectedStatus(e.target.value)}
         >
           {(statusOptions || getStatusOptions()).map((status) => {
