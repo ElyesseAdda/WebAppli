@@ -1485,7 +1485,7 @@ const AgencyExpenses = () => {
               setOpenDialog(true);
             }}
           >
-            Ajouter un montant positif
+            Ajouter un avoir
           </Button>
         </Box>
       </Box>
@@ -1982,12 +1982,9 @@ const AgencyExpenses = () => {
               >
                 Total annuel
               </Typography>
-              <Typography variant="caption" sx={{ color: "text.secondary", display: "block", mt: 0.35 }}>
-                Solde : montants positifs − dépenses − planning agence
-              </Typography>
               <Typography variant="caption" sx={{ color: "text.secondary", display: "block", mt: 0.5, lineHeight: 1.4 }}>
                 Détail : dépenses {formatDetailAmount(yearlyTotalTableau, false)} · planning{" "}
-                {formatDetailAmount(yearlyTotalPlanning, false)} · montants positifs{" "}
+                {formatDetailAmount(yearlyTotalPlanning, false)} · avoirs{" "}
                 {formatDetailAmount(yearlyPositiveSum, true)}
                 {" (planning et ajustements sous-traitant d’un agent disparaissent dès qu’un montant chargé est imputé à l’agence)"}
               </Typography>
@@ -2050,14 +2047,15 @@ const AgencyExpenses = () => {
             emptyText="Aucune dépense pour cette année (toutes les catégories sont à 0 €)."
             accent={COST_ACCENT}
             onOpen={(cat, total) => openCategoryDetail(cat, total, false)}
+            showTotal
           />
           <CategoryYearCard
-            title="Montants positifs par catégorie"
+            title="Avoirs par catégorie"
             subtitle="Synthèse sur les 12 mois — cliquez une catégorie pour voir les désignations regroupées"
             year={selectedYear}
             loading={yearlyCategoryLoading}
             rows={yearlyPositiveDisplayRows}
-            emptyText="Aucun montant positif pour cette année."
+            emptyText="Aucun avoir pour cette année."
             accent={POSITIVE_ACCENT}
             onOpen={(cat, total) => openCategoryDetail(cat, total, true)}
             showTotal
@@ -2070,10 +2068,10 @@ const AgencyExpenses = () => {
         <DialogTitle>
           {isEditing
             ? isPositiveEntry
-              ? "Modifier le montant positif"
+              ? "Modifier l'avoir"
               : "Modifier la dépense"
             : isPositiveEntry
-              ? "Ajouter un montant positif"
+              ? "Ajouter un avoir"
               : "Ajouter une nouvelle dépense"}
         </DialogTitle>
         <DialogContent>
@@ -2268,7 +2266,7 @@ const AgencyExpenses = () => {
               mt: 0.5,
             }}
           >
-            {categoryDetail.positive ? "Montants positifs · " : ""}
+            {categoryDetail.positive ? "Avoirs · " : ""}
             Désignations regroupées · {selectedYear}
           </Typography>
         </DialogTitle>
@@ -2327,13 +2325,13 @@ const AgencyExpenses = () => {
           {categoryDetail.loading ? (
             <Typography color="text.secondary" sx={{ py: 2 }}>
               {categoryDetail.positive
-                ? "Chargement des montants positifs…"
+                ? "Chargement des avoirs…"
                 : "Chargement des dépenses…"}
             </Typography>
           ) : categoryDetail.groups.length === 0 ? (
             <Typography color="text.secondary" sx={{ py: 2, fontStyle: "italic" }}>
               {categoryDetail.positive
-                ? `Aucun montant positif pour cette catégorie sur ${selectedYear}.`
+                ? `Aucun avoir pour cette catégorie sur ${selectedYear}.`
                 : `Aucune dépense pour cette catégorie sur ${selectedYear}.`}
             </Typography>
           ) : (
@@ -2471,7 +2469,7 @@ const AgencyExpenses = () => {
         <DialogContent>
           <Typography>
             Êtes-vous sûr de vouloir supprimer{" "}
-            {expenseToDelete?.is_montant_positif ? "ce montant positif" : "cette dépense"}{" "}
+            {expenseToDelete?.is_montant_positif ? "cet avoir" : "cette dépense"}{" "}
             pour le mois de{" "}
             {new Date(selectedYear, selectedMonth)
               .toLocaleString("default", { month: "long" })
