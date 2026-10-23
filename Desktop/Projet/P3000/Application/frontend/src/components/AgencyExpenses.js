@@ -181,6 +181,13 @@ const expenseDesignationLabel = (expense) => {
   return cleaned || "Sans désignation";
 };
 
+const formatDetailAmount = (value, asPositive) => {
+  const amount = Math.abs(Number(value) || 0);
+  if (!amount) return formatMontantEuroFR(0);
+  if (asPositive) return `+ ${formatMontantEuroFR(amount)}`;
+  return `− ${formatMontantEuroFR(amount)}`;
+};
+
 const groupExpensesByDesignation = (expenses) => {
   const map = {};
   (expenses || []).forEach((e) => {
@@ -196,36 +203,58 @@ const groupExpensesByDesignation = (expenses) => {
         label,
         lines: [],
         total: 0,
+        expenseTotal: 0,
+        positiveTotal: 0,
       };
     }
     map[key].lines.push(e);
-    map[key].total += expenseLineAmount(e);
+    const amount = Math.abs(expenseLineAmount(e));
+    if (e.is_montant_positif) map[key].positiveTotal += amount;
+    else map[key].expenseTotal += amount;
   });
   Object.values(map).forEach((group) => {
     const byMonth = {};
     group.lines.forEach((line) => {
       const monthNum = Number(line.month) || 0;
-      if (!byMonth[monthNum]) {
-        byMonth[monthNum] = {
+      const positive = Boolean(line.is_montant_positif);
+      const bucketKey = `${monthNum}-${positive ? "p" : "d"}`;
+      if (!byMonth[bucketKey]) {
+        byMonth[bucketKey] = {
           ...line,
           description: group.label,
           amount: 0,
           montant_paye: 0,
+          is_montant_positif: positive,
         };
       }
-      const amt = expenseLineAmount(line);
-      byMonth[monthNum].amount = Number(byMonth[monthNum].amount || 0) + amt;
-      if (line.commentaire && !byMonth[monthNum].commentaire) {
-        byMonth[monthNum].commentaire = line.commentaire;
+      byMonth[bucketKey].amount += Math.abs(expenseLineAmount(line));
+      if (line.commentaire && !byMonth[bucketKey].commentaire) {
+        byMonth[bucketKey].commentaire = line.commentaire;
       }
     });
-    group.lines = Object.values(byMonth).sort(
-      (a, b) => Number(a.month || 0) - Number(b.month || 0)
-    );
+    group.lines = Object.values(byMonth).sort((a, b) => {
+      const monthDiff = Number(a.month || 0) - Number(b.month || 0);
+      if (monthDiff !== 0) return monthDiff;
+      return a.is_montant_positif === b.is_montant_positif
+        ? 0
+        : a.is_montant_positif
+          ? 1
+          : -1;
+    });
+    group.total = group.expenseTotal - group.positiveTotal;
   });
   return Object.values(map).sort(
-    (a, b) => b.total - a.total || a.label.localeCompare(b.label, "fr")
+    (a, b) => b.expenseTotal - a.expenseTotal || b.positiveTotal - a.positiveTotal || a.label.localeCompare(b.label, "fr")
   );
+};
+
+const detailAmountView = (expenseTotal, positiveTotal) => {
+  const expenses = Number(expenseTotal) || 0;
+  const positives = Number(positiveTotal) || 0;
+  const signed = positives - expenses;
+  if (signed > 0) return { text: formatDetailAmount(signed, true), positive: true };
+  if (signed < 0) return { text: formatDetailAmount(signed, false), positive: false };
+  return { text: formatMontantEuroFR(0), positive: false };
 };
 
 const buildAgenceChantierMap = (agences) => {
@@ -1228,7 +1257,7 @@ const AgencyExpenses = () => {
     [yearlyPositiveTotals]
   );
 
-  const yearlyNetTotal = yearlyTotal - yearlyPositiveSum;
+  const yearlySignedTotal = yearlyPositiveSum - yearlyTotal;
 
 
   const getExpenseCommentaire = (expense) => {
@@ -1384,9 +1413,10 @@ const AgencyExpenses = () => {
             categoryName
           )}${agenceParam}`
         );
-        let list = asExpenseList(response.data).filter(
-          (e) => Boolean(e.is_montant_positif) === Boolean(positive)
-        );
+        let list = asExpenseList(response.data);
+        if (positive) {
+          list = list.filter((e) => Boolean(e.is_montant_positif));
+        }
         if (categoryName === "Ajustement Sous-traitant") {
           list = list.filter((e) => {
             if (!isAjustementSousTraitant(e)) return true;
@@ -1818,15 +1848,6 @@ const AgencyExpenses = () => {
                     sx={positiveRow ? { color: "#1b7a4a", fontWeight: 700 } : undefined}
                   >
                     {formatMontantEuroFR(effectiveAgencyTableAmount(row))}
-                    {positiveRow ? (
-                      <Typography
-                        variant="caption"
-                        display="block"
-                        sx={{ color: "#1b7a4a", fontWeight: 600, lineHeight: 1.2 }}
-                      >
-                        Positif
-                      </Typography>
-                    ) : null}
                   </TableCell>
                   <TableCell sx={{ minWidth: 160, maxWidth: 280, verticalAlign: "top" }}>
                     <TextField
@@ -1962,12 +1983,12 @@ const AgencyExpenses = () => {
                 Total annuel
               </Typography>
               <Typography variant="caption" sx={{ color: "text.secondary", display: "block", mt: 0.35 }}>
-                Dépenses saisies + planning agence − montants positifs
+                Solde : montants positifs − dépenses − planning agence
               </Typography>
               <Typography variant="caption" sx={{ color: "text.secondary", display: "block", mt: 0.5, lineHeight: 1.4 }}>
-                Détail : dépenses {formatMontantEuroFR(yearlyTotalTableau)} · planning{" "}
-                {formatMontantEuroFR(yearlyTotalPlanning)} · montants positifs{" "}
-                {formatMontantEuroFR(yearlyPositiveSum)}
+                Détail : dépenses {formatDetailAmount(yearlyTotalTableau, false)} · planning{" "}
+                {formatDetailAmount(yearlyTotalPlanning, false)} · montants positifs{" "}
+                {formatDetailAmount(yearlyPositiveSum, true)}
                 {" (planning et ajustements sous-traitant d’un agent disparaissent dès qu’un montant chargé est imputé à l’agence)"}
               </Typography>
             </Box>
@@ -1985,11 +2006,11 @@ const AgencyExpenses = () => {
                 sx={{
                   fontWeight: 800,
                   fontVariantNumeric: "tabular-nums",
-                  color: "rgba(27, 120, 188, 1)",
+                  color: yearlySignedTotal > 0 ? "#1b7a4a" : "rgba(27, 120, 188, 1)",
                   lineHeight: 1.15,
                 }}
               >
-                {formatMontantEuroFR(yearlyNetTotal)}
+                {formatDetailAmount(yearlySignedTotal, yearlySignedTotal > 0)}
               </Typography>
               <Box
                 sx={{
@@ -2281,11 +2302,25 @@ const AgencyExpenses = () => {
             <Typography
               sx={{
                 fontWeight: 800,
-                color: categoryDetail.positive ? "#1b7a4a" : "rgba(27, 120, 188, 1)",
+                color:
+                  !categoryDetail.loading &&
+                  detailAmountView(
+                    categoryDetail.groups.reduce((sum, group) => sum + (group.expenseTotal || 0), 0),
+                    categoryDetail.groups.reduce((sum, group) => sum + (group.positiveTotal || 0), 0)
+                  ).positive
+                    ? "#1b7a4a"
+                    : categoryDetail.positive
+                      ? "#1b7a4a"
+                      : "rgba(27, 120, 188, 1)",
                 fontVariantNumeric: "tabular-nums",
               }}
             >
-              {formatMontantEuroFR(categoryDetail.total)}
+              {categoryDetail.loading
+                ? formatMontantEuroFR(categoryDetail.total)
+                : detailAmountView(
+                    categoryDetail.groups.reduce((sum, group) => sum + (group.expenseTotal || 0), 0),
+                    categoryDetail.groups.reduce((sum, group) => sum + (group.positiveTotal || 0), 0)
+                  ).text}
             </Typography>
           </Box>
 
@@ -2305,6 +2340,7 @@ const AgencyExpenses = () => {
             <Stack spacing={1}>
               {categoryDetail.groups.map((group) => {
                 const isOpen = !!expandedDesignations[group.key];
+                const groupAmount = detailAmountView(group.expenseTotal, group.positiveTotal);
                 return (
                   <Paper
                     key={group.key}
@@ -2360,9 +2396,10 @@ const AgencyExpenses = () => {
                           fontWeight: 700,
                           fontVariantNumeric: "tabular-nums",
                           whiteSpace: "nowrap",
+                          color: groupAmount.positive ? "#1b7a4a" : "inherit",
                         }}
                       >
-                        {formatMontantEuroFR(group.total)}
+                        {groupAmount.text}
                       </Typography>
                     </Box>
                     <Collapse in={isOpen} timeout="auto" unmountOnExit>
@@ -2403,11 +2440,10 @@ const AgencyExpenses = () => {
                                 fontWeight: 600,
                                 fontVariantNumeric: "tabular-nums",
                                 whiteSpace: "nowrap",
+                                color: line.is_montant_positif ? "#1b7a4a" : "inherit",
                               }}
                             >
-                              {formatMontantEuroFR(
-                                expenseLineAmount(line) || Number(line.amount) || 0
-                              )}
+                              {formatDetailAmount(line.amount, Boolean(line.is_montant_positif))}
                             </Typography>
                           </Box>
                         ))}
