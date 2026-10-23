@@ -191,7 +191,7 @@ const formatDetailAmount = (value, asPositive) => {
 const groupExpensesByDesignation = (expenses) => {
   const map = {};
   (expenses || []).forEach((e) => {
-    if (!e || e.is_recurring_template) return;
+    if (!e) return;
     const label = expenseDesignationLabel(e);
     const key =
       e.agent != null && e.agent !== ""

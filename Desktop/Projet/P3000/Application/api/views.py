@@ -11361,7 +11361,7 @@ class AgencyExpenseMonthViewSet(viewsets.ModelViewSet):
         expenses = self.queryset.filter(
             month=int(month),
             year=int(year)
-        ).exclude(is_recurring_template=True)
+        )
         if agence_id:
             expenses = expenses.filter(agence_id=int(agence_id))
         expenses = list(expenses)
@@ -11407,7 +11407,7 @@ class AgencyExpenseMonthViewSet(viewsets.ModelViewSet):
         year = int(year)
         from .models import purge_stale_pointage_agency_expenses
         purge_stale_pointage_agency_expenses(year=year, agence_id=agence_id)
-        expenses = self.queryset.filter(year=year).exclude(is_recurring_template=True)
+        expenses = self.queryset.filter(year=year)
         if agence_id:
             expenses = expenses.filter(agence_id=int(agence_id))
 
