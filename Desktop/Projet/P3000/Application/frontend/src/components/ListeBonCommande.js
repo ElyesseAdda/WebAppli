@@ -1,5 +1,6 @@
 import {
   Autocomplete,
+  Box,
   Button,
   Dialog,
   DialogActions,
@@ -14,6 +15,7 @@ import {
   TableHead,
   TableRow,
   TextField,
+  Tooltip,
   Typography,
 } from "@mui/material";
 import { AdapterDateFns } from "@mui/x-date-pickers/AdapterDateFns";
@@ -21,8 +23,11 @@ import { DatePicker } from "@mui/x-date-pickers/DatePicker";
 import { LocalizationProvider } from "@mui/x-date-pickers/LocalizationProvider";
 import axios from "axios";
 import fr from "date-fns/locale/fr";
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { TfiMore } from "react-icons/tfi";
+import ArrowUpwardIcon from "@mui/icons-material/ArrowUpward";
+import ArrowDownwardIcon from "@mui/icons-material/ArrowDownward";
+import UnfoldMoreIcon from "@mui/icons-material/UnfoldMore";
 import {
   AlignedCell,
   CenteredTableCell,
@@ -53,7 +58,7 @@ const ListeBonCommande = () => {
     montant_paye: "",
     reste_a_payer: "",
   });
-  const [orderBy, setOrderBy] = useState("numero");
+  const [orderBy, setOrderBy] = useState(null);
   const [order, setOrder] = useState("asc");
   const [anchorEl, setAnchorEl] = useState(null);
   const [statusAnchorEl, setStatusAnchorEl] = useState(null);
@@ -77,23 +82,13 @@ const ListeBonCommande = () => {
       setIsLoading(true);
       const response = await axios.get("/api/bons-commande/");
       
-      // Trier les données par numéro (ascendant) par défaut
-      const sortedData = response.data.sort((a, b) => {
+      const sortedData = [...response.data].sort((a, b) => {
         const aNumero = a.numero || "";
         const bNumero = b.numero || "";
-        
-        // Extraire les numéros de séquence (ex: "BC-0026" -> 26)
-        const aMatch = aNumero.match(/BC-(\d+)/);
-        const bMatch = bNumero.match(/BC-(\d+)/);
-        
-        if (aMatch && bMatch) {
-          const aSeq = parseInt(aMatch[1]);
-          const bSeq = parseInt(bMatch[1]);
-          return aSeq - bSeq; // Tri ascendant
-        }
-        
-        // Fallback pour tri alphabétique si le format ne correspond pas
-        return aNumero.localeCompare(bNumero);
+        return aNumero.localeCompare(bNumero, "fr", {
+          numeric: true,
+          sensitivity: "base",
+        });
       });
       
       setBonsCommande(sortedData);
@@ -163,74 +158,96 @@ const ListeBonCommande = () => {
       });
     });
 
-    // Appliquer le tri après le filtrage
-    const sortedFiltered = filtered.sort((a, b) => {
-      if (orderBy === "numero") {
-        const aNumero = a.numero || "";
-        const bNumero = b.numero || "";
-        
-        const aMatch = aNumero.match(/BC-(\d+)/);
-        const bMatch = bNumero.match(/BC-(\d+)/);
-        
-        if (aMatch && bMatch) {
-          const aSeq = parseInt(aMatch[1]);
-          const bSeq = parseInt(bMatch[1]);
-          return order === "asc" ? aSeq - bSeq : bSeq - aSeq;
-        }
-        
-        return order === "asc" ? aNumero.localeCompare(bNumero) : bNumero.localeCompare(aNumero);
-      }
-      
-      if (orderBy === "date_creation") {
-        return order === "asc" 
-          ? new Date(a[orderBy]) - new Date(b[orderBy])
-          : new Date(b[orderBy]) - new Date(a[orderBy]);
-      }
-      
-      return order === "asc" 
-        ? (a[orderBy] < b[orderBy] ? -1 : 1)
-        : (b[orderBy] < a[orderBy] ? -1 : 1);
-    });
-    
-    setFilteredBonsCommande(sortedFiltered);
+    setFilteredBonsCommande(filtered);
   };
 
-  const handleSort = (property) => {
-    const isAsc = orderBy === property && order === "asc";
-    setOrder(isAsc ? "desc" : "asc");
-    setOrderBy(property);
+  const sortedBonsCommande = useMemo(() => {
+    if (!orderBy) return filteredBonsCommande;
 
-    const sortedBCs = [...filteredBonsCommande].sort((a, b) => {
-      if (property === "date_creation") {
-        return (
-          (isAsc ? 1 : -1) * (new Date(a[property]) - new Date(b[property]))
-        );
-      }
-      
-      // Tri spécial pour les numéros de bon de commande
-      if (property === "numero") {
-        const aNumero = a[property] || "";
-        const bNumero = b[property] || "";
-        
-        // Extraire les numéros de séquence (ex: "BC-0026" -> 26)
-        const aMatch = aNumero.match(/BC-(\d+)/);
-        const bMatch = bNumero.match(/BC-(\d+)/);
-        
-        if (aMatch && bMatch) {
-          const aSeq = parseInt(aMatch[1]);
-          const bSeq = parseInt(bMatch[1]);
-          return (isAsc ? 1 : -1) * (aSeq - bSeq);
+    return [...filteredBonsCommande].sort((a, b) => {
+      let aValue;
+      let bValue;
+
+      switch (orderBy) {
+        case "numero": {
+          const aNumero = a.numero || "";
+          const bNumero = b.numero || "";
+          const result = aNumero.localeCompare(bNumero, "fr", {
+            numeric: true,
+            sensitivity: "base",
+          });
+          return order === "asc" ? result : -result;
         }
-        
-        // Fallback pour tri alphabétique si le format ne correspond pas
-        return (isAsc ? 1 : -1) * (aNumero.localeCompare(bNumero));
+        case "date_creation":
+          aValue = new Date(a.date_creation);
+          bValue = new Date(b.date_creation);
+          break;
+        case "montant_total":
+        case "montant_paye":
+        case "reste_a_payer":
+          aValue = parseFloat(a[orderBy]) || 0;
+          bValue = parseFloat(b[orderBy]) || 0;
+          break;
+        case "fournisseur":
+          aValue =
+            typeof a.fournisseur === "object" && a.fournisseur !== null
+              ? a.fournisseur.name || a.fournisseur.Fournisseur_mail || ""
+              : a.fournisseur || "";
+          bValue =
+            typeof b.fournisseur === "object" && b.fournisseur !== null
+              ? b.fournisseur.name || b.fournisseur.Fournisseur_mail || ""
+              : b.fournisseur || "";
+          aValue = aValue.toString().toLowerCase();
+          bValue = bValue.toString().toLowerCase();
+          break;
+        default:
+          aValue = (a[orderBy] || "").toString().toLowerCase();
+          bValue = (b[orderBy] || "").toString().toLowerCase();
       }
-      
-      // Tri standard pour les autres propriétés
-      return (isAsc ? 1 : -1) * (a[property] < b[property] ? -1 : 1);
-    });
 
-    setFilteredBonsCommande(sortedBCs);
+      if (aValue < bValue) return order === "asc" ? -1 : 1;
+      if (aValue > bValue) return order === "asc" ? 1 : -1;
+      return 0;
+    });
+  }, [filteredBonsCommande, orderBy, order]);
+
+  const handleSort = (property) => {
+    if (orderBy === property) {
+      if (order === "asc") {
+        setOrder("desc");
+      } else {
+        setOrderBy(null);
+        setOrder("asc");
+      }
+    } else {
+      setOrderBy(property);
+      setOrder("asc");
+    }
+  };
+
+  const SortIcon = ({ column }) => {
+    if (orderBy !== column) {
+      return (
+        <UnfoldMoreIcon
+          sx={{
+            fontSize: 16,
+            opacity: 0.3,
+            transition: "opacity 0.2s",
+            "&:hover": { opacity: 0.6 },
+          }}
+        />
+      );
+    }
+    return order === "asc" ? (
+      <ArrowUpwardIcon sx={{ fontSize: 16, color: "#1976d2" }} />
+    ) : (
+      <ArrowDownwardIcon sx={{ fontSize: 16, color: "#1976d2" }} />
+    );
+  };
+
+  const sortButtonSx = {
+    padding: "4px",
+    "&:hover": { backgroundColor: "rgba(255,255,255,0.1)" },
   };
 
   const handleMenuOpen = (event, bc) => {
@@ -422,92 +439,196 @@ const ListeBonCommande = () => {
           <TableHead>
             <TableRow>
               <FilterCell>
-                <StyledTextField
-                  label="N° BC"
-                  variant="standard"
-                  value={filters.numero}
-                  onChange={handleFilterChange("numero")}
-                />
+                <Box sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
+                  <StyledTextField
+                    label="N° BC"
+                    variant="standard"
+                    value={filters.numero}
+                    onChange={handleFilterChange("numero")}
+                    sx={{ flex: 1 }}
+                  />
+                  <Tooltip title="Trier par numéro">
+                    <IconButton
+                      size="small"
+                      onClick={() => handleSort("numero")}
+                      sx={sortButtonSx}
+                    >
+                      <SortIcon column="numero" />
+                    </IconButton>
+                  </Tooltip>
+                </Box>
               </FilterCell>
               <FilterCell>
-                <StyledTextField
-                  label="Chantier"
-                  variant="standard"
-                  value={filters.chantier_name}
-                  onChange={handleFilterChange("chantier_name")}
-                />
+                <Box sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
+                  <StyledTextField
+                    label="Chantier"
+                    variant="standard"
+                    value={filters.chantier_name}
+                    onChange={handleFilterChange("chantier_name")}
+                    sx={{ flex: 1 }}
+                  />
+                  <Tooltip title="Trier par chantier">
+                    <IconButton
+                      size="small"
+                      onClick={() => handleSort("chantier_name")}
+                      sx={sortButtonSx}
+                    >
+                      <SortIcon column="chantier_name" />
+                    </IconButton>
+                  </Tooltip>
+                </Box>
               </FilterCell>
               <FilterCell>
-                <StyledTextField
-                  label="Fournisseur"
-                  variant="standard"
-                  value={filters.fournisseur}
-                  onChange={handleFilterChange("fournisseur")}
-                />
+                <Box sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
+                  <StyledTextField
+                    label="Fournisseur"
+                    variant="standard"
+                    value={filters.fournisseur}
+                    onChange={handleFilterChange("fournisseur")}
+                    sx={{ flex: 1 }}
+                  />
+                  <Tooltip title="Trier par fournisseur">
+                    <IconButton
+                      size="small"
+                      onClick={() => handleSort("fournisseur")}
+                      sx={sortButtonSx}
+                    >
+                      <SortIcon column="fournisseur" />
+                    </IconButton>
+                  </Tooltip>
+                </Box>
               </FilterCell>
               <FilterCell>
-                <CenteredTextField
-                  label=""
-                  variant="standard"
-                  type="date"
-                  value={filters.date_creation}
-                  onChange={handleFilterChange("date_creation")}
-                  InputLabelProps={{ shrink: true }}
-                  sx={{ pt: "15px" }}
-                />
+                <Box sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
+                  <CenteredTextField
+                    label=""
+                    variant="standard"
+                    type="date"
+                    value={filters.date_creation}
+                    onChange={handleFilterChange("date_creation")}
+                    InputLabelProps={{ shrink: true }}
+                    sx={{ pt: "15px", flex: 1 }}
+                  />
+                  <Tooltip title="Trier par date">
+                    <IconButton
+                      size="small"
+                      onClick={() => handleSort("date_creation")}
+                      sx={sortButtonSx}
+                    >
+                      <SortIcon column="date_creation" />
+                    </IconButton>
+                  </Tooltip>
+                </Box>
               </FilterCell>
               <FilterCell>
-                <StyledTextField
-                  label="Montant"
-                  variant="standard"
-                  value={filters.montant_total}
-                  onChange={handleFilterChange("montant_total")}
-                />
+                <Box sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
+                  <StyledTextField
+                    label="Montant"
+                    variant="standard"
+                    value={filters.montant_total}
+                    onChange={handleFilterChange("montant_total")}
+                    sx={{ flex: 1 }}
+                  />
+                  <Tooltip title="Trier par montant">
+                    <IconButton
+                      size="small"
+                      onClick={() => handleSort("montant_total")}
+                      sx={sortButtonSx}
+                    >
+                      <SortIcon column="montant_total" />
+                    </IconButton>
+                  </Tooltip>
+                </Box>
               </FilterCell>
               <FilterCell>
-                <StyledTextField
-                  label="Statut"
-                  variant="standard"
-                  value={filters.statut}
-                  onChange={handleFilterChange("statut")}
-                />
+                <Box sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
+                  <StyledTextField
+                    label="Statut"
+                    variant="standard"
+                    value={filters.statut}
+                    onChange={handleFilterChange("statut")}
+                    sx={{ flex: 1 }}
+                  />
+                  <Tooltip title="Trier par statut">
+                    <IconButton
+                      size="small"
+                      onClick={() => handleSort("statut")}
+                      sx={sortButtonSx}
+                    >
+                      <SortIcon column="statut" />
+                    </IconButton>
+                  </Tooltip>
+                </Box>
               </FilterCell>
               <FilterCell>
-                <StyledTextField
-                  label="Paiement"
-                  variant="standard"
-                  value={filters.statut_paiement}
-                  onChange={handleFilterChange("statut_paiement")}
-                  disabled
-                  sx={{ opacity: 1 }}
-                />
+                <Box sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
+                  <StyledTextField
+                    label="Paiement"
+                    variant="standard"
+                    value={filters.statut_paiement}
+                    onChange={handleFilterChange("statut_paiement")}
+                    disabled
+                    sx={{ opacity: 1, flex: 1 }}
+                  />
+                  <Tooltip title="Trier par statut de paiement">
+                    <IconButton
+                      size="small"
+                      onClick={() => handleSort("statut_paiement")}
+                      sx={sortButtonSx}
+                    >
+                      <SortIcon column="statut_paiement" />
+                    </IconButton>
+                  </Tooltip>
+                </Box>
               </FilterCell>
               <FilterCell>
-                <StyledTextField
-                  label="Payé"
-                  variant="standard"
-                  value={filters.montant_paye}
-                  onChange={handleFilterChange("montant_paye")}
-                  disabled
-                  sx={{ opacity: 1 }}
-                />
+                <Box sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
+                  <StyledTextField
+                    label="Payé"
+                    variant="standard"
+                    value={filters.montant_paye}
+                    onChange={handleFilterChange("montant_paye")}
+                    disabled
+                    sx={{ opacity: 1, flex: 1 }}
+                  />
+                  <Tooltip title="Trier par montant payé">
+                    <IconButton
+                      size="small"
+                      onClick={() => handleSort("montant_paye")}
+                      sx={sortButtonSx}
+                    >
+                      <SortIcon column="montant_paye" />
+                    </IconButton>
+                  </Tooltip>
+                </Box>
               </FilterCell>
               <FilterCell>
-                <StyledTextField
-                  label="À Payer"
-                  variant="standard"
-                  value={filters.reste_a_payer}
-                  onChange={handleFilterChange("reste_a_payer")}
-                  disabled
-                  sx={{ opacity: 1 }}
-                />
+                <Box sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
+                  <StyledTextField
+                    label="À Payer"
+                    variant="standard"
+                    value={filters.reste_a_payer}
+                    onChange={handleFilterChange("reste_a_payer")}
+                    disabled
+                    sx={{ opacity: 1, flex: 1 }}
+                  />
+                  <Tooltip title="Trier par reste à payer">
+                    <IconButton
+                      size="small"
+                      onClick={() => handleSort("reste_a_payer")}
+                      sx={sortButtonSx}
+                    >
+                      <SortIcon column="reste_a_payer" />
+                    </IconButton>
+                  </Tooltip>
+                </Box>
               </FilterCell>
               <FilterCell />
             </TableRow>
           </TableHead>
 
           <TableBody>
-            {filteredBonsCommande.map((bc) => (
+            {sortedBonsCommande.map((bc) => (
               <TableRow key={bc.id} hover>
                 <DevisNumber
                   onClick={() => handlePreviewBonCommande(bc.id)}

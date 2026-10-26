@@ -871,6 +871,7 @@ const TableauRecapContratAvenants = ({
   contrats,
   chantierId,
   sousTraitantId,
+  contratId = null,
 }) => {
   // Filtrer les contrats pour ne garder que ceux du bon chantier et sous-traitant
   const contratsFiltres = contrats.filter(
@@ -878,6 +879,9 @@ const TableauRecapContratAvenants = ({
       String(c.chantier) === String(chantierId) &&
       String(c.sous_traitant) === String(sousTraitantId)
   );
+  const contratCourant = contratId
+    ? contratsFiltres.find((c) => String(c.id) === String(contratId)) || null
+    : contratsFiltres[0] || null;
 
   let types = [
     "CONTRAT",
@@ -887,13 +891,13 @@ const TableauRecapContratAvenants = ({
     ),
   ];
   let montants = Array(16).fill(0);
-  if (contratsFiltres.length > 0) {
+  if (contratCourant) {
     // Contrat initial
-    montants[0] = Number(contratsFiltres[0].montant_operation);
+    montants[0] = Number(contratCourant.montant_operation);
 
     // Avenants
-    if (contratsFiltres[0].avenants && contratsFiltres[0].avenants.length > 0) {
-      contratsFiltres[0].avenants.forEach((avenant) => {
+    if (contratCourant.avenants && contratCourant.avenants.length > 0) {
+      contratCourant.avenants.forEach((avenant) => {
         if (avenant.numero && Number(avenant.numero) <= 15) {
           montants[Number(avenant.numero)] = Number(avenant.montant);
         }
@@ -983,7 +987,11 @@ const formatDateFR2 = (dateStr) => {
   return `${jour}/${mois}/${annee}`;
 };
 
-const TableauPaiementSousTraitant = ({ chantierId, sousTraitantId }) => {
+const TableauPaiementSousTraitant = ({
+  chantierId,
+  sousTraitantId,
+  contratId = null,
+}) => {
   const [contrats, setContrats] = useState([]);
   const [factures, setFactures] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -1005,13 +1013,14 @@ const TableauPaiementSousTraitant = ({ chantierId, sousTraitantId }) => {
   useEffect(() => {
     if (chantierId && sousTraitantId) {
       setLoading(true);
+      const facturesUrl = contratId
+        ? `/api/factures-sous-traitant/?chantier=${chantierId}&sous_traitant=${sousTraitantId}&contrat=${contratId}`
+        : `/api/factures-sous-traitant/?chantier=${chantierId}&sous_traitant=${sousTraitantId}`;
       Promise.all([
         axios.get(
           `/api/contrats-sous-traitance/?chantier_id=${chantierId}&sous_traitant=${sousTraitantId}`
         ),
-        axios.get(
-          `/api/factures-sous-traitant/?chantier=${chantierId}&sous_traitant=${sousTraitantId}`
-        ),
+        axios.get(facturesUrl),
       ])
         .then(([contratsRes, facturesRes]) => {
           setContrats(contratsRes.data);
@@ -1025,7 +1034,7 @@ const TableauPaiementSousTraitant = ({ chantierId, sousTraitantId }) => {
           setLoading(false);
         });
     }
-  }, [chantierId, sousTraitantId]);
+  }, [chantierId, sousTraitantId, contratId]);
 
   // Trier les factures par année, mois, puis numéro de facture
   const facturesTries = factures.sort((a, b) => {
@@ -1046,14 +1055,15 @@ const TableauPaiementSousTraitant = ({ chantierId, sousTraitantId }) => {
         montant_facture_ht: data.montantFacture,
         date_reception: data.dateReception,
         delai_paiement: data.delaiPaiement,
+        ...(contratId ? { contrat: contratId } : {}),
       };
 
       const res = await axios.post(`/api/factures-sous-traitant/`, payload);
       setFactures((prev) => [...prev, res.data]);
 
       // Upload du fichier facture dans le drive si fourni
-      if (data.fichierFacture && contratsFiltres.length > 0) {
-        const contrat = contratsFiltres[0];
+      if (data.fichierFacture && contratCourant) {
+        const contrat = contratCourant;
         const sousTraitantName = contrat.sous_traitant_details?.entreprise || 'SousTraitant';
         try {
           // Récupérer le drive_path du chantier
@@ -1101,8 +1111,8 @@ const TableauPaiementSousTraitant = ({ chantierId, sousTraitantId }) => {
       }
 
       // Si la checkbox "Créer certificat de paiement" est cochée
-      if (data.creerCertificat && contratsFiltres.length > 0) {
-        const contrat = contratsFiltres[0];
+      if (data.creerCertificat && contratCourant) {
+        const contrat = contratCourant;
         const sousTraitantName = contrat.sous_traitant_details?.entreprise || '';
         const chantierName = contrat.chantier_details?.chantier_name || chantierNom || '';
         const societeName = contrat.chantier_details?.societe_name || contrat.societe_name || 'PEINTURE 3000';
@@ -1340,6 +1350,9 @@ const TableauPaiementSousTraitant = ({ chantierId, sousTraitantId }) => {
       String(c.chantier) === String(chantierId) &&
       String(c.sous_traitant) === String(sousTraitantId)
   );
+  const contratCourant = contratId
+    ? contratsFiltres.find((c) => String(c.id) === String(contratId)) || null
+    : contratsFiltres[0] || null;
 
   // Récupérer le nom du chantier si besoin
   useEffect(() => {
@@ -1347,7 +1360,7 @@ const TableauPaiementSousTraitant = ({ chantierId, sousTraitantId }) => {
     // Si on a déjà le nom, ne refais pas la requête
     if (chantierNom) return;
     // Cherche dans les contrats filtrés si on a déjà le nom
-    const contrat = contratsFiltres[0];
+    const contrat = contratCourant;
     if (contrat) {
       const chantierObj = contrat.chantier;
       if (typeof chantierObj === "object" && chantierObj.chantier_name) {
@@ -1370,13 +1383,12 @@ const TableauPaiementSousTraitant = ({ chantierId, sousTraitantId }) => {
   }, [chantierId, chantierNom, contratsFiltres]);
 
   // Calculs pour le récapitulatif
-  const montantContrat =
-    contratsFiltres.length > 0
-      ? parseFloat(contratsFiltres[0].montant_operation) || 0
-      : 0;
+  const montantContrat = contratCourant
+    ? parseFloat(contratCourant.montant_operation) || 0
+    : 0;
   const montantAvenants =
-    contratsFiltres.length > 0 && contratsFiltres[0].avenants
-      ? contratsFiltres[0].avenants.reduce(
+    contratCourant?.avenants
+      ? contratCourant.avenants.reduce(
           (sum, av) => sum + (parseFloat(av.montant) || 0),
           0
         )
@@ -1463,7 +1475,7 @@ const TableauPaiementSousTraitant = ({ chantierId, sousTraitantId }) => {
 
   return (
     <Box sx={{ width: "100%", p: 2 }}>
-      {contratsFiltres.length > 0 && (
+      {contratCourant && (
         <Box sx={{ mb: 1 }}>
           {chantierNom && (
             <Typography
@@ -1478,8 +1490,9 @@ const TableauPaiementSousTraitant = ({ chantierId, sousTraitantId }) => {
             sx={{ color: "white", fontWeight: 700, fontSize: "1.1rem" }}
           >
             {" "}
-            {contratsFiltres[0].sous_traitant_details?.entreprise ||
-              contratsFiltres[0].sous_traitant}
+            {contratCourant.sous_traitant_details?.entreprise ||
+              contratCourant.sous_traitant}
+            {contratId ? ` — Contrat #${contratCourant.id}` : ""}
           </Typography>
         </Box>
       )}
@@ -1498,6 +1511,7 @@ const TableauPaiementSousTraitant = ({ chantierId, sousTraitantId }) => {
         contrats={contrats}
         chantierId={chantierId}
         sousTraitantId={sousTraitantId}
+        contratId={contratId}
       />
       {/* Tableau des factures */}
       {loading ? (
@@ -1737,13 +1751,13 @@ const TableauPaiementSousTraitant = ({ chantierId, sousTraitantId }) => {
                           </IconButton>
                         </Tooltip>
                       )}
-                      {ligne.isFirstForFacture && contratsFiltres.length > 0 && (
+                      {ligne.isFirstForFacture && contratCourant && (
                         <Tooltip title={`Télécharger certificat de paiement n°${numeroCertificatMap[ligne.facture.id] || ""}`}>
                           <IconButton
                             size="small"
                             color="primary"
                             onClick={async () => {
-                              const contrat = contratsFiltres[0];
+                              const contrat = contratCourant;
                               const numCP = String(numeroCertificatMap[ligne.facture.id] || 1).padStart(2, "0");
                               const sousTraitantNom = normalizeFilename(contrat.sous_traitant_details?.entreprise || "Sous-traitant");
                               const chantierName = normalizeFilename(contrat.chantier_details?.chantier_name || chantierNom || "Chantier");
@@ -2007,7 +2021,7 @@ const TableauPaiementSousTraitant = ({ chantierId, sousTraitantId }) => {
         chantierId={chantierId}
         sousTraitantId={sousTraitantId}
         factures={factures}
-        contrat={contratsFiltres.length > 0 ? contratsFiltres[0] : null}
+        contrat={contratCourant}
         chantierNom={chantierNom}
       />
       <PaiementFactureModal

@@ -844,7 +844,8 @@ class DashboardViewSet(viewsets.ViewSet):
             total_cout_estime_materiel = sum(float(c.cout_estime_materiel or 0) for c in chantiers_query)
             total_cout_estime_main_oeuvre = sum(float(c.cout_estime_main_oeuvre or 0) for c in chantiers_query)
             
-            # Dépenses module Agences (AgencyExpenseMonth), aligné période — hors templates récurrence
+            # Dépenses module Agences (AgencyExpenseMonth), aligné période.
+            # Le template de récurrence EST la ligne du premier mois : il doit être compté.
             def _agency_expense_month_line_amount(aem):
                 """Montant suivi : montant_paye si renseigné et non nul, sinon amount (comme le tableau)."""
                 paye = aem.montant_paye
@@ -861,7 +862,7 @@ class DashboardViewSet(viewsets.ViewSet):
 
             aem_qs = AgencyExpenseMonth.objects.filter(
                 Q(chantier__isnull=True) | Q(chantier__in=chantiers_query)
-            ).exclude(is_recurring_template=True)
+            ).exclude(is_montant_positif=True)
             for aem in aem_qs:
                 month_date_aem = month_year_to_date(aem.year, aem.month)
                 if not in_period(month_date_aem):
