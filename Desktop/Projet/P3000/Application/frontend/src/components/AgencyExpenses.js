@@ -390,6 +390,128 @@ const repeatDesignationKey = (row) => {
   return `${kind}|${category}|${name}`;
 };
 
+const AGENT_AMOUNT_CATEGORIES = new Set([
+  "Pointage",
+  "Prime",
+  "Ajustement Sous-traitant",
+  "Planning agence",
+]);
+
+const agentPeriodKey = (row) => {
+  const isPlanning = Boolean(row?.isPlanningRow || row?.category === "Planning agence");
+  if (!isPlanning && !AGENT_AMOUNT_CATEGORIES.has(row?.category)) return null;
+  const id = isPlanning ? (row.agent_id ?? row.agent) : row.agent;
+  if (id != null && id !== "") return `agent-${id}`;
+  const name = agentPeriodLabel(row).trim().toLowerCase();
+  return name && name !== "agent" ? `name-${name}` : null;
+};
+
+const agentPeriodLabel = (row) => {
+  if (row?.agent_name) return String(row.agent_name).trim();
+  if (row?.isPlanningRow || row?.category === "Planning agence") {
+    return String(row.description || "").split("—")[0].trim() || "Agent";
+  }
+  return expenseDesignationLabel(row);
+};
+
+const rowsToBlocks = (rows) => {
+  const blocks = [];
+  let index = 0;
+  while (index < rows.length) {
+    const row = rows[index];
+    if (row.isGroupHeader) {
+      const grouped = [row];
+      index += 1;
+      while (
+        index < rows.length &&
+        rows[index].isSubRow &&
+        rows[index].agentKey === row.agentKey
+      ) {
+        grouped.push(rows[index]);
+        index += 1;
+      }
+      blocks.push({ sortKey: row.description, rows: grouped });
+    } else {
+      blocks.push({ sortKey: row.description, rows: [row] });
+      index += 1;
+    }
+  }
+  return blocks;
+};
+
+const groupPeriodTableRows = (sortedRows) => {
+  const others = [];
+  const buckets = new Map();
+  const order = [];
+  (sortedRows || []).forEach((row) => {
+    const key = agentPeriodKey(row);
+    if (!key) {
+      others.push(row);
+      return;
+    }
+    if (!buckets.has(key)) {
+      buckets.set(key, []);
+      order.push(key);
+    }
+    buckets.get(key).push(row);
+  });
+
+  const blocks = rowsToBlocks(groupRepeatingDesignations(others));
+  order.forEach((key) => {
+    const group = [...buckets.get(key)].sort((a, b) => {
+      const yearDiff = (Number(a.year) || 0) - (Number(b.year) || 0);
+      if (yearDiff !== 0) return yearDiff;
+      const monthDiff = (Number(a.month) || 0) - (Number(b.month) || 0);
+      if (monthDiff !== 0) return monthDiff;
+      return compareAlphaFR(a.description, b.description);
+    });
+    const months = new Set(group.map((row) => `${row.year}-${Number(row.month) || 0}`));
+    const label =
+      group.map(agentPeriodLabel).find((name) => name && name !== "Agent") || "Agent";
+    if (group.length < 2) {
+      group.forEach((row) => blocks.push({ sortKey: label, rows: [row] }));
+      return;
+    }
+    const categories = [
+      ...new Set(group.map((row) => (row.isPlanningRow ? "Planning agence" : row.category))),
+    ];
+    const singleCategory = categories.length === 1 ? categories[0] : "";
+    const agentKey = `agent-months-${key}`;
+    blocks.push({
+      sortKey: label,
+      rows: [
+        {
+          id: agentKey,
+          description: label,
+          category: singleCategory,
+          amount: group.reduce((sum, row) => sum + effectiveAgencyTableAmount(row), 0),
+          is_montant_positif: false,
+          isPlanningRow: singleCategory === "Planning agence",
+          isGroupHeader: true,
+          isRepeatGroup: Boolean(singleCategory),
+          isAgentMonthGroup: true,
+          agentKey,
+          subRowCount: group.length,
+          monthCount: months.size,
+          periodLabel:
+            months.size === 1
+              ? group[0].periodLabel || formatMonthLabel(group[0].year, group[0].month)
+              : "",
+        },
+        ...group.map((row) => ({
+          ...row,
+          isSubRow: true,
+          isRepeatChild: true,
+          agentKey,
+        })),
+      ],
+    });
+  });
+
+  blocks.sort((a, b) => compareAlphaFR(a.sortKey, b.sortKey));
+  return blocks.flatMap((block) => block.rows);
+};
+
 const groupRepeatingDesignations = (rows) => {
   const buckets = new Map();
   const order = [];
@@ -1506,6 +1628,7 @@ const AgencyExpenses = () => {
           rows.push({
             id: `planning-agence-${scheduleMonth.year}-${scheduleMonth.month}-${row.agent_id}-${suffix}-${idx}`,
             agent_id: row.agent_id,
+            agent_name: row.agent_nom,
             chantier_id: row.chantier_id,
             description: `${row.agent_nom} — ${chantierLabel}${heuresLabel}`,
             planningComment: cmt,
@@ -1541,6 +1664,7 @@ const AgencyExpenses = () => {
         return {
           id: `planning-agence-${row.agent_id}-${suffix}-${idx}`,
           agent_id: row.agent_id,
+          agent_name: row.agent_nom,
           chantier_id: row.chantier_id,
           description: `${row.agent_nom} — ${chantierLabel}${heuresLabel}`,
           planningComment: cmt,
@@ -1590,7 +1714,7 @@ const AgencyExpenses = () => {
         if (yearDiff !== 0) return yearDiff;
         return (Number(a.month) || 0) - (Number(b.month) || 0);
       });
-      return groupRepeatingDesignations(sorted);
+      return groupPeriodTableRows(sorted);
     }
  
     // Identifier les lignes liées à un agent (Planning, Pointage, Prime, Ajustement Sous-traitant)
@@ -1652,6 +1776,10 @@ const AgencyExpenses = () => {
     }));
 
     Object.entries(agentGroups).forEach(([key, group]) => {
+      if (group.rows.length < 2) {
+        group.rows.forEach((row) => blocks.push({ sortKey: group.label, rows: [row] }));
+        return;
+      }
       const totalAmount = group.rows.reduce((sum, r) => sum + effectiveAgencyTableAmount(r), 0);
       const subRows = [...group.rows]
         .sort((a, b) => compareAlphaFR(a.description, b.description))
@@ -2478,7 +2606,11 @@ const AgencyExpenses = () => {
                       {!isDefaultMode ? (
                         <TableCell align="center">
                           <Typography sx={{ color: UI.textFaint, fontSize: "0.78rem" }}>
-                            {row.subRowCount} mois
+                            {row.isAgentMonthGroup
+                              ? row.monthCount > 1
+                                ? `${row.monthCount} mois`
+                                : row.periodLabel || ""
+                              : `${row.subRowCount} mois`}
                           </Typography>
                         </TableCell>
                       ) : null}
