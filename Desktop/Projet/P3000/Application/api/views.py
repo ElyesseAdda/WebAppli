@@ -11257,6 +11257,7 @@ class AgencyExpenseMonthViewSet(viewsets.ModelViewSet):
                 month=m,
                 year=y,
                 agence=template.agence,
+                is_montant_positif=template.is_montant_positif,
                 defaults={
                     'amount': template.amount,
                     'date_paiement': date(y, m, 1),
@@ -11360,9 +11361,10 @@ class AgencyExpenseMonthViewSet(viewsets.ModelViewSet):
         expenses = self.queryset.filter(
             month=int(month),
             year=int(year)
-        ).exclude(is_recurring_template=True)
+        )
         if agence_id:
             expenses = expenses.filter(agence_id=int(agence_id))
+        expenses = list(expenses)
 
         def _line_amount(e):
             paye = e.montant_paye
@@ -11370,19 +11372,29 @@ class AgencyExpenseMonthViewSet(viewsets.ModelViewSet):
                 return float(paye)
             return float(e.amount or 0)
 
-        total = sum(_line_amount(e) for e in expenses)
+        total = 0
+        positive_total = 0
         totals_by_category = {}
-        
+        positive_by_category = {}
+
         for expense in expenses:
+            amt = _line_amount(expense)
             cat = expense.category
-            if cat not in totals_by_category:
-                totals_by_category[cat] = 0
-            totals_by_category[cat] += _line_amount(expense)
-        
+            if expense.is_montant_positif:
+                positive_total += amt
+                positive_by_category[cat] = positive_by_category.get(cat, 0) + amt
+            else:
+                total += amt
+                totals_by_category[cat] = totals_by_category.get(cat, 0) + amt
+
         return Response({
             'expenses': self.serializer_class(expenses, many=True).data,
             'totals_by_category': [{'category': k, 'total': v} for k, v in totals_by_category.items()],
-            'total': total
+            'positive_totals_by_category': [
+                {'category': k, 'total': v} for k, v in positive_by_category.items()
+            ],
+            'total': total,
+            'positive_total': positive_total,
         })
 
     @action(detail=False, methods=['get'], url_path='yearly_summary')
@@ -11395,7 +11407,7 @@ class AgencyExpenseMonthViewSet(viewsets.ModelViewSet):
         year = int(year)
         from .models import purge_stale_pointage_agency_expenses
         purge_stale_pointage_agency_expenses(year=year, agence_id=agence_id)
-        expenses = self.queryset.filter(year=year).exclude(is_recurring_template=True)
+        expenses = self.queryset.filter(year=year)
         if agence_id:
             expenses = expenses.filter(agence_id=int(agence_id))
 
@@ -11409,21 +11421,46 @@ class AgencyExpenseMonthViewSet(viewsets.ModelViewSet):
         for exp in expenses:
             m = exp.month
             if m not in months:
-                months[m] = {'total': 0, 'by_category': {}}
+                months[m] = {
+                    'total': 0,
+                    'by_category': {},
+                    'positive_total': 0,
+                    'positive_by_category': {},
+                }
             amt = _line_amount_y(exp)
-            months[m]['total'] += amt
             cat = exp.category or 'Autres'
-            months[m]['by_category'][cat] = months[m]['by_category'].get(cat, 0) + amt
+            if exp.is_montant_positif:
+                months[m]['positive_total'] += amt
+                bucket = months[m]['positive_by_category']
+            else:
+                months[m]['total'] += amt
+                bucket = months[m]['by_category']
+            bucket[cat] = bucket.get(cat, 0) + amt
 
+        empty_month = {
+            'total': 0,
+            'by_category': {},
+            'positive_total': 0,
+            'positive_by_category': {},
+        }
         result = []
         for m in range(1, 13):
-            info = months.get(m, {'total': 0, 'by_category': {}})
+            info = months.get(m, empty_month)
             result.append({
                 'month': m,
                 'total': info['total'],
+                'positive_total': info['positive_total'],
                 'totals_by_category': [{'category': k, 'total': v} for k, v in info['by_category'].items()],
+                'positive_totals_by_category': [
+                    {'category': k, 'total': v} for k, v in info['positive_by_category'].items()
+                ],
             })
-        return Response({'year': year, 'months': result, 'yearly_total': sum(d['total'] for d in result)})
+        return Response({
+            'year': year,
+            'months': result,
+            'yearly_total': sum(d['total'] for d in result),
+            'yearly_positive_total': sum(d['positive_total'] for d in result),
+        })
 
     @action(detail=True, methods=['post'])
     def recurring_generate(self, request, pk=None):
@@ -11483,6 +11520,7 @@ class AgencyExpenseMonthViewSet(viewsets.ModelViewSet):
                             is_recurring_template=True,
                             description=instance.description,
                             category=instance.category,
+                            is_montant_positif=instance.is_montant_positif,
                         )
                         .order_by('recurrence_start', 'year', 'month')
                         .first()
@@ -12150,6 +12188,25 @@ class ContratSousTraitanceViewSet(viewsets.ModelViewSet):
         if sous_traitant_id:
             queryset = queryset.filter(sous_traitant_id=sous_traitant_id)
         return queryset
+
+    @action(detail=False, methods=['get'])
+    def resume(self, request):
+        """Associations légères sous-traitant / chantier, sans le détail des avenants."""
+        contrats = (
+            ContratSousTraitance.objects
+            .select_related('chantier')
+            .values('sous_traitant_id', 'chantier_id', 'chantier__chantier_name', 'sans_contrat')
+        )
+        data = [
+            {
+                'sous_traitant': contrat['sous_traitant_id'],
+                'chantier': contrat['chantier_id'],
+                'chantier_name': contrat['chantier__chantier_name'],
+                'sans_contrat': contrat['sans_contrat'],
+            }
+            for contrat in contrats
+        ]
+        return Response(data)
 
     def create(self, request, *args, **kwargs):
         serializer = self.get_serializer(data=request.data)
@@ -13090,27 +13147,36 @@ class FactureSousTraitantViewSet(viewsets.ModelViewSet):
         queryset = super().get_queryset()
         chantier_id = self.request.query_params.get('chantier')
         sous_traitant_id = self.request.query_params.get('sous_traitant')
+        contrat_id = self.request.query_params.get('contrat')
         if chantier_id:
             queryset = queryset.filter(chantier_id=chantier_id)
         if sous_traitant_id:
             queryset = queryset.filter(sous_traitant_id=sous_traitant_id)
+        if contrat_id:
+            queryset = queryset.filter(contrat_id=contrat_id)
         return queryset.prefetch_related('paiements')
 
     def create(self, request, *args, **kwargs):
         """Création d'une facture avec auto-génération du numéro si nécessaire"""
         chantier_id = request.data.get('chantier')
         sous_traitant_id = request.data.get('sous_traitant')
+        contrat_id = request.data.get('contrat')
         mois = request.data.get('mois')
         annee = request.data.get('annee')
         numero_facture = request.data.get('numero_facture')
         
         # Auto-génération du numéro de facture si pas fourni
         if not numero_facture and chantier_id and sous_traitant_id and mois and annee:
+            existing_filters = {
+                'chantier_id': chantier_id,
+                'sous_traitant_id': sous_traitant_id,
+                'mois': mois,
+                'annee': annee,
+            }
+            if contrat_id:
+                existing_filters['contrat_id'] = contrat_id
             existing_factures = FactureSousTraitant.objects.filter(
-                chantier_id=chantier_id,
-                sous_traitant_id=sous_traitant_id,
-                mois=mois,
-                annee=annee
+                **existing_filters
             ).count()
             numero_facture = str(existing_factures + 1)
             request.data['numero_facture'] = numero_facture
@@ -14445,7 +14511,10 @@ def _get_tableau_fournisseur_data(chantier_id=None):
     
     # Dépenses agence (catégorie Fournisseur) — même principe que le tableau sous-traitant / Sous-traitant
     from datetime import datetime as dt_class, timedelta as td_class
-    agency_fournisseur_qs = AgencyExpenseMonth.objects.filter(category='Fournisseur')
+    agency_fournisseur_qs = AgencyExpenseMonth.objects.filter(
+        category='Fournisseur',
+        is_montant_positif=False,
+    )
     if chantier_id:
         agency_fournisseur_qs = agency_fournisseur_qs.filter(chantier_id=chantier_id)
     agency_fournisseur_qs = agency_fournisseur_qs.select_related('chantier', 'agence', 'agence__chantier')
@@ -14832,7 +14901,8 @@ def _get_tableau_sous_traitant_data(chantier_id=None):
     # Les ajustements sont stockés avec category='Ajustement Sous-traitant' et liés à l'agent
     ajustements_agency = AgencyExpenseMonth.objects.filter(
         category='Ajustement Sous-traitant',
-        agent__isnull=False
+        agent__isnull=False,
+        is_montant_positif=False,
     ).select_related('agent')
     
     ajustements_map = {}  # {(agent_id, mois, annee): {montant, description, id}}
@@ -14903,10 +14973,14 @@ def _get_tableau_sous_traitant_data(chantier_id=None):
     if chantier_id:
         agency_expenses_month = AgencyExpenseMonth.objects.filter(
             category='Sous-traitant',
-            chantier_id=chantier_id
+            chantier_id=chantier_id,
+            is_montant_positif=False,
         )
     else:
-        agency_expenses_month = AgencyExpenseMonth.objects.filter(category='Sous-traitant')
+        agency_expenses_month = AgencyExpenseMonth.objects.filter(
+            category='Sous-traitant',
+            is_montant_positif=False,
+        )
     
     agency_expenses_month = agency_expenses_month.select_related('chantier', 'sous_traitant', 'agence', 'agence__chantier')
     
