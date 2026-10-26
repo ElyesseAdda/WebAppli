@@ -1506,16 +1506,21 @@ const DevisTable = ({
                                                                                   {/* QUANTITÉ */}
                                                                                   <div style={{ flex: '0 0 100px', textAlign: 'center' }}>
                                                                                     <input
-                                                                                      type="number"
-                                                                                      min="0"
-                                                                                      step="0.01"
+                                                                                      type="text"
+                                                                                      inputMode="decimal"
                                                                                       value={ligne.quantity || 0}
                                                                                       onChange={(e) => {
                                                                                         if (onLigneDetailQuantityChange) {
-                                                                                          // Trouver la partie_id depuis la sous-partie
-                                                                                          const sp = devisItems.find(item => item.type === 'sous_partie' && item.id === ligne.sous_partie_id);
-                                                                                          const partieId = sp?.partie_id;
-                                                                                          onLigneDetailQuantityChange(partieId, ligne.sous_partie_id, ligne.id, parseFloat(e.target.value) || 0);
+                                                                                          let value = e.target.value;
+                                                                                          // Remplacer la virgule par un point
+                                                                                          value = value.replace(',', '.');
+                                                                                          // Valider le format et empêcher les valeurs négatives
+                                                                                          if (value === '' || (/^\d*\.?\d*$/.test(value) && parseFloat(value) >= 0)) {
+                                                                                            // Trouver la partie_id depuis la sous-partie
+                                                                                            const sp = devisItems.find(item => item.type === 'sous_partie' && item.id === ligne.sous_partie_id);
+                                                                                            const partieId = sp?.partie_id;
+                                                                                            onLigneDetailQuantityChange(partieId, ligne.sous_partie_id, ligne.id, parseFloat(value) || 0);
+                                                                                          }
                                                                                         }
                                                                                       }}
                                                                                       style={{
@@ -1541,7 +1546,9 @@ const DevisTable = ({
                                                                                           // Trouver la partie_id depuis la sous-partie
                                                                                           const sp = devisItems.find(item => item.type === 'sous_partie' && item.id === ligne.sous_partie_id);
                                                                                           const partieId = sp?.partie_id;
-                                                                                          const value = e.target.value;
+                                                                                          let value = e.target.value;
+                                                                                          // Remplacer la virgule par un point
+                                                                                          value = value.replace(',', '.');
                                                                                           // Valider le format : autoriser les nombres négatifs, décimaux, et le signe moins seul
                                                                                           if (value === '' || value === '-' || /^-?\d*\.?\d*$/.test(value)) {
                                                                                             // Stocker la valeur en cours de saisie
@@ -1558,7 +1565,9 @@ const DevisTable = ({
                                                                                         }
                                                                                       }}
                                                                                       onBlur={(e) => {
-                                                                                        const value = e.target.value;
+                                                                                        let value = e.target.value;
+                                                                                        // Remplacer la virgule par un point
+                                                                                        value = value.replace(',', '.');
                                                                                         // Si le champ est vide ou juste "-" au blur, remettre la valeur précédente
                                                                                         if (value === '' || value === '-') {
                                                                                           // Retirer de l'état d'édition
@@ -1925,17 +1934,25 @@ const DevisTable = ({
                           </div>
                           <div style={{ display: 'flex', flexDirection: 'row', gap: '6px', alignItems: 'center', flex: 1 }}>
                             <input
-                              type="number"
-                              step="0.01"
-                              min="-100"
+                              type="text"
+                              inputMode="decimal"
                               value={ligne.marge_devis !== null && ligne.marge_devis !== undefined ? ligne.marge_devis : ligne.marge}
                               onChange={(e) => {
-                                // Trouver les IDs parents en cherchant dans devisItems
-                                const spItem = devisItems.find(s => s.type === 'sous_partie' && s.id === ligne.sous_partie_id);
-                                const partieId = spItem ? spItem.partie_id : null;
-                                
-                                if (partieId && ligne.sous_partie_id && onLigneDetailMargeChange) {
-                                  onLigneDetailMargeChange(partieId, ligne.sous_partie_id, ligne.id, parseFloat(e.target.value) || 0);
+                                let value = e.target.value;
+                                // Remplacer la virgule par un point
+                                value = value.replace(',', '.');
+                                // Valider le format pour les valeurs décimales négatives
+                                if (value === '' || value === '-' || /^-?\d*\.?\d*$/.test(value)) {
+                                  // Trouver les IDs parents en cherchant dans devisItems
+                                  const spItem = devisItems.find(s => s.type === 'sous_partie' && s.id === ligne.sous_partie_id);
+                                  const partieId = spItem ? spItem.partie_id : null;
+                                  
+                                  if (partieId && ligne.sous_partie_id && onLigneDetailMargeChange && value !== '' && value !== '-') {
+                                    const parsedValue = parseFloat(value);
+                                    if (!isNaN(parsedValue)) {
+                                      onLigneDetailMargeChange(partieId, ligne.sous_partie_id, ligne.id, parsedValue);
+                                    }
+                                  }
                                 }
                               }}
                               style={{

@@ -2853,6 +2853,10 @@ class AgencyExpenseMonth(models.Model):
     
     agence = models.ForeignKey('Agence', on_delete=models.CASCADE, null=True, blank=True, related_name='agency_expenses_month')
     commentaire = models.TextField(blank=True, null=True)
+    is_montant_positif = models.BooleanField(
+        default=False,
+        help_text="Montant positif (crédit / entrée), distinct d'une dépense",
+    )
     
     # Lien vers la dépense source (si générée depuis AgencyExpense)
     source_expense = models.ForeignKey('AgencyExpense', on_delete=models.SET_NULL, null=True, blank=True, related_name='monthly_entries')
@@ -2875,7 +2879,7 @@ class AgencyExpenseMonth(models.Model):
 
     class Meta:
         ordering = ['-year', '-month']
-        unique_together = ('description', 'category', 'month', 'year', 'agence')
+        unique_together = ('description', 'category', 'month', 'year', 'agence', 'is_montant_positif')
         verbose_name = "Dépense Mensuelle Agence"
         verbose_name_plural = "Dépenses Mensuelles Agence"
         indexes = [
@@ -3433,7 +3437,6 @@ class ContratSousTraitance(models.Model):
     date_modification = models.DateTimeField(auto_now=True)
 
     class Meta:
-        unique_together = ('chantier', 'sous_traitant')
         ordering = ['-date_creation']
 
     def __str__(self):
@@ -3449,29 +3452,25 @@ class ContratSousTraitance(models.Model):
         if not self.montant_operation:
             self.montant_operation = Decimal('0')
         
-        # Calcul des coûts pour TOUS les contrats (avec ou sans contrat documenté)
-        # Si c'est une modification, on soustrait l'ancien montant
+        # Le contrat est enregistré avant la mise à jour des coûts :
+        # un échec d'insertion ne doit pas modifier le chantier.
+        old_montant = Decimal('0')
         if self.pk:
             old_instance = ContratSousTraitance.objects.get(pk=self.pk)
             old_montant = Decimal(str(old_instance.montant_operation))
-            cout_sous_traitance_decimal = Decimal(str(self.chantier.cout_sous_traitance or 0))
-            cout_estime_main_oeuvre_decimal = Decimal(str(self.chantier.cout_estime_main_oeuvre or 0))
-            
-            self.chantier.cout_sous_traitance = float(cout_sous_traitance_decimal - old_montant)
-            # Restaurer l'ancien montant dans le coût estimé main d'œuvre
-            self.chantier.cout_estime_main_oeuvre = cout_estime_main_oeuvre_decimal + old_montant
-
-        # Ajouter le nouveau montant (même si c'est 0 pour un sans_contrat)
-        montant_decimal = Decimal(str(self.montant_operation))
-        cout_sous_traitance_decimal = Decimal(str(self.chantier.cout_sous_traitance or 0))
-        cout_estime_main_oeuvre_decimal = Decimal(str(self.chantier.cout_estime_main_oeuvre or 0))
-        
-        self.chantier.cout_sous_traitance = float(cout_sous_traitance_decimal + montant_decimal)
-        # Déduire le montant du coût estimé main d'œuvre
-        self.chantier.cout_estime_main_oeuvre = cout_estime_main_oeuvre_decimal - montant_decimal
-        self.chantier.save()
 
         super().save(*args, **kwargs)
+
+        montant_decimal = Decimal(str(self.montant_operation))
+        delta = montant_decimal - old_montant
+        if delta == 0:
+            return
+
+        cout_sous_traitance_decimal = Decimal(str(self.chantier.cout_sous_traitance or 0))
+        cout_estime_main_oeuvre_decimal = Decimal(str(self.chantier.cout_estime_main_oeuvre or 0))
+        self.chantier.cout_sous_traitance = float(cout_sous_traitance_decimal + delta)
+        self.chantier.cout_estime_main_oeuvre = cout_estime_main_oeuvre_decimal - delta
+        self.chantier.save()
 
     def delete(self, *args, **kwargs):
         from decimal import Decimal
@@ -3684,6 +3683,13 @@ class FactureSousTraitant(models.Model):
     """Modèle pour les factures des sous-traitants avec paiements multiples possibles"""
     sous_traitant = models.ForeignKey('SousTraitant', on_delete=models.CASCADE, related_name='factures')
     chantier = models.ForeignKey('Chantier', on_delete=models.CASCADE, related_name='factures_sous_traitant')
+    contrat = models.ForeignKey(
+        'ContratSousTraitance',
+        on_delete=models.CASCADE,
+        related_name='factures',
+        null=True,
+        blank=True,
+    )
     
     # Informations de la facture
     mois = models.IntegerField()  # Mois de la facture (1-12)
@@ -3705,7 +3711,7 @@ class FactureSousTraitant(models.Model):
         verbose_name = "Facture Sous-Traitant"
         verbose_name_plural = "Factures Sous-Traitants"
         ordering = ['chantier', 'sous_traitant', 'annee', 'mois', 'numero_facture']
-        unique_together = ('chantier', 'sous_traitant', 'annee', 'mois', 'numero_facture')
+        unique_together = ('chantier', 'sous_traitant', 'contrat', 'annee', 'mois', 'numero_facture')
 
     def __str__(self):
         return f"{self.sous_traitant} - {self.chantier} - Facture {self.numero_facture} ({self.mois:02d}/{self.annee})"

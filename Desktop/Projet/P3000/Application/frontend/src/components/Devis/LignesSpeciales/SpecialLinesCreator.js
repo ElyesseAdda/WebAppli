@@ -238,20 +238,22 @@ const SpecialLinesCreator = ({
             </Box>
             
             <TextField
-              type="number"
+              type="text"
+              inputMode="decimal"
               label="Valeur"
               fullWidth
               margin="normal"
               value={newLine.value}
               onChange={(e) => {
-                const value = e.target.value;
+                let value = e.target.value;
+                // Remplacer la virgule par un point
+                value = value.replace(',', '.');
                 // Empêcher les valeurs négatives
-                if (value === '' || parseFloat(value) >= 0) {
+                if (value === '' || (parseFloat(value) >= 0 && /^-?\d*\.?\d*$/.test(value))) {
                   setNewLine(prev => ({ ...prev, value: value }));
                 }
               }}
               helperText={newLine.valueType === "display" ? "Valeur optionnelle pour les lignes d'affichage (laisser vide ou 0 pour ne pas afficher de montant)" : ""}
-              inputProps={{ min: 0, step: "any" }}
             />
             
             {/* Type de valeur avec boutons */}

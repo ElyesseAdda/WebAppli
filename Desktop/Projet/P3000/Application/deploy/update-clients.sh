@@ -119,7 +119,6 @@ PROTECTED_MJRSERVICE=(
     "$APP_PATH/frontend/templates/frontend/index_production.html"
 )
 
-# Branche démo : cursor/client-demo-environment-f3f5
 PROTECTED_DEMO=(
     "$APP_PATH/deploy/.env.demo"
     "$APP_PATH/deploy/cors-demo.json"
@@ -134,8 +133,6 @@ PROTECTED_DEMO=(
     "$APP_PATH/DEMO_README.md"
     "$APP_PATH/GUIDE_DEPLOIEMENT_VPS_COMPLET.md"
 )
-
-BRANCH_DEMO="cursor/client-demo-environment-f3f5"
 
 # =============================================================================
 # Fonctions
@@ -238,7 +235,7 @@ do_merge() {
     elif [ "$branch" = "client/mjrservice" ]; then
         restore_files "$branch" "${PROTECTED_MJRSERVICE[@]}"
         log_ok "  Migrations mjrservice : nouvelles migrations de main conservées"
-    elif [ "$branch" = "$BRANCH_DEMO" ]; then
+    elif [ "$branch" = "client/demo" ]; then
         restore_files "$branch" "${PROTECTED_DEMO[@]}"
         log_ok "  Migrations demo : nouvelles migrations de main conservées"
     fi
@@ -295,9 +292,6 @@ do_push() {
 show_next_steps() {
     local branch="$1"
     local client="${branch#client/}"
-    if [ "$branch" = "$BRANCH_DEMO" ]; then
-        client="demo"
-    fi
     echo ""
     echo -e "${BOLD}${YELLOW}━━━  Prochaines étapes pour ${client}  ━━━${NC}"
     echo ""
@@ -310,9 +304,8 @@ show_next_steps() {
         echo "    python manage.py makemigrations"
         echo "    python manage.py migrate"
     elif [ "$client" = "demo" ]; then
-        echo "  Branche : ${BRANCH_DEMO}"
         echo "  Sur le serveur démo :"
-        echo "    git pull origin ${BRANCH_DEMO}"
+        echo "    git checkout client/demo && git pull origin client/demo"
         echo "    # puis déploiement selon DEMO_QUICK_DEPLOY.md / reset_demo_data.sh"
     else
         echo "  Sur le serveur mjrserviceapp.com :"
@@ -349,15 +342,15 @@ fi
 # S'assurer que main est à jour
 log_info "Fetch des dernières modifications..."
 git fetch origin main:main 2>/dev/null || log_warn "Impossible de fetch origin/main"
-git fetch origin "$BRANCH_DEMO" 2>/dev/null || log_warn "Impossible de fetch origin/${BRANCH_DEMO}"
+git fetch origin client/demo 2>/dev/null || log_warn "Impossible de fetch origin/client/demo"
 
-# Créer le tracking local de la branche démo si besoin
-if ! git show-ref --verify --quiet "refs/heads/${BRANCH_DEMO}"; then
-    if git show-ref --verify --quiet "refs/remotes/origin/${BRANCH_DEMO}"; then
-        log_info "Création du tracking local : ${BRANCH_DEMO}"
-        git branch --track "$BRANCH_DEMO" "origin/${BRANCH_DEMO}"
+# Créer le tracking local de client/demo si besoin
+if ! git show-ref --verify --quiet "refs/heads/client/demo"; then
+    if git show-ref --verify --quiet "refs/remotes/origin/client/demo"; then
+        log_info "Création du tracking local : client/demo"
+        git branch --track "client/demo" "origin/client/demo"
     else
-        log_error "Branche ${BRANCH_DEMO} introuvable en local et sur origin."
+        log_error "Branche client/demo introuvable en local et sur origin."
     fi
 fi
 
@@ -376,11 +369,11 @@ run_client() {
 case "$TARGET" in
     elekable)   run_client "client/elekable" ;;
     mjrservice) run_client "client/mjrservice" ;;
-    demo)       run_client "$BRANCH_DEMO" ;;
+    demo)       run_client "client/demo" ;;
     all|both)
         run_client "client/mjrservice"
         run_client "client/elekable"
-        run_client "$BRANCH_DEMO"
+        run_client "client/demo"
         ;;
     *)
         log_error "Argument invalide : '$TARGET'. Utilisez : elekable | mjrservice | demo | all"

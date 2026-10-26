@@ -617,7 +617,7 @@ function App() {
           />
 
           <Route
-            path="/paiements-sous-traitant/:chantierId/:sousTraitantId"
+            path="/paiements-sous-traitant/:chantierId/:sousTraitantId/:contratId?"
             element={
               <ProtectedRoute isAuthenticated={isAuthenticated}>
                 <Layout user={user} onLogout={handleLogout}>

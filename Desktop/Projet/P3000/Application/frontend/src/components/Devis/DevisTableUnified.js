@@ -301,13 +301,18 @@ const DevisTableUnified = ({
                                                       <div style={{ flex: '0 0 80px', textAlign: 'center' }}>{ligne.unite}</div>
                                                       <div style={{ flex: '0 0 100px', textAlign: 'center' }}>
                                                         <input
-                                                          type="number"
-                                                          min="0"
-                                                          step="0.01"
+                                                          type="text"
+                                                          inputMode="decimal"
                                                           value={ligne.quantity || 0}
                                                           onChange={(e) => {
                                                             if (onLigneDetailQuantityChange) {
-                                                              onLigneDetailQuantityChange(partie.id, sp.id, ligne.id, parseFloat(e.target.value) || 0);
+                                                              let value = e.target.value;
+                                                              // Remplacer la virgule par un point
+                                                              value = value.replace(',', '.');
+                                                              // Valider le format et empêcher les valeurs négatives
+                                                              if (value === '' || (/^\d*\.?\d*$/.test(value) && parseFloat(value) >= 0)) {
+                                                                onLigneDetailQuantityChange(partie.id, sp.id, ligne.id, parseFloat(value) || 0);
+                                                              }
                                                             }
                                                           }}
                                                           style={{

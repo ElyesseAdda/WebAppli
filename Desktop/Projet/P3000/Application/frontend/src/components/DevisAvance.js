@@ -8,7 +8,6 @@ import ClientInfo from './Devis/ClientInfo';
 import ChantierInfo from './Devis/ChantierInfo';
 import DevisTable from './Devis/DevisTable';
 import DevisRecap from './Devis/DevisRecap';
-import TableauOption from './Devis/TableauOption';
 import DevisCostPieChart from './Devis/DevisCostPieChart';
 import ChantierForm from './ChantierForm';
 import ClientInfoModal from './ClientInfoModal';
@@ -2884,26 +2883,6 @@ const DevisAvance = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [devisItems, devisData.tva_rate]);
 
-  // Fonction pour transférer un élément du tableau option vers le tableau principal
-  const handleTransferFromOptionsToMain = (itemToTransfer) => {
-    if (!itemToTransfer) return;
-    
-    // Calculer le prochain index_global pour l'élément transféré
-    const nextIndex = getNextIndex(devisItems, itemToTransfer.type === 'ligne_detail' ? 'sous_partie' : 
-                                                      itemToTransfer.type === 'sous_partie' ? 'partie' : 'global', 
-                                                      itemToTransfer.type === 'ligne_detail' ? itemToTransfer.sous_partie_id :
-                                                      itemToTransfer.type === 'sous_partie' ? itemToTransfer.partie_id : null);
-    
-    // Créer la copie de l'élément avec le nouvel index
-    const transferredItem = {
-      ...itemToTransfer,
-      index_global: nextIndex || (devisItems.length > 0 ? Math.max(...devisItems.map(i => i.index_global)) + 1 : 1)
-    };
-    
-    // Ajouter au tableau principal
-    setDevisItems(prev => sortByIndexGlobal([...prev, transferredItem]));
-  };
-
   // Fonction pour récupérer l'ID du client depuis le chantier sélectionné
   const getClientIdFromChantier = async (chantierId) => {
     if (!chantierId || chantierId === -1) {
@@ -3918,14 +3897,6 @@ const DevisAvance = () => {
               }}
             />
           </div>
-
-          {/* Section 7: Options (prestations supplémentaires) */}
-          <TableauOption
-            devisData={devisData}
-            devisItems={devisItems}
-            formatMontantEspace={formatMontantEspace}
-            onTransferToMain={handleTransferFromOptionsToMain}
-          />
 
           {/* Section 6: Actions */}
           <div style={{
