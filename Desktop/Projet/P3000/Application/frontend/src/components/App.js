@@ -64,6 +64,7 @@ import TestDragDrop from "./TestDragDrop";
 import TestDragSimple from "./TestDragSimple";
 import ChantiersDrivePaths from "./ChantiersDrivePaths";
 import PageTitleManager from "./PageTitleManager";
+import ZoniaChat from "./ZoniaChat";
 import UsersManagement from "./UsersManagement";
 import AdminAgences from "./AdminAgences";
 import RapportsPage from "./RapportIntervention/RapportsPage";
@@ -783,6 +784,8 @@ function App() {
           {/* Redirection par défaut - si une route n'existe pas */}
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
+        {/* Hors des routes : le logo et la conversation ne se rechargent pas au changement de page. */}
+        <ZoniaChat user={user} isMobile={isMobile} />
       </Router>
     </ThemeProvider>
   );
