@@ -236,7 +236,7 @@ button.zonia-close:focus-visible {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
-  padding-left: 36px;
+  padding-left: 26px;
 }
 
 button.zonia-chip {
@@ -357,8 +357,7 @@ button.zonia-fab:focus-visible {
 }
 
 .zonia-fab.is-thinking .zonia-fab-ring {
-  opacity: 1;
-  animation: zonia-spin 1.15s linear infinite;
+  opacity: 0;
 }
 
 .zonia-fab-disc {
@@ -424,8 +423,8 @@ button.zonia-fab:focus-visible .zonia-fab-disc {
 }
 
 .zonia-mark-sm {
-  width: 26px;
-  height: 26px;
+  width: 18px;
+  height: 18px;
 }
 
 .zonia-mark img,
@@ -444,13 +443,25 @@ button.zonia-fab:focus-visible .zonia-fab-disc {
   height: 46%;
 }
 
-.zonia-mark.is-thinking img,
-.zonia-fab.is-thinking .zonia-fab-disc img {
-  animation: zonia-spin 1.8s linear infinite;
+.zonia-mark.is-thinking img {
+  animation: zonia-turn 1.6s infinite;
 }
 
 @keyframes zonia-spin {
   to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes zonia-turn {
+  0% {
+    transform: rotate(0deg);
+    animation-timing-function: cubic-bezier(0.5, 0.05, 0.15, 1);
+  }
+  42% {
+    transform: rotate(360deg);
+  }
+  100% {
     transform: rotate(360deg);
   }
 }

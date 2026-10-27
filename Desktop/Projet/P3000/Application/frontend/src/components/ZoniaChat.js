@@ -175,7 +175,7 @@ const ZoniaChat = ({ user, isMobile }) => {
         aria-hidden={!open}
       >
         <header className="zonia-header">
-          <ZoniaMark thinking={thinking} />
+          <ZoniaMark />
           <div className="zonia-header-copy">
             <h2 className="zonia-header-title">
               Zonia
