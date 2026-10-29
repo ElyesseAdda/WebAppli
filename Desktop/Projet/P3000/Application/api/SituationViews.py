@@ -190,6 +190,8 @@ def preview_situation_v2(request, situation_id):
             sous_parties_data = []
             total_partie = Decimal('0')
             total_avancement_partie = Decimal('0')
+            total_ht_lignes_partie = Decimal('0')
+            total_pct_pondere_partie = Decimal('0')
             partie_index_global = parse_index(partie_meta.get('index_global'))
             
             # Récupérer les lignes spéciales pour cette partie
@@ -211,6 +213,7 @@ def preview_situation_v2(request, situation_id):
                 lignes_details_data = []
                 total_sous_partie = Decimal('0')
                 total_avancement_sous_partie = Decimal('0')
+                total_pct_pondere_sous_partie = Decimal('0')
                 
                 # Récupérer les lignes de détail pour cette sous-partie
                 ligne_detail_ids = sous_partie_meta.get('lignesDetails', [])
@@ -251,6 +254,7 @@ def preview_situation_v2(request, situation_id):
                     
                     total_sous_partie += total_ligne
                     total_avancement_sous_partie += montant_situation
+                    total_pct_pondere_sous_partie += Decimal(str(pourcentage or 0)) * Decimal(str(total_ligne or 0))
                 
                 if lignes_details_data:
                     # Récupérer les lignes spéciales pour cette sous-partie
@@ -269,8 +273,9 @@ def preview_situation_v2(request, situation_id):
                         'numero': sous_partie_meta.get('numero'),  # ✅ Numéro depuis partie_metadata
                         'lignes_details': lignes_details_data,
                         'total_sous_partie': total_sous_partie,
+                        'total_ht_lignes': total_sous_partie,
                         'montant_avancement': total_avancement_sous_partie,
-                        'pourcentage': (total_avancement_sous_partie / total_sous_partie * 100) if total_sous_partie else Decimal('0'),
+                        'pourcentage': (total_pct_pondere_sous_partie / total_sous_partie) if total_sous_partie else Decimal('0'),
                         'special_lines': []
                     }
                     
@@ -320,6 +325,8 @@ def preview_situation_v2(request, situation_id):
                     sous_parties_data.append(sous_partie_data)
                     total_partie += total_sous_partie
                     total_avancement_partie += total_avancement_sous_partie
+                    total_ht_lignes_partie += sous_partie_data['total_ht_lignes']
+                    total_pct_pondere_partie += total_pct_pondere_sous_partie
             
             if sous_parties_data:
                 # Trier les lignes spéciales de la partie par index_global
@@ -338,8 +345,9 @@ def preview_situation_v2(request, situation_id):
                     'sous_parties': sous_parties_data,
                     'total_partie': total_partie,
                     'total_partie_sans_speciales': total_partie_sans_speciales,  # ✅ Pour calculer total_marche_ht
+                    'total_ht_lignes': total_ht_lignes_partie,
                     'montant_avancement': total_avancement_partie,
-                    'pourcentage': (total_avancement_partie / total_partie * 100) if total_partie else Decimal('0'),
+                    'pourcentage': (total_pct_pondere_partie / total_ht_lignes_partie) if total_ht_lignes_partie else Decimal('0'),
                     'special_lines': [],
                     'index_global': partie_index_global
                 }
