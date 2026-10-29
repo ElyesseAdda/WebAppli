@@ -65,6 +65,7 @@ import TestDragDrop from "./TestDragDrop";
 import TestDragSimple from "./TestDragSimple";
 import ChantiersDrivePaths from "./ChantiersDrivePaths";
 import PageTitleManager from "./PageTitleManager";
+import ZoniaChat from "./ZoniaChat";
 import UsersManagement from "./UsersManagement";
 import AdminAgences from "./AdminAgences";
 import RapportsPage from "./RapportIntervention/RapportsPage";
@@ -73,6 +74,9 @@ import RapportPreviewPage from "./RapportIntervention/RapportPreviewPage";
 import RapportMobileLayout from "./RapportIntervention/RapportMobileLayout";
 import MobileHomePage from "./MobileHomePage";
 import DriveMobileLayout from "./DriveV2/DriveMobileLayout";
+
+// Passer à true quand le chat sera branché.
+const ZONIA_CHAT_ACTIF = false;
 
 // Créer un thème par défaut
 
@@ -771,6 +775,9 @@ function App() {
           {/* Redirection par défaut - si une route n'existe pas */}
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
+        {ZONIA_CHAT_ACTIF && isAuthenticated && (
+          <ZoniaChat user={user} isMobile={isMobile} />
+        )}
       </Router>
     </ThemeProvider>
   );
