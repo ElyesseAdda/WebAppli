@@ -74,6 +74,9 @@ import RapportMobileLayout from "./RapportIntervention/RapportMobileLayout";
 import MobileHomePage from "./MobileHomePage";
 import DriveMobileLayout from "./DriveV2/DriveMobileLayout";
 
+// Passer à true quand le chat sera branché.
+const ZONIA_CHAT_ACTIF = false;
+
 // Créer un thème par défaut
 const theme = createTheme({
   palette: {
@@ -784,8 +787,9 @@ function App() {
           {/* Redirection par défaut - si une route n'existe pas */}
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
-        {/* Hors des routes : le logo et la conversation ne se rechargent pas au changement de page. */}
-        <ZoniaChat user={user} isMobile={isMobile} />
+        {ZONIA_CHAT_ACTIF && isAuthenticated && (
+          <ZoniaChat user={user} isMobile={isMobile} />
+        )}
       </Router>
     </ThemeProvider>
   );

@@ -1,6 +1,5 @@
 import React, { useEffect, useRef, useState } from "react";
 import { IoClose, IoSend } from "react-icons/io5";
-import logo from "../img/zonia-mark.png";
 import "./../../static/css/zoniaChat.css";
 
 const SUGGESTIONS = [
@@ -17,6 +16,7 @@ const memory = {
   open: false,
   draft: "",
   messages: null,
+  replyReady: false,
 };
 
 let sequence = 0;
@@ -57,8 +57,19 @@ const requestZoniaReply = (text, signal) => {
 };
 
 const ZoniaMark = ({ thinking, small }) => (
-  <span className={`zonia-mark${small ? " zonia-mark-sm" : ""}${thinking ? " is-thinking" : ""}`}>
-    <img src={logo} alt="" />
+  <span
+    className={`zonia-mark${small ? " zonia-mark-sm" : ""}${thinking ? " is-thinking" : ""}`}
+    aria-hidden="true"
+  >
+    <svg viewBox="0 0 100 100" fill="none">
+      <path
+        d="M 25 25 H 75 L 25 75 H 75 L 25 25 Z"
+        stroke="currentColor"
+        strokeWidth="6"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
   </span>
 );
 
@@ -69,15 +80,23 @@ const ZoniaChat = ({ user, isMobile }) => {
     () => memory.messages || [{ id: "welcome", role: "assistant", text: welcomeText(user) }]
   );
   const [thinking, setThinking] = useState(false);
+  const [replyReady, setReplyReady] = useState(memory.replyReady);
   const inputRef = useRef(null);
   const bottomRef = useRef(null);
   const abortRef = useRef(null);
+  const openRef = useRef(open);
+  openRef.current = open;
 
   useEffect(() => {
     memory.open = open;
     memory.draft = draft;
     memory.messages = messages;
-  }, [open, draft, messages]);
+    memory.replyReady = replyReady;
+  }, [open, draft, messages, replyReady]);
+
+  useEffect(() => {
+    if (open) setReplyReady(false);
+  }, [open]);
 
   useEffect(() => {
     const firstName = (user?.first_name || "").trim();
@@ -129,12 +148,14 @@ const ZoniaChat = ({ user, isMobile }) => {
     setMessages((prev) => [...prev, { id: nextId(), role: "user", text }]);
     setDraft("");
     if (inputRef.current) inputRef.current.style.height = "auto";
+    setReplyReady(false);
     setThinking(true);
 
     try {
       const reply = await requestZoniaReply(text, controller.signal);
       if (controller.signal.aborted) return;
       setMessages((prev) => [...prev, { id: nextId(), role: "assistant", text: reply }]);
+      if (!openRef.current) setReplyReady(true);
     } catch (error) {
       if (error?.name === "AbortError") return;
       setMessages((prev) => [
@@ -145,6 +166,7 @@ const ZoniaChat = ({ user, isMobile }) => {
           text: "Une erreur est survenue. Réessayez dans un instant.",
         },
       ]);
+      if (!openRef.current) setReplyReady(true);
     } finally {
       if (!controller.signal.aborted) setThinking(false);
     }
@@ -163,7 +185,20 @@ const ZoniaChat = ({ user, isMobile }) => {
   };
 
   const showSuggestions = messages.length === 1 && messages[0].id === "welcome" && !thinking;
-  const fabLabel = thinking ? "Zonia réfléchit…" : open ? "Fermer" : "Zonia";
+  const fabLabel = thinking
+    ? "Zonia réfléchit…"
+    : replyReady
+      ? "Réponse prête"
+      : open
+        ? "Fermer"
+        : "Zonia";
+  const fabAria = thinking
+    ? "Zonia réfléchit"
+    : replyReady
+      ? "Zonia a répondu, ouvrir la conversation"
+      : open
+        ? "Fermer Zonia"
+        : "Ouvrir Zonia";
 
   return (
     <div className={`zonia-root${open ? " is-open" : ""}${isMobile ? " is-mobile" : ""}`}>
@@ -175,9 +210,11 @@ const ZoniaChat = ({ user, isMobile }) => {
         aria-hidden={!open}
       >
         <header className="zonia-header">
-          <ZoniaMark />
+          <span className="zonia-logo-tile">
+            <ZoniaMark />
+          </span>
           <div className="zonia-header-copy">
-            <h2 className="zonia-header-title">
+            <h2 className="zonia-wordmark">
               Zonia
               <span className="zonia-status" aria-hidden="true" />
             </h2>
@@ -193,7 +230,6 @@ const ZoniaChat = ({ user, isMobile }) => {
           >
             <IoClose size={20} />
           </button>
-          <div className="zonia-header-progress" aria-hidden="true" />
         </header>
 
         <div className="zonia-messages">
@@ -265,16 +301,16 @@ const ZoniaChat = ({ user, isMobile }) => {
 
       <button
         type="button"
-        className={`zonia-fab${thinking ? " is-thinking" : ""}`}
+        className={`zonia-fab${thinking ? " is-thinking" : ""}${replyReady ? " has-reply" : ""}`}
         aria-expanded={open}
         aria-controls="zonia-panel"
-        aria-label={thinking ? "Zonia réfléchit" : open ? "Fermer Zonia" : "Ouvrir Zonia"}
+        aria-label={fabAria}
         onClick={() => setOpen((value) => !value)}
       >
-        <span className="zonia-fab-ring" aria-hidden="true" />
         <span className="zonia-fab-disc">
-          <img src={logo} alt="" />
+          <ZoniaMark thinking={thinking} />
         </span>
+        {replyReady && !open && <span className="zonia-fab-badge" aria-hidden="true" />}
         <span className="zonia-fab-label">{fabLabel}</span>
       </button>
     </div>

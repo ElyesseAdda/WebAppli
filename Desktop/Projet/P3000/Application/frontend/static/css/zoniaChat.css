@@ -1,22 +1,36 @@
+@import url("https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700&display=swap");
+
 .zonia-root,
 .zonia-root * {
   box-sizing: border-box;
 }
 
 .zonia-root {
-  --zonia-navy: #0c1a30;
-  --zonia-navy-mid: #16304d;
-  --zonia-ink: #1c2834;
-  --zonia-muted: #6b7280;
-  --zonia-accent: #46acc2;
-  --zonia-line: rgba(19, 39, 67, 0.1);
+  --zonia-bg: #f4f7fb;
+  --zonia-white: #ffffff;
+  --zonia-slate-50: #f8fafc;
+  --zonia-slate-100: #f1f5f9;
+  --zonia-slate-200: #e2e8f0;
+  --zonia-slate-300: #cbd5e1;
+  --zonia-slate-400: #94a3b8;
+  --zonia-slate-500: #64748b;
+  --zonia-slate-700: #334155;
+  --zonia-slate-950: #020617;
+  --zonia-ink: #0f172a;
+  --zonia-cyan: #19e4fa;
+  --zonia-cyan-action: #0891b2;
   position: fixed;
   right: 22px;
   bottom: 22px;
   z-index: 1250;
-  font-family: Roboto, "Segoe UI", sans-serif;
+  font-family: Outfit, sans-serif;
   color: var(--zonia-ink);
-  line-height: 1.45;
+  line-height: 1.5;
+}
+
+.zonia-root ::selection {
+  background: #ffd700;
+  color: var(--zonia-ink);
 }
 
 .zonia-root.is-mobile {
@@ -27,18 +41,18 @@
 .zonia-panel {
   position: absolute;
   right: 0;
-  bottom: 86px;
+  bottom: 68px;
   width: min(392px, calc(100vw - 28px));
-  height: min(640px, calc(100dvh - 132px));
+  height: min(640px, calc(100dvh - 120px));
   display: flex;
   flex-direction: column;
-  background: #f4f6f8;
-  border-radius: 22px;
+  background: var(--zonia-white);
+  border-radius: 24px;
   overflow: hidden;
-  border: 1px solid rgba(15, 23, 42, 0.08);
+  border: 1px solid var(--zonia-slate-200);
   box-shadow:
-    0 24px 60px rgba(11, 23, 48, 0.22),
-    0 2px 8px rgba(11, 23, 48, 0.08);
+    0 20px 25px -5px rgba(15, 23, 42, 0.1),
+    0 8px 10px -6px rgba(15, 23, 42, 0.1);
   transform-origin: bottom right;
   opacity: 0;
   visibility: hidden;
@@ -50,9 +64,26 @@
     visibility 0.22s ease;
 }
 
+.zonia-panel::before {
+  content: "";
+  display: block;
+  height: 4px;
+  flex: none;
+  background: linear-gradient(
+    90deg,
+    #19e4fa 0%,
+    #ffffff 25%,
+    #ffd700 50%,
+    #ffffff 75%,
+    #19e4fa 100%
+  );
+  background-size: 200% 100%;
+  animation: zonia-bar 4s linear infinite;
+}
+
 .zonia-root.is-mobile .zonia-panel {
   width: min(392px, calc(100vw - 20px));
-  height: min(640px, calc(100dvh - 196px));
+  height: min(640px, calc(100dvh - 180px));
 }
 
 .zonia-panel.is-open {
@@ -68,10 +99,26 @@
   align-items: center;
   gap: 12px;
   padding: 14px 14px 14px 16px;
-  background: #fff;
-  color: var(--zonia-ink);
-  border-bottom: 1px solid var(--zonia-line);
+  background: rgba(255, 255, 255, 0.95);
+  border-bottom: 1px solid var(--zonia-slate-200);
   flex: none;
+}
+
+.zonia-logo-tile {
+  width: 40px;
+  height: 40px;
+  border-radius: 12px;
+  background: var(--zonia-slate-100);
+  border: 1px solid var(--zonia-slate-200);
+  display: grid;
+  place-items: center;
+  flex: none;
+  color: var(--zonia-ink);
+}
+
+.zonia-logo-tile .zonia-mark {
+  width: 26px;
+  height: 26px;
 }
 
 .zonia-header-copy {
@@ -79,23 +126,27 @@
   flex: 1;
 }
 
-.zonia-header-title {
+.zonia-wordmark {
   display: flex;
   align-items: center;
   gap: 8px;
   margin: 0;
   font-size: 16px;
-  font-weight: 650;
-  letter-spacing: -0.01em;
+  font-weight: 700;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--zonia-slate-950);
+  line-height: 1;
 }
 
 .zonia-status {
-  width: 7px;
-  height: 7px;
+  width: 8px;
+  height: 8px;
   border-radius: 50%;
-  background: var(--zonia-accent);
-  box-shadow: 0 0 0 3px rgba(70, 172, 194, 0.18);
+  background: var(--zonia-cyan-action);
+  box-shadow: 0 0 0 0 rgba(25, 228, 250, 0.7);
   flex: none;
+  letter-spacing: 0;
 }
 
 .zonia-panel.is-thinking .zonia-status {
@@ -103,33 +154,10 @@
 }
 
 .zonia-header-sub {
-  margin: 2px 0 0;
+  margin: 6px 0 0;
   font-size: 12px;
-  color: var(--zonia-muted);
-}
-
-.zonia-header-progress {
-  position: absolute;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  height: 2px;
-  overflow: hidden;
-  opacity: 0;
-  transition: opacity 0.2s ease;
-}
-
-.zonia-panel.is-thinking .zonia-header-progress {
-  opacity: 1;
-}
-
-.zonia-header-progress::after {
-  content: "";
-  display: block;
-  height: 100%;
-  width: 42%;
-  background: linear-gradient(90deg, transparent, #8fe0ee, transparent);
-  animation: zonia-shimmer 1.15s ease-in-out infinite;
+  font-weight: 500;
+  color: var(--zonia-slate-500);
 }
 
 button.zonia-close {
@@ -139,16 +167,16 @@ button.zonia-close {
   height: 32px;
   display: grid;
   place-items: center;
-  border-radius: 10px;
-  color: #5c6b7a;
+  border-radius: 8px;
+  color: var(--zonia-slate-500);
   cursor: pointer;
   flex: none;
 }
 
 button.zonia-close:hover,
 button.zonia-close:focus-visible {
-  background: rgba(19, 39, 67, 0.06);
-  color: var(--zonia-ink);
+  background: var(--zonia-slate-100);
+  color: var(--zonia-slate-950);
 }
 
 .zonia-messages {
@@ -159,9 +187,12 @@ button.zonia-close:focus-visible {
   display: flex;
   flex-direction: column;
   gap: 12px;
-  background:
-    radial-gradient(900px 160px at 100% -20px, rgba(70, 172, 194, 0.1), transparent 46%),
-    #f4f6f8;
+  background-color: var(--zonia-bg);
+  background-image:
+    radial-gradient(420px 180px at 0% -30px, rgba(25, 228, 250, 0.15), transparent 70%),
+    linear-gradient(to right, rgba(15, 23, 42, 0.045) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(15, 23, 42, 0.045) 1px, transparent 1px);
+  background-size: auto, 32px 32px, 32px 32px;
 }
 
 .zonia-messages::-webkit-scrollbar {
@@ -169,7 +200,7 @@ button.zonia-close:focus-visible {
 }
 
 .zonia-messages::-webkit-scrollbar-thumb {
-  background: rgba(19, 39, 67, 0.18);
+  background: var(--zonia-slate-300);
   border-radius: 99px;
 }
 
@@ -186,27 +217,31 @@ button.zonia-close:focus-visible {
 
 .zonia-bubble {
   max-width: min(300px, 84%);
-  padding: 10px 12px;
-  border-radius: 16px 16px 16px 6px;
-  background: #fff;
-  color: var(--zonia-ink);
+  padding: 10px 14px;
+  border-radius: 16px;
+  background: var(--zonia-white);
+  color: var(--zonia-slate-700);
   font-size: 14px;
+  font-weight: 400;
+  line-height: 1.55;
   white-space: pre-wrap;
   overflow-wrap: anywhere;
-  box-shadow: 0 1px 2px rgba(16, 24, 40, 0.05);
-  border: 1px solid var(--zonia-line);
+  border: 1px solid var(--zonia-slate-200);
+  box-shadow: 0 16px 40px -28px rgba(15, 23, 42, 0.45);
 }
 
 .zonia-row.is-user .zonia-bubble {
   max-width: min(300px, 88%);
-  border-radius: 16px 16px 6px 16px;
-  background: var(--zonia-navy-mid);
-  color: #fff;
-  border-color: transparent;
+  background: var(--zonia-slate-950);
+  color: var(--zonia-white);
+  border-color: var(--zonia-slate-950);
+  box-shadow: none;
 }
 
 .zonia-bubble-thinking {
   padding: 12px 14px;
+  background: #ecfeff;
+  border-color: rgba(25, 228, 250, 0.4);
 }
 
 .zonia-dots {
@@ -220,7 +255,7 @@ button.zonia-close:focus-visible {
   width: 6px;
   height: 6px;
   border-radius: 50%;
-  background: #8aa0b5;
+  background: var(--zonia-cyan-action);
   animation: zonia-dot 1.2s ease-in-out infinite;
 }
 
@@ -236,33 +271,33 @@ button.zonia-close:focus-visible {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
-  padding-left: 26px;
+  padding-left: 36px;
 }
 
 button.zonia-chip {
   all: unset;
   box-sizing: border-box;
   cursor: pointer;
-  border: 1px solid rgba(19, 39, 67, 0.12);
-  background: #fff;
-  color: var(--zonia-navy-mid);
-  border-radius: 999px;
-  padding: 7px 12px;
-  font-size: 12.5px;
+  border: 1px solid var(--zonia-slate-200);
+  background: var(--zonia-white);
+  color: var(--zonia-slate-700);
+  border-radius: 9999px;
+  padding: 8px 14px;
+  font-family: inherit;
+  font-size: 13px;
   font-weight: 500;
   line-height: 1.2;
-  box-shadow: 0 1px 2px rgba(16, 24, 40, 0.04);
 }
 
 button.zonia-chip:hover,
 button.zonia-chip:focus-visible {
-  border-color: var(--zonia-accent);
-  color: #0f6f84;
+  border-color: var(--zonia-slate-400);
+  color: var(--zonia-slate-950);
 }
 
 button.zonia-chip:disabled {
-  cursor: default;
-  opacity: 0.55;
+  cursor: not-allowed;
+  opacity: 0.5;
 }
 
 form.zonia-composer {
@@ -270,9 +305,9 @@ form.zonia-composer {
   align-items: flex-end;
   gap: 8px;
   margin: 0;
-  padding: 12px 12px 14px;
-  background: #fff;
-  border-top: 1px solid var(--zonia-line);
+  padding: 12px;
+  background: var(--zonia-white);
+  border-top: 1px solid var(--zonia-slate-200);
   flex: none;
 }
 
@@ -281,113 +316,120 @@ form.zonia-composer {
   min-height: 44px;
   max-height: 112px;
   resize: none;
-  border: 1px solid rgba(19, 39, 67, 0.12);
-  border-radius: 14px;
-  padding: 11px 12px;
-  font: 14px/1.4 Roboto, "Segoe UI", sans-serif;
+  border: 1px solid var(--zonia-slate-200);
+  border-radius: 12px;
+  padding: 11px 14px;
+  font: 14px/1.45 Outfit, sans-serif;
   color: var(--zonia-ink);
-  background: #f8fafb;
+  background: var(--zonia-slate-50);
   outline: none;
   width: auto;
 }
 
 .zonia-composer textarea::placeholder {
-  color: #98a2b3;
+  color: var(--zonia-slate-400);
 }
 
 .zonia-composer textarea:focus {
-  border-color: rgba(70, 172, 194, 0.85);
-  background: #fff;
-  box-shadow: 0 0 0 3px rgba(70, 172, 194, 0.16);
+  background: var(--zonia-white);
+  box-shadow: 0 0 0 2px var(--zonia-cyan);
 }
 
 button.zonia-send {
   all: unset;
   box-sizing: border-box;
-  width: 42px;
-  height: 42px;
+  width: 44px;
+  height: 44px;
   display: grid;
   place-items: center;
-  border-radius: 14px;
-  background: var(--zonia-accent);
-  color: #fff;
+  border-radius: 9999px;
+  background: var(--zonia-slate-950);
+  color: var(--zonia-white);
+  border: 1px solid var(--zonia-slate-950);
   cursor: pointer;
   flex: none;
-  box-shadow: 0 6px 14px rgba(70, 172, 194, 0.32);
+  box-shadow: 0 12px 30px -12px rgba(15, 23, 42, 0.55);
+  transition: background 0.15s ease, border-color 0.15s ease, transform 0.15s ease;
 }
 
 button.zonia-send:hover,
 button.zonia-send:focus-visible {
-  background: #2f8a9f;
+  background: var(--zonia-cyan-action);
+  border-color: var(--zonia-cyan-action);
+  transform: translateY(-2px);
 }
 
 button.zonia-send:disabled {
-  cursor: default;
-  background: #c5d0d8;
-  box-shadow: none;
+  cursor: not-allowed;
+  opacity: 0.5;
+  transform: none;
+  background: var(--zonia-slate-950);
+  border-color: var(--zonia-slate-950);
 }
 
 button.zonia-fab {
   all: unset;
   box-sizing: border-box;
   position: relative;
-  width: 72px;
-  height: 72px;
+  width: 56px;
+  height: 56px;
   display: grid;
   place-items: center;
   cursor: pointer;
-  border-radius: 50%;
 }
 
 button.zonia-fab:focus-visible {
-  outline: 2px solid var(--zonia-accent);
-  outline-offset: 4px;
-}
-
-.zonia-fab-ring {
-  position: absolute;
-  inset: -4px;
-  border-radius: 50%;
-  background: conic-gradient(from 90deg, transparent 0 68%, var(--zonia-accent) 86%, #9ae7f2 100%);
-  -webkit-mask: radial-gradient(farthest-side, transparent calc(100% - 2.5px), #000 calc(100% - 2px));
-  mask: radial-gradient(farthest-side, transparent calc(100% - 2.5px), #000 calc(100% - 2px));
-  opacity: 0;
-  pointer-events: none;
-  transition: opacity 0.25s ease;
-}
-
-.zonia-fab.is-thinking .zonia-fab-ring {
-  opacity: 0;
+  outline: 2px solid var(--zonia-cyan);
+  outline-offset: 3px;
+  border-radius: 18px;
 }
 
 .zonia-fab-disc {
-  width: 72px;
-  height: 72px;
-  border-radius: 50%;
-  overflow: hidden;
+  width: 56px;
+  height: 56px;
+  border-radius: 16px;
   position: relative;
   z-index: 1;
   display: grid;
   place-items: center;
-  background: #fff;
-  box-shadow:
-    0 0 0 1px rgba(15, 23, 42, 0.08),
-    0 14px 32px rgba(8, 16, 32, 0.18);
-  transition: transform 0.2s ease, box-shadow 0.2s ease;
+  background: var(--zonia-white);
+  border: 1px solid var(--zonia-slate-200);
+  color: var(--zonia-ink);
+  box-shadow: 0 12px 30px -12px rgba(15, 23, 42, 0.55);
+  transition: transform 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.zonia-fab-disc .zonia-mark {
+  width: 28px;
+  height: 28px;
 }
 
 button.zonia-fab:hover .zonia-fab-disc,
 button.zonia-fab:focus-visible .zonia-fab-disc {
   transform: translateY(-2px);
-  box-shadow:
-    0 0 0 1px rgba(15, 23, 42, 0.1),
-    0 18px 36px rgba(8, 16, 32, 0.22);
+  border-color: rgba(25, 228, 250, 0.6);
 }
 
 .zonia-fab.is-thinking .zonia-fab-disc {
-  box-shadow:
-    0 0 0 6px rgba(70, 172, 194, 0.14),
-    0 14px 32px rgba(8, 16, 32, 0.35);
+  border-color: rgba(25, 228, 250, 0.6);
+}
+
+.zonia-fab.has-reply .zonia-fab-disc {
+  border-color: var(--zonia-cyan-action);
+}
+
+.zonia-fab-badge {
+  position: absolute;
+  top: -2px;
+  right: -2px;
+  z-index: 2;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: var(--zonia-cyan-action);
+  border: 2px solid var(--zonia-white);
+  box-shadow: 0 0 0 0 rgba(25, 228, 250, 0.7);
+  animation: zonia-status 1.6s ease-out infinite;
 }
 
 .zonia-fab-label {
@@ -395,61 +437,66 @@ button.zonia-fab:focus-visible .zonia-fab-disc {
   right: calc(100% + 10px);
   top: 50%;
   transform: translateY(-50%);
-  background: var(--zonia-navy);
-  color: #fff;
-  font-size: 13px;
-  font-weight: 600;
-  letter-spacing: 0.01em;
-  padding: 6px 10px;
-  border-radius: 999px;
+  background: var(--zonia-slate-950);
+  color: var(--zonia-white);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  padding: 6px 12px;
+  border-radius: 9999px;
   white-space: nowrap;
   opacity: 0;
   pointer-events: none;
-  box-shadow: 0 8px 20px rgba(8, 16, 32, 0.2);
+  box-shadow: 0 12px 30px -12px rgba(15, 23, 42, 0.55);
   transition: opacity 0.15s ease;
 }
 
 .zonia-root:not(.is-open) button.zonia-fab:hover .zonia-fab-label,
 .zonia-root:not(.is-open) button.zonia-fab:focus-visible .zonia-fab-label,
-.zonia-root:not(.is-open) .zonia-fab.is-thinking .zonia-fab-label {
+.zonia-root:not(.is-open) .zonia-fab.is-thinking .zonia-fab-label,
+.zonia-root:not(.is-open) .zonia-fab.has-reply .zonia-fab-label {
   opacity: 1;
 }
 
 .zonia-mark {
   width: 26px;
   height: 26px;
+  display: grid;
+  place-items: center;
   flex: none;
-  background: transparent;
+  color: var(--zonia-ink);
 }
 
-.zonia-mark-sm {
-  width: 18px;
-  height: 18px;
-}
-
-.zonia-mark img,
-.zonia-fab-disc img {
-  object-fit: contain;
+.zonia-mark svg {
+  width: 100%;
+  height: 100%;
   display: block;
 }
 
-.zonia-mark img {
-  width: 100%;
-  height: 100%;
+.zonia-mark-sm {
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  background: var(--zonia-slate-100);
+  border: 1px solid var(--zonia-slate-200);
 }
 
-.zonia-fab-disc img {
-  width: 46%;
-  height: 46%;
+.zonia-mark-sm svg {
+  width: 16px;
+  height: 16px;
 }
 
-.zonia-mark.is-thinking img {
+.zonia-mark.is-thinking svg {
   animation: zonia-turn 1.6s infinite;
+  transform-origin: center;
 }
 
-@keyframes zonia-spin {
+@keyframes zonia-bar {
+  from {
+    background-position: 0% 50%;
+  }
   to {
-    transform: rotate(360deg);
+    background-position: 200% 50%;
   }
 }
 
@@ -463,15 +510,6 @@ button.zonia-fab:focus-visible .zonia-fab-disc {
   }
   100% {
     transform: rotate(360deg);
-  }
-}
-
-@keyframes zonia-shimmer {
-  from {
-    transform: translateX(-130%);
-  }
-  to {
-    transform: translateX(320%);
   }
 }
 
@@ -490,24 +528,25 @@ button.zonia-fab:focus-visible .zonia-fab-disc {
 
 @keyframes zonia-status {
   0% {
-    box-shadow: 0 0 0 0 rgba(70, 172, 194, 0.55);
+    box-shadow: 0 0 0 0 rgba(25, 228, 250, 0.7);
   }
   100% {
-    box-shadow: 0 0 0 8px rgba(70, 172, 194, 0);
+    box-shadow: 0 0 0 8px rgba(25, 228, 250, 0);
   }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .zonia-mark.is-thinking img,
-  .zonia-fab.is-thinking .zonia-fab-disc img,
-  .zonia-fab.is-thinking .zonia-fab-ring,
+  .zonia-mark.is-thinking svg,
   .zonia-dots span,
-  .zonia-header-progress::after,
-  .zonia-panel.is-thinking .zonia-status {
+  .zonia-panel.is-thinking .zonia-status,
+  .zonia-panel::before,
+  .zonia-fab-badge {
     animation: none;
   }
 
-  .zonia-panel {
+  .zonia-panel,
+  button.zonia-send,
+  .zonia-fab-disc {
     transition: none;
   }
 }
