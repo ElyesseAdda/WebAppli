@@ -82,6 +82,30 @@
         white-space: normal;
         vertical-align: top;
       }
+
+      .entete-totaux {
+        float: right;
+        display: flex;
+        align-items: center;
+        font-size: 0.8rem;
+        font-weight: 600;
+      }
+      .entete-ht {
+        width: 85px;
+        text-align: center;
+      }
+      .entete-pct {
+        width: 68px;
+        margin-left: 3px;
+        text-align: center;
+      }
+      .entete-montant {
+        width: 90px;
+        margin-left: 3px;
+        text-align: right;
+        padding-right: 4px;
+        box-sizing: border-box;
+      }
       .ligne-details {
         text-align: left;
         width: 320px;
@@ -701,7 +725,11 @@
                   <tr class="partie">
                     <td class="partie" colspan="7">
                       {% if partie.numero %}{{ partie.numero }} - {% endif %}{{ partie.titre }}
-                      <span style="float: right">{{ partie.total_partie|format_montant_espace }}</span>
+                      <span class="entete-totaux">
+                        <span class="entete-ht">{{ partie.total_ht_lignes|format_montant_espace }}</span>
+                        <span class="entete-pct">{{ partie.pourcentage|floatformat:2 }} %</span>
+                        <span class="entete-montant">{{ partie.montant_avancement|format_montant_espace }}</span>
+                      </span>
                     </td>
                   </tr>
                   {% for special_line in partie.special_lines %}
@@ -739,7 +767,11 @@
                   <tr class="sous-partie">
                     <td colspan="7">
                       {% if sous_partie.numero %}{{ sous_partie.numero }} {% endif %}{{ sous_partie.description }}
-                      <span style="float: right">{{ sous_partie.total_sous_partie|format_montant_espace }}</span>
+                      <span class="entete-totaux">
+                        <span class="entete-ht">{{ sous_partie.total_ht_lignes|format_montant_espace }}</span>
+                        <span class="entete-pct">{{ sous_partie.pourcentage|floatformat:2 }} %</span>
+                        <span class="entete-montant">{{ sous_partie.montant_avancement|format_montant_espace }}</span>
+                      </span>
                     </td>
                   </tr>
                   {% for special_line in sous_partie.special_lines %}
@@ -828,7 +860,7 @@
                 <span style="float: right">
                   <span class="centaine" style="font-size: 0.8rem;float: right;margin-left: 10px;width: 85px;text-align: right;">{{ partie.montant_avancement|format_montant_espace }}</span>
                   <span class="centaine" style="font-size: 0.8rem;float: right;width: 75px;text-align: center;margin-left: 10px;transform: translateX(8px);">{{ partie.pourcentage|floatformat:2 }} %</span>
-                  <span class="centaine" style="font-size: 0.8rem;float: right;margin-left: 10px;width: 78px;text-align: center;transform: translateX(10px)">{{ partie.total_partie|format_montant_espace }}</span>
+                  <span class="centaine" style="font-size: 0.8rem;float: right;margin-left: 10px;width: 78px;text-align: center;transform: translateX(10px)">{{ partie.total_ht_lignes|format_montant_espace }}</span>
                 </span>
               </td>
             </tr>
@@ -892,7 +924,7 @@
                 <span style="float: right">
                   <span class="centaine" style="font-size: 0.8rem;float: right;margin-left: 10px;width: 78px;text-align: right;">{{ sous_partie.montant_avancement|format_montant_espace }}</span>
                   <span class="centaine" style="font-size: 0.8rem;float: right;width: 75px;text-align: center;margin-left: 10px;">{{ sous_partie.pourcentage|floatformat:2 }} %</span>
-                  <span class="centaine" style="font-size: 0.8rem;float: right;margin-left: 10px;width: 85px;text-align: center;transform: translateX(10px)">{{ sous_partie.total_sous_partie|format_montant_espace }}</span>
+                  <span class="centaine" style="font-size: 0.8rem;float: right;margin-left: 10px;width: 85px;text-align: center;transform: translateX(10px)">{{ sous_partie.total_ht_lignes|format_montant_espace }}</span>
                 </span>
               </td>
             </tr>
