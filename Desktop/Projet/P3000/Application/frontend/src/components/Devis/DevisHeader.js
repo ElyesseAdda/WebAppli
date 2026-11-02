@@ -1,11 +1,10 @@
 import React from 'react';
-import { COLORS } from '../../constants/colors';
 
 const DevisHeader = ({ devisData, formatDate, onDateChange, isGeneratingNumber }) => {
   return (
     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px' }}>
       <div>
-        <label style={{ display: 'block', fontSize: '12px', color: COLORS.textLight, marginBottom: '4px' }}>
+        <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, color: '#6b7577', marginBottom: '6px' }}>
           Numéro de devis
         </label>
         <input
@@ -24,19 +23,20 @@ const DevisHeader = ({ devisData, formatDate, onDateChange, isGeneratingNumber }
           style={{
             width: '100%',
             padding: '12px',
-            backgroundColor: isGeneratingNumber ? COLORS.backgroundAlt : 'white',
-            border: '1px solid #ced4da',
-            borderRadius: '4px',
+            backgroundColor: isGeneratingNumber ? '#f7f8f8' : 'white',
+            border: '1px solid #e4e8ea',
+            borderRadius: '10px',
             fontSize: '16px',
-            fontWeight: 'bold',
-            color: COLORS.infoDark,
-            textAlign: 'center'
+            fontWeight: 700,
+            color: '#001514',
+            textAlign: 'center',
+            boxSizing: 'border-box'
           }}
         />
       </div>
       
       <div>
-        <label style={{ display: 'block', fontSize: '12px', color: COLORS.textLight, marginBottom: '4px' }}>
+        <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, color: '#6b7577', marginBottom: '6px' }}>
           Date de création
         </label>
         <input
@@ -51,11 +51,12 @@ const DevisHeader = ({ devisData, formatDate, onDateChange, isGeneratingNumber }
             width: '100%',
             padding: '12px',
             backgroundColor: 'white',
-            border: '1px solid #ced4da',
-            borderRadius: '4px',
+            border: '1px solid #e4e8ea',
+            borderRadius: '10px',
             fontSize: '14px',
-            color: COLORS.textMuted,
-            textAlign: 'center'
+            color: '#243233',
+            textAlign: 'center',
+            boxSizing: 'border-box'
           }}
         />
       </div>

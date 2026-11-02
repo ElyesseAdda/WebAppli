@@ -19,6 +19,7 @@ import ContactSocieteModal from '../ContactSocieteModal';
 import SelectSocieteModal from '../SelectSocieteModal';
 import SocieteInfoModal from '../SocieteInfoModal';
 import ClientInfoModal from '../ClientInfoModal';
+import '../../../static/css/devisAvance.css';
 
 // Hooks personnalisés
 import { useDevisLoader } from './hooks/useDevisLoader';
@@ -1197,68 +1198,38 @@ const ModificationDevisV2 = () => {
   }
 
   return (
-    <div style={{
-      padding: '20px 10px',
-      marginRight: '150px',
-      minHeight: 'auto',
-      backgroundColor: '#f5f5f5',
-      borderRadius: '10px',
-    }}>
-      <div style={{
-        fontFamily: 'Arial, Helvetica, "Roboto", sans-serif',
-        fontSize: '16px',
-        maxWidth: '1200px',
-        margin: '0 150px 0 150px',
-        padding: '20px 10px',
-        minHeight: 'auto',
-        backgroundColor: 'rgb(255 255 255)',
-        borderRadius: '10px',
-        boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
-        overflow: 'visible'
-      }}>
+    <div className="dav">
+      <div className="dav-sheet">
         <DevisStyles />
-        
-        {/* En-tête de la page */}
-        <div style={{
-          backgroundColor: '#ff9800',
-          color: 'white',
-          padding: '20px 30px',
-          textAlign: 'center'
-        }}>
-          <h1 style={{ margin: 0, fontSize: '28px', fontWeight: 'bold' }}>
-            Modification de Devis
-          </h1>
-          <p style={{ margin: '8px 0 0 0', fontSize: '16px', opacity: 0.9 }}>
-            Devis n°{devisData.numero}
-          </p>
-        </div>
 
-        {/* Contenu principal */}
-        <div style={{ padding: '30px' }}>
-          
-          {/* Section Client et contact */}
-          <div style={{
-            backgroundColor: '#f8f9fa',
-            border: '1px solid #e9ecef',
-            borderRadius: '8px',
-            padding: '25px',
-            marginBottom: '30px'
-          }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', paddingBottom: '10px', borderBottom: '2px solid #1976d2' }}>
-              <h2 style={{
-                color: '#1976d2',
-                fontSize: '20px',
-                fontWeight: 'bold',
-                margin: 0,
-              }}>
-                👤 Client et contact
-              </h2>
+        <header className="dav-hero">
+          <p className="dav-kicker">Documents</p>
+          <h1>Modification de devis</h1>
+          <p>Devis n°{devisData.numero}</p>
+        </header>
+
+        <div className="dav-body">
+
+          <section className="dav-section">
+            <div className="dav-section-head" style={{ justifyContent: 'space-between' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                <span className="dav-mark" />
+                <h2>Client et contact</h2>
+              </div>
               {clientId && (
                 <Button
                   variant="outlined"
                   size="small"
                   onClick={() => setShowEditClientModal(true)}
-                  sx={{ fontSize: '12px', padding: '4px 10px' }}
+                  sx={{
+                    fontSize: '12px',
+                    padding: '4px 10px',
+                    textTransform: 'none',
+                    borderRadius: '8px',
+                    fontWeight: 600,
+                    borderColor: '#c5d0d2',
+                    color: '#1565c0',
+                  }}
                 >
                   Modifier le contact
                 </Button>
@@ -1292,33 +1263,19 @@ const ModificationDevisV2 = () => {
               }}
               onOpenSelectSocieteModal={() => setShowSelectSocieteDevisModal(true)}
             />
-          </div>
+          </section>
 
-          {/* Section Chantier */}
-          <div style={{
-            backgroundColor: '#f8f9fa',
-            border: '1px solid #e9ecef',
-            borderRadius: '8px',
-            padding: '25px',
-            marginBottom: '30px'
-          }}>
-            <h2 style={{
-              color: '#1976d2',
-              fontSize: '20px',
-              fontWeight: 'bold',
-              margin: '0 0 20px 0',
-              paddingBottom: '10px',
-              borderBottom: '2px solid #1976d2'
-            }}>
-              🏗️ Adresse du chantier
-            </h2>
+          <section className="dav-section">
+            <div className="dav-section-head">
+              <span className="dav-mark" />
+              <h2>Adresse du chantier</h2>
+            </div>
 
-            <Box ref={chantierDropdownRef} sx={{ position: 'relative', marginBottom: '20px' }}>
-              <label style={{ display: 'block', fontSize: '12px', color: '#6c757d', marginBottom: '6px' }}>
-                Chantier
-              </label>
+            <div className="dav-chantier-field" ref={chantierDropdownRef} style={{ marginBottom: '16px' }}>
+              <label className="dav-path-label">Chantier</label>
               <input
                 type="text"
+                className="dav-search"
                 placeholder="Rechercher un chantier..."
                 value={
                   selectedChantierId
@@ -1330,35 +1287,9 @@ const ModificationDevisV2 = () => {
                   setChantierDropdownOpen(true);
                 }}
                 onFocus={() => setChantierDropdownOpen(true)}
-                style={{
-                  width: '100%',
-                  padding: '10px 12px',
-                  border: '2px solid #e0e0e0',
-                  borderRadius: '8px',
-                  fontSize: '14px',
-                  boxSizing: 'border-box',
-                }}
               />
               {chantierDropdownOpen && (
-                <ul
-                  style={{
-                    position: 'absolute',
-                    top: '100%',
-                    left: 0,
-                    right: 0,
-                    margin: 0,
-                    marginTop: '4px',
-                    padding: 0,
-                    listStyle: 'none',
-                    maxHeight: '240px',
-                    overflowY: 'auto',
-                    backgroundColor: '#fff',
-                    border: '2px solid #2196f3',
-                    borderRadius: '8px',
-                    boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
-                    zIndex: 10,
-                  }}
-                >
+                <ul className="dav-menu">
                   {(() => {
                     const chantiersEnCours = chantiers.filter(
                       (c) =>
@@ -1377,7 +1308,7 @@ const ModificationDevisV2 = () => {
                       : sorted;
                     if (filtered.length === 0) {
                       return (
-                        <li style={{ padding: '12px 14px', color: '#666', fontSize: '14px' }}>
+                        <li className="dav-empty">
                           Aucun chantier trouvé
                         </li>
                       );
@@ -1385,21 +1316,8 @@ const ModificationDevisV2 = () => {
                     return filtered.map((ch) => (
                       <li
                         key={ch.id}
+                        className={`dav-option${selectedChantierId === ch.id ? ' is-selected' : ''}`}
                         onClick={() => handleChantierChange(ch.id)}
-                        style={{
-                          padding: '10px 14px',
-                          cursor: 'pointer',
-                          fontSize: '14px',
-                          borderBottom: '1px solid #eee',
-                          backgroundColor: selectedChantierId === ch.id ? '#e3f2fd' : 'transparent',
-                        }}
-                        onMouseEnter={(e) => {
-                          e.currentTarget.style.backgroundColor = '#e3f2fd';
-                        }}
-                        onMouseLeave={(e) => {
-                          e.currentTarget.style.backgroundColor =
-                            selectedChantierId === ch.id ? '#e3f2fd' : 'transparent';
-                        }}
                       >
                         {ch.chantier_name}
                       </li>
@@ -1407,36 +1325,23 @@ const ModificationDevisV2 = () => {
                   })()}
                 </ul>
               )}
-            </Box>
+            </div>
             
             <ChantierInfo 
               chantier={chantier} 
               selectedChantierId={selectedChantierId}
               isEditable={false}
             />
-          </div>
+          </section>
 
-          {/* Section Informations générales */}
-          <div style={{
-            backgroundColor: '#f8f9fa',
-            border: '1px solid #e9ecef',
-            borderRadius: '8px',
-            padding: '25px',
-            marginBottom: '30px'
-          }}>
-            <h2 style={{
-              color: '#1976d2',
-              fontSize: '20px',
-              fontWeight: 'bold',
-              margin: '0 0 20px 0',
-              paddingBottom: '10px',
-              borderBottom: '2px solid #1976d2'
-            }}>
-              📋 Informations générales
-            </h2>
-            
-            <div style={{ display: 'flex', justifyContent: 'center' }}>
-              <div style={{ maxWidth: '600px', width: '100%' }}>
+          <section className="dav-section">
+            <div className="dav-section-head">
+              <span className="dav-mark" />
+              <h2>Informations générales</h2>
+            </div>
+
+            <div className="dav-center">
+              <div className="dav-narrow">
                 <DevisHeader 
                   devisData={devisData} 
                   formatDate={formatDate}
@@ -1451,26 +1356,13 @@ const ModificationDevisV2 = () => {
                 />
               </div>
             </div>
-          </div>
+          </section>
 
-          {/* Section Détail du devis */}
-          <div style={{
-            backgroundColor: '#f8f9fa',
-            border: '1px solid #e9ecef',
-            borderRadius: '8px',
-            padding: '25px',
-            marginBottom: '30px'
-          }}>
-            <h2 style={{
-              color: '#1976d2',
-              fontSize: '20px',
-              fontWeight: 'bold',
-              margin: '0 0 20px 0',
-              paddingBottom: '10px',
-              borderBottom: '2px solid #1976d2'
-            }}>
-              📊 Détail du devis
-            </h2>
+          <section className="dav-section">
+            <div className="dav-section-head">
+              <span className="dav-mark" />
+              <h2>Détail du devis</h2>
+            </div>
             
             <DevisTable 
               devisData={devisData}
@@ -1538,26 +1430,13 @@ const ModificationDevisV2 = () => {
               onLigneDetailHover={setHoveredLigneDetail}
               hoveredLigneDetail={hoveredLigneDetail}
             />
-          </div>
+          </section>
 
-          {/* Section Récapitulatif */}
-          <div style={{
-            backgroundColor: '#f8f9fa',
-            border: '1px solid #e9ecef',
-            borderRadius: '8px',
-            padding: '25px',
-            marginBottom: '30px'
-          }}>
-            <h2 style={{
-              color: '#1976d2',
-              fontSize: '20px',
-              fontWeight: 'bold',
-              margin: '0 0 20px 0',
-              paddingBottom: '10px',
-              borderBottom: '2px solid #1976d2'
-            }}>
-              💰 Récapitulatif financier
-            </h2>
+          <section className="dav-section">
+            <div className="dav-section-head">
+              <span className="dav-mark" />
+              <h2>Récapitulatif financier</h2>
+            </div>
             
             <DevisRecap 
               devisData={devisData}
@@ -1569,79 +1448,40 @@ const ModificationDevisV2 = () => {
                 setDevisData(prev => ({ ...prev, tva_rate: newRate }));
               }}
             />
-          </div>
+          </section>
 
-          {/* Section Actions */}
-          <div style={{
-            backgroundColor: '#fff3e0',
-            border: '1px solid #ff9800',
-            borderRadius: '8px',
-            padding: '25px',
-            textAlign: 'center'
-          }}>
-            <h3 style={{
-              color: '#e65100',
-              fontSize: '18px',
-              fontWeight: 'bold',
-              margin: '0 0 15px 0'
-            }}>
-              Actions disponibles
-            </h3>
-            <div style={{ display: 'flex', gap: '15px', justifyContent: 'center', flexWrap: 'wrap' }}>
-              <button 
+          <div className="dav-actions">
+            <div>
+              <h3>Actions disponibles</h3>
+              <p>Enregistrer, prévisualiser ou revenir à la liste</p>
+            </div>
+            <div className="dav-actions-buttons">
+              <button
+                type="button"
                 onClick={handleSaveDevis}
                 disabled={isSaving}
-                style={{
-                  backgroundColor: isSaving ? '#6c757d' : '#ff9800',
-                  color: 'white',
-                  border: 'none',
-                  padding: '12px 24px',
-                  borderRadius: '6px',
-                  fontSize: '14px',
-                  fontWeight: 'bold',
-                  cursor: isSaving ? 'not-allowed' : 'pointer',
-                  boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
-                  opacity: isSaving ? 0.6 : 1
-                }}
+                className="dav-btn dav-btn-primary"
               >
-                {isSaving ? '⏳ Sauvegarde...' : '💾 Sauvegarder les modifications'}
-              </button>
-              <button 
-                onClick={handlePreviewDevis}
-                style={{
-                  backgroundColor: '#28a745',
-                  color: 'white',
-                  border: 'none',
-                  padding: '12px 24px',
-                  borderRadius: '6px',
-                  fontSize: '14px',
-                  fontWeight: 'bold',
-                  cursor: 'pointer',
-                  boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
-                }}
-              >
-                👁️ Aperçu PDF
+                {isSaving ? 'Sauvegarde...' : 'Sauvegarder les modifications'}
               </button>
               <button
-                onClick={() => navigate('/ListeDevis')}
-                style={{
-                  backgroundColor: '#9e9e9e',
-                  color: 'white',
-                  border: 'none',
-                  padding: '12px 24px',
-                  borderRadius: '6px',
-                  fontSize: '14px',
-                  fontWeight: 'bold',
-                  cursor: 'pointer',
-                  boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
-                }}
+                type="button"
+                onClick={handlePreviewDevis}
+                className="dav-btn dav-btn-success"
               >
-                ↩️ Retour à la liste
+                Aperçu PDF
+              </button>
+              <button
+                type="button"
+                onClick={() => navigate('/ListeDevis')}
+                className="dav-btn dav-btn-ghost"
+              >
+                Retour à la liste
               </button>
             </div>
-            
+
             {saveError && (
-              <Alert severity="error" sx={{ mt: 2 }}>
+              <Alert severity="error" sx={{ mt: 2, width: '100%' }}>
                 {saveError}
               </Alert>
             )}

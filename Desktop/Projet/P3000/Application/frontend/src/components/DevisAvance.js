@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import axios from 'axios';
-import { Select, MenuItem, FormControl, InputLabel, Button, Box, Typography } from '@mui/material';
+import { FormControl, InputLabel, Button } from '@mui/material';
 import { FiPlus } from 'react-icons/fi';
 import DevisStyles from './Devis/DevisStyles';
 import DevisHeader from './Devis/DevisHeader';
@@ -19,7 +19,7 @@ import DrivePathSelector from './Devis/DrivePathSelector';
 import { DevisIndexManager } from '../utils/DevisIndexManager';
 import { appendCatalogSelection } from '../utils/catalogSelection';
 import { transformToLegacyFormat, validateBeforeTransform } from '../utils/DevisLegacyTransformer';
-import { COLORS } from '../constants/colors';
+import '../../static/css/devisAvance.css';
 
 const createInitialDevisData = () => ({
   numero: '',
@@ -94,8 +94,8 @@ const RECURRING_SPECIAL_LINE_TEMPLATE = {
     value: 0
   },
   styles: {
-    backgroundColor: COLORS.warningLight,
-    color: COLORS.error,
+    backgroundColor: '#fbff24',
+    color: '#ff3838',
     fontWeight: 'bold',
     textAlign: 'left'
   },
@@ -3330,71 +3330,32 @@ const DevisAvance = () => {
   }, [devisItems, recurringLineDraft, buildRecurringSpecialLine]);
 
   return (
-    <div style={{
-      padding: '20px 10px',
-      marginRight: '150px', // Espace pour la sidebar
-      minHeight: 'auto', // Changé de 100vh à auto
-      backgroundColor: COLORS.backgroundHover,
-      borderRadius: '10px',
-    }}>
-      <div style={{
-        fontFamily: 'Arial, Helvetica, "Roboto", sans-serif',
-        fontSize: '16px',
-        maxWidth: '1200px',
-        margin: '0 150px 0 150px',
-        padding: '20px 10px',
-        minHeight: 'auto', // Changé de 100vh à auto
-        backgroundColor: 'rgb(255 255 255)',
-        borderRadius: '10px',
-        boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
-        overflow: 'visible' // Changé de hidden à visible
-      }}>
+    <div className="dav">
+      <div className="dav-sheet">
         <DevisStyles />
-        
-        {/* En-tête de la page */}
-        <div style={{
-          backgroundColor: COLORS.infoDark,
-          color: 'white',
-          padding: '20px 30px',
-          textAlign: 'center'
-        }}>
-          <h1 style={{ margin: 0, fontSize: '28px', fontWeight: 'bold' }}>
-            Création de Devis
-          </h1>
-          <p style={{ margin: '8px 0 0 0', fontSize: '16px', opacity: 0.9 }}>
-            Remplissez les informations ci-dessous pour créer votre devis
-          </p>
-        </div>
 
-        {/* Contenu principal */}
-        <div style={{ padding: '30px' }}>
+        <header className="dav-hero">
+          <p className="dav-kicker">Documents</p>
+          <h1>Création de devis</h1>
+          <p>Remplissez les informations ci-dessous pour créer votre devis</p>
+        </header>
+
+        <div className="dav-body">
           
-          {/* Section 0: Sélection du chantier */}
-          <div style={{
-            backgroundColor: COLORS.infoLight,
-            border: '2px solid #1976d2',
-            borderRadius: '8px',
-            padding: '25px',
-            marginBottom: '30px'
-          }}>
-            <h2 style={{
-              color: COLORS.infoDark,
-              fontSize: '20px',
-              fontWeight: 'bold',
-              margin: '0 0 20px 0',
-              paddingBottom: '10px',
-              borderBottom: '2px solid #1976d2'
-            }}>
-              🏗️ Sélection du chantier
-            </h2>
-            
-            <Box sx={{ display: 'flex', gap: '20px', alignItems: 'center', flexWrap: 'wrap' }}>
-              <FormControl sx={{ minWidth: 300, flex: 1 }} ref={chantierDropdownRef}>
-                <InputLabel shrink sx={{ backgroundColor: 'transparent', px: 0.5 }}>
+          <section className="dav-section dav-section-lead">
+            <div className="dav-section-head">
+              <span className="dav-mark" />
+              <h2>Sélection du chantier</h2>
+            </div>
+
+            <div className="dav-row">
+              <FormControl className="dav-chantier-field" ref={chantierDropdownRef}>
+                <InputLabel shrink sx={{ backgroundColor: 'transparent', px: 0.5, color: '#5c6768' }}>
                   Chantier existant
                 </InputLabel>
                 <input
                   type="text"
+                  className="dav-search"
                   placeholder="Rechercher un chantier..."
                   value={
                     selectedChantierId && selectedChantierId !== -1
@@ -3410,36 +3371,9 @@ const DevisAvance = () => {
                   }}
                   onFocus={() => setChantierDropdownOpen(true)}
                   disabled={isLoadingChantiers}
-                  style={{
-                    width: '100%',
-                    padding: '14px 12px 14px 12px',
-                    marginTop: '8px',
-                    border: '2px solid #e0e0e0',
-                    borderRadius: '8px',
-                    fontSize: '14px',
-                    boxSizing: 'border-box',
-                  }}
                 />
                 {chantierDropdownOpen && (
-                  <ul
-                    style={{
-                      position: 'absolute',
-                      top: '100%',
-                      left: 0,
-                      right: 0,
-                      margin: 0,
-                      marginTop: '4px',
-                      padding: 0,
-                      listStyle: 'none',
-                      maxHeight: '240px',
-                      overflowY: 'auto',
-                      backgroundColor: '#fff',
-                      border: '2px solid #2196f3',
-                      borderRadius: '8px',
-                      boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
-                      zIndex: 10,
-                    }}
-                  >
+                  <ul className="dav-menu">
                     {(() => {
                       const chantiersEnCours = chantiers
                         .filter((c) => c.chantier_name !== 'École - Formation')
@@ -3460,7 +3394,7 @@ const DevisAvance = () => {
                         : sorted;
                       if (filtered.length === 0) {
                         return (
-                          <li style={{ padding: '12px 14px', color: '#666', fontSize: '14px' }}>
+                          <li className="dav-empty">
                             Aucun chantier trouvé
                           </li>
                         );
@@ -3468,25 +3402,11 @@ const DevisAvance = () => {
                       return filtered.map((chantier) => (
                         <li
                           key={chantier.id}
+                          className={`dav-option${selectedChantierId === chantier.id ? ' is-selected' : ''}`}
                           onClick={() => {
                             handleChantierSelection(chantier.id);
                             setChantierDropdownOpen(false);
                             setChantierSearchQuery('');
-                          }}
-                          style={{
-                            padding: '10px 14px',
-                            cursor: 'pointer',
-                            fontSize: '14px',
-                            borderBottom: '1px solid #eee',
-                            backgroundColor:
-                              selectedChantierId === chantier.id ? '#e3f2fd' : 'transparent',
-                          }}
-                          onMouseEnter={(e) => {
-                            e.currentTarget.style.backgroundColor = '#e3f2fd';
-                          }}
-                          onMouseLeave={(e) => {
-                            e.currentTarget.style.backgroundColor =
-                              selectedChantierId === chantier.id ? '#e3f2fd' : 'transparent';
                           }}
                         >
                           {chantier.chantier_name}
@@ -3496,11 +3416,9 @@ const DevisAvance = () => {
                   </ul>
                 )}
               </FormControl>
-              
-              <Typography sx={{ color: COLORS.textMuted, fontSize: '14px' }}>
-                ou
-              </Typography>
-              
+
+              <span className="dav-or">ou</span>
+
               <Button
                 variant="contained"
                 startIcon={<FiPlus />}
@@ -3522,51 +3440,38 @@ const DevisAvance = () => {
                 }}
                 // Permettre de recliquer même si déjà en mode appel d'offres (pour recommencer)
                 sx={{
-                  backgroundColor: COLORS.warning,
-                  '&:hover': { backgroundColor: COLORS.warningDark },
+                  backgroundColor: '#b45309',
+                  borderRadius: '10px',
                   textTransform: 'none',
-                  fontWeight: 'bold'
+                  fontWeight: 600,
+                  boxShadow: 'none',
+                  height: 44,
+                  px: 2.2,
+                  '&:hover': { backgroundColor: '#92400e', boxShadow: 'none' },
                 }}
               >
                 Créer un appel d'offres
               </Button>
-            </Box>
-            
+            </div>
+
             {devisType === "chantier" && (
-              <Box sx={{ mt: 2, p: 2, backgroundColor: COLORS.warningLight, borderRadius: '4px', border: '1px solid #ffc107' }}>
-                <Typography variant="body2" color="text.secondary">
-                  <strong>Appel d'offres :</strong> Aucun chantier ne sera créé. Les informations du chantier seront stockées dans l'appel d'offres.
-                </Typography>
-              </Box>
+              <div className="dav-note dav-note-warn">
+                <strong>Appel d'offres :</strong> Aucun chantier ne sera créé. Les informations du chantier seront stockées dans l'appel d'offres.
+              </div>
             )}
-            
+
             {selectedChantierId && devisType === "normal" && (
-              <Box sx={{ mt: 2, p: 2, backgroundColor: 'white', borderRadius: '4px', border: '1px solid #dee2e6' }}>
-                <Typography variant="body2" color="text.secondary">
-                  Chantier sélectionné : <strong>{chantier.chantier_name}</strong>
-                </Typography>
-              </Box>
+              <div className="dav-note dav-note-ok">
+                Chantier sélectionné : <strong>{chantier.chantier_name}</strong>
+              </div>
             )}
-          </div>
+          </section>
           
-          {/* Section 1: Client et contact */}
-          <div style={{
-            backgroundColor: COLORS.backgroundAlt,
-            border: '1px solid #e9ecef',
-            borderRadius: '8px',
-            padding: '25px',
-            marginBottom: '30px'
-          }}>
-            <h2 style={{
-              color: COLORS.infoDark,
-              fontSize: '20px',
-              fontWeight: 'bold',
-              margin: '0 0 20px 0',
-              paddingBottom: '10px',
-              borderBottom: '2px solid #1976d2'
-            }}>
-              👤 Client et contact
-            </h2>
+          <section className="dav-section">
+            <div className="dav-section-head">
+              <span className="dav-mark" />
+              <h2>Client et contact</h2>
+            </div>
             
             <ClientInfo 
               client={client} 
@@ -3628,26 +3533,13 @@ const DevisAvance = () => {
                 }));
               }}
             />
-          </div>
+          </section>
 
-          {/* Section 2: Chantier */}
-          <div style={{
-            backgroundColor: COLORS.backgroundAlt,
-            border: '1px solid #e9ecef',
-            borderRadius: '8px',
-            padding: '25px',
-            marginBottom: '30px'
-          }}>
-            <h2 style={{
-              color: COLORS.infoDark,
-              fontSize: '20px',
-              fontWeight: 'bold',
-              margin: '0 0 20px 0',
-              paddingBottom: '10px',
-              borderBottom: '2px solid #1976d2'
-            }}>
-              🏗️ Adresse du chantier
-            </h2>
+          <section className="dav-section">
+            <div className="dav-section-head">
+              <span className="dav-mark" />
+              <h2>Adresse du chantier</h2>
+            </div>
             
             <ChantierInfo 
               chantier={chantier} 
@@ -3668,32 +3560,17 @@ const DevisAvance = () => {
                 }));
               }}
             />
-          </div>
+          </section>
 
-          {/* Section 3: Informations générales */}
-          <div style={{
-            backgroundColor: COLORS.backgroundAlt,
-            border: '1px solid #e9ecef',
-            borderRadius: '8px',
-            padding: '25px',
-            marginBottom: '30px'
-          }}>
-            <h2 style={{
-              color: COLORS.infoDark,
-              fontSize: '20px',
-              fontWeight: 'bold',
-              margin: '0 0 20px 0',
-              paddingBottom: '10px',
-              borderBottom: '2px solid #1976d2'
-            }}>
-              📋 Informations générales
-            </h2>
-            
-            <div style={{ display: 'flex', justifyContent: 'center' }}>
-              <div style={{ maxWidth: '600px', width: '100%' }}>
-                <h3 style={{ color: COLORS.text, fontSize: '16px', margin: '0 0 15px 0', textAlign: 'center' }}>
-                  Informations du devis
-                </h3>
+          <section className="dav-section">
+            <div className="dav-section-head">
+              <span className="dav-mark" />
+              <h2>Informations générales</h2>
+            </div>
+
+            <div className="dav-center">
+              <div className="dav-narrow">
+                <h3 className="dav-subtitle">Informations du devis</h3>
                 <DevisHeader 
                   devisData={devisData} 
                   formatDate={formatDate}
@@ -3708,66 +3585,46 @@ const DevisAvance = () => {
                 />
               </div>
             </div>
-          </div>
+          </section>
 
-          {/* Section 4: Chemin du drive - Afficher uniquement pour les nouveaux chantiers et les appels d'offres (pas pour les devis TS) */}
           {((devisType === "normal" && (selectedChantierId === null || selectedChantierId === -1)) || devisType === "chantier") && (
-            <div style={{
-              backgroundColor: COLORS.backgroundAlt,
-              border: '1px solid #e9ecef',
-              borderRadius: '8px',
-              padding: '25px',
-              marginBottom: '30px'
-            }}>
-              <h2 style={{
-                color: COLORS.infoDark,
-                fontSize: '20px',
-                fontWeight: 'bold',
-                margin: '0 0 20px 0',
-                paddingBottom: '10px',
-                borderBottom: '2px solid #1976d2'
-              }}>
-                📁 Chemin du drive pour les documents
-              </h2>
-              
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>
-                <div style={{
-                  backgroundColor: 'white',
-                  border: '1px solid #dee2e6',
-                  borderRadius: '6px',
-                  padding: '15px',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'space-between'
-                }}>
-                  <div style={{ flex: 1 }}>
-                    <Typography variant="body2" color="text.secondary" style={{ marginBottom: '5px' }}>
-                      Chemin actuel :
-                    </Typography>
-                    <Typography variant="body1" style={{ 
-                      fontFamily: 'monospace',
-                      color: effectiveDrivePath ? COLORS.infoDark : COLORS.textMuted
-                    }}>
+            <section className="dav-section">
+              <div className="dav-section-head">
+                <span className="dav-mark" />
+                <h2>Chemin du drive pour les documents</h2>
+              </div>
+
+              <div className="dav-stack">
+                <div className="dav-path-card">
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div className="dav-path-label">Chemin actuel</div>
+                    <div className={`dav-path-value ${effectiveDrivePath ? 'is-set' : 'is-empty'}`}>
                       {displayDrivePath(effectiveDrivePath) || '(Chemin par défaut non disponible)'}
-                    </Typography>
+                    </div>
                     {customDrivePath === null && defaultDrivePath && (
-                      <Typography variant="caption" color="text.secondary" style={{ marginTop: '5px', display: 'block' }}>
+                      <span className="dav-path-hint">
                         Chemin par défaut : {displayDrivePath(defaultDrivePath)}
-                      </Typography>
+                      </span>
                     )}
                   </div>
                   <Button
                     variant="outlined"
                     onClick={() => setShowDrivePathSelector(true)}
-                    style={{
-                      marginLeft: '15px',
-                      whiteSpace: 'nowrap'
+                    sx={{
+                      flexShrink: 0,
+                      whiteSpace: 'nowrap',
+                      borderRadius: '10px',
+                      textTransform: 'none',
+                      fontWeight: 600,
+                      borderColor: '#c5d0d2',
+                      color: '#001514',
+                      '&:hover': { borderColor: '#46acc2', backgroundColor: 'rgba(70,172,194,0.08)' },
                     }}
                   >
                     Modifier le chemin
                   </Button>
                 </div>
-                
+
                 {customDrivePath !== null && (
                   <Button
                     variant="text"
@@ -3775,33 +3632,20 @@ const DevisAvance = () => {
                     onClick={() => {
                       setCustomDrivePath(null);
                     }}
-                    style={{ alignSelf: 'flex-start' }}
+                    sx={{ alignSelf: 'flex-start', textTransform: 'none', color: '#0e6f84', fontWeight: 600 }}
                   >
                     Réinitialiser au chemin par défaut
                   </Button>
                 )}
               </div>
-            </div>
+            </section>
           )}
 
-          {/* Section 5: Détail du devis */}
-          <div style={{
-            backgroundColor: COLORS.backgroundAlt,
-            border: '1px solid #e9ecef',
-            borderRadius: '8px',
-            padding: '25px',
-            marginBottom: '30px'
-          }}>
-            <h2 style={{
-              color: COLORS.infoDark,
-              fontSize: '20px',
-              fontWeight: 'bold',
-              margin: '0 0 20px 0',
-              paddingBottom: '10px',
-              borderBottom: '2px solid #1976d2'
-            }}>
-              📊 Détail du devis
-            </h2>
+          <section className="dav-section">
+            <div className="dav-section-head">
+              <span className="dav-mark" />
+              <h2>Détail du devis</h2>
+            </div>
             
             <DevisTable 
               devisData={devisData}
@@ -3872,26 +3716,13 @@ const DevisAvance = () => {
               onLigneDetailHover={setHoveredLigneDetail}
               hoveredLigneDetail={hoveredLigneDetail}
             />
-          </div>
+          </section>
 
-          {/* Section 6: Récapitulatif */}
-          <div style={{
-            backgroundColor: COLORS.backgroundAlt,
-            border: '1px solid #e9ecef',
-            borderRadius: '8px',
-            padding: '25px',
-            marginBottom: '30px'
-          }}>
-            <h2 style={{
-              color: COLORS.infoDark,
-              fontSize: '20px',
-              fontWeight: 'bold',
-              margin: '0 0 20px 0',
-              paddingBottom: '10px',
-              borderBottom: '2px solid #1976d2'
-            }}>
-              💰 Récapitulatif financier
-            </h2>
+          <section className="dav-section">
+            <div className="dav-section-head">
+              <span className="dav-mark" />
+              <h2>Récapitulatif financier</h2>
+            </div>
             
             <DevisRecap 
               devisData={devisData}
@@ -3903,44 +3734,24 @@ const DevisAvance = () => {
                 setDevisData(prev => ({ ...prev, tva_rate: newRate }));
               }}
             />
-          </div>
+          </section>
 
-          {/* Section 6: Actions */}
-          <div style={{
-            backgroundColor: COLORS.infoLight,
-            border: '1px solid #1976d2',
-            borderRadius: '8px',
-            padding: '25px',
-            textAlign: 'center'
-          }}>
-            <h3 style={{
-              color: COLORS.infoDark,
-              fontSize: '18px',
-              fontWeight: 'bold',
-              margin: '0 0 15px 0'
-            }}>
-              Actions disponibles
-            </h3>
-            <div style={{ display: 'flex', gap: '15px', justifyContent: 'center', flexWrap: 'wrap' }}>
-              <button 
+          <div className="dav-actions">
+            <div>
+              <h3>Actions disponibles</h3>
+              <p>Enregistrer, prévisualiser ou repartir d’une page vide</p>
+            </div>
+            <div className="dav-actions-buttons">
+              <button
+                type="button"
                 onClick={handleSaveDevis}
                 disabled={isSaving}
-                style={{
-                  backgroundColor: isSaving ? COLORS.textMuted : COLORS.infoDark,
-                  color: 'white',
-                  border: 'none',
-                  padding: '12px 24px',
-                  borderRadius: '6px',
-                  fontSize: '14px',
-                  fontWeight: 'bold',
-                  cursor: isSaving ? 'not-allowed' : 'pointer',
-                  boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
-                  opacity: isSaving ? 0.6 : 1
-                }}
+                className="dav-btn dav-btn-primary"
               >
-                {isSaving ? '⏳ Sauvegarde...' : '💾 Sauvegarder le devis'}
+                {isSaving ? 'Sauvegarde...' : 'Sauvegarder le devis'}
               </button>
-              <button 
+              <button
+                type="button"
                 onClick={async () => {
                   try {
                     // Valider les données avant transformation
@@ -4013,35 +3824,16 @@ const DevisAvance = () => {
                   alert(`Erreur lors de la prévisualisation:\n${error.message || 'Erreur inconnue'}`);
                 }
                 }}
-                style={{
-                  backgroundColor: COLORS.success,
-                  color: 'white',
-                  border: 'none',
-                  padding: '12px 24px',
-                  borderRadius: '6px',
-                  fontSize: '14px',
-                  fontWeight: 'bold',
-                  cursor: 'pointer',
-                  boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
-                }}
+                className="dav-btn dav-btn-success"
               >
-                👁️ Aperçu PDF
+                Aperçu PDF
               </button>
               <button
+                type="button"
                 onClick={handleResetDraft}
-                style={{
-                  backgroundColor: COLORS.textLight,
-                  color: 'white',
-                  border: 'none',
-                  padding: '12px 24px',
-                  borderRadius: '6px',
-                  fontSize: '14px',
-                  fontWeight: 'bold',
-                  cursor: 'pointer',
-                  boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
-                }}
+                className="dav-btn dav-btn-ghost"
               >
-                ♻️ Réinitialiser
+                Réinitialiser
               </button>
             </div>
           </div>
