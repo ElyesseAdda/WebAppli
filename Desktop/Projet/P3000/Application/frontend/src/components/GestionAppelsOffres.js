@@ -1,5 +1,6 @@
 import {
   Delete as DeleteIcon,
+  Edit as EditIcon,
   Transform as TransformIcon,
   Visibility as VisibilityIcon,
   Folder as FolderIcon,
@@ -38,6 +39,8 @@ import {
   TableFooter,
   TableHead,
   TableRow,
+  Tab,
+  Tabs,
   TextField,
   ToggleButton,
   ToggleButtonGroup,
@@ -90,6 +93,13 @@ const cleanDrivePath = (drivePath) => {
   return path;
 };
 
+const editFieldSx = {
+  "& .MuiOutlinedInput-root": {
+    borderRadius: "10px",
+    backgroundColor: "#fff",
+  },
+};
+
 const SORT_FIELDS = {
   chantier_name: "Nom du projet",
   societe: "Société",
@@ -114,6 +124,33 @@ const GestionAppelsOffres = () => {
   const [showTransformModal, setShowTransformModal] = useState(false);
   const [selectedAppelOffresForTransform, setSelectedAppelOffresForTransform] = useState(null);
   const [syncingMontants, setSyncingMontants] = useState(false);
+  const [editInfoOpen, setEditInfoOpen] = useState(false);
+  const [editInfoTarget, setEditInfoTarget] = useState(null);
+  const [savingInfo, setSavingInfo] = useState(false);
+  const [editTab, setEditTab] = useState(0);
+  const [editInfoForm, setEditInfoForm] = useState({
+    chantier_name: "",
+    rue: "",
+    code_postal: "",
+    ville: "",
+    description: "",
+  });
+  const [societeForm, setSocieteForm] = useState({
+    id: null,
+    nom_societe: "",
+    rue_societe: "",
+    codepostal_societe: "",
+    ville_societe: "",
+  });
+  const [clientForm, setClientForm] = useState({
+    id: null,
+    civilite: "",
+    name: "",
+    surname: "",
+    client_mail: "",
+    phone_Number: "",
+    poste: "",
+  });
 
   // --- Filtres ---
   const [filterStatut, setFilterStatut] = useState(null);
@@ -244,6 +281,172 @@ const GestionAppelsOffres = () => {
       }
     } finally {
       setTransformingId(null);
+    }
+  };
+
+  const closeEditInfos = () => {
+    if (savingInfo) {
+      return;
+    }
+    setEditInfoOpen(false);
+  };
+
+  const openEditChantierInfo = async (appelOffres) => {
+    const societe = appelOffres.societe || null;
+    setEditTab(0);
+    setEditInfoTarget(appelOffres);
+    setEditInfoForm({
+      chantier_name: appelOffres.chantier_name || "",
+      rue: appelOffres.rue || "",
+      code_postal: appelOffres.code_postal || "",
+      ville: appelOffres.ville || "",
+      description: appelOffres.description || "",
+    });
+    setSocieteForm({
+      id: societe?.id || null,
+      nom_societe: societe?.nom_societe || "",
+      rue_societe: societe?.rue_societe || "",
+      codepostal_societe: societe?.codepostal_societe || "",
+      ville_societe: societe?.ville_societe || "",
+    });
+    setClientForm({
+      id: null,
+      civilite: "",
+      name: "",
+      surname: "",
+      client_mail: "",
+      phone_Number: "",
+      poste: "",
+    });
+    setEditInfoOpen(true);
+
+    const clientId = typeof societe?.client_name === "object"
+      ? societe.client_name?.id
+      : societe?.client_name;
+    if (!clientId) {
+      return;
+    }
+    try {
+      const response = await axios.get(`/api/client/${clientId}/`);
+      const client = response.data;
+      setClientForm({
+        id: client.id,
+        civilite: client.civilite || "",
+        name: client.name || "",
+        surname: client.surname || "",
+        client_mail: client.client_mail || "",
+        phone_Number: client.phone_Number ? String(client.phone_Number) : "",
+        poste: client.poste || "",
+      });
+    } catch (error) {
+      showAlert("Impossible de charger le client lié à la société.", "error");
+    }
+  };
+
+  const handleSaveChantierInfo = async () => {
+    if (!editInfoTarget || savingInfo) {
+      return;
+    }
+
+    const chantierName = editInfoForm.chantier_name.trim();
+    const rue = editInfoForm.rue.trim();
+    const ville = editInfoForm.ville.trim();
+    const codePostal = editInfoForm.code_postal.trim();
+
+    if (!chantierName || !rue || !ville) {
+      setEditTab(0);
+      showAlert("Le nom, l'adresse et la ville du chantier sont obligatoires.", "error");
+      return;
+    }
+    if (codePostal && !/^\d{5}$/.test(codePostal)) {
+      setEditTab(0);
+      showAlert("Le code postal du chantier doit contenir exactement 5 chiffres.", "error");
+      return;
+    }
+
+    if (societeForm.id) {
+      const nomSociete = societeForm.nom_societe.trim();
+      const rueSociete = societeForm.rue_societe.trim();
+      const villeSociete = societeForm.ville_societe.trim();
+      const codePostalSociete = societeForm.codepostal_societe.trim();
+      if (!nomSociete || !rueSociete || !villeSociete) {
+        setEditTab(1);
+        showAlert("Le nom, l'adresse et la ville de la société sont obligatoires.", "error");
+        return;
+      }
+      if (codePostalSociete && !/^\d{5}$/.test(codePostalSociete)) {
+        setEditTab(1);
+        showAlert("Le code postal de la société doit contenir exactement 5 chiffres.", "error");
+        return;
+      }
+    }
+
+    const phone = clientForm.phone_Number.trim();
+    const mail = clientForm.client_mail.trim();
+    if (clientForm.id) {
+      if (phone && (!/^\d+$/.test(phone) || Number(phone) > 2147483647)) {
+        setEditTab(2);
+        showAlert("Le téléphone du client doit être un nombre d'au plus 10 chiffres.", "error");
+        return;
+      }
+      if (mail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(mail)) {
+        setEditTab(2);
+        showAlert("L'adresse e-mail du client n'est pas valide.", "error");
+        return;
+      }
+    }
+
+    try {
+      setSavingInfo(true);
+      const requests = [
+        axios.patch(`/api/appels-offres/${editInfoTarget.id}/`, {
+          chantier_name: chantierName,
+          rue,
+          ville,
+          code_postal: codePostal || null,
+          description: editInfoForm.description.trim() || null,
+        }),
+      ];
+      if (societeForm.id) {
+        requests.push(axios.patch(`/api/societe/${societeForm.id}/`, {
+          nom_societe: societeForm.nom_societe.trim(),
+          rue_societe: societeForm.rue_societe.trim(),
+          ville_societe: societeForm.ville_societe.trim(),
+          codepostal_societe: societeForm.codepostal_societe.trim() || null,
+        }));
+      }
+      if (clientForm.id) {
+        requests.push(axios.patch(`/api/client/${clientForm.id}/`, {
+          civilite: clientForm.civilite || "",
+          name: clientForm.name.trim(),
+          surname: clientForm.surname.trim(),
+          client_mail: mail || null,
+          phone_Number: phone ? parseInt(phone, 10) : null,
+          poste: clientForm.poste.trim(),
+        }));
+      }
+      await Promise.all(requests);
+      setEditInfoOpen(false);
+      fetchAppelsOffres();
+      showAlert("Informations mises à jour.");
+    } catch (error) {
+      const data = error.response?.data;
+      const nameError = Array.isArray(data?.chantier_name) ? data.chantier_name[0] : null;
+      const postalError = Array.isArray(data?.code_postal) ? data.code_postal[0]
+        : Array.isArray(data?.codepostal_societe) ? data.codepostal_societe[0] : null;
+      const errorMessage = nameError
+        ? "Un appel d'offres porte déjà ce nom."
+        : postalError
+          || data?.error
+          || data?.detail
+          || data?.client_mail?.[0]
+          || "Erreur lors de la mise à jour des informations";
+      showAlert(
+        typeof errorMessage === "string" ? errorMessage : "Erreur lors de la mise à jour des informations",
+        "error"
+      );
+    } finally {
+      setSavingInfo(false);
     }
   };
 
@@ -792,6 +995,15 @@ const GestionAppelsOffres = () => {
                       </TableCell>
                       <TableCell>
                         <Box sx={{ display: "flex", gap: 0.5, flexWrap: "wrap" }}>
+                          <Tooltip title="Modifier les informations">
+                            <IconButton
+                              color="secondary"
+                              size="small"
+                              onClick={() => openEditChantierInfo(appelOffres)}
+                            >
+                              <EditIcon />
+                            </IconButton>
+                          </Tooltip>
                           {appelOffres.statut === "valide" && (
                             <Tooltip title={appelOffres.deja_transforme ? `Déjà transformé : ${appelOffres.chantier_transformé_name || "N/A"}` : "Transformer en chantier"}>
                               <span>
@@ -853,6 +1065,274 @@ const GestionAppelsOffres = () => {
           </TableContainer>
         </Paper>
       </Box>
+
+      <Dialog
+        open={editInfoOpen}
+        onClose={closeEditInfos}
+        maxWidth="sm"
+        fullWidth
+        PaperProps={{
+          sx: {
+            borderRadius: "16px",
+            overflow: "hidden",
+          },
+        }}
+      >
+        <Box sx={{ px: 3, pt: 2.5, background: "linear-gradient(180deg, #f5f7ff 0%, #fff 72%)" }}>
+          <Box sx={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 2 }}>
+            <Box sx={{ minWidth: 0 }}>
+              <Typography sx={{ fontSize: "1.15rem", fontWeight: 700, color: "#1e1b4b", lineHeight: 1.3 }}>
+                Modifier les informations
+              </Typography>
+              <Typography variant="body2" noWrap sx={{ color: "#6366f1", fontWeight: 600, mt: 0.25 }}>
+                {editInfoTarget?.chantier_name || "Appel d'offres"}
+              </Typography>
+            </Box>
+            <IconButton onClick={closeEditInfos} disabled={savingInfo} size="small" aria-label="Fermer">
+              <CloseIcon fontSize="small" />
+            </IconButton>
+          </Box>
+          <Tabs
+            value={editTab}
+            onChange={(_, value) => setEditTab(value)}
+            variant="fullWidth"
+            sx={{
+              mt: 1.5,
+              minHeight: 42,
+              "& .MuiTab-root": {
+                minHeight: 42,
+                textTransform: "none",
+                fontWeight: 600,
+                fontSize: "0.92rem",
+                color: "#64748b",
+              },
+              "& .Mui-selected": { color: "#4338ca" },
+              "& .MuiTabs-indicator": {
+                height: 3,
+                borderRadius: "3px 3px 0 0",
+                backgroundColor: "#4338ca",
+              },
+            }}
+          >
+            <Tab label="Chantier" />
+            <Tab label="Société" />
+            <Tab label="Client" />
+          </Tabs>
+        </Box>
+        <DialogContent sx={{ px: 3, py: 2.5, bgcolor: "#f8fafc" }}>
+          {editTab === 0 && (
+            <Box sx={{ display: "flex", flexDirection: "column", gap: 1.75 }}>
+              {editInfoTarget?.deja_transforme && (
+                <Alert severity="info" sx={{ borderRadius: "10px" }}>
+                  Un chantier existe déjà
+                  {editInfoTarget.chantier_transformé_name
+                    ? ` (« ${editInfoTarget.chantier_transformé_name} »)`
+                    : ""}
+                  . Seule la fiche de l'appel d'offres est modifiée.
+                </Alert>
+              )}
+              <TextField
+                fullWidth
+                required
+                size="small"
+                label="Nom du chantier"
+                value={editInfoForm.chantier_name}
+                onChange={(e) => setEditInfoForm((prev) => ({ ...prev, chantier_name: e.target.value }))}
+                sx={editFieldSx}
+                inputProps={{ maxLength: 255 }}
+              />
+              <TextField
+                fullWidth
+                required
+                size="small"
+                label="Adresse"
+                value={editInfoForm.rue}
+                onChange={(e) => setEditInfoForm((prev) => ({ ...prev, rue: e.target.value }))}
+                sx={editFieldSx}
+                inputProps={{ maxLength: 100 }}
+              />
+              <Box sx={{ display: "grid", gridTemplateColumns: "150px 1fr", gap: 1.5 }}>
+                <TextField
+                  size="small"
+                  label="Code postal"
+                  value={editInfoForm.code_postal}
+                  onChange={(e) => setEditInfoForm((prev) => ({
+                    ...prev,
+                    code_postal: e.target.value.replace(/\D/g, "").slice(0, 5),
+                  }))}
+                  sx={editFieldSx}
+                  inputProps={{ maxLength: 5, inputMode: "numeric" }}
+                />
+                <TextField
+                  required
+                  size="small"
+                  label="Ville"
+                  value={editInfoForm.ville}
+                  onChange={(e) => setEditInfoForm((prev) => ({ ...prev, ville: e.target.value }))}
+                  sx={editFieldSx}
+                  inputProps={{ maxLength: 100 }}
+                />
+              </Box>
+              <TextField
+                fullWidth
+                size="small"
+                multiline
+                minRows={2}
+                label="Description"
+                value={editInfoForm.description}
+                onChange={(e) => setEditInfoForm((prev) => ({ ...prev, description: e.target.value }))}
+                sx={editFieldSx}
+              />
+            </Box>
+          )}
+
+          {editTab === 1 && (
+            societeForm.id ? (
+              <Box sx={{ display: "flex", flexDirection: "column", gap: 1.75 }}>
+                <TextField
+                  fullWidth
+                  required
+                  size="small"
+                  label="Nom de la société"
+                  value={societeForm.nom_societe}
+                  onChange={(e) => setSocieteForm((prev) => ({ ...prev, nom_societe: e.target.value }))}
+                  sx={editFieldSx}
+                  inputProps={{ maxLength: 100 }}
+                />
+                <TextField
+                  fullWidth
+                  required
+                  size="small"
+                  label="Adresse"
+                  value={societeForm.rue_societe}
+                  onChange={(e) => setSocieteForm((prev) => ({ ...prev, rue_societe: e.target.value }))}
+                  sx={editFieldSx}
+                  inputProps={{ maxLength: 100 }}
+                />
+                <Box sx={{ display: "grid", gridTemplateColumns: "150px 1fr", gap: 1.5 }}>
+                  <TextField
+                    size="small"
+                    label="Code postal"
+                    value={societeForm.codepostal_societe}
+                    onChange={(e) => setSocieteForm((prev) => ({
+                      ...prev,
+                      codepostal_societe: e.target.value.replace(/\D/g, "").slice(0, 5),
+                    }))}
+                    sx={editFieldSx}
+                    inputProps={{ maxLength: 5, inputMode: "numeric" }}
+                  />
+                  <TextField
+                    required
+                    size="small"
+                    label="Ville"
+                    value={societeForm.ville_societe}
+                    onChange={(e) => setSocieteForm((prev) => ({ ...prev, ville_societe: e.target.value }))}
+                    sx={editFieldSx}
+                    inputProps={{ maxLength: 100 }}
+                  />
+                </Box>
+              </Box>
+            ) : (
+              <Alert severity="info" sx={{ borderRadius: "10px" }}>Aucune société n'est liée à cet appel d'offres.</Alert>
+            )
+          )}
+
+          {editTab === 2 && (
+            clientForm.id ? (
+              <Box sx={{ display: "flex", flexDirection: "column", gap: 1.75 }}>
+                <Box sx={{ display: "grid", gridTemplateColumns: "150px 1fr 1fr", gap: 1.5 }}>
+                  <FormControl fullWidth size="small" sx={editFieldSx}>
+                    <InputLabel>Civilité</InputLabel>
+                    <Select
+                      value={clientForm.civilite}
+                      label="Civilité"
+                      onChange={(e) => setClientForm((prev) => ({ ...prev, civilite: e.target.value }))}
+                    >
+                      <MenuItem value="">Aucune</MenuItem>
+                      <MenuItem value="M.">M.</MenuItem>
+                      <MenuItem value="Mme">Mme</MenuItem>
+                      <MenuItem value="Mlle">Mlle</MenuItem>
+                    </Select>
+                  </FormControl>
+                  <TextField
+                    size="small"
+                    label="Nom"
+                    value={clientForm.name}
+                    onChange={(e) => setClientForm((prev) => ({ ...prev, name: e.target.value }))}
+                    sx={editFieldSx}
+                    inputProps={{ maxLength: 100 }}
+                  />
+                  <TextField
+                    size="small"
+                    label="Prénom"
+                    value={clientForm.surname}
+                    onChange={(e) => setClientForm((prev) => ({ ...prev, surname: e.target.value }))}
+                    sx={editFieldSx}
+                    inputProps={{ maxLength: 25 }}
+                  />
+                </Box>
+                <TextField
+                  fullWidth
+                  size="small"
+                  label="E-mail"
+                  type="email"
+                  value={clientForm.client_mail}
+                  onChange={(e) => setClientForm((prev) => ({ ...prev, client_mail: e.target.value }))}
+                  sx={editFieldSx}
+                />
+                <Box sx={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 1.5 }}>
+                  <TextField
+                    size="small"
+                    label="Téléphone"
+                    value={clientForm.phone_Number}
+                    onChange={(e) => setClientForm((prev) => ({
+                      ...prev,
+                      phone_Number: e.target.value.replace(/\D/g, "").slice(0, 10),
+                    }))}
+                    sx={editFieldSx}
+                    inputProps={{ maxLength: 10, inputMode: "numeric" }}
+                  />
+                  <TextField
+                    size="small"
+                    label="Poste"
+                    value={clientForm.poste}
+                    onChange={(e) => setClientForm((prev) => ({ ...prev, poste: e.target.value }))}
+                    sx={editFieldSx}
+                    inputProps={{ maxLength: 100 }}
+                  />
+                </Box>
+              </Box>
+            ) : (
+              <Alert severity="info" sx={{ borderRadius: "10px" }}>Aucun client n'est lié à la société de cet appel d'offres.</Alert>
+            )
+          )}
+        </DialogContent>
+        <DialogActions sx={{ px: 3, py: 2, borderTop: "1px solid #e5e7eb", bgcolor: "#fff" }}>
+          <Button
+            onClick={closeEditInfos}
+            disabled={savingInfo}
+            sx={{ textTransform: "none", fontWeight: 600, color: "#64748b", borderRadius: "10px" }}
+          >
+            Annuler
+          </Button>
+          <Button
+            onClick={handleSaveChantierInfo}
+            variant="contained"
+            disabled={savingInfo}
+            sx={{
+              textTransform: "none",
+              fontWeight: 700,
+              borderRadius: "10px",
+              px: 2.5,
+              boxShadow: "none",
+              bgcolor: "#4338ca",
+              "&:hover": { bgcolor: "#3730a3", boxShadow: "none" },
+            }}
+          >
+            {savingInfo ? "Enregistrement..." : "Enregistrer"}
+          </Button>
+        </DialogActions>
+      </Dialog>
 
       {/* Dialog pour modifier le statut */}
       <Dialog
