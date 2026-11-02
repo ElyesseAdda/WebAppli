@@ -5904,8 +5904,9 @@ def create_devis(request):
                 status=400,
             )
 
-    # Un numéro au format automatique est réattribué à l'enregistrement s'il est déjà pris.
-    # On ne bloque ici que les numéros saisis à la main.
+    # Le format automatique strict est réattribué à l'enregistrement s'il est déjà pris.
+    # Un libellé modifié à la main (ex. « … n°002.2026 - Test ») est conservé tel quel.
+    # On ne bloque ici que le doublon de ce libellé saisi à la main.
     try:
         if numero_in and not is_numero_devis_officiel(numero_in):
             existing = Devis.objects.filter(numero=numero_in).only('id', 'numero').first()
