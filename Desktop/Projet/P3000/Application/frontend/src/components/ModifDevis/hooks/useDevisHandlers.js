@@ -5,6 +5,7 @@
 import { useCallback, useState } from 'react';
 import axios from 'axios';
 import { DevisIndexManager } from '../../../utils/DevisIndexManager';
+import { appendCatalogSelection } from '../../../utils/catalogSelection';
 
 const {
   roundIndex,
@@ -96,6 +97,14 @@ export const useDevisHandlers = (devisItems, setDevisItems, loadParties = null) 
       const updated = sortByIndexGlobal([...prevItems, newPartie]);
       return reindexAll(updated);
     });
+  }, [setDevisItems]);
+
+  /**
+   * Ajoute une partie, une sous-partie ou une ligne du catalogue,
+   * en rattachant l'élément à la partie ou à la sous-partie déjà présente.
+   */
+  const handleCatalogSelect = useCallback((selection) => {
+    setDevisItems(prevItems => appendCatalogSelection(prevItems, selection));
   }, [setDevisItems]);
 
   /**
@@ -677,6 +686,7 @@ export const useDevisHandlers = (devisItems, setDevisItems, loadParties = null) 
     
     // Handlers parties
     handlePartieSelect,
+    handleCatalogSelect,
     handlePartieCreate,
     handlePartieRemove,
     handlePartieEdit,
