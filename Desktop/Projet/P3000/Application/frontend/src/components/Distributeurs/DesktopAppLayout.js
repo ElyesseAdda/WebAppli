@@ -28,7 +28,6 @@ import StatsTab from "./StatsTab";
 import DocumentsTab from "./DocumentsTab";
 import StockTab from "./StockTab";
 
-// Logo client
 import mjrLogo from "../../img/MJR SERVICES logo.jpg";
 import DISTRIBUTEURS_NAV from "../../config/distributeursNav";
 
