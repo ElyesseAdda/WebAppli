@@ -43,68 +43,58 @@ const DevisRecap = ({ devisData, total_ht, tva, montant_ttc, formatMontantEspace
 
   return (
     <div style={{
-      backgroundColor: 'white',
-      border: '1px solid #ced4da',
-      borderRadius: '6px',
+      backgroundColor: '#ffffff',
+      border: '1px solid #e6eaec',
+      borderRadius: '12px',
       overflow: 'hidden'
     }}>
-      {/* En-tête du récapitulatif */}
-      <div style={{
-        backgroundColor: '#28a745',
-        color: 'white',
-        padding: '15px 20px',
-        fontWeight: 'bold',
-        fontSize: '16px'
-      }}>
-        💰 Récapitulatif financier
-      </div>
-      
-      {/* Tableau récapitulatif */}
-      <div style={{ padding: '20px' }}>
+      <div style={{ padding: '8px 8px 4px' }}>
         <div style={{
           display: 'grid',
           gridTemplateColumns: '1fr auto',
-          gap: '15px',
-          marginBottom: '15px'
+          gap: '12px',
+          alignItems: 'center',
+          marginBottom: '10px'
         }}>
           <div style={{
-            padding: '12px 15px',
-            backgroundColor: '#f8f9fa',
-            border: '1px solid #dee2e6',
-            borderRadius: '4px',
+            padding: '14px 16px',
+            backgroundColor: '#f7f8f8',
+            border: '1px solid #e6eaec',
+            borderRadius: '10px',
             fontSize: '14px',
-            color: '#495057'
+            color: '#3d4a4c'
           }}>
             Montant HT
           </div>
           <div style={{
-            padding: '12px 20px',
-            backgroundColor: '#e3f2fd',
-            border: '1px solid #1976d2',
-            borderRadius: '4px',
+            padding: '14px 18px',
+            backgroundColor: '#f3fbfc',
+            border: '1px solid #d5e8ee',
+            borderRadius: '10px',
             fontSize: '16px',
-            fontWeight: 'bold',
-            color: '#1976d2',
-            textAlign: 'center',
-            minWidth: '120px'
+            fontWeight: 700,
+            color: '#0e6f84',
+            textAlign: 'right',
+            minWidth: '140px'
           }}>
             {formatMontantEspace(total_ht)} €
           </div>
         </div>
-        
+
         <div style={{
           display: 'grid',
           gridTemplateColumns: '1fr auto',
-          gap: '15px',
-          marginBottom: '15px'
+          gap: '12px',
+          alignItems: 'center',
+          marginBottom: '10px'
         }}>
           <div style={{
-            padding: '12px 15px',
-            backgroundColor: '#f8f9fa',
-            border: '1px solid #dee2e6',
-            borderRadius: '4px',
+            padding: '14px 16px',
+            backgroundColor: '#f7f8f8',
+            border: '1px solid #e6eaec',
+            borderRadius: '10px',
             fontSize: '14px',
-            color: '#495057',
+            color: '#3d4a4c',
             display: 'flex',
             alignItems: 'center',
             gap: '10px'
@@ -119,75 +109,74 @@ const DevisRecap = ({ devisData, total_ht, tva, montant_ttc, formatMontantEspace
               onChange={handleTvaRateChange}
               onBlur={handleTvaRateBlur}
               style={{
-                width: '60px',
-                padding: '4px 8px',
-                border: '1px solid #ced4da',
-                borderRadius: '4px',
+                width: '72px',
+                padding: '6px 8px',
+                border: '1px solid #d5dcde',
+                borderRadius: '8px',
                 fontSize: '14px',
                 textAlign: 'center',
-                backgroundColor: 'white'
+                backgroundColor: 'white',
+                color: '#001514'
               }}
             />
             <span>%</span>
           </div>
           <div style={{
-            padding: '12px 20px',
-            backgroundColor: '#fff3cd',
-            border: '1px solid #ffc107',
-            borderRadius: '4px',
+            padding: '14px 18px',
+            backgroundColor: '#fff8eb',
+            border: '1px solid #f3ddb0',
+            borderRadius: '10px',
             fontSize: '16px',
-            fontWeight: 'bold',
-            color: '#856404',
-            textAlign: 'center',
-            minWidth: '120px'
+            fontWeight: 700,
+            color: '#8a5a12',
+            textAlign: 'right',
+            minWidth: '140px'
           }}>
             {formatMontantEspace(tva)} €
           </div>
         </div>
-        
+
         <div style={{
           display: 'grid',
           gridTemplateColumns: '1fr auto',
-          gap: '15px',
-          marginBottom: '20px'
+          gap: '12px',
+          alignItems: 'center',
+          marginBottom: '14px'
         }}>
           <div style={{
-            padding: '12px 15px',
-            backgroundColor: '#d4edda',
-            border: '2px solid #28a745',
-            borderRadius: '4px',
-            fontSize: '16px',
-            fontWeight: 'bold',
-            color: '#155724'
+            padding: '14px 16px',
+            backgroundColor: '#1565c0',
+            borderRadius: '10px',
+            fontSize: '15px',
+            fontWeight: 700,
+            color: '#ffffff'
           }}>
-            TOTAL TTC
+            Total TTC
           </div>
           <div style={{
-            padding: '12px 20px',
-            backgroundColor: '#28a745',
-            border: '2px solid #28a745',
-            borderRadius: '4px',
+            padding: '14px 18px',
+            backgroundColor: '#1565c0',
+            borderRadius: '10px',
             fontSize: '18px',
-            fontWeight: 'bold',
-            color: 'white',
-            textAlign: 'center',
-            minWidth: '120px'
+            fontWeight: 700,
+            color: '#ffffff',
+            textAlign: 'right',
+            minWidth: '140px'
           }}>
             {formatMontantEspace(montant_ttc)} €
           </div>
         </div>
-        
-        {/* Pied de page */}
+
         <div style={{
-          padding: '15px',
-          backgroundColor: '#f8f9fa',
-          border: '1px solid #dee2e6',
-          borderRadius: '4px',
+          padding: '14px 16px',
+          backgroundColor: '#f7f8f8',
+          border: '1px solid #e6eaec',
+          borderRadius: '10px',
           fontSize: '12px',
-          color: '#6c757d',
+          color: '#6b7577',
           textAlign: 'center'
         }}>
-          <div style={{ marginBottom: '8px', fontWeight: 'bold' }}>
+          <div style={{ marginBottom: '6px', fontWeight: 700, color: '#243233' }}>
             Signature suivie de la mention "BON POUR ACCORD"
           </div>
           <div>

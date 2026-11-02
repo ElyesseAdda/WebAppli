@@ -24,25 +24,25 @@ const ClientInfo = ({
     : societe;
 
   return (
-    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '30px' }}>
+    <div className="dav-client-grid" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
       {/* Informations société */}
       <div style={{
-        backgroundColor: 'white',
-        border: '1px solid #ced4da',
-        borderRadius: '6px',
-        padding: '20px'
+        backgroundColor: '#ffffff',
+        border: '1px solid #e6eaec',
+        borderRadius: '12px',
+        padding: '18px'
       }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '15px' }}>
           <h3 style={{
-            color: '#1976d2',
-            fontSize: '16px',
-            fontWeight: 'bold',
+            color: '#001514',
+            fontSize: '15px',
+            fontWeight: 700,
             margin: 0,
             paddingBottom: '8px',
-            borderBottom: '1px solid #e9ecef',
+            borderBottom: '1px solid #eef1f3',
             flex: 1
           }}>
-            🏢 Société
+            Société
           </h3>
           {onOpenSelectSocieteModal && (
             <Button
@@ -50,7 +50,7 @@ const ClientInfo = ({
               size="small"
               startIcon={<MdSwapHoriz />}
               onClick={() => onOpenSelectSocieteModal()}
-              sx={{ ml: 2, minWidth: 'auto', fontSize: '12px', padding: '4px 8px' }}
+              sx={{ ml: 2, minWidth: 'auto', fontSize: '12px', padding: '4px 10px', textTransform: 'none', borderRadius: '8px', fontWeight: 600 }}
             >
               Changer société
             </Button>
@@ -84,7 +84,7 @@ const ClientInfo = ({
         )}
 
         <div style={{ marginBottom: '12px' }}>
-          <label style={{ display: 'block', fontSize: '12px', color: '#6c757d', marginBottom: '4px' }}>
+          <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, color: '#6b7577', marginBottom: '4px' }}>
             Nom de la société
           </label>
           {isEditable && !selectedSocieteDevisId ? (
@@ -97,19 +97,19 @@ const ClientInfo = ({
             />
           ) : (
             <div style={{
-              padding: '10px',
-              backgroundColor: '#f8f9fa',
-              border: '1px solid #ced4da',
-              borderRadius: '4px',
+              padding: '10px 12px',
+              backgroundColor: '#f7f8f8',
+              border: '1px solid #e6eaec',
+              borderRadius: '8px',
               fontSize: '14px',
-              color: '#495057'
+              color: '#243233'
             }}>
               {displaySociete.nom_societe || ''}
             </div>
           )}
         </div>
         <div style={{ marginBottom: '12px' }}>
-          <label style={{ display: 'block', fontSize: '12px', color: '#6c757d', marginBottom: '4px' }}>
+          <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, color: '#6b7577', marginBottom: '4px' }}>
             Adresse
           </label>
           {isEditable && !selectedSocieteDevisId ? (
@@ -122,19 +122,19 @@ const ClientInfo = ({
             />
           ) : (
             <div style={{
-              padding: '10px',
-              backgroundColor: '#f8f9fa',
-              border: '1px solid #ced4da',
-              borderRadius: '4px',
+              padding: '10px 12px',
+              backgroundColor: '#f7f8f8',
+              border: '1px solid #e6eaec',
+              borderRadius: '8px',
               fontSize: '14px',
-              color: '#495057'
+              color: '#243233'
             }}>
               {displaySociete.rue_societe || ''}
             </div>
           )}
         </div>
         <div style={{ marginBottom: '12px' }}>
-          <label style={{ display: 'block', fontSize: '12px', color: '#6c757d', marginBottom: '4px' }}>
+          <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, color: '#6b7577', marginBottom: '4px' }}>
             Code postal
           </label>
           {isEditable && !selectedSocieteDevisId ? (
@@ -147,19 +147,19 @@ const ClientInfo = ({
             />
           ) : (
             <div style={{
-              padding: '10px',
-              backgroundColor: '#f8f9fa',
-              border: '1px solid #ced4da',
-              borderRadius: '4px',
+              padding: '10px 12px',
+              backgroundColor: '#f7f8f8',
+              border: '1px solid #e6eaec',
+              borderRadius: '8px',
               fontSize: '14px',
-              color: '#495057'
+              color: '#243233'
             }}>
               {displaySociete.codepostal_societe || ''}
             </div>
           )}
         </div>
         <div>
-          <label style={{ display: 'block', fontSize: '12px', color: '#6c757d', marginBottom: '4px' }}>
+          <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, color: '#6b7577', marginBottom: '4px' }}>
             Ville
           </label>
           {isEditable && !selectedSocieteDevisId ? (
@@ -172,12 +172,12 @@ const ClientInfo = ({
             />
           ) : (
             <div style={{
-              padding: '10px',
-              backgroundColor: '#f8f9fa',
-              border: '1px solid #ced4da',
-              borderRadius: '4px',
+              padding: '10px 12px',
+              backgroundColor: '#f7f8f8',
+              border: '1px solid #e6eaec',
+              borderRadius: '8px',
               fontSize: '14px',
-              color: '#495057'
+              color: '#243233'
             }}>
               {displaySociete.ville_societe || ''}
             </div>
@@ -187,22 +187,22 @@ const ClientInfo = ({
 
       {/* Informations contact */}
       <div style={{
-        backgroundColor: 'white',
-        border: '1px solid #ced4da',
-        borderRadius: '6px',
-        padding: '20px'
+        backgroundColor: '#ffffff',
+        border: '1px solid #e6eaec',
+        borderRadius: '12px',
+        padding: '18px'
       }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '15px' }}>
           <h3 style={{
-            color: '#1976d2',
-            fontSize: '16px',
-            fontWeight: 'bold',
+            color: '#001514',
+            fontSize: '15px',
+            fontWeight: 700,
             margin: 0,
             paddingBottom: '8px',
-            borderBottom: '1px solid #e9ecef',
+            borderBottom: '1px solid #eef1f3',
             flex: 1
           }}>
-            👤 Contact
+            Contact
           </h3>
           {societeId && onOpenContactModal && (
             <Button
@@ -210,7 +210,7 @@ const ClientInfo = ({
               size="small"
               startIcon={<MdAdd />}
               onClick={() => onOpenContactModal()}
-              sx={{ ml: 2, minWidth: 'auto', fontSize: '12px', padding: '4px 8px' }}
+              sx={{ ml: 2, minWidth: 'auto', fontSize: '12px', padding: '4px 10px', textTransform: 'none', borderRadius: '8px', fontWeight: 600 }}
             >
               Gérer contacts
             </Button>
@@ -257,96 +257,96 @@ const ClientInfo = ({
           return (
             <>
               <div style={{ marginBottom: '12px' }}>
-                <label style={{ display: 'block', fontSize: '12px', color: '#6c757d', marginBottom: '4px' }}>
+                <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, color: '#6b7577', marginBottom: '4px' }}>
                   {selectedContact ? 'Civilité' : 'Prénom'}
                 </label>
                 <div style={{
-                  padding: '10px',
-                  backgroundColor: '#f8f9fa',
-                  border: '1px solid #ced4da',
-                  borderRadius: '4px',
+                  padding: '10px 12px',
+                  backgroundColor: '#f7f8f8',
+                  border: '1px solid #e6eaec',
+                  borderRadius: '8px',
                   fontSize: '14px',
-                  color: '#495057'
+                  color: '#243233'
                 }}>
                   {selectedContact ? (displayContact.civilite || '') : displayContact.prenom}
                 </div>
               </div>
               {selectedContact && (
                 <div style={{ marginBottom: '12px' }}>
-                  <label style={{ display: 'block', fontSize: '12px', color: '#6c757d', marginBottom: '4px' }}>
+                  <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, color: '#6b7577', marginBottom: '4px' }}>
                     Prénom
                   </label>
                   <div style={{
-                    padding: '10px',
-                    backgroundColor: '#f8f9fa',
-                    border: '1px solid #ced4da',
-                    borderRadius: '4px',
+                    padding: '10px 12px',
+                    backgroundColor: '#f7f8f8',
+                    border: '1px solid #e6eaec',
+                    borderRadius: '8px',
                     fontSize: '14px',
-                    color: '#495057'
+                    color: '#243233'
                   }}>
                     {displayContact.prenom || ''}
                   </div>
                 </div>
               )}
               <div style={{ marginBottom: '12px' }}>
-                <label style={{ display: 'block', fontSize: '12px', color: '#6c757d', marginBottom: '4px' }}>
+                <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, color: '#6b7577', marginBottom: '4px' }}>
                   Nom
                 </label>
                 <div style={{
-                  padding: '10px',
-                  backgroundColor: '#f8f9fa',
-                  border: '1px solid #ced4da',
-                  borderRadius: '4px',
+                  padding: '10px 12px',
+                  backgroundColor: '#f7f8f8',
+                  border: '1px solid #e6eaec',
+                  borderRadius: '8px',
                   fontSize: '14px',
-                  color: '#495057'
+                  color: '#243233'
                 }}>
                   {displayContact.nom || ''}
                 </div>
               </div>
               {displayContact.poste && (
                 <div style={{ marginBottom: '12px' }}>
-                  <label style={{ display: 'block', fontSize: '12px', color: '#6c757d', marginBottom: '4px' }}>
+                  <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, color: '#6b7577', marginBottom: '4px' }}>
                     Poste
                   </label>
                   <div style={{
-                    padding: '10px',
-                    backgroundColor: '#f8f9fa',
-                    border: '1px solid #ced4da',
-                    borderRadius: '4px',
+                    padding: '10px 12px',
+                    backgroundColor: '#f7f8f8',
+                    border: '1px solid #e6eaec',
+                    borderRadius: '8px',
                     fontSize: '14px',
-                    color: '#495057'
+                    color: '#243233'
                   }}>
                     {displayContact.poste}
                   </div>
                 </div>
               )}
               <div style={{ marginBottom: '12px' }}>
-                <label style={{ display: 'block', fontSize: '12px', color: '#6c757d', marginBottom: '4px' }}>
+                <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, color: '#6b7577', marginBottom: '4px' }}>
                   Email
                 </label>
                 <div style={{
-                  padding: '10px',
-                  backgroundColor: '#f8f9fa',
-                  border: '1px solid #ced4da',
-                  borderRadius: '4px',
+                  padding: '10px 12px',
+                  backgroundColor: '#f7f8f8',
+                  border: '1px solid #e6eaec',
+                  borderRadius: '8px',
                   fontSize: '14px',
-                  color: '#495057',
+                  color: '#243233',
                   wordBreak: 'break-all'
                 }}>
                   {displayContact.email || ''}
                 </div>
               </div>
               <div>
-                <label style={{ display: 'block', fontSize: '12px', color: '#6c757d', marginBottom: '4px' }}>
+                <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, color: '#6b7577', marginBottom: '4px' }}>
                   Téléphone
                 </label>
                 <div style={{
-                  padding: '10px',
-                  backgroundColor: '#f8f9fa',
-                  border: '1px solid #ced4da',
-                  borderRadius: '4px',
+                  padding: '10px 12px',
+                  backgroundColor: '#f7f8f8',
+                  border: '1px solid #e6eaec',
+                  borderRadius: '8px',
                   fontSize: '14px',
-                  color: '#495057'
+                  color: '#243233'
                 }}>
                   {formatPhoneNumber(displayContact.telephone)}
                 </div>
