@@ -6,162 +6,16 @@ import PATCH_NOTES, {
 } from "../config/patchNotes";
 import "../../static/css/patchNotes.css";
 
-function VisualAgentConges() {
+function VisualAppelOffres() {
   return (
     <div className="pn-screen">
-      <div className="pn-screen-bar">Carte Agent — Congés</div>
-      <div className="pn-kpi-row">
-        <div className="pn-kpi">
-          <strong>0</strong>
-          <span>Acquis</span>
-        </div>
-        <div className="pn-kpi pn-hit" data-label="Cliquez pour corriger">
-          <strong>1,2</strong>
-          <span>En cours</span>
-        </div>
-        <div className="pn-kpi">
-          <strong>21</strong>
-          <span>Prévision</span>
-        </div>
-        <div className="pn-kpi">
-          <strong>0</strong>
-          <span>Pris</span>
-        </div>
-      </div>
-      <div className="pn-row pn-hit" data-label="Cliquez pour le détail">
-        <span>Septembre 2026</span>
-        <strong>1,02 j</strong>
-      </div>
-      <div className="pn-conges-detail">
-        <div>2,5 × 9 / 22 = 1,02 j acquis</div>
-        <div>9 présence · 4 absences</div>
-      </div>
-      <p className="pn-caption">
-        Corrigez les compteurs au clic, puis ouvrez un mois pour voir le calcul.
-      </p>
-    </div>
-  );
-}
-
-function VisualDevisTags() {
-  return (
-    <div className="pn-screen">
-      <div className="pn-screen-bar">Liste des devis — tags</div>
+      <div className="pn-screen-bar">Appel d&apos;offres — crayon</div>
       <div className="pn-row">
-        <span className="pn-doc">DEV-2026-014</span>
-        <span className="pn-tag-chips">
-          <span className="pn-chip pn-chip-bdc">BDC reçus</span>
-          <span className="pn-chip pn-chip-ok">Validé</span>
-          <span className="pn-chip pn-chip-work">Travaux réalisés</span>
-        </span>
+        <span className="pn-chip pn-chip-ok">Chantier</span>
+        <span className="pn-chip pn-chip-bdc">Société</span>
+        <span className="pn-chip pn-chip-action">Client</span>
       </div>
-      <div className="pn-row">
-        <span className="pn-doc">DEV-2026-015</span>
-        <span className="pn-tag-chips">
-          <span
-            className="pn-hit pn-chip pn-chip-action"
-            data-label="Cliquez pour modifier"
-          >
-            A facturer
-          </span>
-        </span>
-      </div>
-      <div className="pn-history-card">
-        <div className="pn-history-meta">Aujourd&apos;hui — Marie</div>
-        <div className="pn-history-flow">
-          <span className="pn-chip pn-chip-action">A facturer</span>
-          <span className="pn-arrow">→</span>
-          <span className="pn-chip pn-chip-ok">Facturé</span>
-        </div>
-        <div className="pn-history-doc">
-          Transformation en facture —{" "}
-          <span className="pn-linkish">F2026-042</span>
-        </div>
-      </div>
-      <p className="pn-caption">
-        Plusieurs tags par devis, filtre par combinaison, et historique avec le
-        numéro de document.
-      </p>
-    </div>
-  );
-}
-
-function VisualDevisNotifications() {
-  return (
-    <div className="pn-screen">
-      <div className="pn-screen-bar">Alertes — cloche en haut à droite</div>
-      <div className="pn-notif-card">
-        <div className="pn-notif-title">
-          Jean — transformation en facture du devis DEV-2026-015
-        </div>
-        <div className="pn-history-doc">
-          Transformation en facture —{" "}
-          <span className="pn-hit pn-linkish" data-label="Ouvre la facture">
-            F2026-042
-          </span>
-        </div>
-        <div className="pn-history-flow">
-          <span className="pn-chip pn-chip-action">A facturer</span>
-          <span className="pn-arrow">→</span>
-          <span className="pn-chip pn-chip-ok">Facturé</span>
-        </div>
-      </div>
-      <div className="pn-notif-card is-muted">
-        <div className="pn-notif-title">
-          Sophie a modifié les tags du devis DEV-2026-014
-        </div>
-        <div className="pn-history-flow">
-          <span className="pn-chip pn-chip-bdc">En attente BDC</span>
-          <span className="pn-arrow">→</span>
-          <span className="pn-chip pn-chip-bdc">BDC reçus</span>
-        </div>
-      </div>
-      <p className="pn-caption">
-        Vous etes alertes partout dans l&apos;app. Le numéro de facture ou
-        d&apos;avenant est cliquable.
-      </p>
-    </div>
-  );
-}
-
-function VisualBugFixes() {
-  return (
-    <div className="pn-screen">
-      <div className="pn-screen-bar">Corrections</div>
-      <div className="pn-row">
-        <span className="pn-doc">Avenant n°01</span>
-        <span className="pn-chip pn-chip-ok">puis n°02, n°03…</span>
-      </div>
-      <div className="pn-row">
-        <span className="pn-doc">Catégories</span>
-        <span className="pn-chip pn-chip-bdc">A → Z</span>
-      </div>
-      <p className="pn-caption">
-        Numérotation des avenants et tri alphabétique des catégories.
-      </p>
-    </div>
-  );
-}
-
-function VisualFacturationMaitreOuvrage() {
-  return (
-    <div className="pn-screen">
-      <div className="pn-screen-bar">Tableau Facturation — récapitulatif</div>
-      <div className="pn-row pn-hit" data-label="Regroupé par maître d’ouvrage">
-        <span>Maître d’ouvrage A</span>
-        <strong>2 chantiers</strong>
-      </div>
-      <div className="pn-row">
-        <span>Maître d’ouvrage B</span>
-        <strong>1 chantier</strong>
-      </div>
-      <div className="pn-row">
-        <span>Non renseigné</span>
-        <strong>5 chantiers</strong>
-      </div>
-      <p className="pn-caption">
-        Recherche et tri à partir du nom de société du maître d’ouvrage.
-      </p>
+      <p className="pn-caption">Nom, adresse et contact, sans créer de chantier.</p>
     </div>
   );
 }
@@ -177,31 +31,10 @@ function FeatureVisual({ feature }) {
 
   const key = feature.visual || feature.id;
 
-  if (key === "agent-conges" || feature.id === "agent-conges") {
-    return <VisualAgentConges />;
+  if (key === "appel-offres-modifier" || feature.id === "appel-offres-modifier") {
+    return <VisualAppelOffres />;
   }
-  if (key === "devis-tags" || feature.id === "devis-tags") {
-    return <VisualDevisTags />;
-  }
-  if (key === "devis-notifications" || feature.id === "devis-notifications") {
-    return <VisualDevisNotifications />;
-  }
-  if (key === "bugfixes" || feature.id === "bugfixes-avenant-categories") {
-    return <VisualBugFixes />;
-  }
-  if (
-    key === "facturation-maitre-ouvrage" ||
-    feature.id === "facturation-maitre-ouvrage"
-  ) {
-    return <VisualFacturationMaitreOuvrage />;
-  }
-
-  return (
-    <div className="pn-screen">
-      <div className="pn-screen-bar">{feature.title}</div>
-      <p className="pn-caption">{feature.text}</p>
-    </div>
-  );
+  return null;
 }
 
 const PatchNotesModal = () => {
@@ -265,10 +98,12 @@ const PatchNotesModal = () => {
           </button>
         </header>
 
-        <div className="pn-body">
-          <div className="pn-visual">
-            <FeatureVisual feature={feature} />
-          </div>
+        <div className={`pn-body${feature.visual ? "" : " pn-body-text"}`}>
+          {feature.visual ? (
+            <div className="pn-visual">
+              <FeatureVisual feature={feature} />
+            </div>
+          ) : null}
 
           <div className="pn-info">
             <span className={`pn-tag pn-tag-${feature.kind}`}>

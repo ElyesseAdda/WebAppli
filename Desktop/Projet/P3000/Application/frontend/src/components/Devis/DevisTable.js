@@ -146,6 +146,7 @@ const DevisTable = ({
   onPartiesReorder,
   searchParties,
   isLoadingParties,
+  onCatalogSelect,
   // Props pour les sous-parties
   onSousPartieSelect,
   onSousPartieCreate,
@@ -723,42 +724,40 @@ const DevisTable = ({
       <div style={{ overflowX: 'auto', overflowY: 'visible', position: 'relative' }}>
         <table style={{ width: '100%', borderCollapse: 'collapse' }}>
           <tbody>
-            {/* Barre de recherche initiale - Quand aucun élément */}
-            {devisItems.length === 0 && (
-              <tr style={{ backgroundColor: 'rgba(27, 120, 188, 1)', color: 'white' }}>
-                <td colSpan="5" style={{
-                  padding: '20px 20px 15px 20px',
-                  fontWeight: 'bold',
-                  fontSize: '16px',
-                  border: '1px solid rgba(27, 120, 188, 1)',
-                  backgroundClip: 'content-box',
-                  height: '20px',
-                  lineHeight: '25px'
+            {/* Barre de recherche, juste sous l'en-tête DÉSIGNATION */}
+            <tr>
+              <td colSpan="5" style={{ padding: 0, border: 'none' }}>
+                <div style={{
+                  backgroundColor: 'rgba(27, 120, 188, 1)',
+                  color: 'white',
+                  padding: '12px 20px',
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'center'
                 }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <div style={{ flex: 1 }}>
-                      <PartieSearch
-                        selectedParties={selectedParties}
-                        onPartieSelect={onPartieSelect}
-                        onPartieCreate={onPartieCreate}
-                        onPartieRemove={onPartieRemove}
-                        searchParties={searchParties}
-                        isLoadingParties={isLoadingParties}
-                      />
-                    </div>
-                    <div style={{
-                      fontSize: '18px',
-                      fontWeight: 'bold',
-                      marginLeft: '20px',
-                      minWidth: '120px',
-                      textAlign: 'right'
-                    }}>
-                      0 €
-                    </div>
+                  <div style={{ flex: 1 }}>
+                    <PartieSearch
+                      selectedParties={selectedParties}
+                      devisItems={devisItems}
+                      onPartieSelect={onPartieSelect}
+                      onPartieCreate={onPartieCreate}
+                      onCatalogSelect={onCatalogSelect}
+                      searchParties={searchParties}
+                      isLoadingParties={isLoadingParties}
+                    />
                   </div>
-                </td>
-              </tr>
-            )}
+                  <div style={{
+                    fontSize: '18px',
+                    fontWeight: 'bold',
+                    marginLeft: '20px',
+                    minWidth: '120px',
+                    textAlign: 'right'
+                  }}>
+                    {formatMontantEspace(selectedParties.reduce((total, partie) => total + (partie.total_partie || 0), 0))} €
+                  </div>
+                </div>
+              </td>
+            </tr>
 
             {/* Indicateur : ligne en attente de placement */}
             {placementLine && (
@@ -1751,42 +1750,6 @@ const DevisTable = ({
                         </div>
                       )}
                     </Droppable>
-                    
-                    
-                    {devisItems.some(item => item.type === 'partie') && (
-                      <div style={{ 
-                        backgroundColor: 'rgba(27, 120, 188, 1)', 
-                        color: 'white',
-                        padding: '20px',
-                        marginTop: '10px',
-                        borderRadius: '4px',
-                        display: 'flex',
-                        justifyContent: 'space-between',
-                        alignItems: 'center'
-                      }}>
-                        <div style={{ flex: 1 }}>
-                          <PartieSearch
-                            selectedParties={selectedParties}
-                            onPartieSelect={onPartieSelect}
-                            onPartieCreate={onPartieCreate}
-                            onPartieRemove={onPartieRemove}
-                            searchParties={searchParties}
-                            isLoadingParties={isLoadingParties}
-                          />
-                        </div>
-                        <div style={{
-                          fontSize: '18px',
-                          fontWeight: 'bold',
-                          marginLeft: '20px',
-                          minWidth: '120px',
-                          textAlign: 'right'
-                        }}>
-                          {formatMontantEspace(selectedParties.reduce((total, partie) => total + (partie.total_partie || 0), 0))} €
-                        </div>
-                      </div>
-                    )}
-                    
-                    
                   </DragDropContext>
                   
                   {/* Portails pour les icônes hover - Rendu Unifié */}

@@ -253,15 +253,51 @@ def peek_situation_numero(chantier_id, year=None):
     }
 
 
+def _sequence_embarquee(requested, year):
+    """Séquence lue dans un libellé qui reprend le préfixe officiel."""
+    match = _SCAN_DEVIS.search(requested or '')
+    if not match or int(match.group(2)) != year:
+        return None
+    sequence = int(match.group(1))
+    if not 1 <= sequence <= PLAUSIBLE_MAX:
+        return None
+    return sequence
+
+
+def _reserver_sequence_embarquee(requested, year):
+    """Réserve la séquence d'un libellé personnalisé lorsqu'elle est encore libre."""
+    sequence_demandee = _sequence_embarquee(requested, year)
+    if sequence_demandee is None:
+        return
+    with transaction.atomic():
+        _verrouiller_compteur(DocumentNumeroCompteur.SERIE_DEVIS, year)
+        utilises = _sequences_devis(year)
+        if sequence_demandee in utilises:
+            return
+        _reserver_sequence(
+            DocumentNumeroCompteur.SERIE_DEVIS,
+            year,
+            utilises,
+            sequence_demandee,
+        )
+
+
 def claim_devis_numero(requested, *, is_ts=False, chantier_id=None, year=None):
-    """Retourne le numéro à enregistrer. Réserve la séquence sous verrou."""
+    """Retourne le numéro à enregistrer. Réserve la séquence sous verrou.
+
+    Le texte saisi est conservé tel quel, y compris lorsqu'il reprend le
+    préfixe officiel avec un complément (« Devis de travaux n°002.2026 - Test »).
+    Seul le format automatique strict est réattribué s'il est déjà pris.
+    """
     year = _annee(year)
     requested = (requested or '').strip()
     parsed = _DEVIS_OFFICIEL.match(requested)
 
-    if requested and parsed is None and not _PREFIXE_DEVIS.match(requested):
+    if requested and parsed is None:
         if Devis.objects.filter(numero=requested).exists():
             raise NumeroDejaUtilise(f"Numéro de devis déjà existant: {requested}")
+        if _PREFIXE_DEVIS.match(requested):
+            _reserver_sequence_embarquee(requested, year)
         return requested
 
     with transaction.atomic():

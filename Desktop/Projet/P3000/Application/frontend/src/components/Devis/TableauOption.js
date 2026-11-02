@@ -1,7 +1,8 @@
-import React, { useState, useMemo, useCallback } from 'react';
+import React, { useState, useMemo, useCallback, useRef } from 'react';
 import axios from 'axios';
 import DevisTable from './DevisTable';
 import { DevisIndexManager } from '../../utils/DevisIndexManager';
+import { appendCatalogSelection } from '../../utils/catalogSelection';
 
 const TableauOption = ({ 
   devisData,
@@ -13,6 +14,7 @@ const TableauOption = ({
   const [devisItemsOptions, setDevisItemsOptions] = useState([]);
   const [isLoadingParties, setIsLoadingParties] = useState(false);
   const [isExpanded, setIsExpanded] = useState(false); // État pour gérer l'ouverture/fermeture
+  const partiesCacheRef = useRef(null);
 
   // ✅ Construire selectedPartiesOptions depuis devisItemsOptions pour les barres de recherche
   const selectedPartiesOptions = useMemo(() => {
@@ -57,16 +59,45 @@ const TableauOption = ({
 
   // Fonction pour rechercher les parties (pour React Select)
   // Charge toutes les parties disponibles (pas de filtre - toutes les parties peuvent être ajoutées en option)
-  const searchParties = useCallback(async (inputValue) => {
+  const searchParties = useCallback(async () => {
     try {
       setIsLoadingParties(true);
-      const params = {};
-      if (inputValue) {
-        params.q = inputValue;
+      if (!partiesCacheRef.current) {
+        const firstResponse = await axios.get('/api/parties/');
+        const firstRaw = firstResponse.data;
+        let allParties = [];
+
+        if (Array.isArray(firstRaw)) {
+          allParties = firstRaw;
+        } else if (firstRaw && Array.isArray(firstRaw.results)) {
+          allParties = [...firstRaw.results];
+          let nextUrl = firstRaw.next;
+          let guard = 0;
+          while (nextUrl && guard < 50) {
+            guard += 1;
+            const nextResp = await axios.get(nextUrl);
+            const nextRaw = nextResp.data;
+            if (Array.isArray(nextRaw)) {
+              allParties = nextRaw;
+              break;
+            }
+            if (nextRaw && Array.isArray(nextRaw.results)) {
+              allParties = allParties.concat(nextRaw.results);
+              nextUrl = nextRaw.next;
+            } else {
+              break;
+            }
+          }
+        }
+
+        partiesCacheRef.current = allParties;
       }
-      
-      const response = await axios.get('/api/parties/search/', { params });
-      return response.data.options || [];
+
+      return (partiesCacheRef.current || []).map(partie => ({
+        value: partie.id,
+        label: `${partie.titre || partie.nom || ''}${partie.type ? ` (${partie.type})` : ''}`,
+        data: partie
+      }));
     } catch (error) {
       return [];
     } finally {
@@ -97,6 +128,7 @@ const TableauOption = ({
       };
       
       setDevisItemsOptions(prev => sortByIndexGlobal([...prev, newPartie]));
+      partiesCacheRef.current = null;
       
       // Ne pas charger automatiquement les sous-parties
       // L'utilisateur devra les sélectionner manuellement via la barre de recherche
@@ -378,6 +410,9 @@ const TableauOption = ({
         onPartiesReorder={() => {}}
         searchParties={searchParties}
         isLoadingParties={isLoadingParties}
+        onCatalogSelect={(selection) => {
+          setDevisItemsOptions(prev => appendCatalogSelection(prev, selection));
+        }}
         onSousPartieSelect={(partieId, sousPartie) => {
           const partie = devisItemsOptions.find(i => i.type === 'partie' && i.id === partieId);
           if (!partie) return;

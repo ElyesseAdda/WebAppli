@@ -441,6 +441,7 @@ const ModificationDevisV2 = () => {
     isSelectingBase,
     pendingLineForBase,
     handlePartieSelect,
+    handleCatalogSelect,
     handlePartieCreate,
     handlePartieRemove,
     handlePartieEdit,
@@ -1487,6 +1488,7 @@ const ModificationDevisV2 = () => {
               onPartiesReorder={handlePartiesReorder}
               searchParties={searchParties}
               isLoadingParties={isLoadingParties}
+              onCatalogSelect={handleCatalogSelect}
               onSousPartieSelect={handleSousPartieSelect}
               onSousPartieCreate={handleSousPartieCreate}
               onSousPartieRemove={handleSousPartieRemove}

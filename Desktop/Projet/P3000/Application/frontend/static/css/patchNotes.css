@@ -74,6 +74,10 @@
   padding: 22px 26px;
 }
 
+.pn-body-text {
+  grid-template-columns: 1fr;
+}
+
 .pn-visual {
   min-width: 0;
 }

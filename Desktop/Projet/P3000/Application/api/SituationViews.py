@@ -557,6 +557,8 @@ def preview_situation_v2(request, situation_id):
             total_montant_avancement_avenants += av['montant_avancement']
         
         pourcentage_total_avenants = (total_montant_avancement_avenants / total_avenants * 100) if total_avenants else Decimal('0')
+        # Le total HT de la ligne « MONTANT GLOBAL » inclut le marché et les avenants.
+        total_ht_avec_avenants = total_ht + total_avenants
         
         # Calculer le montant total du marché HT
         # total_marche_ht = somme des total_partie (avant lignes spéciales de la partie) + lignes spéciales (hors display)
@@ -600,6 +602,7 @@ def preview_situation_v2(request, situation_id):
         
         # total_marche_ht = somme des parties (inclut déjà les lignes spéciales des sous-parties) + lignes spéciales parties + lignes spéciales globales
         total_marche_ht = total_parties_sans_speciales + total_lignes_speciales_parties + total_lignes_speciales_globales
+        total_marche_avec_avenants = total_marche_ht + total_avenants
         
         # Calculer le montant total des travaux HT
         # Montant total des travaux HT = somme des montants d'avancement (colonne TOTAL) de toutes les parties
@@ -774,12 +777,14 @@ def preview_situation_v2(request, situation_id):
             'lignes_supplementaires': lignes_supplementaires_data,
             'special_lines_global': special_lines_global,  # ✅ Avec style_attr
             'total_ht': str(total_ht),
+            'total_ht_avec_avenants': total_ht_avec_avenants,
             'tva': str(tva),
             'montant_ttc': str(montant_apres_retenues + tva),
             'total_avenants': total_avenants,
             'pourcentage_total_avenants': pourcentage_total_avenants,
             'montant_total_avenants': total_montant_avancement_avenants,
             'total_marche_ht': total_marche_ht,
+            'total_marche_avec_avenants': total_marche_avec_avenants,
         }
         
         return render(request, 'preview_situation_v2.html', context)

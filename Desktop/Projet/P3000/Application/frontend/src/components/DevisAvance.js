@@ -17,6 +17,7 @@ import SelectClientModal from './SelectClientModal';
 import ContactSocieteModal from './ContactSocieteModal';
 import DrivePathSelector from './Devis/DrivePathSelector';
 import { DevisIndexManager } from '../utils/DevisIndexManager';
+import { appendCatalogSelection } from '../utils/catalogSelection';
 import { transformToLegacyFormat, validateBeforeTransform } from '../utils/DevisLegacyTransformer';
 
 const createInitialDevisData = () => ({
@@ -1317,6 +1318,11 @@ const DevisAvance = () => {
       const updated = sortByIndexGlobal([...prevItems, newPartie]);
       return reindexAll(updated);
     });
+  };
+
+  // Partie, sous-partie ou ligne de détail choisie dans la recherche du catalogue
+  const handleCatalogSelect = (selection) => {
+    setDevisItems(prevItems => appendCatalogSelection(prevItems, selection));
   };
 
   // Fonction pour créer une nouvelle partie
@@ -3812,6 +3818,7 @@ const DevisAvance = () => {
               onPartiesReorder={handlePartiesReorder}
               searchParties={searchParties}
               isLoadingParties={isLoadingParties}
+              onCatalogSelect={handleCatalogSelect}
               onSousPartieSelect={handleSousPartieSelect}
               onSousPartieCreate={handleSousPartieCreate}
               onSousPartieRemove={handleSousPartieRemove}
