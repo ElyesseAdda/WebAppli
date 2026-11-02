@@ -4,15 +4,15 @@ import { TextField } from '@mui/material';
 const ChantierInfo = ({ chantier, selectedChantierId, isEditable = false, onChantierChange }) => {
   return (
     <div style={{
-      backgroundColor: 'white',
-      border: '1px solid #ced4da',
-      borderRadius: '6px',
-      padding: '20px'
+      backgroundColor: '#ffffff',
+      border: '1px solid #e6eaec',
+      borderRadius: '12px',
+      padding: '18px'
     }}>
       {selectedChantierId ? (
         <>
           <div style={{ marginBottom: '20px' }}>
-            <label style={{ display: 'block', fontSize: '12px', color: '#6c757d', marginBottom: '4px' }}>
+            <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, color: '#6b7577', marginBottom: '4px' }}>
               Nom du chantier
             </label>
             {isEditable ? (
@@ -27,12 +27,12 @@ const ChantierInfo = ({ chantier, selectedChantierId, isEditable = false, onChan
             ) : (
               <div style={{
                 padding: '12px',
-                backgroundColor: '#f8f9fa',
-                border: '1px solid #ced4da',
-                borderRadius: '4px',
+                backgroundColor: '#f7f8f8',
+                border: '1px solid #e6eaec',
+                borderRadius: '8px',
                 fontSize: '16px',
-                fontWeight: 'bold',
-                color: '#1976d2'
+                fontWeight: 700,
+                color: '#001514'
               }}>
                 {chantier.chantier_name || ''}
               </div>
@@ -41,7 +41,7 @@ const ChantierInfo = ({ chantier, selectedChantierId, isEditable = false, onChan
           
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px' }}>
             <div>
-              <label style={{ display: 'block', fontSize: '12px', color: '#6c757d', marginBottom: '4px' }}>
+              <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, color: '#6b7577', marginBottom: '4px' }}>
                 Adresse
               </label>
               {isEditable ? (
@@ -54,12 +54,12 @@ const ChantierInfo = ({ chantier, selectedChantierId, isEditable = false, onChan
                 />
               ) : (
                 <div style={{
-                  padding: '10px',
-                  backgroundColor: '#f8f9fa',
-                  border: '1px solid #ced4da',
-                  borderRadius: '4px',
+                  padding: '10px 12px',
+                  backgroundColor: '#f7f8f8',
+                  border: '1px solid #e6eaec',
+                  borderRadius: '8px',
                   fontSize: '14px',
-                  color: '#495057'
+                  color: '#243233'
                 }}>
                   {chantier.rue || ''}
                 </div>
@@ -67,7 +67,7 @@ const ChantierInfo = ({ chantier, selectedChantierId, isEditable = false, onChan
             </div>
             
             <div>
-              <label style={{ display: 'block', fontSize: '12px', color: '#6c757d', marginBottom: '4px' }}>
+              <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, color: '#6b7577', marginBottom: '4px' }}>
                 Code postal
               </label>
               {isEditable ? (
@@ -80,12 +80,12 @@ const ChantierInfo = ({ chantier, selectedChantierId, isEditable = false, onChan
                 />
               ) : (
                 <div style={{
-                  padding: '10px',
-                  backgroundColor: '#f8f9fa',
-                  border: '1px solid #ced4da',
-                  borderRadius: '4px',
+                  padding: '10px 12px',
+                  backgroundColor: '#f7f8f8',
+                  border: '1px solid #e6eaec',
+                  borderRadius: '8px',
                   fontSize: '14px',
-                  color: '#495057'
+                  color: '#243233'
                 }}>
                   {chantier.code_postal || ''}
                 </div>
@@ -95,7 +95,7 @@ const ChantierInfo = ({ chantier, selectedChantierId, isEditable = false, onChan
           
           {isEditable && (
             <div style={{ marginTop: '20px' }}>
-              <label style={{ display: 'block', fontSize: '12px', color: '#6c757d', marginBottom: '4px' }}>
+              <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, color: '#6b7577', marginBottom: '4px' }}>
                 Ville
               </label>
               <TextField
@@ -110,16 +110,16 @@ const ChantierInfo = ({ chantier, selectedChantierId, isEditable = false, onChan
           
           {!isEditable && (
             <div style={{ marginTop: '20px' }}>
-              <label style={{ display: 'block', fontSize: '12px', color: '#6c757d', marginBottom: '4px' }}>
+              <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, color: '#6b7577', marginBottom: '4px' }}>
                 Ville
               </label>
               <div style={{
-                padding: '10px',
-                backgroundColor: '#f8f9fa',
-                border: '1px solid #ced4da',
-                borderRadius: '4px',
+                padding: '10px 12px',
+                backgroundColor: '#f7f8f8',
+                border: '1px solid #e6eaec',
+                borderRadius: '8px',
                 fontSize: '14px',
-                color: '#495057'
+                color: '#243233'
               }}>
                 {chantier.ville || ''}
               </div>
@@ -130,7 +130,7 @@ const ChantierInfo = ({ chantier, selectedChantierId, isEditable = false, onChan
         <div style={{
           textAlign: 'center',
           padding: '40px 20px',
-          color: '#6c757d',
+          color: '#6b7577',
           fontStyle: 'italic'
         }}>
           <p>Veuillez d'abord sélectionner ou créer un chantier</p>

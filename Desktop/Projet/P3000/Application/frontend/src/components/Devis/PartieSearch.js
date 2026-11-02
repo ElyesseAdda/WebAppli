@@ -7,9 +7,9 @@ import { FiPlus, FiSearch } from 'react-icons/fi';
 const RESULT_LIMIT = 80;
 const KIND_RANK = { partie: 0, sous_partie: 1, ligne_detail: 2 };
 const KIND_META = {
-  partie: { label: 'Partie', color: '#1565c0', bg: '#e3f2fd' },
-  sous_partie: { label: 'Sous-partie', color: '#6a1b9a', bg: '#f3e5f5' },
-  ligne_detail: { label: 'Ligne', color: '#2e7d32', bg: '#e8f5e9' }
+  partie: { label: 'Partie', color: '#0e6f84', bg: '#e7f6f9' },
+  sous_partie: { label: 'Sous-partie', color: '#6b4c9a', bg: '#f3eef8' },
+  ligne_detail: { label: 'Ligne', color: '#0f766e', bg: '#e7f5f2' }
 };
 
 const fold = (value) =>
@@ -286,20 +286,23 @@ const PartieSearch = ({
     }),
     option: (provided, state) => ({
       ...provided,
-      backgroundColor: state.isSelected
-        ? '#1976d2'
-        : state.isFocused
-          ? '#e3f2fd'
-          : 'white',
-      color: state.isSelected ? 'white' : '#333',
+      backgroundColor: state.isFocused ? '#f4fbfc' : 'transparent',
+      color: '#001514',
       fontSize: '14px',
-      padding: '8px 12px'
+      padding: '10px 12px',
+      borderRadius: '10px',
+      cursor: 'pointer',
+      margin: '2px 0'
     }),
     menu: (provided) => ({
       ...provided,
       zIndex: 9999,
-      boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
-      borderRadius: '6px'
+      overflow: 'hidden',
+      padding: '6px',
+      border: '1px solid #e4e8ea',
+      boxShadow: '0 18px 40px rgba(0, 21, 20, 0.12)',
+      borderRadius: '14px',
+      background: '#ffffff'
     }),
     noOptionsMessage: (provided) => ({
       ...provided,
@@ -366,36 +369,51 @@ const PartieSearch = ({
             formatOptionLabel={(option) => {
               if (option.data?.isCreateOption) {
                 return (
-                  <span style={{ color: '#1976d2', fontWeight: 700 }}>
-                    <FiPlus style={{ marginRight: '8px' }} />
+                  <span style={{ display: 'flex', alignItems: 'center', gap: '10px', color: '#0e6f84', fontWeight: 650 }}>
+                    <span style={{
+                      width: 22,
+                      height: 22,
+                      borderRadius: 7,
+                      background: '#e7f6f9',
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      flexShrink: 0
+                    }}>
+                      <FiPlus size={14} />
+                    </span>
                     {option.label}
                   </span>
                 );
               }
               if (option.data?.isHint) {
-                return <span style={{ color: '#6c757d', fontStyle: 'italic' }}>{option.label}</span>;
+                return <span style={{ color: '#6b7577', fontSize: '13px' }}>{option.label}</span>;
               }
               const meta = KIND_META[option.kind];
               if (!meta) return option.label;
               return (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                    <span style={{
-                      fontSize: '11px',
-                      fontWeight: 700,
-                      color: meta.color,
-                      background: meta.bg,
-                      borderRadius: '4px',
-                      padding: '1px 6px',
-                      flexShrink: 0
-                    }}>
-                      {meta.label}
-                    </span>
-                    <span style={{ fontWeight: 600 }}>{option.label}</span>
-                  </div>
-                  {option.context ? (
-                    <span style={{ fontSize: '12px', opacity: 0.75 }}>{option.context}</span>
-                  ) : null}
+                <div style={{ display: 'flex', alignItems: 'flex-start', gap: '10px' }}>
+                  <span style={{
+                    marginTop: '2px',
+                    fontSize: '10px',
+                    fontWeight: 700,
+                    letterSpacing: '0.04em',
+                    textTransform: 'uppercase',
+                    color: meta.color,
+                    background: meta.bg,
+                    borderRadius: '999px',
+                    padding: '3px 8px',
+                    lineHeight: 1.4,
+                    flexShrink: 0
+                  }}>
+                    {meta.label}
+                  </span>
+                  <span style={{ minWidth: 0 }}>
+                    <span style={{ display: 'block', fontWeight: 600, color: '#001514', lineHeight: 1.35 }}>{option.label}</span>
+                    {option.context ? (
+                      <span style={{ display: 'block', marginTop: '2px', fontSize: '12px', fontWeight: 500, color: '#6b7577', lineHeight: 1.35 }}>{option.context}</span>
+                    ) : null}
+                  </span>
                 </div>
               );
             }}
@@ -447,13 +465,27 @@ const PartieSearch = ({
               menu: (provided) => ({
                 ...provided,
                 zIndex: 99999,
-                boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
-                borderRadius: '6px',
-                position: 'absolute'
+                overflow: 'hidden',
+                padding: '6px',
+                marginTop: '6px',
+                border: '1px solid #e4e8ea',
+                background: '#ffffff',
+                boxShadow: '0 18px 40px rgba(0, 21, 20, 0.14)',
+                borderRadius: '14px'
               }),
               menuList: (provided) => ({
                 ...provided,
-                maxHeight: '360px'
+                maxHeight: '340px',
+                padding: '2px'
+              }),
+              option: (provided, state) => ({
+                ...provided,
+                backgroundColor: state.isFocused ? '#f3fbfc' : 'transparent',
+                color: '#001514',
+                borderRadius: '10px',
+                padding: '10px 12px',
+                cursor: 'pointer',
+                margin: '2px 0'
               }),
               menuPortal: (provided) => ({
                 ...provided,

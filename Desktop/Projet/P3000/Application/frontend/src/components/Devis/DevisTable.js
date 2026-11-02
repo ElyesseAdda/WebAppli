@@ -130,6 +130,13 @@ const PlacementZone = ({ position, onPlaceLineAt, isActive, lineAwaitingPlacemen
   );
 };
 
+const clampFixedLeft = (preferredLeft, panelWidth = 360) => {
+  if (typeof window === 'undefined') return preferredLeft;
+  const margin = 16;
+  const maxLeft = window.innerWidth - panelWidth - margin;
+  return Math.max(margin, Math.min(preferredLeft, maxLeft));
+};
+
 const DevisTable = ({ 
   devisData, 
   parties, 
@@ -290,6 +297,24 @@ const DevisTable = ({
         setIsIconsAnimatingOut(false);
       }, 10);
     }
+  }, [clickedLigneDetailId]);
+
+  useEffect(() => {
+    if (!clickedLigneDetailId) return undefined;
+    const handlePointerDown = (event) => {
+      const target = event.target;
+      if (!(target instanceof Element)) return;
+      if (target.closest('[data-ligne-marge-panel]')) return;
+      const row = target.closest(`[data-ligne-detail-row="${clickedLigneDetailId}"]`);
+      if (row) {
+        const tagName = target.tagName.toLowerCase();
+        if (!['input', 'textarea', 'button', 'svg', 'path'].includes(tagName)) return;
+      }
+      setClickedLigneDetailId(null);
+      setClickedLignePosition(null);
+    };
+    document.addEventListener('mousedown', handlePointerDown);
+    return () => document.removeEventListener('mousedown', handlePointerDown);
   }, [clickedLigneDetailId]);
 
   // Déclencher l'animation d'entrée pour les parties (au clic)
@@ -454,8 +479,8 @@ const DevisTable = ({
   return (
     <div style={{
       backgroundColor: 'white',
-      border: '1px solid #ced4da',
-      borderRadius: '6px',
+      border: '1px solid #e6eaec',
+      borderRadius: '12px',
       overflow: 'visible',
       minHeight: 'auto',
       position: 'relative',
@@ -1451,7 +1476,8 @@ const DevisTable = ({
                                                                                   marginBottom: '4px'
                                                                                 }}
                                                                               >
-                                                                                <div 
+                                                                                <div
+                                                                                  data-ligne-detail-row={ligne.id}
                                                                                   style={{ 
                                                                                     backgroundColor: hoveredLigneDetail && hoveredLigneDetail.id === ligne.id ? '#e3f2fd' : '#fff',
                                                                                     border: hoveredLigneDetail && hoveredLigneDetail.id === ligne.id ? '2px solid #1976d2' : '1px solid #dee2e6',
@@ -1845,10 +1871,12 @@ const DevisTable = ({
                     .filter(item => item.type === 'ligne_detail')
                     .map(ligne => (
                       clickedLigneDetailId === ligne.id && createPortal(
-                        <div style={{
+                        <div
+                          data-ligne-marge-panel="true"
+                          style={{
                           position: 'fixed',
                           top: `${clickedLignePosition?.top || 0}px`,
-                          left: `${(clickedLignePosition?.left || 0) + 30}px`,
+                          left: `${clampFixedLeft((clickedLignePosition?.left || 0) + 30, 360)}px`,
                           transform: `translateY(30%) translateX(${isIconsAnimatingOut ? '-30px' : '0'})`,
                           display: 'flex',
                           flexDirection: 'row',
@@ -2098,28 +2126,28 @@ const DevisTable = ({
           position: 'fixed',
           bottom: '20px',
           right: '20px',
-          padding: '12px 24px',
-          borderRadius: '8px',
-          backgroundColor: '#1976d2',
-          color: 'white',
+          padding: '12px 18px',
+          borderRadius: '12px',
+          backgroundColor: '#1565c0',
+          color: '#fcfcfc',
           border: 'none',
           cursor: 'pointer',
           fontSize: '14px',
-          fontWeight: 'bold',
-          boxShadow: '0 4px 12px rgba(0,0,0,0.3)',
+          fontWeight: 600,
+          boxShadow: '0 8px 24px rgba(21, 101, 192, 0.35)',
           zIndex: 1000,
-          transition: 'all 0.3s ease',
+          transition: 'background 0.15s ease, transform 0.15s ease',
           display: 'flex',
           alignItems: 'center',
           gap: '8px'
         }}
         onMouseEnter={(e) => {
           e.target.style.transform = 'scale(1.05)';
-          e.target.style.backgroundColor = '#1565c0';
+          e.target.style.backgroundColor = '#0d47a1';
         }}
         onMouseLeave={(e) => {
           e.target.style.transform = 'scale(1)';
-          e.target.style.backgroundColor = '#1976d2';
+          e.target.style.backgroundColor = '#1565c0';
         }}
       >
         <span style={{ fontSize: '18px' }}>+</span>
@@ -2235,28 +2263,28 @@ const DevisTable = ({
           position: 'fixed',
           bottom: '20px',
           right: '20px',
-          padding: '12px 24px',
-          borderRadius: '8px',
-          backgroundColor: '#1976d2',
-          color: 'white',
+          padding: '12px 18px',
+          borderRadius: '12px',
+          backgroundColor: '#1565c0',
+          color: '#fcfcfc',
           border: 'none',
           cursor: 'pointer',
           fontSize: '14px',
-          fontWeight: 'bold',
-          boxShadow: '0 4px 12px rgba(0,0,0,0.3)',
+          fontWeight: 600,
+          boxShadow: '0 8px 24px rgba(21, 101, 192, 0.35)',
           zIndex: 1000,
-          transition: 'all 0.3s ease',
+          transition: 'background 0.15s ease, transform 0.15s ease',
           display: 'flex',
           alignItems: 'center',
           gap: '8px'
         }}
         onMouseEnter={(e) => {
           e.target.style.transform = 'scale(1.05)';
-          e.target.style.backgroundColor = '#1565c0';
+          e.target.style.backgroundColor = '#0d47a1';
         }}
         onMouseLeave={(e) => {
           e.target.style.transform = 'scale(1)';
-          e.target.style.backgroundColor = '#1976d2';
+          e.target.style.backgroundColor = '#1565c0';
         }}
       >
         <span style={{ fontSize: '18px' }}>+</span>

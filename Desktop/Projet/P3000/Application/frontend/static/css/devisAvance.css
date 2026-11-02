@@ -1,0 +1,397 @@
+.dav {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 8px 20px 48px;
+  min-height: auto;
+  background: transparent;
+  font-family: "Roboto", Arial, sans-serif;
+  color: #001514;
+}
+
+.dav-sheet {
+  width: 100%;
+  max-width: 1280px;
+  margin: 0 auto;
+  background: #ffffff;
+  border: 1px solid #e4e8ea;
+  border-radius: 18px;
+  box-shadow: 0 12px 40px rgba(0, 21, 20, 0.06);
+  overflow: visible;
+}
+
+.dav-hero {
+  position: relative;
+  padding: 22px 28px 18px;
+  background: #1565c0;
+  color: #ffffff;
+  border-radius: 18px 18px 0 0;
+  border-bottom: none;
+}
+
+.dav-kicker {
+  margin: 0 0 6px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.82);
+}
+
+.dav-hero h1 {
+  margin: 0;
+  font-size: 28px;
+  font-weight: 700;
+  letter-spacing: -0.03em;
+  line-height: 1.15;
+}
+
+.dav-hero p {
+  margin: 6px 0 0;
+  max-width: 520px;
+  font-size: 14px;
+  line-height: 1.5;
+  color: rgba(255, 255, 255, 0.9);
+}
+
+.dav-body {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  padding: 22px;
+  background: #f4f6f7;
+  border-radius: 0 0 18px 18px;
+}
+
+.dav-section {
+  background: #ffffff;
+  border: 1px solid #e6eaec;
+  border-radius: 14px;
+  padding: 20px 22px 22px;
+  box-shadow: 0 1px 2px rgba(0, 21, 20, 0.03);
+}
+
+.dav-section-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 0 0 18px;
+  padding-bottom: 14px;
+  border-bottom: 1px solid #eef1f3;
+}
+
+.dav-mark {
+  width: 8px;
+  height: 8px;
+  border-radius: 99px;
+  background: #46acc2;
+  box-shadow: 0 0 0 4px rgba(70, 172, 194, 0.16);
+  flex-shrink: 0;
+}
+
+.dav-hero h1,
+.dav-section h2,
+.dav-section h3,
+.dav-actions h3 {
+  text-decoration: none;
+}
+
+.dav-section h2 {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  color: #001514;
+}
+
+.dav-section-lead {
+  background: linear-gradient(180deg, #f3fbfc 0%, #ffffff 72px);
+  border-color: #d7e8ed;
+}
+
+.dav-row {
+  display: flex;
+  gap: 16px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.dav-chantier-field {
+  position: relative;
+  min-width: 280px;
+  flex: 1;
+}
+
+.dav-search {
+  width: 100%;
+  margin-top: 8px;
+  padding: 12px 14px;
+  border: 1px solid #d5dcde;
+  border-radius: 10px;
+  font-size: 14px;
+  color: #001514;
+  background: #ffffff;
+  box-sizing: border-box;
+  outline: none;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.dav-search:focus {
+  border-color: #46acc2;
+  box-shadow: 0 0 0 3px rgba(70, 172, 194, 0.18);
+}
+
+.dav-search:disabled {
+  background: #f4f6f7;
+  color: #6b7577;
+}
+
+.dav-menu {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  z-index: 20;
+  margin: 6px 0 0;
+  padding: 6px;
+  list-style: none;
+  max-height: 260px;
+  overflow-y: auto;
+  background: #ffffff;
+  border: 1px solid #d7e0e3;
+  border-radius: 12px;
+  box-shadow: 0 16px 40px rgba(0, 21, 20, 0.12);
+}
+
+.dav-option,
+.dav-empty {
+  padding: 10px 12px;
+  border-radius: 8px;
+  font-size: 14px;
+  color: #243233;
+}
+
+.dav-option {
+  cursor: pointer;
+}
+
+.dav-option:hover,
+.dav-option.is-selected {
+  background: #e8f5f8;
+  color: #001514;
+}
+
+.dav-empty {
+  color: #6b7577;
+}
+
+.dav-or {
+  color: #8b9698;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.dav-note {
+  margin-top: 14px;
+  padding: 12px 14px;
+  border-radius: 10px;
+  font-size: 14px;
+  line-height: 1.45;
+}
+
+.dav-note strong {
+  font-weight: 700;
+}
+
+.dav-note-warn {
+  background: #fff8eb;
+  border: 1px solid #f3ddb0;
+  color: #6b5420;
+}
+
+.dav-note-ok {
+  background: #f7fbfb;
+  border: 1px solid #d5e4e6;
+  color: #3d4a4c;
+}
+
+.dav-center {
+  display: flex;
+  justify-content: center;
+}
+
+.dav-narrow {
+  width: 100%;
+  max-width: 640px;
+}
+
+.dav-subtitle {
+  margin: 0 0 14px;
+  text-align: center;
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: #6b7577;
+}
+
+.dav-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.dav-path-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 14px 16px;
+  background: #f7f9f9;
+  border: 1px solid #e4e9eb;
+  border-radius: 12px;
+}
+
+.dav-path-label {
+  margin-bottom: 4px;
+  font-size: 12px;
+  color: #6b7577;
+}
+
+.dav-path-value {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 14px;
+  word-break: break-all;
+}
+
+.dav-path-value.is-set {
+  color: #0e6f84;
+}
+
+.dav-path-value.is-empty {
+  color: #8b9698;
+}
+
+.dav-path-hint {
+  display: block;
+  margin-top: 6px;
+  font-size: 12px;
+  color: #6b7577;
+}
+
+.dav-actions {
+  position: sticky;
+  bottom: 14px;
+  z-index: 30;
+  margin-right: 230px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+  padding: 14px 16px;
+  background: rgba(255, 255, 255, 0.96);
+  border: 1px solid #e4e8ea;
+  border-radius: 14px;
+  box-shadow: 0 10px 30px rgba(0, 21, 20, 0.08);
+  backdrop-filter: blur(8px);
+}
+
+.dav-actions h3 {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 700;
+  color: #001514;
+}
+
+.dav-actions p {
+  margin: 3px 0 0;
+  font-size: 12px;
+  color: #6b7577;
+}
+
+.dav-actions-buttons {
+  display: flex;
+  gap: 10px;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+}
+
+.dav-btn {
+  border: none;
+  border-radius: 10px;
+  padding: 11px 16px;
+  font-family: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s ease, transform 0.15s ease, opacity 0.15s ease;
+}
+
+.dav-btn:hover:not(:disabled) {
+  transform: translateY(-1px);
+}
+
+.dav-btn:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+  transform: none;
+}
+
+.dav-btn-primary {
+  background: #1565c0;
+  color: #ffffff;
+}
+
+.dav-btn-primary:hover:not(:disabled) {
+  background: #0d47a1;
+}
+
+.dav-btn-success {
+  background: #0f766e;
+  color: #ffffff;
+}
+
+.dav-btn-success:hover:not(:disabled) {
+  background: #0c5f59;
+}
+
+.dav-btn-ghost {
+  background: #eef2f3;
+  color: #243233;
+}
+
+.dav-btn-ghost:hover:not(:disabled) {
+  background: #e2e8ea;
+}
+
+@media (max-width: 800px) {
+  .dav {
+    padding: 8px 10px 32px;
+  }
+
+  .dav-hero,
+  .dav-body {
+    padding-left: 16px;
+    padding-right: 16px;
+  }
+
+  .dav-hero h1 {
+    font-size: 22px;
+  }
+
+  .dav-path-card,
+  .dav-actions {
+    align-items: stretch;
+    flex-direction: column;
+    margin-right: 0;
+    bottom: 78px;
+  }
+
+  .dav-actions-buttons .dav-btn {
+    width: 100%;
+  }
+
+  .dav-client-grid {
+    grid-template-columns: 1fr !important;
+  }
+}
