@@ -13,15 +13,29 @@ export const PATCH_NOTES_STORAGE_KEY = "p3000_seen_patch_notes";
 export const PATCH_NOTES_OPEN_EVENT = "p3000:open-patch-notes";
 export const PATCH_NOTES_SEEN_EVENT = "p3000:patch-notes-seen";
 
-export const PATCH_NOTES_ID = "2026-11-02-bugfix-situation-1.2";
+export const PATCH_NOTES_ID = "2026-11-02-recherche-devis-1.2";
 
 const PATCH_NOTES = {
   id: PATCH_NOTES_ID,
   version: "1.2",
   title: "Quoi de neuf ?",
   date: "Novembre 2026",
-  intro: "Deux corrections, et un appel d'offres se modifie sans créer de chantier.",
+  intro: "Une barre de recherche intelligente : une seule barre pour tout votre devis.",
   features: [
+    {
+      id: "recherche-devis",
+      kind: "nouveau",
+      title: "Une barre de recherche intelligente",
+      where: "Devis",
+      text: "Une seule barre pour tout votre devis. Tapez un mot : les parties, les sous-parties et les lignes de détail qui correspondent s'affichent ensemble.",
+      steps: [
+        "La barre est juste sous Désignation",
+        "Une ligne ajoute sa partie et sa sous-partie si elles ne sont pas déjà dans le devis",
+        "Une sous-partie ajoute seulement sa partie",
+        "Le texte reste dans le champ : vous pouvez en ajouter plusieurs d'affilée",
+        "Si rien ne correspond, créez une partie avec ce nom",
+      ],
+    },
     {
       id: "bugfix",
       kind: "bugfix",

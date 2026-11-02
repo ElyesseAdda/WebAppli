@@ -1,25 +1,136 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import Select from 'react-select';
 import Fuse from 'fuse.js';
-import { FiPlus, FiX, FiSearch } from 'react-icons/fi';
+import axios from 'axios';
+import { FiPlus, FiSearch } from 'react-icons/fi';
+
+const RESULT_LIMIT = 80;
+const KIND_RANK = { partie: 0, sous_partie: 1, ligne_detail: 2 };
+const KIND_META = {
+  partie: { label: 'Partie', color: '#1565c0', bg: '#e3f2fd' },
+  sous_partie: { label: 'Sous-partie', color: '#6a1b9a', bg: '#f3e5f5' },
+  ligne_detail: { label: 'Ligne', color: '#2e7d32', bg: '#e8f5e9' }
+};
+
+const fold = (value) =>
+  (value ?? '')
+    .toString()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .trim();
+
+const sameId = (a, b) => a != null && b != null && String(a) === String(b);
+
+const isActive = (item) => item && item.is_deleted !== true;
+
+const toSelectOptions = (parties) => (parties || []).map(partie => ({
+  value: partie.id,
+  label: `${partie.titre || partie.nom || ''}${partie.type ? ` (${partie.type})` : ''}`,
+  data: partie
+}));
+
+const hasHierarchy = (partieOptions) => (partieOptions || []).some(option =>
+  Array.isArray(option?.data?.sous_parties) && option.data.sous_parties.length > 0
+);
+
+const fetchAllParties = async () => {
+  const firstResponse = await axios.get('/api/parties/');
+  const firstRaw = firstResponse.data;
+  if (Array.isArray(firstRaw)) return firstRaw;
+  if (!firstRaw || !Array.isArray(firstRaw.results)) return [];
+
+  let allParties = [...firstRaw.results];
+  let nextUrl = firstRaw.next;
+  let guard = 0;
+  while (nextUrl && guard < 50) {
+    guard += 1;
+    const nextResp = await axios.get(nextUrl);
+    const nextRaw = nextResp.data;
+    if (Array.isArray(nextRaw)) return nextRaw;
+    if (!nextRaw || !Array.isArray(nextRaw.results)) break;
+    allParties = allParties.concat(nextRaw.results);
+    nextUrl = nextRaw.next;
+  }
+  return allParties;
+};
+
+const buildCatalog = (partieOptions) => {
+  const entries = [];
+
+  (partieOptions || []).forEach(option => {
+    const partie = option?.data;
+    if (!partie || partie.isCreateOption || partie.isHint || !isActive(partie)) return;
+
+    const partieId = partie.id ?? option.value;
+    const titre = (partie.titre || partie.nom || '').trim();
+    if (!titre) return;
+
+    const typeLabel = partie.type || partie.type_activite || '';
+    entries.push({
+      value: `partie:${partieId}`,
+      kind: 'partie',
+      label: titre,
+      folded: fold(titre),
+      context: typeLabel,
+      partieId,
+      partie
+    });
+
+    (partie.sous_parties || []).forEach(sousPartie => {
+      if (!isActive(sousPartie)) return;
+      const sousPartieLabel = (sousPartie.description || '').trim() || 'Lignes directes';
+      entries.push({
+        value: `sous_partie:${sousPartie.id}`,
+        kind: 'sous_partie',
+        label: sousPartieLabel,
+        folded: fold(sousPartieLabel),
+        context: `dans ${titre}`,
+        partieId,
+        partie,
+        sousPartieId: sousPartie.id,
+        sousPartie
+      });
+
+      (sousPartie.lignes_details || []).forEach(ligne => {
+        if (!isActive(ligne)) return;
+        const ligneLabel = (ligne.description || '').trim();
+        if (!ligneLabel) return;
+        const unite = (ligne.unite || '').trim();
+        entries.push({
+          value: `ligne:${ligne.id}`,
+          kind: 'ligne_detail',
+          label: ligneLabel,
+          folded: fold(ligneLabel),
+          context: `dans ${sousPartieLabel} › ${titre}${unite ? ` · ${unite}` : ''}`,
+          partieId,
+          partie,
+          sousPartieId: sousPartie.id,
+          sousPartie,
+          ligneId: ligne.id,
+          ligne
+        });
+      });
+    });
+  });
+
+  return entries;
+};
 
 const PartieSearch = ({
   selectedParties = [],
+  devisItems = [],
   onPartieSelect,
   onPartieCreate,
-  onPartieRemove,
+  onCatalogSelect,
   searchParties,
   isLoadingParties = false
 }) => {
   const [inputValue, setInputValue] = useState('');
   const [options, setOptions] = useState([]);
-  const [isLoading, setIsLoading] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
+  const loadSeq = useRef(0);
 
-  // Charger (ou recharger) les options quand la source change.
-  // ✅ Important: au refresh, `availableParties` est rempli async dans le parent.
-  // Le 1er appel peut tomber sur `/api/parties/search/` (limité à 50),
-  // puis quand `availableParties` est prêt, `searchParties` change de référence
-  // et on recharge automatiquement la liste complète.
   useEffect(() => {
     if (typeof searchParties === 'function') {
       loadInitialOptions();
@@ -27,83 +138,120 @@ const PartieSearch = ({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchParties]);
 
-  // ✅ Recharger les options quand selectedParties change (ex: après suppression d'une partie)
   useEffect(() => {
-    // Recharger uniquement si des options sont déjà présentes
-    // (évite un double chargement au montage)
     if (options.length > 0) {
       loadInitialOptions();
     }
-  }, [selectedParties.length]); // Dépend de la longueur pour détecter ajout/suppression
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedParties.length]);
 
-  // Charger toutes les options au démarrage
   const loadInitialOptions = async () => {
+    const seq = ++loadSeq.current;
     setIsLoading(true);
     try {
-      const allOptions = await searchParties('');
-      setOptions(allOptions);
+      let allOptions = await searchParties('');
+      if (!hasHierarchy(allOptions)) {
+        const parties = await fetchAllParties();
+        if (hasHierarchy(toSelectOptions(parties)) || (parties || []).length > 0) {
+          allOptions = toSelectOptions(parties);
+        }
+      }
+      if (seq !== loadSeq.current) return;
+      setOptions(allOptions || []);
     } catch (error) {
       // Erreur lors du chargement initial
     } finally {
-      setIsLoading(false);
+      if (seq === loadSeq.current) setIsLoading(false);
     }
   };
 
-  // Configuration de Fuse.js pour la recherche floue
+  const catalog = useMemo(() => buildCatalog(options), [options]);
+
   const fuse = useMemo(() => {
-    return new Fuse(options, {
-      keys: ['label'],
-      threshold: 0.4, // Tolérance aux erreurs (0.0 = exact, 1.0 = accepte tout)
-      distance: 100, // Distance maximale de recherche (caractères)
-      includeScore: true, // Inclure le score de correspondance
-      minMatchCharLength: 2, // Nombre minimum de caractères pour déclencher la recherche
-      ignoreLocation: true, // Ignorer la position des caractères
-      shouldSort: true, // Trier par pertinence
-      findAllMatches: true // Trouver toutes les correspondances
+    return new Fuse(catalog, {
+      keys: ['folded'],
+      threshold: 0.35,
+      distance: 100,
+      includeScore: true,
+      minMatchCharLength: 2,
+      ignoreLocation: true,
+      shouldSort: true,
+      findAllMatches: true
     });
-  }, [options]);
+  }, [catalog]);
 
-  // Filtrer les options avec recherche floue et exclure les parties déjà sélectionnées
+  const isInDevis = (entry) => {
+    if (entry.kind === 'partie') {
+      const inItems = devisItems.some(item => item.type === 'partie' && sameId(item.id, entry.partieId));
+      if (inItems) return true;
+      return selectedParties.some(partie => sameId(partie.id, entry.partieId));
+    }
+    if (entry.kind === 'sous_partie') {
+      return devisItems.some(item => item.type === 'sous_partie' && sameId(item.id, entry.sousPartieId));
+    }
+    if (entry.kind === 'ligne_detail') {
+      return devisItems.some(item => item.type === 'ligne_detail' && sameId(item.id, entry.ligneId));
+    }
+    return false;
+  };
+
   const filteredOptions = useMemo(() => {
-    // D'abord, exclure les parties déjà sélectionnées
-    const availableOptions = options.filter(option => 
-      !selectedParties.some(partie => partie.id === option.value)
-    );
+    const available = catalog.filter(entry => !isInDevis(entry));
+    const query = inputValue.trim();
 
-    // Si pas de recherche, retourner toutes les options disponibles
-    if (!inputValue || inputValue.trim() === '') {
-      return availableOptions;
+    if (!query) {
+      return available.filter(entry => entry.kind === 'partie');
     }
 
-    // Utiliser Fuse.js pour la recherche floue
-    const fuseResults = fuse.search(inputValue);
-    
-    // Convertir les résultats Fuse en format React Select
-    const results = fuseResults.map(result => result.item);
-    
-    // Si on a des résultats, les retourner
-    if (results.length > 0) {
-      return results;
-    }
-    
-    // Si aucun résultat, vérifier s'il y a une correspondance approximative avec un seuil moins strict
-    // Cela permet de trouver des résultats même si la tolérance est un peu dépassée
-    return availableOptions.filter(option => 
-      option.label.toLowerCase().includes(inputValue.toLowerCase()) ||
-      inputValue.toLowerCase().includes(option.label.toLowerCase())
-    );
-  }, [inputValue, options, selectedParties, fuse]);
+    const foldedQuery = fold(query);
+    let matches = available.filter(entry => entry.folded.includes(foldedQuery));
 
-  // Ajouter l'option de création tout en bas si l'utilisateur tape quelque chose
-  const optionsWithCreate = inputValue && inputValue.trim() !== '' 
-    ? [
-        ...filteredOptions,  // D'abord les résultats de recherche
+    if (matches.length === 0 && foldedQuery.length >= 2) {
+      matches = fuse.search(foldedQuery).map(result => result.item).filter(entry => !isInDevis(entry));
+    }
+
+    matches.sort((a, b) => {
+      const aStart = a.folded.startsWith(foldedQuery) ? 0 : 1;
+      const bStart = b.folded.startsWith(foldedQuery) ? 0 : 1;
+      if (aStart !== bStart) return aStart - bStart;
+      if (KIND_RANK[a.kind] !== KIND_RANK[b.kind]) return KIND_RANK[a.kind] - KIND_RANK[b.kind];
+      return a.label.localeCompare(b.label, 'fr');
+    });
+
+    if (matches.length > RESULT_LIMIT) {
+      const hiddenCount = matches.length - RESULT_LIMIT;
+      return [
+        ...matches.slice(0, RESULT_LIMIT),
         {
-          value: `create_${inputValue}`,
-          label: `✨ Créer "${inputValue}"`,
+          value: '__more__',
+          label: `… ${hiddenCount} autres résultats. Précisez la recherche.`,
+          isDisabled: true,
+          data: { isHint: true }
+        }
+      ];
+    }
+
+    return matches;
+    // isInDevis dépend de devisItems et selectedParties, déjà listés
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [inputValue, catalog, devisItems, selectedParties, fuse]);
+
+  const trimmedInput = inputValue.trim();
+  const hasExactPartie = trimmedInput !== '' && catalog.some(
+    entry => entry.kind === 'partie' && entry.folded === fold(trimmedInput)
+  );
+  const realMatches = filteredOptions.filter(option => !option.data?.isHint);
+  const showCreate = trimmedInput !== '' && !isLoading && !isLoadingParties && !hasExactPartie;
+
+  const optionsWithCreate = showCreate
+    ? [
+        ...filteredOptions,
+        {
+          value: `create_${trimmedInput}`,
+          label: `Créer la partie "${trimmedInput}"`,
           data: {
-            id: `create_${inputValue}`,
-            titre: inputValue,
+            id: `create_${trimmedInput}`,
+            titre: trimmedInput,
             type: 'PEINTURE',
             domaine: 'PEINTURE',
             total_partie: 0,
@@ -116,7 +264,6 @@ const PartieSearch = ({
       ]
     : filteredOptions;
 
-  // Styles personnalisés pour React Select
   const customStyles = {
     control: (provided, state) => ({
       ...provided,
@@ -139,10 +286,10 @@ const PartieSearch = ({
     }),
     option: (provided, state) => ({
       ...provided,
-      backgroundColor: state.isSelected 
-        ? '#1976d2' 
-        : state.isFocused 
-          ? '#e3f2fd' 
+      backgroundColor: state.isSelected
+        ? '#1976d2'
+        : state.isFocused
+          ? '#e3f2fd'
           : 'white',
       color: state.isSelected ? 'white' : '#333',
       fontSize: '14px',
@@ -162,21 +309,35 @@ const PartieSearch = ({
     })
   };
 
+  const handleSelect = (selectedOption) => {
+    if (!selectedOption || selectedOption.data?.isHint || selectedOption.isDisabled) return;
+
+    if (selectedOption.data?.isCreateOption) {
+      onPartieCreate(selectedOption.data.titre);
+    } else if (selectedOption.kind === 'sous_partie' || selectedOption.kind === 'ligne_detail') {
+      if (typeof onCatalogSelect === 'function') {
+        onCatalogSelect(selectedOption);
+      }
+    } else if (selectedOption.kind === 'partie' || selectedOption.partie) {
+      onPartieSelect({
+        value: selectedOption.partie?.id ?? selectedOption.partieId,
+        label: selectedOption.label,
+        data: selectedOption.partie
+      });
+    }
+  };
+
   return (
     <div style={{ marginBottom: '0' }}>
-      {/* Interface intégrée dans le style partie */}
       <div style={{ position: 'relative' }}>
-        {/* Zone de recherche/création intégrée */}
         <div style={{ maxWidth: '100%' }}>
           <Select
             isClearable
             isSearchable
-            isCreatable
-            placeholder={selectedParties.length > 0 ? "Ajouter une autre partie..." : "Tapez le nom de la partie ou choisissez-en une existante..."}
+            placeholder={selectedParties.length > 0 ? "Ajouter une partie, une sous-partie ou une ligne..." : "Tapez une partie, une sous-partie ou une ligne de détail..."}
             value={null}
             inputValue={inputValue}
             onInputChange={(newValue, actionMeta) => {
-              // Préserver la valeur sauf si l'utilisateur efface explicitement
               if (actionMeta.action === 'input-change') {
                 setInputValue(newValue);
               } else if (actionMeta.action === 'clear') {
@@ -184,49 +345,66 @@ const PartieSearch = ({
               }
             }}
             options={optionsWithCreate}
-            onCreateOption={(inputValue) => {
-              const result = onPartieCreate(inputValue);
-              // ✅ Réinitialiser l'input après création
-              setInputValue('');
-              return result;
-            }}
-            onChange={(selectedOption) => {
-              if (selectedOption) {
-                if (selectedOption.data.isCreateOption) {
-                  // Créer une nouvelle partie
-                  onPartieCreate(selectedOption.data.titre);
-                } else {
-                  // Sélectionner une partie existante
-                  onPartieSelect(selectedOption);
-                }
-                // ✅ Réinitialiser l'input après sélection/création
-                setInputValue('');
-              }
-            }}
+            filterOption={() => true}
+            closeMenuOnSelect={false}
+            blurInputOnSelect={false}
+            onChange={handleSelect}
             isLoading={isLoading || isLoadingParties}
             loadingMessage={() => "Chargement..."}
             noOptionsMessage={() => {
-              if (inputValue && inputValue.length > 0) {
-                return `Aucune partie trouvée pour "${inputValue}". L'option de création apparaîtra dans le dropdown.`;
+              if (trimmedInput && hasExactPartie && realMatches.length === 0) {
+                return `« ${trimmedInput} » est déjà dans le devis.`;
+              }
+              if (trimmedInput) {
+                return `Aucune correspondance pour « ${trimmedInput} ».`;
               }
               if (selectedParties.length > 0) {
-                return "Toutes les parties disponibles sont déjà sélectionnées. Tapez pour créer une nouvelle partie.";
+                return "Toutes les parties disponibles sont déjà dans le devis. Tapez pour créer une nouvelle partie.";
               }
-              return "Commencez à taper pour rechercher ou créer une partie.";
+              return "Commencez à taper pour rechercher une partie, une sous-partie ou une ligne.";
             }}
-            formatCreateLabel={(inputValue) => `✨ Créer "${inputValue}"`}
-            onBlur={() => {
-              // Préserver la valeur au blur
-              // Ne rien faire, la valeur est déjà préservée dans inputValue
+            formatOptionLabel={(option) => {
+              if (option.data?.isCreateOption) {
+                return (
+                  <span style={{ color: '#1976d2', fontWeight: 700 }}>
+                    <FiPlus style={{ marginRight: '8px' }} />
+                    {option.label}
+                  </span>
+                );
+              }
+              if (option.data?.isHint) {
+                return <span style={{ color: '#6c757d', fontStyle: 'italic' }}>{option.label}</span>;
+              }
+              const meta = KIND_META[option.kind];
+              if (!meta) return option.label;
+              return (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <span style={{
+                      fontSize: '11px',
+                      fontWeight: 700,
+                      color: meta.color,
+                      background: meta.bg,
+                      borderRadius: '4px',
+                      padding: '1px 6px',
+                      flexShrink: 0
+                    }}>
+                      {meta.label}
+                    </span>
+                    <span style={{ fontWeight: 600 }}>{option.label}</span>
+                  </div>
+                  {option.context ? (
+                    <span style={{ fontSize: '12px', opacity: 0.75 }}>{option.context}</span>
+                  ) : null}
+                </div>
+              );
             }}
             onFocus={() => {
-              // S'assurer que les options sont chargées
               if (options.length === 0) {
                 loadInitialOptions();
               }
             }}
             onMenuOpen={() => {
-              // Charger les options si le menu s'ouvre
               if (options.length === 0) {
                 loadInitialOptions();
               }
@@ -268,10 +446,14 @@ const PartieSearch = ({
               }),
               menu: (provided) => ({
                 ...provided,
-                zIndex: 99999, // Augmenté pour être au-dessus de tout
+                zIndex: 99999,
                 boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
                 borderRadius: '6px',
                 position: 'absolute'
+              }),
+              menuList: (provided) => ({
+                ...provided,
+                maxHeight: '360px'
               }),
               menuPortal: (provided) => ({
                 ...provided,
@@ -279,17 +461,10 @@ const PartieSearch = ({
               })
             }}
             components={{
-              DropdownIndicator: () => <FiSearch style={{ marginRight: '8px', color: 'rgba(255,255,255,0.8)', fontSize: '18px' }} />,
-              CreateOption: ({ children, ...props }) => (
-                <div {...props} style={{ ...props.style, color: '#1976d2', fontWeight: '600', fontSize: '16px' }}>
-                  <FiPlus style={{ marginRight: '8px' }} />
-                  {children}
-                </div>
-              )
+              DropdownIndicator: () => <FiSearch style={{ marginRight: '8px', color: 'rgba(255,255,255,0.8)', fontSize: '18px' }} />
             }}
           />
         </div>
-
       </div>
     </div>
   );
